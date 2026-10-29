@@ -112,10 +112,10 @@ ColumnLayout {
         visible: Backend.playsets.canRestore
         level: "info"
         iconName: "history"
-        text: qsTr("A deleted or replaced playset can be restored.")
+        text: qsTr("The deleted playset can be restored.")
         LinkButton {
             text: qsTr("Restore")
-            toolTipText: qsTr("Restore the most recently deleted or replaced playset")
+            toolTipText: qsTr("Restore the most recently deleted playset (replaced ones are in History)")
             onClicked: Backend.playsets.restoreLast()
         }
     }

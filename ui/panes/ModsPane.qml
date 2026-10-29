@@ -242,8 +242,9 @@ Rectangle {
         const rows = selectedSourceRows()
         if (rows.length === 0)
             return
-        const feedback = Backend.mods.setEnabledRows(rows, on)
-        dependencyFeedback = on && feedback ? feedback : ""
+        // Dependency issues arrive through Backend.mods.dependencyFeedback.
+        dependencyFeedback = ""
+        Backend.mods.setEnabledRows(rows, on)
     }
 
     function toggleSelected() {
@@ -272,31 +273,37 @@ Rectangle {
         anchorRow = -1
     }
 
+    // The whole selection moves as one undoable step. The backend applies the
+    // move to the model right away (and persists it in the background), so the
+    // moved rows can be re-selected immediately.
     function moveSelection(delta: int) {
         const rows = selectedSourceRows()
         if (rows.length === 0)
             return
         if (!Backend.modView.reorderAllowed) {
             // The backend refuses and explains why (notification).
-            if (delta < 0)
-                Backend.mods.moveUp(rows[0])
-            else
-                Backend.mods.moveDown(rows[rows.length - 1])
+            Backend.mods.moveRows(rows, delta)
             return
         }
         if (delta < 0 && rows[0] <= 0 || delta > 0 && rows[rows.length - 1] >= Backend.mods.count - 1)
             return
         const current = modList.currentIndex
-        if (delta < 0) {
-            for (const r of rows)
-                Backend.mods.moveUp(r)
-        } else {
-            for (const r of rows.slice().reverse())
-                Backend.mods.moveDown(r)
-        }
+        Backend.mods.moveRows(rows, delta)
         const moved = rows.map(r => Backend.modView.proxyRow(r + delta))
         selectRows(moved)
         setCurrent(current + delta)
+    }
+
+    // Drag of a multi-selection: the selection is gathered into one block whose
+    // first row lands `delta` rows from where the first selected row was.
+    function moveSelectionBlock(rows: list<int>, delta: int) {
+        const first = Math.max(0, Math.min(Backend.mods.count - rows.length, rows[0] + delta))
+        Backend.mods.moveRows(rows, delta)
+        const moved = []
+        for (let i = 0; i < rows.length; ++i)
+            moved.push(Backend.modView.proxyRow(first + i))
+        selectRows(moved)
+        setCurrent(moved[0])
     }
 
     function moveCurrentTo(target: int) {
@@ -343,6 +350,11 @@ Rectangle {
         const to = gap > from ? gap - 1 : gap
         if (to === from)
             return
+        const rows = selectedSourceRows()
+        if (rows.length > 1 && isSelected(from)) {
+            moveSelectionBlock(rows, to - from)
+            return
+        }
         Backend.mods.moveRow(Backend.modView.sourceRow(from), Backend.modView.sourceRow(to))
         selectOnly(to)
     }
@@ -368,6 +380,11 @@ Rectangle {
         function onRowsInserted() { root.afterModelUpdate() }
         function onRowsRemoved() { root.afterModelUpdate() }
         function onRowsMoved() { root.afterModelUpdate() }
+    }
+
+    Connections {
+        target: Backend.mods
+        function onDependencyFeedback(text: string) { root.dependencyFeedback = text }
     }
 
     Timer {
