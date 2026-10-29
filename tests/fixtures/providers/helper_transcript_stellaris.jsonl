@@ -1,0 +1,8 @@
+{"event":"ready","protocol":1,"ok":true,"loggedOn":true,"ownsApp":true,"appId":"281990","ugcInterface":"STEAMUGC_INTERFACE_VERSION016","init":"SteamAPI_InitSafe","subscribedCount":27}
+{"event":"pong"}
+{"event":"state","id":"703156866","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"D:\\SteamLibrary\\steamapps\\workshop\\content\\281990\\703156866","sizeOnDisk":429416,"timestamp":1782489192}
+{"event":"state","id":"1623423360","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"D:\\SteamLibrary\\steamapps\\workshop\\content\\281990\\1623423360","sizeOnDisk":231762225,"timestamp":1791477347}
+{"event":"state","id":"2830996883","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"D:\\SteamLibrary\\steamapps\\workshop\\content\\281990\\2830996883","sizeOnDisk":76147217,"timestamp":1781543136}
+{"event":"state","id":"3090328185","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"D:\\SteamLibrary\\steamapps\\workshop\\content\\281990\\3090328185","sizeOnDisk":1093428,"timestamp":1782072748}
+{"event":"state","id":"1121692237","flags":0,"subscribed":false,"installed":false,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"","sizeOnDisk":0,"timestamp":0}
+{"event":"pong"}
