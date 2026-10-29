@@ -360,3 +360,143 @@ TEST_CASE("Restoring a purged playset recreates it under a new id", "[persistenc
     CHECK(restored.createdAt == 1'000'000);
     CHECK(restored.updatedAt == 1'002'000);
 }
+
+namespace {
+
+// Two Linux local mods whose descriptor stems are Latin-1 bytes: not valid
+// UTF-8, and identical once each bad byte is replaced with U+FFFD.
+std::vector<PlaysetEntry> nonUtf8Entries() {
+    auto e9 = entry(source::Local, "caf\xE9", true, "Cafe 1");
+    auto e8 = entry(source::Local, "caf\xE8", true, "Cafe 2");
+    e9.identity.game = "stellaris";
+    e8.identity.game = "stellaris";
+    return {e9, e8};
+}
+
+// Inserts an entry row directly, as an older build could have written it.
+void insertRawEntry(Database& db, std::int64_t playsetId, int position, const std::string& hexId) {
+    execRaw(db, "INSERT INTO playset_entries (playset_id, position, source, provider_id, "
+                "enabled) VALUES (" +
+                    std::to_string(playsetId) + ", " + std::to_string(position) +
+                    ", 'local', CAST(X'" + hexId + "' AS TEXT), 1)");
+}
+
+} // namespace
+
+TEST_CASE("Provider ids that are not valid UTF-8 are rejected when written",
+          "[persistence][playsets]") {
+    Fixture f;
+    Playset bad;
+    bad.game = "stellaris";
+    bad.name = "Non-UTF-8 ids";
+    bad.entries = nonUtf8Entries();
+    auto created = f.repo.create(bad);
+    REQUIRE_FALSE(created.ok());
+    CHECK(created.error().code == ErrorCode::InvalidArgument);
+    CHECK(created.error().message.find("not valid UTF-8") != std::string::npos);
+    CHECK(created.error().detail.find("caf\xEF\xBF\xBD") != std::string::npos);
+    CHECK(queryInt(*f.db, "SELECT count(*) FROM playsets") == 0);
+
+    const auto original = workshopEntries(3);
+    const auto id = f.create("Valid", original);
+    f.advance();
+    auto saved = f.repo.saveEntries(id, nonUtf8Entries());
+    REQUIRE_FALSE(saved.ok());
+    CHECK(saved.error().code == ErrorCode::InvalidArgument);
+    auto replaced = f.repo.replaceWithSnapshot(id, nonUtf8Entries(), history_reason::BulkEdit);
+    REQUIRE_FALSE(replaced.ok());
+    CHECK(replaced.error().code == ErrorCode::InvalidArgument);
+    auto badSource = original;
+    badSource[1].identity.source = "steam\xFF";
+    auto savedSource = f.repo.saveEntries(id, badSource);
+    REQUIRE_FALSE(savedSource.ok());
+    CHECK(savedSource.error().code == ErrorCode::InvalidArgument);
+
+    auto loaded = require(f.repo.get(id));
+    CHECK(loaded.entries == original);
+    CHECK(loaded.updatedAt == 1'000'000);
+    CHECK(require(f.repo.historyForPlayset(id)).empty());
+}
+
+TEST_CASE("Non-ASCII provider ids survive delete and restore byte for byte",
+          "[persistence][playsets]") {
+    Fixture f;
+    auto entries = workshopEntries(2);
+    for (const char* id : {"caf\xC3\xA9", "caf\xC3\xA8", "\xE6\x97\xA5\xE6\x9C\xAC",
+                           "emoji \xF0\x9F\x98\x80", "replacement \xEF\xBF\xBD"}) {
+        auto local = entry(source::Local, id);
+        local.identity.game = "stellaris";
+        entries.push_back(std::move(local));
+    }
+    const auto id = f.create("Unicode ids", entries);
+    const auto deleted = require(f.repo.remove(id));
+    CHECK(require(f.repo.restore(deleted)) == id);
+    CHECK(require(f.repo.get(id)).entries == entries);
+
+    const auto bulk = require(f.repo.replaceWithSnapshot(id, {}, history_reason::BulkEdit));
+    CHECK(require(f.repo.restore(bulk)) == id);
+    CHECK(require(f.repo.get(id)).entries == entries);
+}
+
+TEST_CASE("A playset whose stored ids cannot be snapshotted is left intact",
+          "[persistence][playsets]") {
+    Fixture f;
+    const auto id = f.create("Legacy rows", workshopEntries(2));
+    insertRawEntry(*f.db, id, 2, "636166E9"); // "caf\xE9"
+    insertRawEntry(*f.db, id, 3, "636166E8"); // "caf\xE8"
+    const auto before = require(f.repo.get(id));
+    REQUIRE(before.entries.size() == 4);
+    REQUIRE(before.entries[2].identity.id == "caf\xE9");
+    f.advance();
+
+    // Deleting or bulk-editing would write a snapshot that restore() cannot
+    // bring back, so both refuse up front; copying would spread the rows.
+    auto removed = f.repo.remove(id);
+    REQUIRE_FALSE(removed.ok());
+    CHECK(removed.error().code == ErrorCode::InvalidArgument);
+    CHECK(removed.error().message.find("Legacy rows") != std::string::npos);
+    auto bulk = f.repo.replaceWithSnapshot(id, workshopEntries(1), history_reason::BulkEdit);
+    REQUIRE_FALSE(bulk.ok());
+    CHECK(bulk.error().code == ErrorCode::InvalidArgument);
+    auto copy = f.repo.duplicate(id, "Copy");
+    REQUIRE_FALSE(copy.ok());
+    CHECK(copy.error().code == ErrorCode::InvalidArgument);
+
+    auto after = require(f.repo.get(id));
+    CHECK(after.entries == before.entries);
+    CHECK(after.updatedAt == before.updatedAt);
+    CHECK(queryInt(*f.db, "SELECT count(*) FROM playset_history") == 0);
+    CHECK(queryInt(*f.db, "SELECT count(*) FROM playsets") == 1);
+
+    // Dropping the offending entries makes the playset deletable again.
+    requireOk(f.repo.saveEntries(id, workshopEntries(2)));
+    const auto deleted = require(f.repo.remove(id));
+    CHECK(require(f.repo.restore(deleted)) == id);
+    CHECK(require(f.repo.get(id)).entries == workshopEntries(2));
+}
+
+TEST_CASE("Restoring a snapshot that lists a mod twice fails with a clear error",
+          "[persistence][playsets]") {
+    // Older builds replaced invalid UTF-8 in snapshot ids with U+FFFD, which
+    // could turn two distinct ids into one.
+    Fixture f;
+    const auto id = f.create("Collapsed ids", workshopEntries(1));
+    const auto deleted = require(f.repo.remove(id));
+    const std::string entryJson =
+        R"({"source":"local","id":"caf�","enabled":true,"nameHint":"","versionHint":"",)"
+        R"("fingerprint":""})";
+    const std::string json =
+        R"({"format":1,"name":"Collapsed ids","createdAt":1000000,"updatedAt":1000000,)"
+        R"("entries":[)" +
+        entryJson + "," + entryJson + "]}";
+    execRaw(*f.db, "UPDATE playset_history SET snapshot_json = '" + json +
+                       "' WHERE id = " + std::to_string(deleted));
+
+    auto restored = f.repo.restore(deleted);
+    REQUIRE_FALSE(restored.ok());
+    CHECK(restored.error().code == ErrorCode::InvalidArgument);
+    CHECK(restored.error().message.find("cannot be restored") != std::string::npos);
+    CHECK_FALSE(f.repo.get(id).ok()); // still deleted, nothing half-written
+    CHECK(queryInt(*f.db, "SELECT count(*) FROM playset_entries WHERE playset_id = " +
+                              std::to_string(id)) == 1);
+}
