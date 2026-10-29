@@ -1,7 +1,7 @@
 #pragma once
 
 // Dependencies shared by every service, injected by the composition root (the
-// Qt application or the CLI) and by tests. Services never reach for globals:
+// Qt application) and by tests. Services never reach for globals:
 // they do not use the adapter registry, the real discovery environment, the
 // system clock or OS process APIs unless the composition root wires them in
 // (useSystemDefaults() does that for the clock, processes and fingerprints).

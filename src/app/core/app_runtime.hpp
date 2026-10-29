@@ -1,6 +1,6 @@
 #pragma once
 
-// The application's composition root, shared by pmm-app and the CLI: resolves
+// The application's composition root, used by pmm-app and its tests: resolves
 // the application folders (standard per-user locations, or one folder given
 // with --profile), installs the file log sink, opens the database and the
 // configuration-transaction journal, builds the ServiceContext with the real

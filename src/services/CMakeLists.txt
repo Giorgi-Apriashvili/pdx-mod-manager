@@ -1,5 +1,5 @@
 # Qt-free application services: orchestrate discovery, playsets, sharing,
-# acquisition and launch for the Qt app and the CLI (docs/architecture-services.md).
+# acquisition and launch for the Qt app (docs/architecture-services.md).
 add_library(pmm_services STATIC
   acquisition_coordinator.cpp
   app_paths.cpp

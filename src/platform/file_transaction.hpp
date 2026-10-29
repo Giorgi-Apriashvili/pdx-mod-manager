@@ -19,8 +19,8 @@
 // restore.
 //
 // Txids are "<UTC yyyymmddThhmmssmmm>Z-<4-digit sequence>", so they sort by
-// creation time. Not thread-safe; use one manager per journal root (the
-// application runs as a single instance).
+// creation time. Not thread-safe; use one manager per journal root (pmm-app
+// holds a per-profile lock, so one process uses a journal root at a time).
 
 #include "core/result.hpp"
 

@@ -9,6 +9,6 @@ add_executable(pmm-steam-helper
   steam_api_loader.hpp)
 target_link_libraries(pmm-steam-helper PRIVATE pmm_providers Threads::Threads ${CMAKE_DL_LIBS})
 pmm_configure_target(pmm-steam-helper)
-# The app and CLI look for the helper next to their own executable, in the build
-# tree as in packages, so all three share one output directory.
+# pmm-app looks for the helper next to its own executable, in the build tree as
+# in packages, so both share one output directory.
 set_target_properties(pmm-steam-helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
