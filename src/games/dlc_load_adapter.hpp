@@ -23,6 +23,10 @@
 //     so a developer's local copy that carries a remote_file_id stays local;
 //   - Workshop content folders without a registration: steam-workshop, with
 //     descriptorRef "mod/ugc_<id>.mod" (generated at launch).
+// A Workshop registration whose content exists in no Steam library (e.g. the
+// game was reinstalled and Steam has not downloaded the item yet) is not an
+// installed mod: it is left out of the inventory, so that the item reads as
+// missing and can be acquired. A local mod without its folder stays Broken.
 //
 // User data: a folder chosen by the user, else an absolute path in
 // <install>/userdir.txt (games with GameTraits::userDirFile), else

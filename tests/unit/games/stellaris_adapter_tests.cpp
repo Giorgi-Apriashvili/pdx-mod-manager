@@ -256,12 +256,12 @@ TEST_CASE("Stellaris scan applies the identity rules", "[games][stellaris]") {
     std::vector<std::string> keys;
     for (const InstalledMod& m : mods)
         keys.push_back(m.identity.source + ":" + m.identity.id);
+    // 1000000008 and 1000000009 are registered but not downloaded: not installed.
     CHECK(keys == std::vector<std::string>{
                       "local:bad_syntax", "local:local_tweaks", "local:missing_folder",
                       "local:Ünïcødé mod", "steam-workshop:1000000001", "steam-workshop:1000000002",
                       "steam-workshop:1000000003", "steam-workshop:1000000004",
-                      "steam-workshop:1000000005", "steam-workshop:1000000006",
-                      "steam-workshop:1000000008", "steam-workshop:1000000009"});
+                      "steam-workshop:1000000005", "steam-workshop:1000000006"});
     for (const InstalledMod& m : mods)
         CHECK(m.identity.game == "stellaris");
 
@@ -340,13 +340,19 @@ TEST_CASE("Stellaris scan reports broken and pending mods per mod", "[games][ste
     const InstalledMod& outdated = f.mod(mods, "1000000005");
     CHECK(outdated.state == InstallState::NeedsUpdate);
 
-    const InstalledMod& unsubscribed = f.mod(mods, "1000000008");
-    CHECK(unsubscribed.state == InstallState::Broken);
-    CHECK(test::containsText(unsubscribed.problems, "not downloaded"));
-    CHECK(unsubscribed.descriptor.name == "Example Unsubscribed");
+    // Registered Workshop items whose content is in no library are not
+    // installed (whether Steam is downloading them or not): they read as
+    // missing in playsets and can be acquired.
+    CHECK(findMod(mods, "1000000008") == nullptr);
+    CHECK(findMod(mods, "1000000009") == nullptr);
 
-    const InstalledMod& downloading = f.mod(mods, "1000000009");
+    // Content on disk that Steam does not list as installed yet: an update.
+    test::writeText(f.content("1000000009") / "descriptor.mod", "name=\"Example Downloading\"");
+    const std::vector<InstalledMod> updating = f.scan(f.discovered());
+    const InstalledMod& downloading = f.mod(updating, "1000000009");
     CHECK(downloading.state == InstallState::Downloading);
+    CHECK(downloading.problems.empty());
+    CHECK(findMod(updating, "1000000008") == nullptr);
 }
 
 TEST_CASE("Stellaris scan handles unusual registrations", "[games][stellaris]") {
@@ -439,13 +445,30 @@ TEST_CASE("Stellaris current configuration is read from dlc_load.json", "[games]
         CHECK((*aliased)[0].identity.id == "1000000001");
         CHECK((*aliased)[1].identity.id == "local_tweaks");
     }
-    SECTION("unresolved entries keep a readable name hint") {
+    SECTION("unresolved entries keep their identity and a readable name hint") {
         auto unresolved = f.adapter.readCurrentConfiguration(inst, {});
         REQUIRE(unresolved.ok());
         REQUIRE(unresolved->size() == 4);
         CHECK((*unresolved)[1].identity == ModIdentity{"stellaris", "local", "local_tweaks"});
         CHECK((*unresolved)[1].nameHint == "Local Tweaks");
-        CHECK((*unresolved)[0].identity == ModIdentity{"stellaris", "local", "ugc_1000000001"});
+        CHECK((*unresolved)[0].identity ==
+              ModIdentity{"stellaris", "steam-workshop", "1000000001"});
+        CHECK((*unresolved)[0].nameHint == "Example Overhaul");
+    }
+    SECTION("registered Workshop items that are not downloaded stay Workshop entries") {
+        test::writeText(dlcLoad, "{\"enabled_mods\":[\"mod/ugc_1000000008.mod\","
+                                 "\"mod/ugc_1000000009.mod\",\"mod/ugc_1000000077.mod\","
+                                 "\"mod/ugc_01.mod\"]}");
+        auto missing = f.adapter.readCurrentConfiguration(inst, mods);
+        REQUIRE(missing.ok());
+        REQUIRE(missing->size() == 4);
+        CHECK((*missing)[0].identity == ModIdentity{"stellaris", "steam-workshop", "1000000008"});
+        CHECK((*missing)[0].nameHint == "Example Unsubscribed");
+        CHECK((*missing)[1].identity == ModIdentity{"stellaris", "steam-workshop", "1000000009"});
+        // No descriptor: the ugc_<id>.mod naming convention, canonical ids only.
+        CHECK((*missing)[2].identity == ModIdentity{"stellaris", "steam-workshop", "1000000077"});
+        CHECK((*missing)[2].nameHint == "mod/ugc_1000000077.mod");
+        CHECK((*missing)[3].identity == ModIdentity{"stellaris", "local", "ugc_01"});
     }
     SECTION("missing, empty and malformed files") {
         fs::remove(dlcLoad);
@@ -597,8 +620,12 @@ TEST_CASE("Stellaris launch plan refuses what it cannot launch", "[games][stella
     CHECK(result.error().code == ErrorCode::NotFound);
     CHECK(result.error().message.find("Local Tweaks") != std::string::npos);
 
-    result = build({f.mod(mods, "1000000008")});
+    InstalledMod gone = f.mod(mods, "1000000001"); // removed after the scan
+    gone.contentPath = f.content("1000000008");
+    gone.descriptor.name = "Example Unsubscribed";
+    result = build({gone});
     REQUIRE_FALSE(result.ok());
+    CHECK(result.error().code == ErrorCode::NotFound);
     CHECK(result.error().message.find("Example Unsubscribed") != std::string::npos);
 
     result = build({f.mod(mods, "1000000004")}); // no readable descriptor anywhere

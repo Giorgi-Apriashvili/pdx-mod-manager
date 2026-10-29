@@ -242,18 +242,33 @@ void markBroken(InstalledMod& mod, std::string problem) {
     mod.problems.push_back(std::move(problem));
 }
 
+bool declaredContentExists(const Registration& reg) {
+    return reg.declaredArchive ? isRegularFile(reg.declared) : isDirectory(reg.declared);
+}
+
+// How Steam sees an item whose content is not on disk (diagnostics only).
+std::string steamStateNote(const steam::WorkshopItemState* item) {
+    if (item == nullptr)
+        return "not in Steam's Workshop manifest";
+    if (item->installed)
+        return "listed as installed, but the folder is missing";
+    return item->subscribedBy.empty() ? "not subscribed" : "subscribed, download pending";
+}
+
+// A Workshop item whose content is on disk: `folder` is its folder in a Steam
+// library, or nullptr when only the registration's own path/archive (which
+// exists) has it, e.g. a copy in a custom folder.
 InstalledMod workshopMod(const GameKey& game, const std::string& id, const Registration* reg,
                          const fs::path* folder, const WorkshopContent& content) {
+    assert(folder != nullptr || reg != nullptr);
     InstalledMod mod;
     mod.identity = ModIdentity{game, source::SteamWorkshop, id};
 
     fs::path contentPath;
-    bool contentPresent = false;
     std::optional<ModDescriptor> contentDescriptor;
     std::string contentProblem;
     if (folder != nullptr) {
         contentPath = *folder;
-        contentPresent = true;
         const fs::path descriptorFile = *folder / kContentDescriptor;
         if (reg != nullptr && reg->declaredArchive && isRegularFile(reg->declared) &&
             platform::isWithin(reg->declared, *folder)) {
@@ -271,10 +286,8 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
         } else {
             contentProblem = "The Workshop folder has no descriptor.mod.";
         }
-    } else if (reg != nullptr && !reg->declared.empty()) {
+    } else {
         contentPath = reg->declared;
-        contentPresent =
-            reg->declaredArchive ? isRegularFile(contentPath) : isDirectory(contentPath);
     }
     mod.contentPath = contentPath;
 
@@ -295,14 +308,12 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
         mod.descriptorRef = ugcReference(id);
         if (contentDescriptor)
             mod.descriptor = *contentDescriptor;
-        else if (contentPresent)
+        else
             markBroken(mod, contentProblem);
     }
 
-    if (!contentPresent) {
-        markBroken(mod, "The Workshop item is not downloaded (its content folder is missing).");
-    } else if (reg != nullptr && reg->document &&
-               (reg->declared.empty() || !samePath(reg->declared, contentPath))) {
+    if (reg != nullptr && reg->document &&
+        (reg->declared.empty() || !samePath(reg->declared, contentPath))) {
         mod.problems.push_back("The registered descriptor " + reg->ref +
                                " points to another location; it is rewritten when the game is "
                                "launched from this app.");
@@ -335,9 +346,7 @@ InstalledMod localMod(const GameKey& game, const Registration& reg) {
         return mod;
     }
     mod.contentPath = reg.declared;
-    const bool present =
-        reg.declaredArchive ? isRegularFile(reg.declared) : isDirectory(reg.declared);
-    if (!present)
+    if (!declaredContentExists(reg))
         markBroken(mod, std::string(reg.declaredArchive ? "The mod archive " : "The mod folder ") +
                             toGenericUtf8(reg.declared) + " does not exist.");
     mod.contentUpdatedAt = platform::lastWriteUnixSeconds(reg.declared);
@@ -741,6 +750,7 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         m_traits.logComponent);
 
     std::vector<InstalledMod> mods;
+    std::size_t notDownloaded = 0;
     // Workshop registrations grouped by id; ugc_<id>.mod is the canonical one.
     std::map<std::string, std::vector<const Registration*>> byWorkshopId;
     for (const Registration& reg : registrations) {
@@ -756,6 +766,18 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         });
         const Registration* chosen = primary != regs.end() ? *primary : regs.front();
         const auto folder = content.folders.find(id);
+        if (folder == content.folders.end() && !declaredContentExists(*chosen)) {
+            // Registered but not downloaded (e.g. after a reinstall): not an
+            // installed mod, so that playsets see it as missing and it can be
+            // acquired. Noted for diagnostics only.
+            ++notDownloaded;
+            logInfo(m_traits.logComponent,
+                    "A registered Workshop item is not downloaded; it is not part of the inventory",
+                    {{"id", id},
+                     {"descriptor", chosen->ref},
+                     {"steam", steamStateNote(content.findItem(id))}});
+            continue;
+        }
         InstalledMod mod = workshopMod(
             game, id, chosen, folder != content.folders.end() ? &folder->second : nullptr, content);
         for (const Registration* other : regs) {
@@ -773,7 +795,8 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
     logInfo(m_traits.logComponent, "Mod scan finished",
             {{"mods", std::to_string(mods.size())},
              {"registered", std::to_string(registrations.size())},
-             {"workshopFolders", std::to_string(content.folders.size())}});
+             {"workshopFolders", std::to_string(content.folders.size())},
+             {"registeredNotDownloaded", std::to_string(notDownloaded)}});
     return mods;
 }
 
@@ -830,16 +853,29 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
         PlaysetEntry entry;
         const InstalledMod* mod = findByRef(ref);
         std::string hint = ref;
+        std::string versionHint;
+        std::optional<ModIdentity> workshop; // a Workshop item that is not installed
         if (mod == nullptr && isPlainModReference(ref)) {
             // Another registration of an inventory mod (e.g. a second .mod for
-            // the same Workshop item): resolve it through its own descriptor.
+            // the same Workshop item), or the registration of a Workshop item
+            // that is not downloaded: resolve it through its own descriptor.
             const fs::path descriptorFile = installation.userDataPath / pathFromUtf8(ref);
             if (isRegularFile(descriptorFile)) {
                 const Registration reg = readRegistration(descriptorFile, installation.userDataPath,
                                                           m_traits.steamAppId);
-                mod = findByIdentity(identityOf(reg, game));
+                const ModIdentity identity = identityOf(reg, game);
+                mod = findByIdentity(identity);
+                if (identity.source == source::SteamWorkshop)
+                    workshop = identity;
                 if (reg.document && !reg.descriptor.name.empty())
                     hint = reg.descriptor.name;
+                if (reg.document)
+                    versionHint = reg.descriptor.version;
+            } else if (auto id =
+                           ugcIdFromFileName(ref.substr(std::string_view(kModFolder).size() + 1))) {
+                // No descriptor at all: the launcher's naming convention.
+                workshop = ModIdentity{game, source::SteamWorkshop, *id};
+                mod = findByIdentity(*workshop);
             }
         }
         if (mod != nullptr) {
@@ -847,6 +883,10 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
             entry.nameHint = mod->descriptor.name;
             entry.versionHint = mod->descriptor.version;
             entry.fingerprint = mod->fingerprint;
+        } else if (workshop) {
+            entry.identity = *workshop;
+            entry.nameHint = hint;
+            entry.versionHint = versionHint;
         } else {
             entry.identity = ModIdentity{game, source::Local, referenceStem(ref)};
             entry.nameHint = hint;
