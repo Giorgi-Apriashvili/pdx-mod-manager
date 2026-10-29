@@ -20,9 +20,18 @@ AbstractButton {
     Accessible.name: text
     Accessible.description: toolTipText
 
-    ToolTip.visible: toolTipText.length > 0 && hovered
+    ToolTip.visible: toolTipText.length > 0 && (hovered || visualFocus)
     ToolTip.text: toolTipText
     ToolTip.delay: 600
+
+    Keys.onReturnPressed: event => activate(event)
+    Keys.onEnterPressed: event => activate(event)
+
+    function activate(event: KeyEvent) {
+        event.accepted = true
+        if (enabled)
+            clicked()
+    }
 
     contentItem: Text {
         id: label

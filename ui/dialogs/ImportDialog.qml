@@ -121,6 +121,8 @@ AppDialog {
                 font.weight: Font.DemiBold
                 color: Theme.text
                 elide: Text.ElideMiddle
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
             }
             AppButton {
                 text: qsTr("Paste from clipboard")
@@ -169,6 +171,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             color: Theme.textMuted
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         // Preview
@@ -189,6 +193,8 @@ AppDialog {
                     font.weight: Font.DemiBold
                     color: Theme.text
                     elide: Text.ElideRight
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
                 Chip {
                     text: dialog.preview.gameName ?? ""
@@ -286,6 +292,16 @@ AppDialog {
                         ScrollBar.vertical: AppScrollBar {}
                         Accessible.role: Accessible.List
                         Accessible.name: qsTr("Entries in load order")
+                        // Read-only, but focusable so the entries can be read and
+                        // scrolled with the keyboard.
+                        activeFocusOnTab: true
+                        keyNavigationEnabled: true
+                        currentIndex: -1
+                        onActiveFocusChanged: {
+                            if (activeFocus && currentIndex < 0 && count > 0)
+                                currentIndex = 0
+                        }
+                        Keys.onPressed: event => event.accepted = Theme.pageList(entryList, event.key)
 
                         delegate: Rectangle {
                             id: entry
@@ -295,9 +311,21 @@ AppDialog {
                             height: 22
                             color: index % 2 === 1 ? Theme.alternateBase : Theme.base
                             Accessible.role: Accessible.ListItem
-                            Accessible.name: qsTr("%1. %2, %3, %4").arg(modelData.position).arg(modelData.name)
-                                             .arg(modelData.enabled ? qsTr("enabled") : qsTr("disabled"))
-                                             .arg(modelData.statusText)
+                            Accessible.name: qsTr("%1. %2, %3, %4, %5").arg(entry.modelData.position)
+                                             .arg(entry.modelData.name)
+                                             .arg(entry.modelData.enabled ? qsTr("enabled") : qsTr("disabled"))
+                                             .arg(entry.modelData.source === "local" ? qsTr("Local") : qsTr("Workshop"))
+                                             .arg(entry.modelData.statusText)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                z: 1
+                                visible: entry.ListView.isCurrentItem && entryList.activeFocus
+                                color: "transparent"
+                                border.width: 2
+                                border.color: Theme.focus
+                                radius: 2
+                            }
 
                             Row {
                                 anchors.fill: parent

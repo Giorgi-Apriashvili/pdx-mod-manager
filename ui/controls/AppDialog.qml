@@ -70,6 +70,8 @@ Dialog {
                 font.pixelSize: Theme.fontSize
                 color: Theme.textMuted
                 wrapMode: Text.Wrap
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
             }
         }
 

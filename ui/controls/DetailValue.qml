@@ -4,10 +4,12 @@ import QtQuick.Layouts
 import Pmm.Ui
 
 // Value column of a details grid; optionally selectable for copying ids/paths.
+// `labelText` repeats the key column so the value is announced as "Label: value".
 Item {
     id: root
 
     property string text
+    property string labelText
     property bool selectable: false
     property bool monospace: false
     property int elideMode: Text.ElideRight
@@ -17,7 +19,7 @@ Item {
     implicitHeight: Math.max(label.implicitHeight, edit.implicitHeight)
     implicitWidth: Math.min(label.implicitWidth, 80)
     Accessible.role: Accessible.StaticText
-    Accessible.name: text
+    Accessible.name: labelText.length > 0 ? labelText + ": " + text : text
 
     Text {
         id: label
@@ -47,6 +49,7 @@ Item {
         selectedTextColor: Theme.accentText
         verticalAlignment: TextEdit.AlignVCenter
         activeFocusOnPress: true
+        Accessible.name: root.labelText.length > 0 ? root.labelText : root.text
     }
 
     HoverHandler {

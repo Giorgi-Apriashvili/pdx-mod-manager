@@ -32,9 +32,19 @@ Button {
     Accessible.name: text.length > 0 ? text : toolTipText
     Accessible.description: toolTipText
 
-    ToolTip.visible: toolTipText.length > 0 && hovered
+    ToolTip.visible: toolTipText.length > 0 && (hovered || visualFocus)
     ToolTip.text: toolTipText
     ToolTip.delay: 600
+
+    // Space is built in; Enter and Return activate a focused button as well.
+    Keys.onReturnPressed: event => activate(event)
+    Keys.onEnterPressed: event => activate(event)
+
+    function activate(event: KeyEvent) {
+        event.accepted = true
+        if (enabled)
+            clicked()
+    }
 
     contentItem: Item {
         implicitWidth: row.implicitWidth
@@ -82,8 +92,10 @@ Button {
         border.width: control._flat || control._accent ? 0 : 1
         border.color: Theme.border
 
+        // Filled buttons get a 1 px gap so the ring never merges with the fill.
         FocusRing {
             visible: control.visualFocus
+            inset: control._accent ? -3 : -2
         }
     }
 }

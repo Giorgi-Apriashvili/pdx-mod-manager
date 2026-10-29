@@ -19,7 +19,7 @@ CheckBox {
     Accessible.name: text.length > 0 ? text : toolTipText
     Accessible.description: toolTipText
 
-    ToolTip.visible: toolTipText.length > 0 && hovered
+    ToolTip.visible: toolTipText.length > 0 && (hovered || visualFocus)
     ToolTip.text: toolTipText
     ToolTip.delay: 600
 
@@ -31,10 +31,10 @@ CheckBox {
         y: control.topPadding + (control.availableHeight - height) / 2
         radius: 2
         color: control.checkState !== Qt.Unchecked
-               ? (control.enabled ? Theme.accent : Theme.borderStrong)
+               ? (control.enabled ? Theme.controlChecked : Theme.borderStrong)
                : Theme.input
         border.width: control.checkState !== Qt.Unchecked ? 0 : 1
-        border.color: control.hovered ? Theme.textMuted : Theme.borderStrong
+        border.color: control.hovered ? Theme.textMuted : Theme.controlBorder
 
         Icon {
             anchors.centerIn: parent
@@ -48,6 +48,7 @@ CheckBox {
         FocusRing {
             visible: control.visualFocus
             baseRadius: 2
+            inset: control.checkState !== Qt.Unchecked ? -3 : -2
         }
     }
 

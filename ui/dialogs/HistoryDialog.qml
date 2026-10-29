@@ -18,6 +18,7 @@ AppDialog {
     preferredWidth: 560
 
     onAboutToShow: entries = Backend.playsets.history()
+    onOpened: closeButton.forceActiveFocus(Qt.TabFocusReason)
 
     contentItem: Rectangle {
         implicitHeight: Math.max(120, Math.min(historyList.contentHeight + 2, 420))
@@ -45,7 +46,8 @@ AppDialog {
                 implicitHeight: 44
                 color: index % 2 === 1 ? Theme.alternateBase : Theme.base
                 Accessible.role: Accessible.ListItem
-                Accessible.name: modelData.playsetName + ", " + modelData.reason + ", " + modelData.createdText
+                Accessible.name: entry.modelData.playsetName + ", " + entry.modelData.reason + ", "
+                                 + entry.modelData.createdText
 
                 RowLayout {
                     anchors.fill: parent
@@ -81,6 +83,8 @@ AppDialog {
                     AppButton {
                         text: qsTr("Restore")
                         toolTipText: qsTr("Restore this snapshot as a playset")
+                        Accessible.name: qsTr("Restore %1 (%2, %3)").arg(entry.modelData.playsetName)
+                                         .arg(entry.modelData.reason).arg(entry.modelData.createdText)
                         onClicked: {
                             if (Backend.playsets.restoreHistory(entry.modelData.historyId))
                                 dialog.close()
@@ -98,12 +102,15 @@ AppDialog {
                 font.pixelSize: Theme.fontSize
                 color: Theme.textMuted
                 wrapMode: Text.Wrap
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
             }
         }
     }
 
     footer: DialogFooter {
         AppButton {
+            id: closeButton
             text: qsTr("Close")
             onClicked: dialog.close()
         }

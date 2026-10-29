@@ -38,8 +38,9 @@ ItemDelegate {
     }
     Keys.onReturnPressed: clicked()
     Keys.onEnterPressed: clicked()
-    Keys.onUpPressed: nextItemInFocusChain(false).forceActiveFocus(Qt.TabFocusReason)
-    Keys.onDownPressed: nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason)
+    // Up/Down move between the selectable games only.
+    Keys.onUpPressed: (nextItemInFocusChain(false) as GameDelegate)?.forceActiveFocus(Qt.TabFocusReason)
+    Keys.onDownPressed: (nextItemInFocusChain(true) as GameDelegate)?.forceActiveFocus(Qt.TabFocusReason)
 
     contentItem: Item {
         implicitHeight: 32

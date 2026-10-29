@@ -26,7 +26,18 @@ Main {
         { name: "main-dark", run: () => {
             Backend.settings.theme = "dark"
         } },
+        // Keyboard focus (F6 into the actions column) with its tool tip.
+        { name: "a11y-focus-light", run: () => {
+            Backend.settings.theme = "light"
+            shot.selectMod(17)
+            shot.focusPane(1)
+        } },
+        { name: "a11y-shortcuts-dark", run: () => {
+            Backend.settings.theme = "dark"
+            shot.openShortcuts()
+        } },
         { name: "import-preview", run: () => {
+            shot.closeDialogs()
             Backend.settings.theme = "light"
             shot.openImport(Backend.sharing.clipboardText())
         } },

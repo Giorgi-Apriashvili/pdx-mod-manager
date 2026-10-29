@@ -49,6 +49,8 @@ AppDialog {
         currentManual = row ? row.manualLocation : false
     }
 
+    onOpened: installBrowse.forceActiveFocus(Qt.TabFocusReason)
+
     Instantiator {
         id: gameRows
         model: Backend.games
@@ -77,6 +79,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             font.weight: Font.DemiBold
             color: Theme.text
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         AppTextField {
             Layout.columnSpan: 2
@@ -87,8 +91,10 @@ AppDialog {
             Accessible.name: qsTr("Installation folder")
         }
         AppButton {
+            id: installBrowse
             text: qsTr("Browse…")
             iconName: "folder"
+            Accessible.name: qsTr("Browse for the installation folder")
             onClicked: installPicker.open()
         }
 
@@ -99,6 +105,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             font.weight: Font.DemiBold
             color: Theme.text
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         AppTextField {
             Layout.columnSpan: 2
@@ -111,6 +119,7 @@ AppDialog {
         AppButton {
             text: qsTr("Browse…")
             iconName: "folder"
+            Accessible.name: qsTr("Browse for the user-data folder")
             onClicked: userDataPicker.open()
         }
         Text {
@@ -120,6 +129,8 @@ AppDialog {
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
     }
 

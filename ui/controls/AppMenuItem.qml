@@ -19,6 +19,7 @@ MenuItem {
     hoverEnabled: true
 
     Accessible.name: text
+    Accessible.description: shortcutText
 
     contentItem: Item {
         implicitWidth: row.implicitWidth

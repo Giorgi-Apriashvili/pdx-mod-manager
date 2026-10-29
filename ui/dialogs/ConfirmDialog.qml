@@ -38,6 +38,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             color: Theme.text
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         Text {
             Layout.fillWidth: true
@@ -47,6 +49,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             color: Theme.textMuted
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
     }
 
@@ -60,8 +64,8 @@ AppDialog {
             objectName: "confirmButton"
             variant: dialog.destructive ? "danger" : "accent"
             text: dialog.confirmText
-            Keys.onReturnPressed: clicked()
-            Keys.onEnterPressed: clicked()
+            // The question is read with the focused button.
+            Accessible.description: dialog.message
             onClicked: {
                 const run = dialog.action
                 dialog.close()

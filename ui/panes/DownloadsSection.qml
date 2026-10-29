@@ -36,6 +36,7 @@ ColumnLayout {
             anchors.verticalCenter: parent ? parent.verticalCenter : undefined
             running: root.acquisition.active
             size: 12
+            Accessible.name: qsTr("Downloads in progress")
         }
     }
 
@@ -43,6 +44,8 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: 6
         visible: root.providerReady || root.acquisition.providerStatus === "unknown"
+        Accessible.role: Accessible.StaticText
+        Accessible.name: providerLine.text
 
         Icon {
             name: root.providerReady ? "check-circle" : "circle-help"
@@ -50,6 +53,7 @@ ColumnLayout {
             size: 13
         }
         Text {
+            id: providerLine
             Layout.fillWidth: true
             text: root.providerText(root.acquisition.providerStatus)
             font.pixelSize: Theme.fontSize
@@ -66,6 +70,7 @@ ColumnLayout {
         text: root.acquisition.providerMessage
     }
 
+    // Progress summary; screen readers hear it when it changes.
     Text {
         Layout.fillWidth: true
         visible: root.acquisition.summary.length > 0
@@ -73,6 +78,8 @@ ColumnLayout {
         font.pixelSize: Theme.fontSize
         color: Theme.text
         wrapMode: Text.Wrap
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
     }
 
     Text {
@@ -85,6 +92,8 @@ ColumnLayout {
         font.pixelSize: Theme.fontSize
         color: Theme.textMuted
         wrapMode: Text.Wrap
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
     }
 
     ListView {

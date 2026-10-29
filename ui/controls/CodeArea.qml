@@ -55,7 +55,7 @@ ScrollView {
             color: area.readOnly ? Theme.pane : Theme.input
             radius: Theme.radius
             border.width: area.activeFocus ? 2 : 1
-            border.color: area.activeFocus ? Theme.focus : Theme.border
+            border.color: area.activeFocus ? Theme.focus : Theme.controlBorder
         }
     }
 }

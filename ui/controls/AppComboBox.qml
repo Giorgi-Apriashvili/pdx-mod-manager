@@ -24,7 +24,7 @@ ComboBox {
     Accessible.name: accessibleName
     Accessible.description: displayText
 
-    ToolTip.visible: toolTipText.length > 0 && hovered && !popup.visible
+    ToolTip.visible: toolTipText.length > 0 && (hovered || visualFocus) && !popup.visible
     ToolTip.text: toolTipText
     ToolTip.delay: 600
 

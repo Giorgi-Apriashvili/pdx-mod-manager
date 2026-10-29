@@ -38,7 +38,12 @@ ColumnLayout {
             implicitHeight: 20
             toolTipText: qsTr("More playset actions")
             Accessible.name: qsTr("More playset actions")
-            onClicked: moreMenu.popup(moreButton, 0, moreButton.height + 2)
+            onClicked: {
+                moreMenu.popup(moreButton, 0, moreButton.height + 2)
+                // Opened from the keyboard: start on the first item.
+                if (visualFocus)
+                    moreMenu.currentIndex = 0
+            }
         }
     }
 
@@ -49,6 +54,8 @@ ColumnLayout {
         font.weight: Font.DemiBold
         color: root.hasPlayset ? Theme.text : Theme.textMuted
         elide: Text.ElideRight
+        Accessible.role: Accessible.StaticText
+        Accessible.name: root.hasPlayset ? qsTr("Active playset: %1").arg(text) : text
     }
     Text {
         Layout.fillWidth: true
@@ -61,6 +68,8 @@ ColumnLayout {
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.textMuted
         elide: Text.ElideRight
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
     }
 
     // Text-only so all four fit on one row in the narrowest right column.
@@ -75,6 +84,7 @@ ColumnLayout {
             rightPadding: 8
             text: qsTr("New…")
             toolTipText: qsTr("Create an empty playset (Ctrl+N)")
+            Accessible.name: qsTr("New playset…")
             onClicked: root.newRequested()
         }
         AppButton {
@@ -84,6 +94,7 @@ ColumnLayout {
             text: qsTr("Duplicate…")
             enabled: root.hasPlayset
             toolTipText: qsTr("Copy the active playset under a new name")
+            Accessible.name: qsTr("Duplicate playset…")
             onClicked: root.duplicateRequested()
         }
         AppButton {
@@ -93,6 +104,7 @@ ColumnLayout {
             text: qsTr("Rename…")
             enabled: root.hasPlayset
             toolTipText: qsTr("Rename the active playset")
+            Accessible.name: qsTr("Rename playset…")
             onClicked: root.renameRequested()
         }
         AppButton {
@@ -102,6 +114,7 @@ ColumnLayout {
             text: qsTr("Delete")
             enabled: root.hasPlayset
             toolTipText: qsTr("Delete the active playset. It is kept in History and can be restored.")
+            Accessible.name: qsTr("Delete playset")
             onClicked: root.deleteRequested()
         }
     }
@@ -115,6 +128,7 @@ ColumnLayout {
         text: qsTr("The deleted playset can be restored.")
         LinkButton {
             text: qsTr("Restore")
+            Accessible.name: qsTr("Restore deleted playset")
             toolTipText: qsTr("Restore the most recently deleted playset (replaced ones are in History)")
             onClicked: Backend.playsets.restoreLast()
         }

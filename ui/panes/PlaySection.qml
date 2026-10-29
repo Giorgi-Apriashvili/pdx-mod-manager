@@ -97,6 +97,8 @@ Rectangle {
             leftPadding: 19
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         Repeater {
             model: root.blockerLines.length === 0 ? root.warningLines.slice(0, 2) : []
@@ -132,6 +134,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 running: root.launcher.busy
                 color: Theme.accentText
+                Accessible.ignored: true
             }
         }
 
@@ -145,6 +148,12 @@ Rectangle {
             wrapMode: Text.Wrap
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+            // Launch progress is spoken as it happens; failures interrupt.
+            onTextChanged: {
+                if (text.length > 0)
+                    Accessible.announce(text, root.launcher.state === "failed" ? Accessible.Assertive
+                                                                               : Accessible.Polite)
+            }
         }
 
         Flow {

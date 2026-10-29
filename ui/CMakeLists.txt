@@ -69,6 +69,7 @@ qt_add_qml_module(pmm_ui
     dialogs/LocateDialog.qml
     dialogs/NameDialog.qml
     dialogs/SettingsDialog.qml
+    dialogs/ShortcutsDialog.qml
 )
 
 target_link_libraries(pmm_ui PRIVATE Qt6::Quick Qt6::QuickControls2)

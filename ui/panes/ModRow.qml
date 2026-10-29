@@ -34,9 +34,11 @@ Item {
 
     height: Theme.rowHeight
 
+    // Read when the row becomes current, so it carries everything the cells show.
     Accessible.role: Accessible.ListItem
-    Accessible.name: qsTr("%1. %2, %3, %4").arg(model.position).arg(model.name)
-                     .arg(modEnabled ? qsTr("enabled") : qsTr("disabled")).arg(model.statusText)
+    Accessible.name: qsTr("%1. %2, %3, %4, %5").arg(model.position).arg(model.name)
+                     .arg(modEnabled ? qsTr("enabled") : qsTr("disabled")).arg(model.sourceLabel)
+                     .arg(model.statusText)
     Accessible.description: model.hasWarnings ? Theme.lines(model.warnings).join(" ") : ""
     Accessible.selected: selected
     Accessible.selectable: true
@@ -48,12 +50,15 @@ Item {
              : (row.index % 2 === 1 ? Theme.alternateBase : Theme.base)
     }
 
+    // Keyboard focus: a 2 px ring inside the current row.
     Rectangle {
         anchors.fill: parent
         visible: row.isCurrent && row.listHasFocus
         color: "transparent"
-        border.width: 1
+        border.width: 2
         border.color: Theme.focus
+        radius: 2
+        z: 1
     }
 
     HoverHandler {
@@ -112,7 +117,7 @@ Item {
             height: parent.height
 
             Accessible.role: Accessible.CheckBox
-            Accessible.name: qsTr("Enabled")
+            Accessible.name: qsTr("Enable %1").arg(row.model.name)
             Accessible.checkable: true
             Accessible.checked: row.modEnabled
             Accessible.onPressAction: row.toggleRequested(row.index)
@@ -125,9 +130,9 @@ Item {
                 width: 14
                 height: 14
                 radius: 2
-                color: row.modEnabled ? Theme.accent : Theme.input
+                color: row.modEnabled ? Theme.controlChecked : Theme.input
                 border.width: row.modEnabled ? 0 : 1
-                border.color: checkHover.hovered ? Theme.textMuted : Theme.borderStrong
+                border.color: checkHover.hovered ? Theme.textMuted : Theme.controlBorder
 
                 Icon {
                     anchors.centerIn: parent
@@ -171,7 +176,7 @@ Item {
                 visible: row.model.hasWarnings
 
                 Accessible.role: Accessible.Indicator
-                Accessible.name: qsTr("Warnings")
+                Accessible.name: qsTr("Warnings for %1").arg(row.model.name)
                 Accessible.description: Theme.lines(row.model.warnings).join(" ")
 
                 Icon {

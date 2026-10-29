@@ -50,6 +50,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             color: Theme.textMuted
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         MessageLine {
             Layout.fillWidth: true
@@ -66,6 +68,8 @@ AppDialog {
                 text: qsTr("%1 characters").arg(Theme.formatCount(dialog.code.length))
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.textMuted
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
             }
         ]
         AppButton {

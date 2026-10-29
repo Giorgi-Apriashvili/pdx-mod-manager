@@ -13,9 +13,16 @@ Rectangle {
     property string iconName: Theme.levelIcon(level)
     property bool closable: false
     property bool actionsBelow: false
+    // Spoken when the banner appears or its message changes (errors by default).
+    property bool announced: level === "error"
     default property alias actions: actionRow.data
 
     signal closed()
+
+    function announce() {
+        if (announced && visible && (title.length > 0 || text.length > 0))
+            Accessible.announce(Accessible.name, Accessible.Assertive)
+    }
 
     implicitHeight: layout.implicitHeight + 10
     radius: Theme.radius
@@ -23,9 +30,14 @@ Rectangle {
     border.width: 1
     border.color: Qt.alpha(Theme.levelColor(level), Theme.dark ? 0.45 : 0.35)
 
-    Accessible.role: Accessible.AlertMessage
-    Accessible.name: title.length > 0 ? title : text
-    Accessible.description: title.length > 0 ? text : ""
+    // A named group: the message is read when focus enters one of its actions.
+    // (AlertMessage would surface as a separate window in UI Automation.)
+    Accessible.role: Accessible.Grouping
+    Accessible.name: [level === "error" ? qsTr("Error") : level === "warning" ? qsTr("Warning") : "",
+                      title, text].filter(s => s.length > 0).join(". ")
+
+    onVisibleChanged: Qt.callLater(announce)
+    Accessible.onNameChanged: Qt.callLater(announce)
 
     GridLayout {
         id: layout
