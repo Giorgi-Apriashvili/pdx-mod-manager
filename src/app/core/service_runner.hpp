@@ -9,10 +9,10 @@
 //               [](Result r) { /* on the receiver's thread */ });
 //
 // Calls run in submission order, one at a time. `done` runs queued on the
-// receiver's thread and is dropped if the receiver is gone by then. Receivers
-// must outlive the running worker (shut the runner down before destroying
-// them). Coordinator activity that nobody asked for (helper events, metadata,
-// ticks) is announced through acquisitionChanged().
+// receiver's thread - receivers live on the runner's own (GUI) thread - and
+// is dropped if the receiver was destroyed meanwhile. Coordinator activity
+// that nobody asked for (helper events, metadata, ticks) is announced through
+// acquisitionChanged().
 //
 // shutdown() (also run by the destructor) stops the tick, persists progress
 // and closes every helper session (coordinator.shutdown(), then the hosts),
@@ -21,6 +21,7 @@
 #include "app/core/app_runtime.hpp"
 
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QThread>
@@ -76,18 +77,30 @@ public:
 
     template <class Fn, class Done> void call(QObject* receiver, Fn fn, Done done) {
         using R = std::invoke_result_t<Fn&, AppRuntime&>;
-        dispatch([this, receiver, fn = std::move(fn), done = std::move(done)]() mutable {
+        Q_ASSERT(receiver && receiver->thread() == thread());
+        // Only dereferenced on this object's thread, where the receiver lives.
+        QPointer<QObject> guard(receiver);
+        dispatch([this, guard, fn = std::move(fn), done = std::move(done)]() mutable {
             AppRuntime* runtime = this->runtime();
             if (!runtime)
                 return;
             if constexpr (std::is_void_v<R>) {
                 fn(*runtime);
                 QMetaObject::invokeMethod(
-                    receiver, [done]() mutable { done(); }, Qt::QueuedConnection);
+                    this,
+                    [guard, done]() mutable {
+                        if (guard)
+                            done();
+                    },
+                    Qt::QueuedConnection);
             } else {
                 auto result = std::make_shared<R>(fn(*runtime));
                 QMetaObject::invokeMethod(
-                    receiver, [done, result]() mutable { done(std::move(*result)); },
+                    this,
+                    [guard, done, result]() mutable {
+                        if (guard)
+                            done(std::move(*result));
+                    },
                     Qt::QueuedConnection);
             }
         });

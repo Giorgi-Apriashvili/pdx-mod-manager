@@ -1,0 +1,301 @@
+// ServiceRunner marshalling and shutdown, and the Backend driving the real
+// services through it: edits are persisted and undoable, playset management,
+// the share-code round trip and start-up failures.
+
+#include "app/core/qt_util.hpp"
+#include "app/core/service_runner.hpp"
+#include "app/gui/backend.hpp"
+#include "persistence/playset_repository.hpp"
+#include "persistence/settings_repository.hpp"
+#include "test_support.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <QPointer>
+#include <QThread>
+
+#include <memory>
+#include <vector>
+
+using namespace pmm;
+using namespace pmm::app;
+using namespace pmm::app::test;
+
+namespace {
+
+RunnerOptions runnerOptions(const fs::path& profile, const FakeAdapter& adapter) {
+    RunnerOptions options;
+    options.runtime = hermeticOptions(profile, adapter);
+    options.steam = false;
+    return options;
+}
+
+std::vector<PlaysetEntry> storedEntries(ServiceRunner& runner, std::int64_t playsetId) {
+    return runner.callBlocking([playsetId](AppRuntime& runtime) {
+        auto playset = runtime.playsets().playset(playsetId);
+        return playset ? playset.value().entries : std::vector<PlaysetEntry>{};
+    });
+}
+
+std::vector<std::string> ids(const std::vector<PlaysetEntry>& entries) {
+    std::vector<std::string> out;
+    for (const PlaysetEntry& entry : entries)
+        out.push_back(entry.identity.id);
+    return out;
+}
+
+std::vector<std::string> ids(const ModListModel& model) {
+    std::vector<std::string> out;
+    for (const ModRowData& row : model.rows())
+        out.push_back(row.entry.identity.id);
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("ServiceRunner runs calls on its worker in order and answers on the caller",
+          "[app][runner]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    CHECK(fs::is_regular_file(temp.path() / "profile" / "state.sqlite"));
+
+    QObject receiver;
+    QThread* const gui = QThread::currentThread();
+    std::vector<int> order;
+    std::vector<bool> onWorker;
+    bool doneOnGui = true;
+    for (int i = 0; i < 50; ++i) {
+        runner.call(
+            &receiver,
+            [i, gui, &onWorker](AppRuntime&) {
+                onWorker.push_back(QThread::currentThread() != gui);
+                return i;
+            },
+            [&order, &doneOnGui, gui](int value) {
+                doneOnGui = doneOnGui && QThread::currentThread() == gui;
+                order.push_back(value);
+            });
+    }
+    REQUIRE(waitUntil([&] { return order.size() == 50; }));
+    CHECK(doneOnGui);
+    CHECK(std::all_of(onWorker.begin(), onWorker.end(), [](bool b) { return b; }));
+    CHECK(std::is_sorted(order.begin(), order.end()));
+
+    // Results for a receiver that is gone are dropped.
+    bool delivered = false;
+    auto* shortLived = new QObject;
+    runner.call(shortLived, [](AppRuntime&) { return 1; }, [&delivered](int) { delivered = true; });
+    delete shortLived;
+    const int marker = runner.callBlocking([](AppRuntime&) { return 7; });
+    CHECK(marker == 7);
+    QCoreApplication::processEvents();
+    CHECK_FALSE(delivered);
+
+    runner.shutdown();
+    CHECK_FALSE(runner.isRunning());
+    runner.shutdown(); // idempotent
+    bool afterShutdown = false;
+    runner.call(
+        &receiver, [](AppRuntime&) { return 0; }, [&afterShutdown](int) { afterShutdown = true; });
+    QCoreApplication::processEvents();
+    CHECK_FALSE(afterShutdown);
+}
+
+TEST_CASE("ServiceRunner reports start-up failures with an actionable message", "[app][runner]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    writeText(profile / "state.sqlite", "this is not a database");
+    ServiceRunner runner(runnerOptions(profile, adapter));
+    const RunnerStart start = runner.start();
+    CHECK_FALSE(start.ok);
+    CHECK(start.errorMessage.contains(QStringLiteral("database")));
+    CHECK(start.errorMessage.contains(QStringLiteral("state.sqlite")));
+    runner.shutdown();
+}
+
+TEST_CASE("Backend edits are persisted, undoable and reflected in the models", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addWorkshopMod("1002", "Beta");
+    world.addWorkshopMod("1003", "Gamma");
+    world.addLocalMod("delta mod", "Delta");
+    world.addLocalMod("epsilon", "Epsilon");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    CHECK(backend.currentGame() == "stellaris");
+    CHECK(backend.games()->currentInstalled());
+    CHECK(backend.inventory()->totalCount() == 5);
+    CHECK(backend.playsets()->count() == 0);
+    CHECK(backend.launcher()->blockers().join(' ').contains("No active playset"));
+
+    backend.playsets()->create(QStringLiteral("Campaign"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    const std::int64_t id = backend.activePlaysetId();
+    CHECK(backend.playsets()->activeName() == "Campaign");
+
+    backend.mods()->addMods({"steam-workshop:1001", "steam-workshop:1002", "steam-workshop:1003",
+                             "local:delta mod", "local:epsilon"});
+    REQUIRE(waitUntil([&] { return backend.mods()->count() == 5 && !backend.mods()->busy(); }));
+    CHECK(backend.mods()->enabledCount() == 5);
+    CHECK(backend.launcher()->canPlay()); // everything installed and ready
+    CHECK(ids(storedEntries(runner, id)) ==
+          std::vector<std::string>{"1001", "1002", "1003", "delta mod", "epsilon"});
+
+    SECTION("enable/disable") {
+        backend.mods()->setEnabled(1, false);
+        CHECK_FALSE(backend.mods()->rows()[1].entry.enabled); // optimistic
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+        CHECK_FALSE(storedEntries(runner, id)[1].enabled);
+        CHECK(backend.mods()->canUndo());
+        backend.mods()->undo();
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+        CHECK(storedEntries(runner, id)[1].enabled);
+        CHECK(backend.mods()->rows()[1].entry.enabled);
+        CHECK(backend.mods()->canRedo());
+    }
+    SECTION("multi-row moves are one undo step") {
+        backend.mods()->moveRows({3, 4}, -1);
+        CHECK(ids(*backend.mods()) ==
+              std::vector<std::string>{"1001", "1002", "delta mod", "epsilon", "1003"});
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+        CHECK(ids(storedEntries(runner, id)) == ids(*backend.mods()));
+        backend.mods()->moveRows({0, 1}, 3); // drag: block lands at index 3
+        CHECK(ids(*backend.mods()) ==
+              std::vector<std::string>{"delta mod", "epsilon", "1003", "1001", "1002"});
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+        CHECK(ids(storedEntries(runner, id)) == ids(*backend.mods()));
+        backend.mods()->undo();
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+        CHECK(ids(storedEntries(runner, id)) ==
+              std::vector<std::string>{"1001", "1002", "delta mod", "epsilon", "1003"});
+        CHECK(ids(*backend.mods()) == ids(storedEntries(runner, id)));
+    }
+    SECTION("reordering is refused while filtered") {
+        backend.modView()->setSearch(QStringLiteral("a"));
+        backend.mods()->moveRow(0, 2);
+        CHECK(ids(*backend.mods())[0] == "1001");
+        CHECK(backend.notifications()->latest().value("title").toString().contains("Reordering"));
+        backend.modView()->setSearch({});
+    }
+    SECTION("removal is snapshotted and undoable") {
+        backend.mods()->removeRows({0, 2});
+        CHECK(backend.mods()->count() == 3);
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+        CHECK(storedEntries(runner, id).size() == 3);
+        CHECK(backend.inventory()->totalCount() == 5);
+        backend.mods()->undo();
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy() && backend.mods()->count() == 5; }));
+        CHECK(ids(storedEntries(runner, id)) ==
+              std::vector<std::string>{"1001", "1002", "1003", "delta mod", "epsilon"});
+    }
+    SECTION("delete and restore a playset") {
+        backend.playsets()->remove(static_cast<int>(id));
+        REQUIRE(waitUntil([&] { return backend.playsets()->count() == 0; }));
+        CHECK(backend.playsets()->canRestore());
+        CHECK(backend.activePlaysetId() == -1);
+        backend.playsets()->restoreLast();
+        REQUIRE(waitUntil(
+            [&] { return backend.playsets()->count() == 1 && backend.mods()->count() == 5; }));
+        CHECK(backend.playsets()->activeName() == "Campaign");
+        CHECK_FALSE(backend.playsets()->canRestore());
+    }
+    SECTION("share code round trip into a new playset") {
+        backend.mods()->setEnabled(2, false);
+        backend.mods()->moveRow(4, 0);
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+        const std::vector<PlaysetEntry> exported = storedEntries(runner, id);
+
+        backend.sharing()->exportCode();
+        REQUIRE(waitUntil([&] { return !backend.sharing()->lastExportCode().isEmpty(); }));
+        const QString code = backend.sharing()->lastExportCode();
+        CHECK(code.startsWith("PMM1."));
+
+        backend.sharing()->previewImport(code);
+        REQUIRE(waitUntil(
+            [&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+        const QVariantMap preview = backend.sharing()->preview();
+        REQUIRE(preview.value("ok").toBool());
+        CHECK(preview.value("total").toInt() == 5);
+        CHECK(preview.value("enabled").toInt() == 4);
+        CHECK(preview.value("missing").toInt() == 0);
+        CHECK(preview.value("entries").toList().size() == 5);
+        CHECK(backend.playsets()->count() == 1); // previewing changes nothing
+
+        REQUIRE(
+            backend.sharing()->confirmImport("new", -1, preview.value("proposedName").toString()));
+        REQUIRE(waitUntil([&] {
+            return backend.playsets()->count() == 2 && backend.activePlaysetId() != id &&
+                   backend.mods()->playsetId() == backend.activePlaysetId();
+        }));
+        const std::vector<PlaysetEntry> imported = storedEntries(runner, backend.activePlaysetId());
+        REQUIRE(imported.size() == exported.size());
+        for (std::size_t i = 0; i < imported.size(); ++i) {
+            CHECK(imported[i].identity.source == exported[i].identity.source);
+            CHECK(imported[i].identity.id == exported[i].identity.id);
+            CHECK(imported[i].enabled == exported[i].enabled);
+        }
+    }
+    SECTION("bad share codes are explained") {
+        backend.sharing()->previewImport(QStringLiteral("PMM9.abc.def"));
+        REQUIRE(waitUntil(
+            [&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+        CHECK_FALSE(backend.sharing()->preview().value("ok").toBool());
+        CHECK_FALSE(backend.sharing()->preview().value("errorMessage").toString().isEmpty());
+    }
+
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Backend restores settings and creates playsets from the game configuration",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("2001", "One");
+    world.addWorkshopMod("2002", "Two");
+    FakeAdapter adapter(world);
+    adapter.currentConfiguration = {
+        PlaysetEntry{ModIdentity{"stellaris", source::SteamWorkshop, "2002"}, true, "Two", {}, {}},
+        PlaysetEntry{ModIdentity{"stellaris", source::SteamWorkshop, "2001"}, true, "One", {}, {}}};
+    const fs::path profile = temp.path() / "profile";
+    {
+        ServiceRunner runner(runnerOptions(profile, adapter));
+        const RunnerStart start = runner.start();
+        REQUIRE(start.ok);
+        Backend backend(runner, {});
+        backend.initialize(start);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        REQUIRE(backend.importCurrentConfiguration());
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2; }));
+        CHECK(backend.mods()->rows()[0].entry.identity.id == "2002");
+        backend.settings()->setTheme(QStringLiteral("dark"));
+        backend.settings()->setColumnWidths({40, 30, 300, 90, 140});
+        backend.settings()->setWindowWidth(1234);
+        backend.shutdown();
+        runner.shutdown();
+    }
+    ServiceRunner runner(runnerOptions(profile, adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    CHECK(backend.settings()->theme() == "dark");
+    CHECK(backend.settings()->effectiveDark());
+    CHECK(backend.settings()->columnWidths() == QList<int>{40, 30, 300, 90, 140});
+    CHECK(backend.settings()->windowWidth() == 1234);
+    CHECK(backend.settings()->lastGameKey() == "stellaris");
+    CHECK(backend.mods()->count() == 2); // last active playset restored at start-up
+    runner.shutdown();
+}

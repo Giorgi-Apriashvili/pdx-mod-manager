@@ -10,6 +10,7 @@
 
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QPointer>
 #include <QTimer>
 
 namespace pmm::app {
@@ -66,9 +67,11 @@ void LaunchController::play() {
         QStringList warnings;
         LaunchData launch;
     };
-    m_backend->runner().call(
+    ServiceRunner* runner = &m_backend->runner();
+    QPointer<LaunchController> self(this); // dereferenced on the GUI thread only
+    runner->call(
         this,
-        [this, game, playsetId, options](AppRuntime& runtime) {
+        [runner, self, game, playsetId, options](AppRuntime& runtime) {
             Outcome outcome;
             const GameKey key = utf8(game);
             const services::LaunchCheck check = runtime.launcher().check(key, playsetId);
@@ -79,10 +82,10 @@ void LaunchController::play() {
                 outcome.error = makeError(ErrorCode::ValidationFailed, text);
             } else {
                 QMetaObject::invokeMethod(
-                    this,
-                    [this] {
-                        if (m_state == QLatin1String("validating"))
-                            setState(QStringLiteral("applying"), true);
+                    runner,
+                    [self] {
+                        if (self && self->m_state == QLatin1String("validating"))
+                            self->setState(QStringLiteral("applying"), true);
                     },
                     Qt::QueuedConnection);
                 auto launched = runtime.launcher().launch(key, playsetId);
