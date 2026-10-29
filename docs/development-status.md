@@ -9,8 +9,7 @@ restart persistence and the failure cases, all passing. The run found one
 defect (a stale Play blocker, fixed) and one game fact the product must
 respect: **EU4 ignores the `enabled_mods` order for file overrides** (the mod
 whose name sorts first wins). What is missing: builds of the application on
-Linux and macOS, a Workshop acquisition for Stellaris, and the open items
-below.
+Linux and macOS, and the open items below.
 
 There is no command-line tool, and none is planned: the spec does not ask for
 one. Headless checks use the hidden verification switches of `pmm-app`
@@ -61,11 +60,10 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 ### 1. Live validation: remaining pieces
 
 Done on 2026-10-30 ([results](validation.md#6-results)): EU4 steps 1-6, 8,
-9; Stellaris steps 1-3, 5-7. Still open, each needing the user's approval:
+9; Stellaris steps 1-7. Still open, each needing the user's approval:
 
 | What | Why open |
 | --- | --- |
-| Stellaris step 4 (a Workshop acquisition) | only one new subscription (EU4) was approved |
 | EU4 step 7 | run for Stellaris; same code path |
 | Steam's own offline mode | the Web API was made unreachable instead |
 | EU4 mods with `dependencies` and override precedence | not covered by the probes |

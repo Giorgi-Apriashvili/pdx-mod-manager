@@ -26,7 +26,7 @@ SteamID printed by the Steam API library is omitted.
 | 1 Detect installation and mods | pass (also [real scan](real-scan-2026-10-29.md)) | pass |
 | 2 Playset with ≥ 3 mods, a disabled entry, non-default order | pass: 6 entries, 2 disabled, probes C before A, local and Workshop mixed | pass (same shape) |
 | 3 Export, import into a clean profile | pass: profile A to profile B, same machine | pass (code imported into a clean profile) |
-| 4 Acquire an initially missing Workshop mod | **pass**: Larger Monuments Interface (2471388429), not subscribed before; subscribe, download, verify through the app | not run (one new subscription was approved) |
+| 4 Acquire an initially missing Workshop mod | **pass**: Larger Monuments Interface (2471388429), not subscribed before; subscribe, download, verify through the app | **pass** (rerun the same night): UI Overhaul Dynamic - Extended Topbar (1780481482), not subscribed before |
 | 5 Exact equality after import | pass: `share-code.py compare` equal, dumps byte-identical | pass: `compare` equal |
 | 6 Launch without the Paradox launcher; enabled mods and order in-game | **pass**: no launcher process, same game process after 20 s (no restart through Steam), probes loaded / not loaded as configured. **Order: EU4 ignores the `enabled_mods` order for file overrides** (below) | **pass**: no launcher process; probes as configured; the later mod in `enabled_mods` wins a shared file |
 | 7 Missing enabled content blocks; unavailable disabled entry stays visible | (covered by step 9 "offline") | pass: enabled wrong-game item blocks Play with the reason; disabled one stays listed as unavailable, Play allowed, not written to `dlc_load.json`, re-export equal |
@@ -76,6 +76,31 @@ Profile B, run 2 (restart, real Web API): the stored job resumed by itself.
 - `share-code.py compare validation.code b.code`: `equal: game 'eu4', 6
   entries, same order and enabled flags`; the A and B dumps are
   byte-identical.
+
+### Stellaris acquisition (step 4)
+
+Run later the same night (build `f809e91`) with a separate approval. A clean
+profile imported a code with Nullcore Nomad Fixes (installed, enabled),
+**UI Overhaul Dynamic - Extended Topbar** (1780481482, 1.0 MB, Steam API
+item state 0 before the run, enabled) and Relic Trade (installed, disabled):
+
+```text
+03:30:57.901 preview: 3 entries, 2 enabled, 2 installed, 1 missing
+03:30:58.129 job 1 1780481482 "UI Overhaul Dynamic - Extended Topbar": pending - Queued
+03:30:58.674 job 1 1780481482 "UI Overhaul Dynamic - Extended Topbar": subscribing - Subscribing
+03:30:59.051 job 1 1780481482 "UI Overhaul Dynamic - Extended Topbar": subscribed - Subscribed, waiting for the download
+03:30:59.059 job 1 1780481482 "UI Overhaul Dynamic - Extended Topbar": download_requested - Download requested
+03:31:00.567 job 1 1780481482 "UI Overhaul Dynamic - Extended Topbar": downloading 0% - Downloading 0 %
+03:31:01.571 job 1 1780481482 "UI Overhaul Dynamic - Extended Topbar": downloading 100% - Downloading 100 %
+03:31:03.726 job 1 1780481482 "UI Overhaul Dynamic - Extended Topbar": installed 100% - Installed
+03:31:03.729 every enabled entry is ready; Play is available
+03:31:03.742 canPlay=true blockers=[] warnings=[1 enabled mod has warnings (versions or dependencies); see the mod list.]
+```
+
+The re-export compared `equal` with the imported code. The game was not
+started for this step (launching was verified with the probe playset). The
+item was unsubscribed again afterwards (state 5 → 4); Stellaris's
+`dlc_load.json` and `mod/` folder were unchanged.
 
 ## Step 6: direct launch and in-game verification
 
@@ -239,5 +264,4 @@ item was removed again.
 - Launches were checked until the probes were reported (EU4: menu session
   started; Stellaris: event loading), not into a running campaign.
 - Not covered: Linux and macOS; Steam's offline mode (the Web API was made
-  unreachable instead); a Workshop acquisition for Stellaris; EU4 mods with
-  `dependencies`.
+  unreachable instead); EU4 mods with `dependencies`.

@@ -47,8 +47,7 @@ Stellaris "Cygnus v4.5.2 (9776)" build 25664273, EU4 "EU4 v1.37.5.0 Inca
   download through the application, restart persistence of a pending job, and
   the failure cases ([evidence](evidence/live-validation-2026-10-30.md)).
 
-Not observed yet: Linux and macOS, other stores, a Workshop acquisition for
-Stellaris, Steam's own offline mode.
+Not observed yet: Linux and macOS, other stores, Steam's own offline mode.
 
 ## Application build
 
@@ -70,7 +69,7 @@ Stellaris, Steam's own offline mode.
 | Share codes (export, import preview, exact reconciliation) | **Verified (2026-10-30, 4.5.2)** read-only between two clean profiles on one machine | Implemented, unverified | Implemented, unverified | Implemented, unverified |
 | Generated configuration (`dlc_load.json`, `mod/ugc_<id>.mod`) | **Verified (2026-10-29, 4.5.2)** computed, not written: identical to the launcher's | Implemented, unverified | Implemented, unverified | Implemented, unverified |
 | Workshop: Steam session and item state | **Verified (2026-10-29, 4.5.2)** read-only probe | Implemented, unverified (helper compiled with GCC and tested against the fake library, not run against Steam) | Implemented, unverified (not compiled) | Unsupported: requires the game on a Steam account |
-| Workshop: subscribe and download | Implemented, unverified for Stellaris (verified live for EU4 on the same machine, 2026-10-30); the identity check rejected an item of another game live without contacting Steam ([evidence](evidence/live-validation-2026-10-30.md)) | Implemented, unverified | Implemented, unverified | Unsupported: requires the game on a Steam account |
+| Workshop: subscribe and download | **Verified (2026-10-30, 4.5.2)**: an item not subscribed before was subscribed, downloaded and verified through the application; the identity check rejected an item of another game without contacting Steam ([evidence](evidence/live-validation-2026-10-30.md)) | Implemented, unverified | Implemented, unverified | Unsupported: requires the game on a Steam account |
 | Workshop: manual fallback (open in Steam, rescan) | Implemented, unverified | Implemented, unverified | Implemented, unverified | Unsupported |
 | Direct launch without the Paradox launcher | **Verified (2026-10-30, 4.5.2)**: started directly, no launcher process; write failure and start failure handled and restored ([evidence](evidence/live-validation-2026-10-30.md)) | Implemented, unverified | Implemented, unverified | Implemented, unverified |
 | In-game verification of enabled mods and order | **Verified (2026-10-30, 4.5.2)** with probe mods: enabled mods loaded, disabled not; the later mod in `enabled_mods` wins a shared file, and moving mods in the app moves the winner ([evidence](evidence/live-validation-2026-10-30.md)) | Unverified | Unverified | Unverified |
