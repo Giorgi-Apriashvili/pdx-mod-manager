@@ -63,6 +63,17 @@ std::vector<persistence::LaunchRecord> launches(World& w) {
     return require(history.latest(kGame, 10));
 }
 
+// Leaves a configuration change "applying", as a crash after the first write would.
+void interruptChange(World& w, const std::string& label, const fs::path& target) {
+    writeText(target, "original");
+    platform::FileTransactionFaults crash;
+    crash.crashAfterWrites = std::size_t{1};
+    w.transactions.setFaultsForTesting(crash);
+    REQUIRE_FALSE(w.transactions.apply(label, {platform::FileWrite{target, "changed"}}));
+    w.transactions.setFaultsForTesting({});
+    REQUIRE_FALSE(require(w.transactions.listIncomplete()).empty());
+}
+
 // A playset whose disabled Workshop entry is still downloading in the
 // background (disabled entries never block a launch).
 struct AcquiringRig {
@@ -375,6 +386,7 @@ TEST_CASE("An interrupted configuration change blocks launching until it is reco
     const LaunchCheck check = launcher.check(kGame, id);
     CHECK_FALSE(check.canLaunch);
     CHECK(check.interruptedTransaction);
+    CHECK(check.interruptedBlocks);
     CHECK(contains(check.blockers, "interrupted"));
     const auto refused = launcher.launch(kGame, id);
     REQUIRE_FALSE(refused);
@@ -393,6 +405,71 @@ TEST_CASE("An interrupted configuration change blocks launching until it is reco
     CHECK(launcher.check(kGame, id).canLaunch);
     require(launcher.launch(kGame, id));
     CHECK(w.started.size() == 1);
+}
+
+TEST_CASE("Only an interrupted change of this game's files blocks its launch",
+          "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    const std::string previous = installPreviousConfiguration(w);
+    w.refresh();
+    const std::int64_t id = makePlayset(w, mixedEntries());
+    const fs::path eu4Data = w.documents / "Paradox Interactive" / u8("Europa Universalis IV");
+    LaunchService launcher(w.ctx, nullptr);
+
+    SECTION("another game's launch: a warning, and the launch goes ahead") {
+        // Its backup may be lost so that recovery fails; Stellaris is unaffected.
+        interruptChange(w, LaunchService::transactionLabel("eu4", 7, "EU4 Main"),
+                        eu4Data / "dlc_load.json");
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK(check.interruptedTransaction); // still offered for recovery
+        CHECK_FALSE(check.interruptedBlocks);
+        CHECK_FALSE(contains(check.blockers, "interrupted"));
+        CHECK(contains(check.warnings, "Europa Universalis IV"));
+        CHECK(contains(check.warnings, "launch eu4 playset 7 (EU4 Main)"));
+
+        const LaunchOutcome outcome = require(launcher.launch(kGame, id));
+        CHECK(outcome.pid == 4242);
+        CHECK(w.started.size() == 1);
+        CHECK(readText(configFile(w)) == kTranslatedOrder);
+        CHECK(require(launcher.interruptedTransactions()).size() == 1); // left for its game
+        CHECK(readText(eu4Data / "dlc_load.json") == "changed");
+    }
+    SECTION("another game's launch: a rolled-back write still reports the old state") {
+        interruptChange(w, LaunchService::transactionLabel("eu4", 7, "EU4 Main"),
+                        eu4Data / "dlc_load.json");
+        platform::FileTransactionFaults faults;
+        faults.failWriteAt = std::size_t{0};
+        w.transactions.setFaultsForTesting(faults);
+        const auto failed = launcher.launch(kGame, id);
+        REQUIRE_FALSE(failed);
+        CHECK(failed.error().code == ErrorCode::IoError);
+        CHECK_THAT(failed.error().message,
+                   ContainsSubstring("previous configuration is unchanged"));
+        CHECK(w.started.empty());
+        CHECK(readText(configFile(w)) == previous);
+    }
+    SECTION("an unattributable change outside this game's folders: a warning") {
+        interruptChange(w, "settings import", w.root / "elsewhere" / "settings.txt");
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK(check.interruptedTransaction);
+        CHECK_FALSE(check.interruptedBlocks);
+        CHECK(contains(check.warnings, "settings import"));
+    }
+    SECTION("any change that touched this game's user data blocks") {
+        interruptChange(w, "settings import", w.userData / "mod" / "ugc_1.mod");
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK_FALSE(check.canLaunch);
+        CHECK(check.interruptedTransaction);
+        CHECK(check.interruptedBlocks);
+        CHECK(contains(check.blockers, "interrupted"));
+        const auto refused = launcher.launch(kGame, id);
+        REQUIRE_FALSE(refused);
+        CHECK(refused.error().code == ErrorCode::Interrupted);
+        CHECK(w.started.empty());
+    }
 }
 
 TEST_CASE("A missing installation or executable blocks with an explanation", "[services][launch]") {

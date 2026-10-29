@@ -53,6 +53,42 @@ fs::path existingAncestor(fs::path path) {
     return path;
 }
 
+// The game key of a LaunchService::transactionLabel(), if `label` is one.
+std::optional<GameKey> launchLabelGame(const std::string& label) {
+    constexpr std::string_view kPrefix = "launch ";
+    if (label.rfind(kPrefix, 0) != 0)
+        return std::nullopt;
+    const std::size_t end = label.find(' ', kPrefix.size());
+    if (end == std::string::npos || end == kPrefix.size())
+        return std::nullopt;
+    return label.substr(kPrefix.size(), end - kPrefix.size());
+}
+
+// A transaction of `game`: its launch label, or a target in its user data.
+bool belongsTo(const platform::TransactionRecord& record, const GameKey& game,
+               const fs::path& userDataPath) {
+    if (launchLabelGame(record.label) == game)
+        return true;
+    return !userDataPath.empty() &&
+           std::any_of(record.entries.begin(), record.entries.end(),
+                       [&](const platform::TransactionEntry& entry) {
+                           return platform::isWithin(entry.target, userDataPath);
+                       });
+}
+
+std::string interruptedElsewhere(const platform::TransactionRecord& record,
+                                 const std::string& gameName) {
+    const std::optional<GameKey> owner = launchLabelGame(record.label);
+    if (!owner)
+        return "A configuration change was interrupted (" + record.label +
+               "). It did not touch the files of " + gameName +
+               ", so it does not block launching; recover it to put its files back.";
+    const std::string ownerName = gameDisplayName(*owner);
+    return "A configuration change of " + ownerName + " was interrupted (" + record.label +
+           "). It does not block launching " + gameName + "; recover it before launching " +
+           ownerName + ".";
+}
+
 void checkWritable(const fs::path& directory, const char* what, std::set<fs::path>& checked,
                    LaunchCheck& check) {
     if (directory.empty())
@@ -214,12 +250,21 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
     if (!incomplete) {
         check.warnings.push_back("Interrupted configuration changes could not be checked: " +
                                  incomplete.error().message);
-    } else if (!incomplete.value().empty()) {
-        check.interruptedTransaction = true;
-        check.blockers.push_back("A previous configuration change was interrupted (" +
-                                 incomplete.value().front().label +
-                                 "). Recover it before launching so that the game's files are "
-                                 "consistent.");
+    } else {
+        const fs::path userData =
+            check.installation ? check.installation->userDataPath : fs::path();
+        for (const platform::TransactionRecord& record : incomplete.value()) {
+            check.interruptedTransaction = true;
+            if (!belongsTo(record, game, userData)) {
+                check.warnings.push_back(interruptedElsewhere(record, gameName));
+            } else if (!check.interruptedBlocks) {
+                check.interruptedBlocks = true;
+                check.blockers.push_back("A previous configuration change was interrupted (" +
+                                         record.label +
+                                         "). Recover it before launching so that the game's files "
+                                         "are consistent.");
+            }
+        }
     }
     check.canLaunch = check.blockers.empty();
     return prepared;
@@ -282,9 +327,9 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t pl
         std::string detail;
         for (const std::string& blocker : check.blockers)
             detail += (detail.empty() ? "" : "\n") + blocker;
-        const ErrorCode code = check.interruptedTransaction ? ErrorCode::Interrupted
-                               : check.runningInstance      ? ErrorCode::ConflictingProcess
-                                                            : ErrorCode::ValidationFailed;
+        const ErrorCode code = check.interruptedBlocks ? ErrorCode::Interrupted
+                               : check.runningInstance ? ErrorCode::ConflictingProcess
+                                                       : ErrorCode::ValidationFailed;
         return makeError(code, gameName + " cannot be launched yet: " + check.blockers.front(),
                          detail);
     }
@@ -326,9 +371,15 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t pl
                          std::string(errorCodeName(applied.error().code)), applied.error().message,
                          {});
             resumeAcquisition();
-            // A failed rollback leaves the journal incomplete for recover().
+            // A failed rollback leaves the journal incomplete for recover(). The
+            // check found none of this game's, so any now is this launch's.
             auto incomplete = m_ctx.transactions.listIncomplete();
-            const bool undone = incomplete && incomplete.value().empty();
+            const bool undone =
+                incomplete &&
+                std::none_of(incomplete.value().begin(), incomplete.value().end(),
+                             [&](const platform::TransactionRecord& record) {
+                                 return belongsTo(record, game, installation.userDataPath);
+                             });
             return Error(applied.error().code,
                          std::string("Writing the game configuration failed, so the game was not "
                                      "started; ") +

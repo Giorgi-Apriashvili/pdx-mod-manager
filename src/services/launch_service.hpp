@@ -7,7 +7,11 @@
 // available, the playset belongs to the game, every ENABLED entry Ready
 // (disabled entries never block), the user-data and mod folders writable, no
 // running instance of the game or conflicting configuration writer (Paradox
-// launcher), and no interrupted configuration transaction awaiting recovery.
+// launcher), and no interrupted configuration transaction of THIS game
+// awaiting recovery (one with its launch label or a target in its user-data
+// folder). Other interrupted transactions are warnings: they cannot make this
+// game's files inconsistent, and one that cannot be recovered must not keep
+// every game from launching.
 //
 // launch() re-checks, builds the adapter's LaunchPlan for the enabled mods in
 // playset order and validates it. Only then does it ask the coordinator to
@@ -49,9 +53,10 @@ struct LaunchCheck {
     std::vector<std::string> blockers; // shown next to Play
     std::vector<std::string> warnings;
     std::optional<GameInstallation> installation;
-    LaunchReadiness readiness; // per-entry verdict (enabled entries only)
-    bool interruptedTransaction = false;
-    bool runningInstance = false; // game or conflicting writer running
+    LaunchReadiness readiness;           // per-entry verdict (enabled entries only)
+    bool interruptedTransaction = false; // a change of any game awaits recovery (offer Recover)
+    bool interruptedBlocks = false;      // ... and one of them is this game's (a blocker)
+    bool runningInstance = false;        // game or conflicting writer running
 };
 
 struct LaunchOutcome {
