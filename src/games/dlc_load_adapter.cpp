@@ -243,6 +243,23 @@ void markBroken(InstalledMod& mod, std::string problem) {
     mod.problems.push_back(std::move(problem));
 }
 
+// The inventory is stored as UTF-8 text, so a path without a UTF-8 form
+// (Windows names with unpaired surrogates, POSIX names that are not UTF-8)
+// cannot be saved. Such a mod stays in the inventory as Broken, without that
+// path, instead of making the whole inventory fail to save.
+void dropUnstorablePaths(InstalledMod& mod) {
+    const auto drop = [&](fs::path& path, std::string_view what) {
+        if (path.empty() || platform::isUtf8Representable(path))
+            return;
+        markBroken(mod, std::string(what) + " " + sanitizeUtf8(toGenericUtf8(path)) +
+                            " has a name with an invalid character, so it cannot be saved. "
+                            "Rename it, then rescan.");
+        path.clear();
+    };
+    drop(mod.contentPath, "The mod content");
+    drop(mod.descriptorPath, "The descriptor file");
+}
+
 bool declaredContentExists(const Registration& reg) {
     return reg.declaredArchive ? isRegularFile(reg.declared) : isDirectory(reg.declared);
 }
@@ -797,6 +814,8 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         if (byWorkshopId.count(id) == 0)
             mods.push_back(workshopMod(game, id, nullptr, &folder, content));
     }
+    for (InstalledMod& mod : mods)
+        dropUnstorablePaths(mod);
     std::sort(mods.begin(), mods.end(),
               [](const InstalledMod& a, const InstalledMod& b) { return a.identity < b.identity; });
     logInfo(m_traits.logComponent, "Mod scan finished",

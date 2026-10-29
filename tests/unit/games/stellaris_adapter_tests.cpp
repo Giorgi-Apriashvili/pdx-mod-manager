@@ -1,3 +1,4 @@
+#include "core/utf8.hpp"
 #include "games/eu4.hpp"
 #include "games/stellaris.hpp"
 #include "platform/steam.hpp"
@@ -5,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -410,6 +412,58 @@ TEST_CASE("Stellaris scan handles unusual registrations", "[games][stellaris]") 
     GameInstallation noUserData = inst;
     noUserData.userDataPath.clear();
     CHECK(f.adapter.scanMods(noUserData).error().code == ErrorCode::InvalidArgument);
+}
+
+TEST_CASE("Stellaris scan keeps mods with unstorable paths as broken", "[games][stellaris]") {
+    StellarisFixture f;
+    const GameInstallation inst = f.discovered();
+    // Names without a UTF-8 form: unpaired surrogates on Windows, Latin-1
+    // bytes elsewhere.
+#if defined(_WIN32)
+    const fs::path descriptorName(L"bad\xD800.mod");
+    const fs::path archiveName(L"legacy\xDC00.zip");
+    const std::string localId = "bad\xEF\xBF\xBD";
+#else
+    const fs::path descriptorName(std::string("bad\xE9.mod"));
+    const fs::path archiveName(std::string("legacy\xE9.zip"));
+    const std::string localId = "bad\xE9";
+#endif
+    const fs::path badDescriptor = f.userData() / "mod" / descriptorName;
+    const fs::path badArchive = f.content("1000000099") / archiveName;
+    fs::create_directories(badArchive.parent_path());
+    std::ofstream(badDescriptor, std::ios::binary)
+        << "name=\"Bad name\"\npath=\""
+        << f.generic("Documents/Paradox Interactive/Stellaris/mod/"
+                     "Ünïcødé mod")
+        << "\"\n";
+    std::ofstream(badArchive, std::ios::binary) << "PK";
+    std::error_code ec;
+    if (!fs::exists(badDescriptor, ec) || !fs::exists(badArchive, ec))
+        SKIP("this filesystem refuses names that are not valid Unicode");
+
+    const std::vector<InstalledMod> mods = f.scan(inst);
+    for (const InstalledMod& m : mods) {
+        CHECK(platform::isUtf8Representable(m.contentPath));
+        CHECK(platform::isUtf8Representable(m.descriptorPath));
+    }
+
+    const InstalledMod& local = f.mod(mods, localId);
+    CHECK(local.state == InstallState::Broken);
+    CHECK(local.descriptorPath.empty());
+    CHECK(samePath(local.contentPath, f.userData() / u8path("mod/Ünïcødé mod")));
+    CHECK(test::containsText(local.problems, "The descriptor file"));
+    CHECK(test::containsText(local.problems, "invalid character"));
+    for (const std::string& problem : local.problems)
+        CHECK(isValidUtf8(problem));
+
+    const InstalledMod& legacy = f.mod(mods, "1000000099");
+    CHECK(legacy.state == InstallState::Broken);
+    CHECK(legacy.contentPath.empty());
+    CHECK(test::containsText(legacy.problems, "The mod content"));
+
+    // Everything else is unaffected.
+    CHECK(f.mod(mods, "1000000001").state == InstallState::Ready);
+    CHECK(f.mod(mods, "Ünïcødé mod").state == InstallState::Ready);
 }
 
 TEST_CASE("Stellaris current configuration is read from dlc_load.json", "[games][stellaris]") {
