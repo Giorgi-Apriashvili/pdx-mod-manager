@@ -44,6 +44,10 @@ Status InstallationRepository::upsert(const GameInstallation& installation) {
     if (installation.game.empty())
         return makeError(ErrorCode::InvalidArgument,
                          "Cannot save a game installation without a game key.");
+    PMM_TRY(checkStorablePath(installation.installPath, "The game folder"));
+    PMM_TRY(checkStorablePath(installation.userDataPath, "The game's user data folder"));
+    PMM_TRY(checkStorablePath(installation.executablePath, "The game executable"));
+    PMM_TRY(checkStorablePath(installation.steamLibraryPath, "The Steam library folder"));
     auto guard = m_db.access();
     PMM_DB_TRY_VALUE(stmt,
                      guard.connection().prepare(

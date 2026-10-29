@@ -30,9 +30,17 @@ std::optional<DistributionSource> distributionFromText(std::string_view text) no
 std::optional<OsPlatform> platformFromText(std::string_view text) noexcept;
 std::optional<InstallState> installStateFromText(std::string_view text) noexcept;
 
-// Paths are stored as UTF-8 text in native format, so they round-trip exactly.
+// Paths are stored as text in native format: the native bytes on POSIX, UTF-8
+// on Windows. The conversions never throw. A Windows path that is not valid
+// UTF-16 (an unpaired surrogate, which NTFS allows) has no UTF-8 form and is
+// written with U+FFFD; ill-formed stored UTF-8 is read the same way. Only
+// storable paths round-trip, so repositories reject the others on write.
 std::string pathToText(const std::filesystem::path& path);
-std::filesystem::path pathFromText(std::string_view utf8);
+std::filesystem::path pathFromText(std::string_view text);
+bool isStorablePath(const std::filesystem::path& path) noexcept;
+// InvalidArgument naming `what` (e.g. "The mod folder") if `path` is not
+// storable.
+Status checkStorablePath(const std::filesystem::path& path, std::string_view what);
 
 // JSON arrays of strings / [key, value] pairs. Invalid UTF-8 in the input is
 // replaced with U+FFFD rather than failing the write.

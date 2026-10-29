@@ -39,7 +39,9 @@ per-user data directory, i.e.
 
 `Database::open()` creates missing parent directories. Paths are handed to
 SQLite as UTF-8 (SQLite's Windows VFS converts them to UTF-16), so folders with
-spaces and non-ASCII characters work on every OS. While the application runs,
+spaces and non-ASCII characters work on every OS. A Windows path that is not
+valid UTF-16 (see Conventions) is refused with `ErrorCode::InvalidArgument`
+rather than opened under an altered name. While the application runs,
 SQLite keeps `state.sqlite-wal` and `state.sqlite-shm` next to the file; they
 are folded back into the main file when the last connection closes.
 Upgrade backups are written next to the database (see below).
@@ -84,8 +86,21 @@ Tests use `Database::openInMemory()` or a unique temporary directory.
   (seconds in the domain model) is stored in milliseconds and converted back.
 * Provider ids are always `TEXT` (a Workshop id such as
   `18446744073709551615` or `000123` round-trips exactly); empty ids are
-  rejected by `CHECK` constraints.
-* Paths are UTF-8 `TEXT` in native format, so they round-trip exactly.
+  rejected by `CHECK` constraints. Playset entries additionally require the
+  provider and provider id to be **valid UTF-8**, because history snapshots
+  are JSON (see Undo history). On Linux a local mod's id is its descriptor
+  file stem as raw bytes, so a descriptor whose name is Latin-1 encoded
+  (`café.mod` as bytes `63 61 66 E9 ...`) cannot be added to a playset:
+  `ErrorCode::InvalidArgument`, "rename the file, then rescan". The
+  inventory stores ids as they are.
+* Paths are `TEXT` in native format: the native bytes on POSIX (any bytes,
+  stored exactly), UTF-8 on Windows. Path conversion never throws. NTFS
+  allows names that are not valid UTF-16 (an unpaired surrogate, usually
+  created by a tool); they have no UTF-8 form, so the inventory, installation
+  and database-open paths reject them with `ErrorCode::InvalidArgument`
+  instead of storing an altered path. Every stored path therefore
+  round-trips exactly; ill-formed UTF-8 found in a stored Windows path
+  (damaged or foreign data) is read with U+FFFD instead of failing.
 * Enumerations are stored as their stable `toString()` names (`steam`,
   `windows`, `ready`, `download_requested`, ...). Unknown stored values are
   reported as damaged data rather than guessed. Adding an enumeration value
@@ -146,7 +161,9 @@ The authoritative DDL is the embedded migration in
   in `extra_json` as `[key, value]` pairs in file order.
 * **Playset order.** Entries are stored with positions `0..N-1` in exactly the
   given order (index 0 is the first mod handed to the game). Identities are
-  unique per playset and must belong to the playset's game.
+  unique per playset, must belong to the playset's game and must be valid
+  UTF-8; `create`, `saveEntries`, `replaceWithSnapshot` and `duplicate`
+  enforce this.
 * **Undo history.** `remove()` writes a snapshot (`reason = "deleted"`) and
   soft-deletes the playset (`deleted_at`). `replaceWithSnapshot()` snapshots
   the current state with a caller-supplied reason (`import_replace`,
@@ -157,7 +174,15 @@ The authoritative DDL is the embedded migration in
   edits (`saveEntries`, `rename`) do not create history.
   `snapshot_json` format (version 1):
   `{"format":1,"name":..,"createdAt":..,"updatedAt":..,"entries":[{"source":..,"id":..,"enabled":..,"nameHint":..,"versionHint":..,"fingerprint":..}]}`.
-  Invalid UTF-8 in names is replaced with U+FFFD in snapshots.
+  Invalid UTF-8 in names (playset name, name/version hints, fingerprint) is
+  replaced with U+FFFD in snapshots. Identities (`source`, `id`) are never
+  altered: a playset whose stored entries include an id that is not valid
+  UTF-8 (rows written before ids were validated) cannot be snapshotted, so
+  `remove()`, `replaceWithSnapshot()` and a restore over it fail with
+  `ErrorCode::InvalidArgument` and leave it unchanged until that entry is
+  removed. `restore()` validates the snapshot's entries first, so a snapshot
+  from an older build whose replaced ids collide is reported instead of
+  failing on the unique constraint.
   `playset_history` has no foreign key so history survives purged playsets.
 * **Acquisition jobs.** At most one unfinished job per mod identity, enforced
   by the partial unique index; `createOrReuse()` returns the existing job.

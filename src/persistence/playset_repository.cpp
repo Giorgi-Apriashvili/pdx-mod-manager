@@ -1,6 +1,7 @@
 #include "persistence/playset_repository.hpp"
 
 #include "persistence/internal/mapping.hpp"
+#include "persistence/internal/utf8.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -39,11 +40,18 @@ Status validateName(std::string_view name) {
     return {};
 }
 
+// History snapshots are JSON, so identities must be valid UTF-8 to survive a
+// snapshot byte for byte (on Linux a local mod id is the raw file stem).
+bool hasStorableIdentity(const PlaysetEntry& entry) noexcept {
+    return isValidUtf8(entry.identity.source) && isValidUtf8(entry.identity.id);
+}
+
 Status validateEntries(const GameKey& game, const std::vector<PlaysetEntry>& entries) {
     std::set<std::pair<std::string_view, std::string_view>> seen;
     for (std::size_t i = 0; i < entries.size(); ++i) {
         const ModIdentity& id = entries[i].identity;
-        const std::string where = "entry " + std::to_string(i) + " (" + toString(id) + ")";
+        const std::string where =
+            "entry " + std::to_string(i) + " (" + sanitizeUtf8(toString(id)) + ")";
         if (!id.game.empty() && id.game != game)
             return makeError(ErrorCode::InvalidArgument,
                              "A mod in the list belongs to a different game than the playset.",
@@ -51,8 +59,14 @@ Status validateEntries(const GameKey& game, const std::vector<PlaysetEntry>& ent
         if (id.source.empty() || id.id.empty())
             return makeError(ErrorCode::InvalidArgument,
                              "A mod in the list has no provider or provider id.", where);
+        if (!hasStorableIdentity(entries[i]))
+            return makeError(ErrorCode::InvalidArgument,
+                             "The descriptor file name of a mod in the list is not valid UTF-8, so "
+                             "the mod cannot be saved in a playset. Rename the file, then rescan.",
+                             where);
         if (!seen.emplace(id.source, id.id).second) {
-            const std::string& label = entries[i].nameHint.empty() ? id.id : entries[i].nameHint;
+            const std::string label =
+                sanitizeUtf8(entries[i].nameHint.empty() ? id.id : entries[i].nameHint);
             return makeError(ErrorCode::InvalidArgument,
                              "The mod '" + label + "' appears more than once in the playset.",
                              where);
@@ -148,7 +162,21 @@ Status touch(Connection& c, std::int64_t id, std::int64_t now) {
     return stmt->bindAll(now, id).run();
 }
 
-std::string snapshotToJson(const Playset& playset) {
+// Names may lose invalid UTF-8 (replaced with U+FFFD); identities may not, so
+// a playset holding such an id (written before ids were validated) is refused
+// rather than snapshotted into a state restore() cannot reproduce.
+Result<std::string> snapshotToJson(const Playset& playset) {
+    for (const auto& e : playset.entries) {
+        if (!hasStorableIdentity(e))
+            return makeError(ErrorCode::InvalidArgument,
+                             "The playset '" + sanitizeUtf8(playset.name) +
+                                 "' contains a mod whose identifier is not valid UTF-8, so its "
+                                 "current state cannot be kept in the playset history and it was "
+                                 "left unchanged. Remove that mod from the playset, then try "
+                                 "again.",
+                             "playset id " + std::to_string(playset.id) + ", " +
+                                 sanitizeUtf8(toString(e.identity)));
+    }
     json entries = json::array();
     for (const auto& e : playset.entries) {
         entries.push_back({{"source", e.identity.source},
@@ -199,9 +227,10 @@ Result<Playset> snapshotFromJson(std::string_view text, std::int64_t playsetId, 
 
 Result<std::int64_t> insertHistory(Connection& c, const Playset& snapshot, std::string_view reason,
                                    std::int64_t now) {
+    PMM_DB_TRY_VALUE(snapshotJson, snapshotToJson(snapshot));
     PMM_DB_TRY_VALUE(stmt, c.prepare("INSERT INTO playset_history (playset_id, game_key, reason, "
                                      "snapshot_json, created_at) VALUES (?, ?, ?, ?, ?)"));
-    PMM_TRY(stmt->bindAll(snapshot.id, snapshot.game, reason, snapshotToJson(snapshot), now).run());
+    PMM_TRY(stmt->bindAll(snapshot.id, snapshot.game, reason, *snapshotJson, now).run());
     return c.lastInsertRowId();
 }
 
@@ -336,6 +365,7 @@ Result<std::int64_t> PlaysetRepository::duplicate(std::int64_t id, std::string_v
     std::int64_t copyId = 0;
     PMM_TRY(m_db.transaction([&]() -> Status {
         PMM_DB_TRY_VALUE(original, loadLivePlayset(c, id));
+        PMM_TRY(validateEntries(original->game, original->entries));
         const std::int64_t now = m_db.now();
         PMM_DB_TRY_VALUE(newId, insertPlayset(c, original->game, newName, now, now));
         PMM_TRY(writeEntries(c, *newId, original->entries));
@@ -414,6 +444,13 @@ Result<std::int64_t> PlaysetRepository::restore(std::int64_t historyId) {
     PMM_TRY(m_db.transaction([&]() -> Status {
         PMM_DB_TRY_VALUE(entry, loadHistory(c, historyId));
         const Playset& snapshot = entry->snapshot;
+        // Older builds replaced invalid UTF-8 in snapshot ids with U+FFFD,
+        // which can turn two ids into one.
+        if (auto valid = validateEntries(entry->game, snapshot.entries); !valid.ok()) {
+            Error error = std::move(valid).error();
+            error.message = "This playset history entry cannot be restored. " + error.message;
+            return error;
+        }
         const std::int64_t now = m_db.now();
         PMM_DB_TRY_VALUE(row, loadRow(c, entry->playsetId));
         if (row->has_value() && (*row)->game == entry->game) {

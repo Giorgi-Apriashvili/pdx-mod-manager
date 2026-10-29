@@ -161,3 +161,46 @@ TEST_CASE("A failure part-way through a replace keeps the previous inventory",
     CHECK(ids(mods) == std::vector<std::string>{"1", "2"});
     CHECK(mods[0].descriptor.name == "A");
 }
+
+#if defined(_WIN32)
+TEST_CASE("A scanned path that is not valid UTF-16 fails the replace instead of throwing",
+          "[persistence][inventory]") {
+    auto db = openMemory();
+    InventoryRepository repo(*db);
+    requireOk(repo.replaceForGame("stellaris", {workshopMod("1", "A")}));
+
+    auto badDescriptor = localMod();
+    badDescriptor.descriptorPath = loneSurrogatePath(
+        L"C:/Users/Example/Documents/Paradox Interactive/Stellaris/mod/bad", L".mod");
+    Status status;
+    REQUIRE_NOTHROW(status =
+                        repo.replaceForGame("stellaris", {workshopMod("2", "B"), badDescriptor}));
+    REQUIRE_FALSE(status.ok());
+    CHECK(status.error().code == ErrorCode::InvalidArgument);
+    CHECK(status.error().message.find("Rename") != std::string::npos);
+    CHECK(status.error().detail.find("bad\xEF\xBF\xBD.mod") != std::string::npos);
+
+    auto badContent = localMod();
+    badContent.contentPath = loneSurrogatePath(L"C:/Mods/content", L"");
+    REQUIRE_NOTHROW(status = repo.replaceForGame("stellaris", {badContent}));
+    REQUIRE_FALSE(status.ok());
+    CHECK(status.error().code == ErrorCode::InvalidArgument);
+
+    CHECK(ids(require(repo.list("stellaris"))) == std::vector<std::string>{"1"});
+}
+#else
+TEST_CASE("Paths that are not valid UTF-8 round-trip as their raw bytes",
+          "[persistence][inventory]") {
+    auto db = openMemory();
+    InventoryRepository repo(*db);
+    auto mod = localMod();
+    mod.contentPath = fs::path("/home/example/mods/caf\xE9");
+    mod.descriptorPath = fs::path("/home/example/.local/share/Paradox Interactive/Stellaris/mod/"
+                                  "caf\xE8.mod");
+    requireOk(repo.replaceForGame("stellaris", {mod}));
+    auto mods = require(repo.list("stellaris"));
+    REQUIRE(mods.size() == 1);
+    CHECK(mods[0].contentPath.native() == mod.contentPath.native());
+    CHECK(mods[0].descriptorPath.native() == mod.descriptorPath.native());
+}
+#endif

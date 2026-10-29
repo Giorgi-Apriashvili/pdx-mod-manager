@@ -7,6 +7,8 @@
 //   - Entries are stored with positions 0..N-1 in exactly the given order;
 //     identities are unique within a playset and belong to the playset's game
 //     (an empty ModIdentity::game is accepted and read back as the playset's).
+//   - Provider and provider id must be valid UTF-8 (InvalidArgument
+//     otherwise), so history snapshots reproduce them byte for byte.
 //   - Every multi-row change is one transaction: on failure the previous
 //     state is intact.
 //   - Deletion is soft: remove() snapshots the playset into playset_history
