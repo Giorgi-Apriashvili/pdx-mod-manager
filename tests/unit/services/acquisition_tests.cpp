@@ -796,7 +796,8 @@ TEST_CASE("Nothing is subscribed until the Web API confirms the item belongs to 
         CHECK_THAT(job.errorMessage, ContainsSubstring("Stellaris"));
         CHECK(r.steam.sentIds<providers::SubscribeCommand>().empty());
         CHECK_FALSE(r.c().sessionOpen(kGame));
-        const JobSnapshot& item = r.snapshotJob(r.c().snapshot(kGame), kItem);
+        const AcquisitionSnapshot snapshot = r.c().snapshot(kGame); // outlives `item`
+        const JobSnapshot& item = r.snapshotJob(snapshot, kItem);
         CHECK(item.canRetry);
         CHECK(item.canOpenFallback);
         CHECK_FALSE(require(loadPlaysetView(r.w.ctx, id, r.c().liveJobs(kGame))).launch.canLaunch);
