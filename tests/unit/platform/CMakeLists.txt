@@ -6,6 +6,7 @@ pmm_configure_target(pmm_platform_echo)
 
 pmm_add_test(pmm_platform_tests
   SOURCES
+    file_transaction_tests.cpp
     fs_tests.cpp
     paths_tests.cpp
     process_tests.cpp
