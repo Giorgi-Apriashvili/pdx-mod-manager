@@ -107,7 +107,15 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
    SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX`), creates the
    `QGuiApplication`, selects the Basic Quick Controls style and parses the
    command line.
-2. `ServiceRunner::start()` starts the worker and creates `AppRuntime` on it
+2. `main()` takes the profile lock (`ProfileLock`, a `QLockFile` on
+   `<data folder>/pmm-app.lock`) and holds it until the runner has shut down.
+   The journal, the acquisition jobs and the Steam helper sessions assume one
+   instance per profile. A second start on the same profile waits up to 2 s
+   for the lock, then shows "already running for this profile" in the error
+   window (verification runs: stderr, exit code 2). A lock left by a crashed
+   process is recognised by its process id and taken over. Every run takes
+   the lock, read-only and verification runs included.
+3. `ServiceRunner::start()` starts the worker and creates `AppRuntime` on it
    (`main()` blocks until this is done):
    1. The application folders are resolved: `AppPaths::standard()`, or
       `fromProfileDir()` with `--profile`. They are created if needed.
@@ -131,14 +139,17 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
    7. Interrupted configuration transactions are **not** recovered. They
       produce a startup notice, block launching (`LaunchService::check`) and
       are offered as **Recover** next to Play.
-3. `Backend::initialize()` loads the UI settings, the cached game states and
+4. `Backend::initialize()` loads the UI settings, the cached game states and
    the initial game's context from the database. The initial game is
    `--game`, else the last selected game, else the first installed supported
    game. Then the window is created
    (`qmlRegisterSingletonInstance("Pmm.Backend", ...)`,
    `engine.loadFromModule("Pmm.Ui", "Main")`). The first frame already shows
-   the last active playset.
-4. In the background, `GameService::refreshAll()` rediscovers the games and
+   the last active playset. The engine has no network access: its
+   `OfflineNetworkAccessManagerFactory` (`network_guard.hpp`) refuses every
+   URL except `qrc:`, `data:` and `file:` without a host, so text from share
+   codes or descriptors can never become a request.
+5. In the background, `GameService::refreshAll()` rediscovers the games and
    rescans the mods. With Steam enabled, the coordinator then resumes the
    unfinished jobs of every supported game (restart reconciliation; a helper
    is only started when there is such a job). The context is reloaded and
@@ -156,7 +167,7 @@ and joins the thread.
 | `--profile <dir>` | Keep every application file (database, journal, logs, cache) in `<dir>` instead of the standard per-user locations. Use it for a clean, isolated profile, for example for the "import into a clean profile" acceptance step. |
 | `--verbose` | Write debug-level log records (including redacted helper stderr). |
 | `--game <key>` | Select this game at start-up (`stellaris`, `eu4`). |
-| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. |
+| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing, so a later session with Steam downloads them only after **Download missing**. |
 | `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. |
 
 ### Hidden verification switches
@@ -248,13 +259,20 @@ platform:
 - `ServiceRunner` ordering, threads, dropped results and shutdown;
 - Backend edits through persistence and undo, playset management, the
   share-code round trip, and settings restore, in a temporary profile with a
-  folder-scanning adapter double;
+  folder-scanning adapter double; row edits made while an undo is in flight,
+  replies superseded by later requests, and imports with downloads off;
 - a 2,000-entry playset with a time budget for each GUI-thread operation;
-- the real QML module against the real Backend, without QML warnings;
+- the real QML module against the real Backend, without QML warnings, with a
+  playset and a mod named like rich text with a remote image: nothing tries
+  to load it;
+- a source check of `ui/` (`ui_text_tests.cpp`): every text element whose
+  text is not a fixed literal uses `textFormat: Text.PlainText`;
+- the QML engine's network access refusing everything but local resources;
 - `QtWorkshopSessionHost` with the real `pmm-steam-helper` and the fake Steam
   API library, including subscribe, download and install through the
   coordinator;
 - `QtWorkshopMetadataHost` against a local HTTP stub;
-- `AppRuntime` start-up failures, retention and interrupted transactions.
+- `AppRuntime` start-up failures, retention and interrupted transactions;
+  the profile lock.
 
 Nothing in these tests touches a real game, Steam folder or the Steam client.
