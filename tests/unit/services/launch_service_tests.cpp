@@ -221,6 +221,42 @@ TEST_CASE("A running game or Paradox launcher refuses the launch", "[services][l
     CHECK_FALSE(fs::exists(configFile(w)));
 }
 
+TEST_CASE("Read-only checks skip only the write probes", "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    const std::int64_t id = makePlayset(w, {workshopEntry("2000000001", "UI Overhaul")});
+    LaunchService launcher(w.ctx, nullptr);
+    LaunchCheckOptions readOnly;
+    readOnly.probeWriteAccess = false;
+    CHECK(launcher.check(kGame, id, readOnly).blockers == launcher.check(kGame, id).blockers);
+
+    // A file where the mod folder should be fails the write probe.
+    fs::remove_all(w.userData / "mod");
+    writeText(w.userData / "mod", "not a folder");
+    const LaunchCheck probed = launcher.check(kGame, id);
+    CHECK_FALSE(probed.canLaunch);
+    CHECK(contains(probed.blockers, "mod folder"));
+
+    const LaunchCheck unprobed = launcher.check(kGame, id, readOnly);
+    CHECK(unprobed.canLaunch);
+    CHECK_FALSE(contains(unprobed.blockers, "mod folder"));
+    CHECK(unprobed.readiness.canLaunch);
+
+    // Every other blocker is still reported.
+    w.processes = {{1234, kExeName, w.executable}};
+    const LaunchCheck running = launcher.check(kGame, id, readOnly);
+    CHECK_FALSE(running.canLaunch);
+    CHECK(running.runningInstance);
+    CHECK(contains(running.blockers, "already running"));
+    CHECK_FALSE(contains(running.blockers, "mod folder"));
+
+    // launch() always probes.
+    w.processes.clear();
+    CHECK_FALSE(launcher.launch(kGame, id));
+    CHECK(w.started.empty());
+}
+
 TEST_CASE("Process checks that cannot run only warn", "[services][launch]") {
     World w;
     w.installFixtureMods();

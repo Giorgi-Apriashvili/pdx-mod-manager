@@ -5,9 +5,10 @@
 // check() gathers every blocking condition and warning without changing
 // anything: installation present and its executable on disk, direct launch
 // available, the playset belongs to the game, every ENABLED entry Ready
-// (disabled entries never block), the user-data and mod folders writable, no
-// running instance of the game or conflicting configuration writer (Paradox
-// launcher), and no interrupted configuration transaction awaiting recovery.
+// (disabled entries never block), the user-data and mod folders writable
+// (probed unless LaunchCheckOptions::probeWriteAccess is off), no running
+// instance of the game or conflicting configuration writer (Paradox launcher),
+// and no interrupted configuration transaction awaiting recovery.
 //
 // launch() re-checks, asks the coordinator to close the game's Steam helper
 // session, builds the adapter's LaunchPlan for the enabled mods in playset
@@ -52,6 +53,13 @@ struct LaunchCheck {
     bool runningInstance = false; // game or conflicting writer running
 };
 
+struct LaunchCheckOptions {
+    // Probe the user-data and mod folders for write access (a temporary file
+    // is created and removed in each). Turned off for read-only verification,
+    // which must not write into game folders; every other check still runs.
+    bool probeWriteAccess = true;
+};
+
 struct LaunchOutcome {
     std::int64_t pid = 0;
     std::string transactionId; // empty when the plan had no configuration writes
@@ -66,7 +74,9 @@ public:
     LaunchService(const ServiceContext& context, AcquisitionCoordinator* coordinator) noexcept
         : m_ctx(context), m_coordinator(coordinator) {}
 
-    LaunchCheck check(const GameKey& game, std::int64_t playsetId);
+    LaunchCheck check(const GameKey& game, std::int64_t playsetId,
+                      const LaunchCheckOptions& options = {});
+    // Always checks with the default options (write probes included).
     Result<LaunchOutcome> launch(const GameKey& game, std::int64_t playsetId);
 
     // Configuration transactions interrupted by a crash (any game).
