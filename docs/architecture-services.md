@@ -193,8 +193,9 @@ helper session per game. Its responsibilities:
   input, so with a metadata host no Subscribe or RequestDownload is sent until
   `onMetadata()` has confirmed that the item exists and belongs to the game.
   Verdicts are cached per mod for the session. The gate lives in the
-  coordinator (the reducer is unchanged): a held transition is dropped and the
-  job's Steam timeouts are suspended, so commands are never queued behind it.
+  coordinator (the reducer is unchanged): a held transition is dropped rather
+  than queued, and the job's Steam timeouts are suspended while it waits, so
+  no subscribe or response timeout fires for a command that was never sent.
   Without a verdict within `CoordinatorOptions::identityTimeoutMs` the job
   needs the user rather than subscribing unverified.
 - Verify content (`verifyWorkshopContent()`).
