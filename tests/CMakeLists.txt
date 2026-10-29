@@ -19,7 +19,7 @@ function(pmm_add_test name)
     PROPERTIES LABELS "${name}")
 endfunction()
 
-foreach(module core platform sharing persistence games providers)
+foreach(module core platform sharing persistence games providers services)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/unit/${module}/CMakeLists.txt")
     add_subdirectory(unit/${module})
   endif()
