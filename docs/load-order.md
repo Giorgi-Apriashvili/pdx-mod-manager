@@ -15,10 +15,10 @@ Code: `src/games/dlc_load_adapter.cpp` (`buildLaunchPlan`,
 
 | | Stellaris | Europa Universalis IV |
 | --- | --- | --- |
-| Configuration file | `<user data>/dlc_load.json`, key `enabled_mods` | same (from leftover launcher output only) |
+| Configuration file | `<user data>/dlc_load.json`, key `enabled_mods` | same (**verified** read-only on v1.37.5.0) |
 | Playset order -> file | enabled entries in playset order, index 0 = array element 0 | same |
 | Disabled entries | not written (the launcher writes only enabled ones) | same |
-| Array order == launcher playset order | **Verified** read-only, 2026-10-29 (see below) | Unverified (game not installed) |
+| Array order == launcher playset order | **Verified** read-only, 2026-10-29 (alphabetical playset, see below) | **Verified** read-only, 2026-10-29 (hand-made `custom` order, see below) |
 | Game reads every descriptor, enables the listed ones | **Verified** read-only (error.log) | Unverified |
 | File override precedence (which mod wins) | **Unverified**: Result: pending in-game verification | **Unverified** |
 | `LoadOrderInfo::verifiedInGame` | `false` | `false` |
@@ -42,10 +42,15 @@ entries, in playset order, and writes:
   unknown) is kept with its value and position. A malformed file is rebuilt
   as `{"enabled_mods":[...],"disabled_dlcs":[]}` with a launch warning.
 - Output is compact JSON without a trailing newline, the form the launcher
-  writes. The file is only written when its bytes would change.
+  writes. The file is only written when its content would change: an
+  existing file with the same JSON in another layout (BOM, CRLF, indentation,
+  `1.50` for `1.5`) is left as it is.
 - `readCurrentConfiguration` is the inverse: array order becomes playset
-  order, every entry enabled; references that match no installed mod become
-  `local` entries named after the reference stem.
+  order, every entry enabled. A reference that matches no installed mod keeps
+  the identity its registration implies: `mod/ugc_<id>.mod` (or a descriptor
+  pointing into the Workshop content folder) stays the Workshop item `<id>`,
+  even when its content is not downloaded, so it can be acquired. Anything
+  else becomes a `local` entry named after the reference stem.
 
 ## Verified on the development machine (read-only)
 
@@ -73,6 +78,19 @@ game was not started.
    a launch plan for the current `dlc_load.json`: zero writes, i.e. identical
    output. Regenerating each of the 27 launcher-written `mod/ugc_<id>.mod`
    files from the Workshop `descriptor.mod` gives identical bytes for 27 of 27.
+
+EU4 v1.37.5.0 (Steam, Windows 11), 2026-10-29, same rules (details in
+[`evidence/real-scan-2026-10-29.md`](evidence/real-scan-2026-10-29.md)):
+
+1. **Launcher playset order equals the `dlc_load.json` order, for a hand-made
+   order too.** `launcher-v2.sqlite`, opened once the same way, has one
+   active playset with `loadOrder = 'custom'`; its 9 enabled rows at positions
+   0..8 have exactly the sequence of `enabled_mods` (8 Workshop items and one
+   local mod, not alphabetical). This closes the Stellaris caveat above for
+   the launcher as such: a custom order is written position 0 first.
+2. **This application reproduces the launcher's files byte for byte**: the
+   launch plan for the current `dlc_load.json` has zero writes, and 12 of 12
+   regenerated `mod/ugc_<id>.mod` files are identical.
 
 ## Community claims about precedence (conflicting)
 
@@ -143,4 +161,5 @@ Result: pending in-game verification.
 
 ### Europa Universalis IV
 
-Result: pending in-game verification (requires a machine with EU4 installed).
+Result: pending in-game verification. EU4 1.37.5.0 is installed on the
+development machine; the run needs the user's approval.

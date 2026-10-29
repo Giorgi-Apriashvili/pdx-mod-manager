@@ -10,6 +10,8 @@ namespace {
 constexpr std::array<std::string_view, 2> kWindowsLauncher{"Paradox Launcher.exe", "dowser.exe"};
 constexpr std::array<std::string_view, 2> kLinuxLauncher{"dowser", "paradox-launcher"};
 constexpr std::array<std::string_view, 1> kMacLauncher{"Paradox Launcher"};
+// Not requested by v4.5.2's launcher-settings.json; dropped all the same.
+constexpr std::array<std::string_view, 1> kDroppedArguments{"-enabletelemetry"};
 
 constexpr GameTraits kTraits{
     .key = "stellaris",
@@ -22,6 +24,10 @@ constexpr GameTraits kTraits{
     .windowsLauncherProcesses = kWindowsLauncher,
     .linuxLauncherProcesses = kLinuxLauncher,
     .macLauncherProcesses = kMacLauncher,
+    // stellaris.exe v4.5.2 references userdir.txt as eu4.exe does (no such
+    // file ships with the game).
+    .userDirFile = "userdir.txt",
+    .droppedArguments = kDroppedArguments,
     // error.log of v4.5.2 reports "Invalid supported_version" for "v4.*.*",
     // "v4.*" and "*".
     .rejectsEarlyWildcards = true,

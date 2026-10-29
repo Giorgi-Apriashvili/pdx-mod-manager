@@ -28,6 +28,7 @@ using platform::toGenericUtf8;
 using steam::keyEquals;
 
 constexpr std::uint64_t kMaxDlcLoadBytes = 16ull * 1024 * 1024;
+constexpr std::uint64_t kMaxUserDirBytes = 64ull * 1024;
 constexpr const char* kDlcLoadFile = "dlc_load.json";
 constexpr const char* kModFolder = "mod";
 constexpr const char* kContentDescriptor = "descriptor.mod";
@@ -241,18 +242,33 @@ void markBroken(InstalledMod& mod, std::string problem) {
     mod.problems.push_back(std::move(problem));
 }
 
+bool declaredContentExists(const Registration& reg) {
+    return reg.declaredArchive ? isRegularFile(reg.declared) : isDirectory(reg.declared);
+}
+
+// How Steam sees an item whose content is not on disk (diagnostics only).
+std::string steamStateNote(const steam::WorkshopItemState* item) {
+    if (item == nullptr)
+        return "not in Steam's Workshop manifest";
+    if (item->installed)
+        return "listed as installed, but the folder is missing";
+    return item->subscribedBy.empty() ? "not subscribed" : "subscribed, download pending";
+}
+
+// A Workshop item whose content is on disk: `folder` is its folder in a Steam
+// library, or nullptr when only the registration's own path/archive (which
+// exists) has it, e.g. a copy in a custom folder.
 InstalledMod workshopMod(const GameKey& game, const std::string& id, const Registration* reg,
                          const fs::path* folder, const WorkshopContent& content) {
+    assert(folder != nullptr || reg != nullptr);
     InstalledMod mod;
     mod.identity = ModIdentity{game, source::SteamWorkshop, id};
 
     fs::path contentPath;
-    bool contentPresent = false;
     std::optional<ModDescriptor> contentDescriptor;
     std::string contentProblem;
     if (folder != nullptr) {
         contentPath = *folder;
-        contentPresent = true;
         const fs::path descriptorFile = *folder / kContentDescriptor;
         if (reg != nullptr && reg->declaredArchive && isRegularFile(reg->declared) &&
             platform::isWithin(reg->declared, *folder)) {
@@ -270,10 +286,8 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
         } else {
             contentProblem = "The Workshop folder has no descriptor.mod.";
         }
-    } else if (reg != nullptr && !reg->declared.empty()) {
+    } else {
         contentPath = reg->declared;
-        contentPresent =
-            reg->declaredArchive ? isRegularFile(contentPath) : isDirectory(contentPath);
     }
     mod.contentPath = contentPath;
 
@@ -294,14 +308,12 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
         mod.descriptorRef = ugcReference(id);
         if (contentDescriptor)
             mod.descriptor = *contentDescriptor;
-        else if (contentPresent)
+        else
             markBroken(mod, contentProblem);
     }
 
-    if (!contentPresent) {
-        markBroken(mod, "The Workshop item is not downloaded (its content folder is missing).");
-    } else if (reg != nullptr && reg->document &&
-               (reg->declared.empty() || !samePath(reg->declared, contentPath))) {
+    if (reg != nullptr && reg->document &&
+        (reg->declared.empty() || !samePath(reg->declared, contentPath))) {
         mod.problems.push_back("The registered descriptor " + reg->ref +
                                " points to another location; it is rewritten when the game is "
                                "launched from this app.");
@@ -334,18 +346,17 @@ InstalledMod localMod(const GameKey& game, const Registration& reg) {
         return mod;
     }
     mod.contentPath = reg.declared;
-    const bool present =
-        reg.declaredArchive ? isRegularFile(reg.declared) : isDirectory(reg.declared);
-    if (!present)
+    if (!declaredContentExists(reg))
         markBroken(mod, std::string(reg.declaredArchive ? "The mod archive " : "The mod folder ") +
                             toGenericUtf8(reg.declared) + " does not exist.");
     mod.contentUpdatedAt = platform::lastWriteUnixSeconds(reg.declared);
     return mod;
 }
 
+// "mod/<file>" (prefix compared case-insensitively, as Windows would).
 bool isPlainModReference(std::string_view ref) {
     const std::string prefix = std::string(kModFolder) + "/";
-    if (ref.size() <= prefix.size() || ref.substr(0, prefix.size()) != prefix)
+    if (ref.size() <= prefix.size() || !keyEquals(ref.substr(0, prefix.size()), prefix))
         return false;
     const std::string_view name = ref.substr(prefix.size());
     return name.find_first_of("/\\:") == std::string_view::npos && name != "." && name != "..";
@@ -363,23 +374,27 @@ std::string referenceStem(std::string_view ref) {
 // dlc_load.json with `refs` as enabled_mods and every other key preserved.
 struct DlcLoadOutput {
     std::string contents;
-    std::optional<std::string> existing; // current file contents, if any
+    // The existing file already says the same (byte-identical, or the same
+    // JSON in another layout): no write is needed.
+    bool unchanged = false;
     std::vector<std::string> warnings;
 };
 
 Result<DlcLoadOutput> composeDlcLoad(const fs::path& file, const std::vector<std::string>& refs) {
     DlcLoadOutput out;
     nlohmann::ordered_json document;
+    std::optional<nlohmann::ordered_json> existing;
     if (isRegularFile(file)) {
         Result<std::string> text = platform::readFile(file, kMaxDlcLoadBytes);
         if (!text)
             return std::move(text).error(); // never clobber DLC choices we could not read
-        out.existing = *text;
         document = nlohmann::ordered_json::parse(*text, nullptr, false);
         if (document.is_discarded() || !document.is_object()) {
             out.warnings.push_back("dlc_load.json was not valid JSON and is rebuilt; DLC choices "
                                    "stored in it could not be preserved.");
             document = nlohmann::ordered_json();
+        } else {
+            existing = document;
         }
     }
     if (!document.is_object() || document.empty())
@@ -394,6 +409,7 @@ Result<DlcLoadOutput> composeDlcLoad(const fs::path& file, const std::vector<std
         document = std::move(rebuilt);
     }
     out.contents = document.dump(-1, ' ', false, nlohmann::ordered_json::error_handler_t::replace);
+    out.unchanged = existing && *existing == document;
     return out;
 }
 
@@ -410,7 +426,55 @@ std::string modLabel(const InstalledMod& mod) {
     return "\"" + (name.empty() ? mod.identity.id : name) + "\"";
 }
 
+std::string_view trimmed(std::string_view text) {
+    constexpr std::string_view space = " \t\r\n\f\v";
+    const std::size_t first = text.find_first_not_of(space);
+    if (first == std::string_view::npos)
+        return {};
+    return text.substr(first, text.find_last_not_of(space) - first + 1);
+}
+
 } // namespace
+
+Result<std::optional<fs::path>> readUserDirFile(const fs::path& file) {
+    if (!isRegularFile(file))
+        return std::optional<fs::path>();
+    Result<std::string> text = platform::readFile(file, kMaxUserDirBytes);
+    if (!text)
+        return std::move(text).error();
+    std::string_view rest = *text;
+    if (rest.substr(0, 3) == "\xEF\xBB\xBF")
+        rest.remove_prefix(3);
+    std::string_view line;
+    while (line.empty() && !rest.empty()) {
+        const std::size_t end = rest.find('\n');
+        line = trimmed(rest.substr(0, end));
+        rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
+    }
+    if (line.size() >= 2 && (line.front() == '"' || line.front() == '\'') &&
+        line.back() == line.front())
+        line = trimmed(line.substr(1, line.size() - 2));
+    if (line.empty())
+        return std::optional<fs::path>();
+
+    const auto ignored = [&](std::string_view reason) {
+        return makeError(ErrorCode::ValidationFailed,
+                         "userdir.txt in the game folder is ignored: " + std::string(reason) + ".",
+                         pathToUtf8(file) + ": " + sanitizeUtf8(line));
+    };
+    const bool control = std::any_of(line.begin(), line.end(), [](char c) {
+        return static_cast<unsigned char>(c) < 0x20 || c == '\x7f';
+    });
+    if (control || !isValidUtf8(line))
+        return ignored("it does not contain a valid path");
+    fs::path path = pathFromUtf8(line);
+    if (!path.is_absolute())
+        return ignored("only absolute paths are supported");
+    path = path.lexically_normal();
+    if (!path.has_filename() && path.has_relative_path())
+        path = path.parent_path(); // trailing separator
+    return std::optional<fs::path>(std::move(path));
+}
 
 std::optional<std::string> workshopIdFromPath(const fs::path& path, std::string_view appId,
                                               fs::path* libraryRoot) {
@@ -478,6 +542,19 @@ fs::path DlcLoadJsonAdapter::defaultExecutable(OsPlatform os) const {
     return pathFromUtf8(m_traits.linuxExecutable);
 }
 
+std::vector<std::string>
+DlcLoadJsonAdapter::launchArguments(const std::vector<std::string>& arguments) const {
+    std::vector<std::string> out;
+    for (const std::string& argument : arguments) {
+        const bool dropped =
+            std::any_of(m_traits.droppedArguments.begin(), m_traits.droppedArguments.end(),
+                        [&](std::string_view flag) { return keyEquals(argument, flag); });
+        if (!dropped)
+            out.push_back(argument);
+    }
+    return out;
+}
+
 Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPath,
                                                       const fs::path& userDataPath,
                                                       const DiscoveryEnvironment& env,
@@ -522,7 +599,7 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
         Result<fs::path> exe = resolveLauncherExecutable(*settings, inst.installPath, env.platform);
         if (exe && !launcherProcess(*exe)) {
             inst.executablePath = *exe;
-            inst.defaultArguments = settings->exeArgs;
+            inst.defaultArguments = launchArguments(settings->exeArgs);
         } else {
             logWarning(
                 m_traits.logComponent,
@@ -567,16 +644,31 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
         const fs::path userAbsolute = fs::absolute(userDataPath, ec);
         inst.userDataPath = (ec ? userDataPath : userAbsolute).lexically_normal();
     } else {
+        std::optional<fs::path> fromUserDir;
+        if (!m_traits.userDirFile.empty()) {
+            Result<std::optional<fs::path>> read =
+                readUserDirFile(inst.installPath / pathFromUtf8(m_traits.userDirFile));
+            if (!read) {
+                logWarning(m_traits.logComponent, "Ignoring the game's userdir.txt",
+                           {{"error", read.error().message}, {"detail", read.error().detail}});
+            } else if (*read) {
+                fromUserDir = **read;
+                logInfo(m_traits.logComponent, "Using the user data folder from userdir.txt",
+                        {{"path", pathToUtf8(*fromUserDir)}});
+            }
+        }
         const fs::path& base =
             env.platform == OsPlatform::Linux ? env.xdgDataHome : env.documentsDir;
         std::optional<fs::path> fromSettings;
-        if (settings && !settings->gameDataPath.empty()) {
+        if (!fromUserDir && settings && !settings->gameDataPath.empty()) {
             fromSettings = resolveGameDataPath(settings->gameDataPath, base);
             if (!fromSettings)
                 logWarning(m_traits.logComponent, "Ignoring an unsupported gameDataPath",
                            {{"gameDataPath", settings->gameDataPath}});
         }
-        inst.userDataPath = fromSettings ? *fromSettings : defaultUserDataPath(env);
+        inst.userDataPath = fromUserDir    ? *fromUserDir
+                            : fromSettings ? *fromSettings
+                                           : defaultUserDataPath(env);
         if (inst.userDataPath.empty())
             return makeError(ErrorCode::NotFound, "The " + gameName +
                                                       " user data folder could not be determined. "
@@ -664,6 +756,7 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         m_traits.logComponent);
 
     std::vector<InstalledMod> mods;
+    std::size_t notDownloaded = 0;
     // Workshop registrations grouped by id; ugc_<id>.mod is the canonical one.
     std::map<std::string, std::vector<const Registration*>> byWorkshopId;
     for (const Registration& reg : registrations) {
@@ -679,6 +772,18 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         });
         const Registration* chosen = primary != regs.end() ? *primary : regs.front();
         const auto folder = content.folders.find(id);
+        if (folder == content.folders.end() && !declaredContentExists(*chosen)) {
+            // Registered but not downloaded (e.g. after a reinstall): not an
+            // installed mod, so that playsets see it as missing and it can be
+            // acquired. Noted for diagnostics only.
+            ++notDownloaded;
+            logInfo(m_traits.logComponent,
+                    "A registered Workshop item is not downloaded; it is not part of the inventory",
+                    {{"id", id},
+                     {"descriptor", chosen->ref},
+                     {"steam", steamStateNote(content.findItem(id))}});
+            continue;
+        }
         InstalledMod mod = workshopMod(
             game, id, chosen, folder != content.folders.end() ? &folder->second : nullptr, content);
         for (const Registration* other : regs) {
@@ -696,7 +801,8 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
     logInfo(m_traits.logComponent, "Mod scan finished",
             {{"mods", std::to_string(mods.size())},
              {"registered", std::to_string(registrations.size())},
-             {"workshopFolders", std::to_string(content.folders.size())}});
+             {"workshopFolders", std::to_string(content.folders.size())},
+             {"registeredNotDownloaded", std::to_string(notDownloaded)}});
     return mods;
 }
 
@@ -753,16 +859,29 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
         PlaysetEntry entry;
         const InstalledMod* mod = findByRef(ref);
         std::string hint = ref;
+        std::string versionHint;
+        std::optional<ModIdentity> workshop; // a Workshop item that is not installed
         if (mod == nullptr && isPlainModReference(ref)) {
             // Another registration of an inventory mod (e.g. a second .mod for
-            // the same Workshop item): resolve it through its own descriptor.
+            // the same Workshop item), or the registration of a Workshop item
+            // that is not downloaded: resolve it through its own descriptor.
             const fs::path descriptorFile = installation.userDataPath / pathFromUtf8(ref);
             if (isRegularFile(descriptorFile)) {
                 const Registration reg = readRegistration(descriptorFile, installation.userDataPath,
                                                           m_traits.steamAppId);
-                mod = findByIdentity(identityOf(reg, game));
+                const ModIdentity identity = identityOf(reg, game);
+                mod = findByIdentity(identity);
+                if (identity.source == source::SteamWorkshop)
+                    workshop = identity;
                 if (reg.document && !reg.descriptor.name.empty())
                     hint = reg.descriptor.name;
+                if (reg.document)
+                    versionHint = reg.descriptor.version;
+            } else if (auto id =
+                           ugcIdFromFileName(ref.substr(std::string_view(kModFolder).size() + 1))) {
+                // No descriptor at all: the launcher's naming convention.
+                workshop = ModIdentity{game, source::SteamWorkshop, *id};
+                mod = findByIdentity(*workshop);
             }
         }
         if (mod != nullptr) {
@@ -770,6 +889,10 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
             entry.nameHint = mod->descriptor.name;
             entry.versionHint = mod->descriptor.version;
             entry.fingerprint = mod->fingerprint;
+        } else if (workshop) {
+            entry.identity = *workshop;
+            entry.nameHint = hint;
+            entry.versionHint = versionHint;
         } else {
             entry.identity = ModIdentity{game, source::Local, referenceStem(ref)};
             entry.nameHint = hint;
@@ -800,7 +923,8 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     plan.game = std::string(m_traits.key);
     plan.executable = installation.executablePath;
     plan.workingDirectory = installation.installPath;
-    plan.arguments = installation.defaultArguments;
+    // Also filtered here: installations stored before a flag was dropped.
+    plan.arguments = launchArguments(installation.defaultArguments);
     if (installation.distribution == DistributionSource::Steam &&
         !installation.steamAppId.empty()) {
         plan.environment.emplace_back("SteamAppId", installation.steamAppId);
@@ -826,9 +950,11 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
                                  "it.",
                              toString(mod.identity) + ": " + pathToUtf8(mod.contentPath));
 
+        // References name the file only ("mod/<file>"), so a descriptor must
+        // lie directly in the mod folder.
         if (mod.identity.source == source::Local) {
             if (mod.descriptorPath.empty() || !isRegularFile(mod.descriptorPath) ||
-                !platform::isWithin(mod.descriptorPath, modDir))
+                !samePath(mod.descriptorPath.parent_path(), modDir))
                 return makeError(ErrorCode::NotFound,
                                  "The local mod " + label +
                                      " has no descriptor in the game's mod "
@@ -848,7 +974,7 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
         const fs::path ugcFile = modDir / pathFromUtf8("ugc_" + mod.identity.id + ".mod");
         fs::path registered = mod.descriptorPath;
         if (registered.empty() || !isRegularFile(registered) ||
-            !platform::isWithin(registered, modDir))
+            !samePath(registered.parent_path(), modDir))
             registered = ugcFile;
         std::optional<DescriptorDocument> registeredDocument;
         if (isRegularFile(registered)) {
@@ -860,6 +986,18 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
                 continue;
             }
             registeredDocument = reg.document;
+        }
+        // mod/ugc_<id>.mod is (re)written below; never over another mod's
+        // registration (e.g. a local mod that happens to use that name).
+        if (isRegularFile(ugcFile)) {
+            const Registration owner =
+                readRegistration(ugcFile, installation.userDataPath, m_traits.steamAppId);
+            if (owner.workshopId != mod.identity.id)
+                return makeError(ErrorCode::ValidationFailed,
+                                 "The Workshop mod " + label + " cannot be registered because " +
+                                     owner.ref +
+                                     " belongs to another mod. Rename that file, then rescan.",
+                                 toString(mod.identity) + ": " + pathToUtf8(ugcFile));
         }
 
         // The content copy's own path= is often stale (the author's machine),
@@ -904,7 +1042,7 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     if (!dlcLoad)
         return std::move(dlcLoad).error();
     plan.warnings = std::move(dlcLoad->warnings);
-    if (dlcLoad->existing != dlcLoad->contents)
+    if (!dlcLoad->unchanged)
         plan.configWrites.push_back(
             ConfigWrite{dlcLoadFile, std::move(dlcLoad->contents), "load order (dlc_load.json)"});
     return plan;

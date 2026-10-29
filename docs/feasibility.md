@@ -15,23 +15,30 @@ Investigation environment (2026-10-29): Windows 11 Enterprise 23H2
 | Game | Steam app | State on this machine | Notes |
 |---|---|---|---|
 | Stellaris | 281990 | Installed via Steam, build 25664273, `launcher-settings.json` reports "Cygnus v4.5.2 (9776)" | 27 Workshop items installed, 10 local mods, 2 launcher playsets |
-| Europa Universalis IV | 236850 | Installed via Steam later the same day, build 15918133, `launcher-settings.json` reports "EU4 v1.37.5.0 Inca (491d)" | 0 Workshop items on disk (`appworkshop_236850.acf` has `NeedsDownload` = 1), 1 local mod, 13 registered `ugc_*.mod` descriptors left from an earlier installation |
+| Europa Universalis IV | 236850 | Installed via Steam later the same day, build 15918133, `launcher-settings.json` reports "EU4 v1.37.5.0 Inca (491d)" | Right after the install 0 Workshop items on disk (`appworkshop_236850.acf` had `NeedsDownload` = 1); shortly afterwards Steam downloaded the 12 subscribed items. 1 local mod; 12 registered `ugc_*.mod` descriptors and 1 local descriptor left from an earlier installation |
 
-EU4 observations that differ from Stellaris (read-only, 2026-10-29):
+EU4 observations that differ from Stellaris (read-only, 2026-10-29; adapter
+results in [`evidence/real-scan-2026-10-29.md`](evidence/real-scan-2026-10-29.md)):
 
 - The install folder has **no `steam_appid.txt`**. A directly started
   `eu4.exe` therefore needs `SteamAppId`/`SteamGameId` in its environment
-  for the Steam API to initialise; whether the game then runs without
-  relaunching through Steam (and the Paradox launcher) must be verified
-  in-game.
-- The install folder contains `userdir.txt` (empty here). EU4 uses a
-  non-empty `userdir.txt` to relocate the user-data directory, so discovery
-  must honour it.
+  for the Steam API to initialise (the launch plan sets both); whether the
+  game then runs without relaunching through Steam (and the Paradox
+  launcher) must be verified in-game.
+- The install folder contains `userdir.txt` (empty here), and `eu4.exe`
+  references that file name (so does `stellaris.exe`). Discovery honours an
+  absolute path on its first non-empty line as the user-data folder; relative
+  paths are ignored with a warning because their meaning is unverified.
 - `exeArgs` is `["-enabletelemetry", "-gdpr-compliant"]`. The manager does not
   enable the game's telemetry on the user's behalf: `-enabletelemetry` is
-  dropped from direct launches by default.
-- `dlc_load.json` enables 8 Workshop mods whose content folders do not exist
-  (EU4 was reinstalled), which exercises missing-content detection on real data.
+  always dropped from direct launches (both games), silently.
+- Right after the reinstall, `dlc_load.json` enabled 8 Workshop mods whose
+  content folders did not exist. Such registrations are treated as not
+  installed (missing, so they can be acquired) rather than as broken
+  inventory items; the hidden real-data test replays that state with the
+  real descriptors.
+- The launcher's active playset uses a hand-made (`custom`) order, and
+  `dlc_load.json` lists it position 0 first (see `docs/load-order.md`).
 - Descriptors use four-component versions such as `supported_version="v1.37.*.*"`.
 - `steam_api64.dll` exports the same flat API generation as Stellaris
   (`SteamAPI_SteamUGC_v016`, `SteamAPI_ManualDispatch_*`).

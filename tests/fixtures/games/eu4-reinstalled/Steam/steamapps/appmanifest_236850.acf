@@ -1,0 +1,27 @@
+"AppState"
+{
+	"appid"		"236850"
+	"Universe"		"1"
+	"LauncherPath"		"@ROOT@/Steam/steam.exe"
+	"name"		"Europa Universalis IV"
+	"StateFlags"		"4"
+	"installdir"		"Europa Universalis IV"
+	"LastUpdated"		"1793278281"
+	"LastPlayed"		"0"
+	"SizeOnDisk"		"9559536253"
+	"StagingSize"		"0"
+	"buildid"		"15918133"
+	"LastOwner"		"76561190000000001"
+	"DownloadType"		"2"
+	"UpdateResult"		"0"
+	"BytesToDownload"		"530400080"
+	"BytesDownloaded"		"530400080"
+	"BytesToStage"		"1603897523"
+	"BytesStaged"		"1603897523"
+	"TargetBuildID"		"0"
+	"AutoUpdateBehavior"		"0"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

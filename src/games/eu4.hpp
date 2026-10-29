@@ -1,11 +1,11 @@
 #pragma once
 
-// Europa Universalis IV adapter (Steam app 236850). EU4 is not installed on
-// the development machine: the dlc_load.json/mod/*.mod formats are taken from
-// leftover launcher output for EU4 v1.37.5.0 found there, everything else
-// (launcher-settings.json, executable, in-game behaviour) is unverified.
-// Pre-launcher-v2 versions that list mods in settings.txt are not supported.
-// Details: docs/games/eu4.md.
+// Europa Universalis IV adapter (Steam app 236850). Uses the dlc_load.json
+// scheme; discovery, launcher-settings.json, userdir.txt, the mod inventory
+// and the generated files were checked read-only against a real Windows
+// installation (v1.37.5.0). Launching and the in-game load order are
+// unverified. Pre-launcher-v2 versions that list mods in settings.txt are not
+// supported. Details: docs/games/eu4.md.
 
 #include "games/dlc_load_adapter.hpp"
 

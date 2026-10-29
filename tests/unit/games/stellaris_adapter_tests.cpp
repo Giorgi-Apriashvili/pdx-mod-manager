@@ -188,6 +188,21 @@ TEST_CASE("Unsafe launcher-settings executables are ignored", "[games][stellaris
     CHECK(inst.version == "v4.5.2");
 }
 
+TEST_CASE("Stellaris drops -enabletelemetry and honours userdir.txt", "[games][stellaris]") {
+    StellarisFixture f;
+    const fs::path settings = f.install() / "launcher-settings.json";
+    test::writeText(settings, test::replaceAll(test::readText(settings), "\"-gdpr-compliant\"",
+                                               "\"-ENABLETELEMETRY\", \"-gdpr-compliant\""));
+    CHECK(f.discovered().defaultArguments == std::vector<std::string>{"-gdpr-compliant"});
+
+    // No userdir.txt ships with Stellaris; an absolute one is honoured.
+    CHECK_FALSE(fs::exists(f.install() / "userdir.txt"));
+    const fs::path custom = f.path("Stellaris Data");
+    fs::create_directories(custom);
+    test::writeText(f.install() / "userdir.txt", f.generic("Stellaris Data") + "\n");
+    CHECK(samePath(f.discovered().userDataPath, custom));
+}
+
 TEST_CASE("Manual Stellaris locations are inspected", "[games][stellaris]") {
     StellarisFixture f;
     const DiscoveryEnvironment& env = f.env;
@@ -241,12 +256,12 @@ TEST_CASE("Stellaris scan applies the identity rules", "[games][stellaris]") {
     std::vector<std::string> keys;
     for (const InstalledMod& m : mods)
         keys.push_back(m.identity.source + ":" + m.identity.id);
+    // 1000000008 and 1000000009 are registered but not downloaded: not installed.
     CHECK(keys == std::vector<std::string>{
                       "local:bad_syntax", "local:local_tweaks", "local:missing_folder",
                       "local:Ünïcødé mod", "steam-workshop:1000000001", "steam-workshop:1000000002",
                       "steam-workshop:1000000003", "steam-workshop:1000000004",
-                      "steam-workshop:1000000005", "steam-workshop:1000000006",
-                      "steam-workshop:1000000008", "steam-workshop:1000000009"});
+                      "steam-workshop:1000000005", "steam-workshop:1000000006"});
     for (const InstalledMod& m : mods)
         CHECK(m.identity.game == "stellaris");
 
@@ -325,13 +340,19 @@ TEST_CASE("Stellaris scan reports broken and pending mods per mod", "[games][ste
     const InstalledMod& outdated = f.mod(mods, "1000000005");
     CHECK(outdated.state == InstallState::NeedsUpdate);
 
-    const InstalledMod& unsubscribed = f.mod(mods, "1000000008");
-    CHECK(unsubscribed.state == InstallState::Broken);
-    CHECK(test::containsText(unsubscribed.problems, "not downloaded"));
-    CHECK(unsubscribed.descriptor.name == "Example Unsubscribed");
+    // Registered Workshop items whose content is in no library are not
+    // installed (whether Steam is downloading them or not): they read as
+    // missing in playsets and can be acquired.
+    CHECK(findMod(mods, "1000000008") == nullptr);
+    CHECK(findMod(mods, "1000000009") == nullptr);
 
-    const InstalledMod& downloading = f.mod(mods, "1000000009");
+    // Content on disk that Steam does not list as installed yet: an update.
+    test::writeText(f.content("1000000009") / "descriptor.mod", "name=\"Example Downloading\"");
+    const std::vector<InstalledMod> updating = f.scan(f.discovered());
+    const InstalledMod& downloading = f.mod(updating, "1000000009");
     CHECK(downloading.state == InstallState::Downloading);
+    CHECK(downloading.problems.empty());
+    CHECK(findMod(updating, "1000000008") == nullptr);
 }
 
 TEST_CASE("Stellaris scan handles unusual registrations", "[games][stellaris]") {
@@ -424,13 +445,30 @@ TEST_CASE("Stellaris current configuration is read from dlc_load.json", "[games]
         CHECK((*aliased)[0].identity.id == "1000000001");
         CHECK((*aliased)[1].identity.id == "local_tweaks");
     }
-    SECTION("unresolved entries keep a readable name hint") {
+    SECTION("unresolved entries keep their identity and a readable name hint") {
         auto unresolved = f.adapter.readCurrentConfiguration(inst, {});
         REQUIRE(unresolved.ok());
         REQUIRE(unresolved->size() == 4);
         CHECK((*unresolved)[1].identity == ModIdentity{"stellaris", "local", "local_tweaks"});
         CHECK((*unresolved)[1].nameHint == "Local Tweaks");
-        CHECK((*unresolved)[0].identity == ModIdentity{"stellaris", "local", "ugc_1000000001"});
+        CHECK((*unresolved)[0].identity ==
+              ModIdentity{"stellaris", "steam-workshop", "1000000001"});
+        CHECK((*unresolved)[0].nameHint == "Example Overhaul");
+    }
+    SECTION("registered Workshop items that are not downloaded stay Workshop entries") {
+        test::writeText(dlcLoad, "{\"enabled_mods\":[\"mod/ugc_1000000008.mod\","
+                                 "\"MOD/ugc_1000000009.mod\",\"mod/ugc_1000000077.mod\","
+                                 "\"mod/ugc_01.mod\"]}");
+        auto missing = f.adapter.readCurrentConfiguration(inst, mods);
+        REQUIRE(missing.ok());
+        REQUIRE(missing->size() == 4);
+        CHECK((*missing)[0].identity == ModIdentity{"stellaris", "steam-workshop", "1000000008"});
+        CHECK((*missing)[0].nameHint == "Example Unsubscribed");
+        CHECK((*missing)[1].identity == ModIdentity{"stellaris", "steam-workshop", "1000000009"});
+        // No descriptor: the ugc_<id>.mod naming convention, canonical ids only.
+        CHECK((*missing)[2].identity == ModIdentity{"stellaris", "steam-workshop", "1000000077"});
+        CHECK((*missing)[2].nameHint == "mod/ugc_1000000077.mod");
+        CHECK((*missing)[3].identity == ModIdentity{"stellaris", "local", "ugc_01"});
     }
     SECTION("missing, empty and malformed files") {
         fs::remove(dlcLoad);
@@ -565,6 +603,79 @@ TEST_CASE("Stellaris dlc_load.json is created or rebuilt when needed", "[games][
                                  "\"disabled_dlcs\":[\"dlc/x.dlc\"]}");
         CHECK(f.plan(inst, mods, {"local_tweaks"}).configWrites.empty());
     }
+    SECTION("already correct in another layout: left untouched") {
+        test::writeText(dlcLoad,
+                        "\xEF\xBB\xBF{\r\n  \"enabled_mods\": [ \"mod/local_tweaks.mod\" ],"
+                        "\r\n  \"disabled_dlcs\": [], \"ratio\": 1.50\r\n}\r\n");
+        CHECK(f.plan(inst, mods, {"local_tweaks"}).configWrites.empty());
+        const LaunchPlan reordered = f.plan(inst, mods, {"local_tweaks", "1000000001"});
+        REQUIRE(reordered.configWrites.size() == 1);
+        CHECK(reordered.configWrites[0].contents ==
+              "{\"enabled_mods\":[\"mod/local_tweaks.mod\",\"mod/ugc_1000000001.mod\"],"
+              "\"disabled_dlcs\":[],\"ratio\":1.5}");
+    }
+}
+
+TEST_CASE("Stellaris launch plan never writes over another mod's registration",
+          "[games][stellaris]") {
+    StellarisFixture f;
+    const GameInstallation inst = f.discovered();
+    const fs::path modDir = f.userData() / "mod";
+
+    // A local mod that uses the name ugc_<id>.mod of a Workshop item that is
+    // installed but not registered.
+    test::writeText(f.path("Custom Content/Thing/descriptor.mod"), "name=\"Impostor\"");
+    const std::string impostor = "name=\"Impostor\"\npath=\"" + f.generic("Custom Content/Thing") +
+                                 "\"\nremote_file_id=\"1\"";
+    test::writeText(modDir / "ugc_1000000003.mod", impostor);
+    const std::vector<InstalledMod> mods = f.scan(inst);
+    CHECK(f.mod(mods, "ugc_1000000003").identity.source == source::Local);
+    const InstalledMod& workshop = f.mod(mods, "1000000003");
+    CHECK(workshop.descriptorPath.empty());
+
+    auto result = f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{workshop});
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.error().code == ErrorCode::ValidationFailed);
+    CHECK(result.error().message.find("mod/ugc_1000000003.mod belongs to another mod") !=
+          std::string::npos);
+    CHECK(test::readText(modDir / "ugc_1000000003.mod") == impostor);
+    // The local mod itself still launches.
+    CHECK(f.plan(inst, mods, {"ugc_1000000003"}).configWrites.size() == 1);
+
+    // A stale or unreadable registration of the same item is replaced.
+    test::writeText(modDir / "ugc_1000000003.mod",
+                    "name=\"Example Battles\"\npath=\"" +
+                        f.generic("Old Library/steamapps/workshop/content/281990/1000000003") +
+                        "\"\nremote_file_id=\"1000000003\"");
+    CHECK(f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{workshop}).ok());
+    test::writeText(modDir / "ugc_1000000003.mod", "name=\"broken");
+    CHECK(f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{workshop}).ok());
+}
+
+TEST_CASE("Stellaris descriptors must lie directly in the mod folder", "[games][stellaris]") {
+    StellarisFixture f;
+    const GameInstallation inst = f.discovered();
+    const std::vector<InstalledMod> mods = f.scan(inst);
+    const fs::path nested = f.userData() / "mod" / "sub" / "local_tweaks.mod";
+    test::writeText(nested, test::readText(f.userData() / "mod" / "local_tweaks.mod"));
+
+    // "mod/local_tweaks.mod" would name a different file.
+    InstalledMod local = f.mod(mods, "local_tweaks");
+    local.descriptorPath = nested;
+    auto result = f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{local});
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.error().code == ErrorCode::NotFound);
+
+    // A nested Workshop registration is not reused; ugc_<id>.mod is written.
+    InstalledMod workshop = f.mod(mods, "1000000003");
+    workshop.descriptorPath = f.userData() / "mod" / "sub" / "ugc_1000000003.mod";
+    test::writeText(workshop.descriptorPath, "name=\"Example Battles\"\npath=\"" +
+                                                 f.generic(std::string(kContent) + "1000000003") +
+                                                 "\"");
+    const LaunchPlan plan = f.plan(inst, {workshop}, {"1000000003"});
+    REQUIRE(plan.configWrites.size() == 2);
+    CHECK(samePath(plan.configWrites[0].target, f.userData() / "mod" / "ugc_1000000003.mod"));
+    CHECK(plan.configWrites[1].contents.find("\"mod/ugc_1000000003.mod\"") != std::string::npos);
 }
 
 TEST_CASE("Stellaris launch plan refuses what it cannot launch", "[games][stellaris]") {
@@ -582,8 +693,12 @@ TEST_CASE("Stellaris launch plan refuses what it cannot launch", "[games][stella
     CHECK(result.error().code == ErrorCode::NotFound);
     CHECK(result.error().message.find("Local Tweaks") != std::string::npos);
 
-    result = build({f.mod(mods, "1000000008")});
+    InstalledMod gone = f.mod(mods, "1000000001"); // removed after the scan
+    gone.contentPath = f.content("1000000008");
+    gone.descriptor.name = "Example Unsubscribed";
+    result = build({gone});
     REQUIRE_FALSE(result.ok());
+    CHECK(result.error().code == ErrorCode::NotFound);
     CHECK(result.error().message.find("Example Unsubscribed") != std::string::npos);
 
     result = build({f.mod(mods, "1000000004")}); // no readable descriptor anywhere
