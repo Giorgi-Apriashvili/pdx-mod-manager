@@ -6,11 +6,15 @@ game itself report what it loaded: each probe ships scripted triggers that use
 deliberately unknown trigger names, which Clausewitz games report in
 logs/error.log together with the file they came from.
 
-  common/scripted_triggers/pmm_probe_only_<X>.txt
+  common/scripted_triggers/pmm_probe_only_<X>.txt, events/pmm_probe_only_<X>.txt
       unique to probe X -> its error proves probe X was loaded
-  common/scripted_triggers/pmm_probe_shared.txt
+  common/scripted_triggers/pmm_probe_shared.txt, events/pmm_probe_shared.txt
       same relative path in every probe -> only the winning copy is parsed, so
       the trigger name in the error reveals which mod won the file override
+
+EU4 1.37 does not report unknown triggers inside scripted triggers that are
+never used (observed 2026-10-30), but it parses every event file at start-up,
+so the event files carry the same trigger names.
 
 Usage:
   probe_mods.py create <mod-dir> [--names a b c] [--supported-version v4.5.*]
@@ -55,6 +59,22 @@ def descriptor(name: str, path: Path | None, supported_version: str | None) -> s
     return "\n".join(lines) + "\n"
 
 
+def probe_event(namespace: str, trigger: str) -> str:
+    # Never fires (triggered only, unknown trigger); the game reports the
+    # unknown trigger with the file it came from while loading events.
+    return (
+        f"namespace = {namespace}\n\n"
+        "country_event = {\n"
+        f"\tid = {namespace}.1\n"
+        f"\ttitle = {namespace}.1.t\n"
+        f"\tdesc = {namespace}.1.d\n"
+        "\tis_triggered_only = yes\n"
+        f"\ttrigger = {{\n\t\t{trigger} = yes\n\t}}\n"
+        f"\toption = {{\n\t\tname = {namespace}.1.a\n\t}}\n"
+        "}\n"
+    )
+
+
 def create(mod_dir: Path, names: list[str], supported_version: str | None) -> dict:
     if not mod_dir.is_dir():
         raise SystemExit(f"mod directory does not exist: {mod_dir}")
@@ -70,6 +90,14 @@ def create(mod_dir: Path, names: list[str], supported_version: str | None) -> di
         (triggers / "pmm_probe_shared.txt").write_text(
             f"pmm_probe_shared_trigger = {{\n\tpmm_probe_shared_from_{name} = yes\n}}\n",
             encoding="utf-8",
+        )
+        events = folder / "events"
+        events.mkdir(parents=True, exist_ok=True)
+        (events / f"pmm_probe_only_{name}.txt").write_text(
+            probe_event(f"pmm_probe_{name}", f"pmm_probe_loaded_{name}"), encoding="utf-8"
+        )
+        (events / "pmm_probe_shared.txt").write_text(
+            probe_event("pmm_probe_shared", f"pmm_probe_shared_from_{name}"), encoding="utf-8"
         )
         (folder / "descriptor.mod").write_text(descriptor(name, None, supported_version), encoding="utf-8")
         (mod_dir / f"{probe_folder(name)}.mod").write_text(
