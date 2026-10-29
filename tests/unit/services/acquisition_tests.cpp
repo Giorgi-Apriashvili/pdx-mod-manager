@@ -1,3 +1,4 @@
+#include "core/log.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/inventory_repository.hpp"
 #include "persistence/playset_repository.hpp"
@@ -11,6 +12,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
+#include <map>
 #include <memory>
 
 using namespace pmm;
@@ -118,6 +121,37 @@ bool installedInInventory(World& w, const std::string& id) {
     persistence::InventoryRepository inventory(*w.db);
     return require(inventory.find({kGame, source::SteamWorkshop, id})).has_value();
 }
+
+// Largest number of unfinished in-memory jobs that share one mod.
+std::size_t unfinishedPerMod(const AcquisitionCoordinator& coordinator) {
+    std::map<ModIdentity, std::size_t> counts;
+    std::size_t most = 0;
+    for (const AcquisitionJob& job : coordinator.liveJobs(kGame)) {
+        if (!isTerminal(job.state))
+            most = std::max(most, ++counts[job.identity]);
+    }
+    return most;
+}
+
+// Captures log records for the lifetime of the object.
+class LogCapture {
+public:
+    LogCapture() {
+        setLogSink([this](const LogRecord& record) { m_records.push_back(record); });
+    }
+    ~LogCapture() { setLogSink({}); }
+    LogCapture(const LogCapture&) = delete;
+    LogCapture& operator=(const LogCapture&) = delete;
+
+    std::size_t count(std::string_view message) const {
+        return static_cast<std::size_t>(
+            std::count_if(m_records.begin(), m_records.end(),
+                          [&](const LogRecord& record) { return record.message == message; }));
+    }
+
+private:
+    std::vector<LogRecord> m_records;
+};
 
 } // namespace
 
@@ -539,4 +573,123 @@ TEST_CASE("A failed job waiting for its automatic retry resumes after a launch o
     CHECK(r.job(kItem).state == AcquisitionState::Installed);
     CHECK(r.job(kItem).id == parked.id);
     CHECK(r.steam.sentIds<providers::SubscribeCommand>().size() == 2);
+}
+
+TEST_CASE("A newer job for the same mod supersedes an older failed one",
+          "[services][acquisition]") {
+    Rig r;
+    LogCapture logs;
+    SECTION("while the older job waits for its automatic retry") {
+        r.steam.items[kItem].subscribeResult = 3; // NoConnection: retried in 5 s
+        r.acquire({workshopEntry(kItem, "Example")});
+        r.steam.pump(r.c());
+        REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+        REQUIRE(r.c().hasActiveWork(kGame));
+    }
+    SECTION("after the older job's automatic retries are exhausted") {
+        r.steam.items[kItem].subscribeResult = 16; // Timeout
+        r.acquire({workshopEntry(kItem, "Example")});
+        r.settle();
+        REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+        REQUIRE(r.job(kItem).attempts == 3);
+    }
+    const std::int64_t older = r.job(kItem).id;
+    r.steam.items[kItem].subscribeResult = 1;
+    r.steam.items[kItem].steps = 4;
+
+    // The user imports a code with the same mod: a new job, since Failed is terminal.
+    ShareService share(r.w.ctx);
+    const AppliedImport applied = require(share.applyImport(
+        share.previewImport(codeFor({workshopEntry(kItem, "Example")})), ImportMode::New));
+    REQUIRE(applied.jobs.size() == 1);
+    const std::int64_t newer = applied.jobs[0].id;
+    REQUIRE(newer != older);
+    const std::size_t subscribesBefore = r.steam.sentIds<providers::SubscribeCommand>().size();
+
+    r.c().start(kGame);
+    bool settled = false;
+    for (int i = 0; i < 100 && !settled; ++i) {
+        r.steam.pump(r.c());
+        CHECK(unfinishedPerMod(r.c()) <= 1);
+        settled = !r.c().hasActiveWork(kGame) && r.steam.pending.empty();
+        r.w.clockMs += 1000;
+        r.c().tick(r.w.clockMs);
+        CHECK(unfinishedPerMod(r.c()) <= 1);
+    }
+    REQUIRE(settled);
+
+    CHECK(r.job(kItem).id == newer);
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    CHECK(require(repo.get(older)).state == AcquisitionState::Failed);
+    CHECK(r.steam.sentIds<providers::SubscribeCommand>().size() == subscribesBefore + 1);
+    CHECK(logs.count("saving an acquisition job failed") == 0);
+    for (const AcquisitionJob& job : r.c().liveJobs(kGame))
+        CHECK(job.id != older);
+}
+
+TEST_CASE("Retrying an older job is refused while a newer one waits for its automatic retry",
+          "[services][acquisition]") {
+    Rig r;
+    LogCapture logs;
+    r.steam.items[kItem].subscribeResult = 16; // Timeout: retries exhaust
+    r.acquire({workshopEntry(kItem, "Example")});
+    r.settle();
+    const std::int64_t older = r.job(kItem).id;
+    REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+
+    r.steam.items[kItem].subscribeResult = 3; // NoConnection: retried automatically
+    ShareService share(r.w.ctx);
+    const AppliedImport applied = require(share.applyImport(
+        share.previewImport(codeFor({workshopEntry(kItem, "Example")})), ImportMode::New));
+    REQUIRE(applied.jobs.size() == 1);
+    r.c().start(kGame);
+    r.steam.pump(r.c());
+    REQUIRE(r.job(kItem).id == applied.jobs[0].id);
+    REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+    REQUIRE(r.c().hasActiveWork(kGame));
+
+    const auto retried = r.c().retry(older);
+    REQUIRE_FALSE(retried);
+    CHECK(retried.error().code == ErrorCode::AlreadyExists);
+    CHECK(unfinishedPerMod(r.c()) <= 1);
+
+    r.steam.items[kItem].subscribeResult = 1;
+    r.settle();
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    CHECK(require(repo.get(older)).state == AcquisitionState::Failed);
+    CHECK(logs.count("saving an acquisition job failed") == 0);
+}
+
+TEST_CASE("An older job revived next to a running one stops at its first save",
+          "[services][acquisition]") {
+    Rig r;
+    LogCapture logs;
+    r.steam.items[kItem].subscribeResult = 16; // Timeout: retries exhaust
+    r.acquire({workshopEntry(kItem, "Example")});
+    r.settle();
+    const std::int64_t older = r.job(kItem).id;
+
+    r.steam.items[kItem].subscribeResult = 1;
+    r.steam.items[kItem].steps = 6;
+    ShareService share(r.w.ctx);
+    require(share.applyImport(share.previewImport(codeFor({workshopEntry(kItem, "Example")})),
+                              ImportMode::New));
+    r.c().start(kGame);
+    r.steam.pump(r.c());
+    REQUIRE(r.job(kItem).state == AcquisitionState::Downloading);
+
+    // The manual fallback of the older job brings it back into memory, where
+    // the running download's state reports reach it too and would revive it.
+    require(r.c().openFallback(older));
+    r.settle();
+
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    CHECK(require(repo.get(older)).state == AcquisitionState::NeedsUserAction);
+    CHECK(logs.count("saving an acquisition job failed") == 0);
+    CHECK(logs.count("stopped a duplicate acquisition job") == 1);
+    for (const AcquisitionJob& job : r.c().liveJobs(kGame))
+        CHECK(job.id != older);
 }

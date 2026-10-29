@@ -15,6 +15,9 @@
 //     reconciliation: each run queries Steam before deciding anything, so
 //     nothing is re-subscribed blindly and installed items are verified, not
 //     downloaded again) and picks up jobs created since (e.g. by an import);
+//   - runs at most one job per mod: a job that starts supersedes the older,
+//     finished in-memory jobs of the same mod, so that neither an automatic
+//     retry nor a state report revives them next to it;
 //   - opens the helper session on demand with the game's own Steam API library
 //     (platform::steam::findSteamApiLibrary) and closes it as soon as no job
 //     of the game is waiting for Steam;
@@ -162,7 +165,7 @@ public:
 
     // User-initiated retry of a failed / needs-action / unavailable /
     // cancelled job (a fresh retry cycle). AlreadyExists when another job for
-    // the same mod is in progress.
+    // the same mod is in progress or waiting for its automatic retry.
     Result<CoordinatorUpdate> retry(std::int64_t jobId);
     // Retries the newest job of every mod of `game` that failed or needs the user.
     CoordinatorUpdate retryAllFailed(const GameKey& game);
@@ -196,7 +199,8 @@ private:
         providers::AcquisitionContext context;
         AcquisitionJob persisted; // last state written to the database
         std::int64_t persistedAtMs = 0;
-        bool dirty = false; // coalesced progress not written yet
+        bool dirty = false;   // coalesced progress not written yet
+        bool stopped = false; // a duplicate of another unfinished job; forgotten after the pass
     };
     enum class SessionState { Closed, Opening, Ready, Failed };
     // Why a session could not be provided; applied to every job asking for it.
@@ -231,10 +235,13 @@ private:
     void closeSession(const GameKey& game);
     void closeIdleSessions();
     void flushOutbox();
-    void persist(Runtime& runtime, bool force);
+    // False when the write showed that another unfinished job owns the mod;
+    // the runtime is then stopped at its last saved state.
+    bool persist(Runtime& runtime, bool force);
     void park(Runtime& runtime);
     void setProvider(const GameKey& game, ProviderStatus status, std::string message);
     Runtime* adopt(const AcquisitionJob& job, bool resume);
+    void dropSuperseded(std::int64_t jobId);
     void requestMetadata(const GameKey& game, const std::vector<std::string>& ids);
     void rememberNames(const std::vector<AcquisitionJob>& jobs);
     std::optional<GameInstallation> storedInstallation(const GameKey& game) const;

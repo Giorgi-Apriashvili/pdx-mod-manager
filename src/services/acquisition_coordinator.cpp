@@ -13,6 +13,7 @@
 #include "services/internal/util.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <system_error>
 #include <type_traits>
 #include <variant>
@@ -215,6 +216,8 @@ CoordinatorUpdate AcquisitionCoordinator::run(const std::function<void()>& work)
         if (m_queue.empty())
             closeIdleSessions();
     } while (!m_queue.empty());
+    for (auto it = m_jobs.begin(); it != m_jobs.end();)
+        it = it->second.stopped ? m_jobs.erase(it) : std::next(it);
     m_draining = false;
     update.changed = m_changed || !update.rescanned.empty();
     m_changed = false;
@@ -228,8 +231,8 @@ void AcquisitionCoordinator::enqueue(std::int64_t jobId, providers::Observation 
 void AcquisitionCoordinator::process(std::int64_t jobId,
                                      const providers::Observation& observation) {
     const auto it = m_jobs.find(jobId);
-    if (it == m_jobs.end())
-        return; // parked or forgotten since the observation was queued
+    if (it == m_jobs.end() || it->second.stopped)
+        return; // parked, forgotten or stopped since the observation was queued
     apply(jobId, providers::reduceAcquisition(it->second.context, observation, m_options.policy));
 }
 
@@ -239,7 +242,8 @@ void AcquisitionCoordinator::apply(std::int64_t jobId, providers::Transition tra
     runtime.context = std::move(transition.context);
     if (transition.persist) {
         m_changed = true;
-        persist(runtime, false);
+        if (!persist(runtime, false))
+            return; // stopped as a duplicate: none of its actions run
     }
     if (before != AcquisitionState::Installed &&
         runtime.context.job.state == AcquisitionState::Installed) {
@@ -307,7 +311,7 @@ void AcquisitionCoordinator::flushOutbox() {
     }
 }
 
-void AcquisitionCoordinator::persist(Runtime& runtime, bool force) {
+bool AcquisitionCoordinator::persist(Runtime& runtime, bool force) {
     const AcquisitionJob& job = runtime.context.job;
     const AcquisitionJob& last = runtime.persisted;
     const bool significant = force || job.state != last.state || job.errorCode != last.errorCode ||
@@ -316,18 +320,34 @@ void AcquisitionCoordinator::persist(Runtime& runtime, bool force) {
     const std::int64_t now = m_ctx.now();
     if (!significant && now - runtime.persistedAtMs < m_options.progressPersistIntervalMs) {
         runtime.dirty = true;
-        return;
+        return true;
     }
     persistence::AcquisitionJobRepository repo(m_ctx.database);
     if (Status saved = repo.update(job); !saved) {
+        if (saved.error().code == ErrorCode::AlreadyExists) {
+            // Another unfinished job for this mod owns the work (the database
+            // allows one per mod): stop this one at its last saved state and
+            // forget it after this pass, instead of retrying the write on
+            // every tick.
+            logWarning(kComponent, "stopped a duplicate acquisition job",
+                       {{"job", std::to_string(job.id)}, {"mod", toString(job.identity)}});
+            runtime.context.job = runtime.persisted;
+            runtime.context.awaiting = AwaitStep::Nothing;
+            runtime.context.retryAtMs = 0;
+            runtime.dirty = false;
+            runtime.stopped = true;
+            m_changed = true;
+            return false;
+        }
         logWarning(kComponent, "saving an acquisition job failed",
                    {{"job", std::to_string(job.id)}, {"error", saved.error().message}});
         runtime.dirty = true;
-        return;
+        return true;
     }
     runtime.persisted = job;
     runtime.persistedAtMs = now;
     runtime.dirty = false;
+    return true;
 }
 
 // --- Sessions ------------------------------------------------------------------
@@ -521,9 +541,33 @@ AcquisitionCoordinator::Runtime* AcquisitionCoordinator::adopt(const Acquisition
     runtime.context.clockMs = now;
     runtime.context.awaitingSinceMs = now;
     Runtime* adopted = &m_jobs.insert_or_assign(job.id, std::move(runtime)).first->second;
-    if (resume)
+    if (resume) {
+        dropSuperseded(job.id);
         apply(job.id, providers::startAcquisition(job, now, m_options.policy));
+    }
     return adopted;
+}
+
+// A job that starts running supersedes the idle, finished in-memory jobs for
+// the same mod (their database rows remain, and snapshots show the newest job
+// per mod). Kept in memory, an automatic retry or a state report for the mod
+// could revive them next to it.
+void AcquisitionCoordinator::dropSuperseded(std::int64_t jobId) {
+    const ModIdentity identity = m_jobs.at(jobId).context.job.identity;
+    for (auto it = m_jobs.begin(); it != m_jobs.end();) {
+        Runtime& other = it->second;
+        if (it->first == jobId || other.context.job.identity != identity ||
+            !isTerminal(other.context.job.state)) {
+            ++it;
+            continue;
+        }
+        if (other.dirty)
+            persist(other, true);
+        logInfo(kComponent, "older acquisition job superseded",
+                {{"job", std::to_string(it->first)}, {"by", std::to_string(jobId)}});
+        it = m_jobs.erase(it);
+        m_changed = true;
+    }
 }
 
 void AcquisitionCoordinator::rememberNames(const std::vector<AcquisitionJob>& jobs) {
@@ -760,26 +804,26 @@ CoordinatorUpdate AcquisitionCoordinator::tick(std::int64_t nowMs) {
 
 Result<CoordinatorUpdate> AcquisitionCoordinator::retry(std::int64_t jobId) {
     persistence::AcquisitionJobRepository repo(m_ctx.database);
-    Runtime* runtime = nullptr;
-    if (const auto it = m_jobs.find(jobId); it != m_jobs.end()) {
-        runtime = &it->second;
+    const auto it = m_jobs.find(jobId);
+    AcquisitionJob job;
+    if (it != m_jobs.end()) {
+        job = it->second.context.job;
     } else {
         auto stored = repo.get(jobId);
         if (!stored)
             return std::move(stored).error();
         if (!isTerminal(stored.value().state))
             return start(stored.value().identity.game); // parked: resume it
-        runtime = adopt(stored.value(), false);
+        job = std::move(stored).value();
     }
-    const AcquisitionJob job = runtime->context.job;
     if (!isTerminal(job.state))
         return CoordinatorUpdate{}; // already in progress
     if (!retryable(job.state))
         return makeError(ErrorCode::InvalidArgument,
                          "Workshop item " + job.identity.id + " is already installed.");
+    // A pending automatic retry counts as in progress.
     for (const auto& [id, other] : m_jobs) {
-        if (id != jobId && other.context.job.identity == job.identity &&
-            !isTerminal(other.context.job.state))
+        if (id != jobId && other.context.job.identity == job.identity && inProgress(other))
             return makeError(ErrorCode::AlreadyExists,
                              "Workshop item " + job.identity.id + " is already being acquired.");
     }
@@ -791,6 +835,9 @@ Result<CoordinatorUpdate> AcquisitionCoordinator::retry(std::int64_t jobId) {
             return makeError(ErrorCode::AlreadyExists,
                              "Workshop item " + job.identity.id + " is already being acquired.");
     }
+    if (it == m_jobs.end())
+        adopt(job, false);
+    dropSuperseded(jobId);
     return run([&] { enqueue(jobId, obs::Retry{}); });
 }
 

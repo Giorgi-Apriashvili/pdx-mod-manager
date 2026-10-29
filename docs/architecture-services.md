@@ -188,6 +188,12 @@ helper session per game. Its responsibilities:
   `helperCommandFor()`, batching state queries into one command.
 - Verify content (`verifyWorkshopContent()`).
 - Persist jobs when the reducer asks, coalescing progress-only changes.
+- Run at most one job per mod. A job that starts (a new import, a retry)
+  supersedes the older, finished in-memory jobs of the same mod; their rows
+  stay. A user retry is refused while another job of the mod is in progress or
+  waiting for its automatic retry. As a last line of defence, a job whose save
+  is rejected because another unfinished job owns the mod is stopped at its
+  last saved state instead of retrying the write on every tick.
 - Rescan the inventory when an item becomes Installed.
 - Report provider status: `ready`, `steam_not_running`, `not_logged_on`,
   `not_owned`, `unavailable`, with recovery text.
