@@ -10,6 +10,11 @@ function(pmm_add_test name)
   target_compile_definitions(${name} PRIVATE
     PMM_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures")
   pmm_configure_target(${name})
+  # Clang 22+ reports Catch2's use of __COUNTER__ as a C2y extension under
+  # -Wpedantic, which would break warnings-as-errors builds.
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 22)
+    target_compile_options(${name} PRIVATE -Wno-c2y-extensions)
+  endif()
   catch_discover_tests(${name} DISCOVERY_MODE PRE_TEST
     PROPERTIES LABELS "${name}")
 endfunction()
