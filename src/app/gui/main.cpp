@@ -4,6 +4,7 @@
 //   <- QML module Pmm.Ui (ui/), loaded with the Backend registered as the
 //   singleton Pmm.Backend.
 
+#include "app/core/profile_lock.hpp"
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
@@ -185,6 +186,23 @@ int main(int argc, char* argv[]) {
     QGuiApplication app(argc, argv);
 
     const CommandLine line = parseCommandLine(app);
+
+    // One instance per profile: the journal, the acquisition jobs and the
+    // helper sessions assume it. Held until the runner has shut down.
+    const services::AppPaths paths = line.profile
+                                         ? services::AppPaths::fromProfileDir(*line.profile)
+                                         : services::AppPaths::standard();
+    auto profileLock = ProfileLock::acquire(paths.dataDir);
+    if (!profileLock) {
+        const QString message = qs(profileLock.error().message);
+        if (line.verification.active()) {
+            std::fprintf(stderr, "pmm-app: %s\n", message.toUtf8().constData());
+            return 2;
+        }
+        QQmlApplicationEngine engine;
+        showFatalError(engine, message);
+        return app.exec();
+    }
 
     RunnerOptions runnerOptions;
     runnerOptions.runtime.profileDir = line.profile;

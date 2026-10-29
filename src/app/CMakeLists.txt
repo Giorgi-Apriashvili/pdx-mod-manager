@@ -12,6 +12,8 @@ add_library(pmm_appcore STATIC
   core/file_log_sink.hpp
   core/metadata_host.cpp
   core/metadata_host.hpp
+  core/profile_lock.cpp
+  core/profile_lock.hpp
   core/qt_util.cpp
   core/qt_util.hpp
   core/service_runner.cpp

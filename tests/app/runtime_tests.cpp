@@ -3,6 +3,8 @@
 
 #include "app/core/app_runtime.hpp"
 #include "app/core/file_log_sink.hpp"
+#include "app/core/profile_lock.hpp"
+#include "app/core/qt_util.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/sqlite.hpp"
@@ -10,6 +12,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <QByteArray>
+#include <QFile>
+#include <QLockFile>
+
+#include <chrono>
 #include <fstream>
 #include <string>
 
@@ -154,4 +161,43 @@ TEST_CASE("FileLogSink writes daily files and keeps a bounded number", "[app][ru
     sink.write(record);
     CHECK(sink.currentFile().filename().string() == "pmm-test-2027-01-16.log");
     CHECK(countLogs(temp.path()) <= 3);
+}
+
+TEST_CASE("ProfileLock admits one instance per profile and takes over stale locks",
+          "[app][runtime]") {
+    TempDir temp;
+    const fs::path profile = temp.path() / u8("profile Ünïcødé");
+    using std::chrono::milliseconds;
+    {
+        auto first = require(ProfileLock::acquire(profile, milliseconds(0)));
+        CHECK(fs::is_regular_file(profile / ProfileLock::kFileName));
+        auto second = ProfileLock::acquire(profile, milliseconds(100));
+        REQUIRE_FALSE(second.ok());
+        CHECK(second.error().code == ErrorCode::AlreadyExists);
+        CHECK(second.error().message.find("already running") != std::string::npos);
+        CHECK(second.error().message.find(platform::pathToUtf8(profile)) != std::string::npos);
+        // Another profile is independent.
+        CHECK(ProfileLock::acquire(temp.path() / "other", milliseconds(0)).ok());
+    }
+    CHECK_FALSE(fs::exists(profile / ProfileLock::kFileName));
+    CHECK(ProfileLock::acquire(profile, milliseconds(0)).ok()); // released
+
+    // A lock file left by a process that no longer runs (Qt's own format, with
+    // a process id that cannot exist).
+    QByteArray contents;
+    {
+        QLockFile probe(qs(platform::pathToUtf8(temp.path() / "probe.lock")));
+        REQUIRE(probe.tryLock(0));
+        QFile file(probe.fileName());
+        REQUIRE(file.open(QIODevice::ReadOnly));
+        contents = file.readAll();
+    }
+    const qsizetype firstLine = contents.indexOf('\n');
+    REQUIRE(firstLine > 0);
+    contents.replace(0, firstLine, QByteArray::number(2147483644));
+    writeText(profile / ProfileLock::kFileName,
+              std::string_view(contents.constData(), static_cast<std::size_t>(contents.size())));
+    auto taken = ProfileLock::acquire(profile, milliseconds(0));
+    REQUIRE(taken.ok());
+    CHECK_FALSE(ProfileLock::acquire(profile, milliseconds(0)).ok());
 }
