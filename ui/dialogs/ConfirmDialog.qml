@@ -60,8 +60,8 @@ AppDialog {
             objectName: "confirmButton"
             variant: dialog.destructive ? "danger" : "accent"
             text: dialog.confirmText
-            Keys.onReturnPressed: clicked()
-            Keys.onEnterPressed: clicked()
+            // The question is read with the focused button.
+            Accessible.description: dialog.message
             onClicked: {
                 const run = dialog.action
                 dialog.close()

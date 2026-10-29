@@ -21,6 +21,8 @@ Rectangle {
 
     Accessible.role: Accessible.CheckBox
     Accessible.name: model.name + (inPlayset ? qsTr(", already in playset") : "")
+    Accessible.description: [model.version, model.sourceLabel, model.stateText, model.problems]
+                            .filter(s => s && s.length > 0).join(", ")
     Accessible.checkable: !inPlayset
     Accessible.checked: checked || inPlayset
     Accessible.onToggleAction: toggleRequested()
@@ -33,11 +35,15 @@ Rectangle {
         onTapped: row.toggleRequested()
     }
 
+    // Keyboard focus: a 2 px ring inside the current row.
     Rectangle {
         anchors.fill: parent
+        z: 1
         visible: row.isCurrent
         color: "transparent"
+        border.width: 2
         border.color: Theme.focus
+        radius: 2
     }
 
     RowLayout {
@@ -51,9 +57,9 @@ Rectangle {
             implicitWidth: 14
             implicitHeight: 14
             radius: 2
-            color: row.inPlayset ? Theme.borderStrong : row.checked ? Theme.accent : Theme.input
+            color: row.inPlayset ? Theme.borderStrong : row.checked ? Theme.controlChecked : Theme.input
             border.width: row.checked || row.inPlayset ? 0 : 1
-            border.color: Theme.borderStrong
+            border.color: Theme.controlBorder
             Icon {
                 anchors.centerIn: parent
                 visible: row.checked || row.inPlayset

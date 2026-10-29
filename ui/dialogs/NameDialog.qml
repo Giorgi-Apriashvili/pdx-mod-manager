@@ -48,7 +48,7 @@ AppDialog {
             Layout.fillWidth: true
             maximumLength: 120
             placeholderText: qsTr("Playset name")
-            Accessible.name: dialog.label
+            Accessible.name: qsTr("Playset name")
             onAccepted: dialog.submit()
         }
     }

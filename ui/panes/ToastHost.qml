@@ -6,11 +6,16 @@ import Pmm.Ui
 import Pmm.Backend
 
 // Non-modal notifications driven by Backend.notifications.posted. Info toasts
-// fade out after a few seconds; warnings and errors stay longer.
+// fade out after a few seconds; warnings and errors stay longer. A toast stays
+// while hovered or while its Dismiss button has keyboard focus, and every toast
+// is announced to screen readers (errors and warnings interrupt).
 Item {
     id: root
 
     readonly property int maxToasts: 3
+
+    // A toast was dismissed from the keyboard; focus should go back to the window.
+    signal focusReleased()
 
     implicitWidth: 360
     implicitHeight: column.implicitHeight
@@ -19,6 +24,9 @@ Item {
         toasts.insert(0, { level: level, title: title, text: text, serial: ++serial })
         while (toasts.count > maxToasts)
             toasts.remove(toasts.count - 1, 1)
+        const spoken = [title, text].filter(s => s.length > 0).join(". ")
+        Accessible.announce(spoken, level === "error" || level === "warning" ? Accessible.Assertive
+                                                                              : Accessible.Polite)
     }
 
     function dismiss(serial: int) {
@@ -67,8 +75,8 @@ Item {
                 border.color: Theme.border
 
                 Accessible.role: Accessible.AlertMessage
-                Accessible.name: title
-                Accessible.description: text
+                Accessible.name: title.length > 0 ? title : text
+                Accessible.description: title.length > 0 ? text : ""
 
                 Rectangle {
                     width: 3
@@ -133,13 +141,20 @@ Item {
                         }
                     }
                     AppButton {
+                        id: dismissButton
                         Layout.alignment: Qt.AlignTop
                         variant: "flat"
                         iconName: "x"
                         implicitWidth: 20
                         implicitHeight: 20
                         toolTipText: qsTr("Dismiss")
-                        onClicked: root.dismiss(toast.serial)
+                        Accessible.name: qsTr("Dismiss notification")
+                        onClicked: {
+                            const focused = activeFocus
+                            root.dismiss(toast.serial)
+                            if (focused)
+                                root.focusReleased()
+                        }
                     }
                 }
 
@@ -149,7 +164,7 @@ Item {
 
                 Timer {
                     interval: toast.level === "error" ? 15000 : toast.level === "warning" ? 9000 : 5000
-                    running: !toastHover.hovered
+                    running: !toastHover.hovered && !dismissButton.activeFocus
                     onTriggered: root.dismiss(toast.serial)
                 }
             }

@@ -40,14 +40,26 @@ ApplicationWindow {
     function openLocate() {
         locateDialog.open()
     }
+    function openShortcuts() {
+        shortcutsDialog.open()
+    }
     function selectMod(proxyRow: int) {
         modsPane.selectOnly(proxyRow)
         modsPane.focusList()
     }
     function closeDialogs() {
         for (const d of [importDialog, exportDialog, addModsDialog, historyDialog, locateDialog,
-                         settingsDialog, confirmDialog, nameDialog])
+                         settingsDialog, confirmDialog, nameDialog, shortcutsDialog])
             d.close()
+    }
+
+    // F6 / Shift+F6: move keyboard focus to the next / previous column.
+    function focusPane(step: int) {
+        const panes = [gamesPane, modsPane, sidePane]
+        let current = -1
+        for (let item = activeFocusItem; item && current < 0; item = item.parent)
+            current = panes.indexOf(item)
+        panes[(current + step + panes.length) % panes.length].focusFirst()
     }
 
     function askName(mode: string) {
@@ -169,6 +181,9 @@ ApplicationWindow {
         Backend.settings.save()
     }
 
+    // Tabbing into a scrolled column scrolls the focused control into view.
+    onActiveFocusItemChanged: Qt.callLater(Theme.reveal, activeFocusItem)
+
     onXChanged: geometryTimer.restart()
     onYChanged: geometryTimer.restart()
     onWidthChanged: geometryTimer.restart()
@@ -212,6 +227,7 @@ ApplicationWindow {
 
         GamesPane {
             id: gamesPane
+            objectName: "gamesPane"
             SplitView.preferredWidth: Backend.settings.leftPaneWidth > 0 ? Backend.settings.leftPaneWidth
                                                                          : window.defaultLeftWidth
             SplitView.minimumWidth: 160
@@ -241,6 +257,7 @@ ApplicationWindow {
 
         SidePane {
             id: sidePane
+            objectName: "sidePane"
             SplitView.preferredWidth: Backend.settings.rightPaneWidth > 0 ? Backend.settings.rightPaneWidth
                                                                           : window.defaultRightWidth
             SplitView.minimumWidth: 270
@@ -259,6 +276,7 @@ ApplicationWindow {
     ToastHost {
         parent: Overlay.overlay
         z: 1000
+        onFocusReleased: modsPane.focusList()
         width: Math.min(380, modsPane.width - 24)
         x: (parent ? parent.width : window.width) - sidePane.width - width - 12
         y: (parent ? parent.height : window.height) - height - 34
@@ -284,6 +302,8 @@ ApplicationWindow {
     }
     SettingsDialog {
         id: settingsDialog
+        objectName: "settingsDialog"
+        onShortcutsRequested: window.openShortcuts()
     }
     ConfirmDialog {
         id: confirmDialog
@@ -292,6 +312,10 @@ ApplicationWindow {
     NameDialog {
         id: nameDialog
         onSubmitted: name => window.applyName(name)
+    }
+    ShortcutsDialog {
+        id: shortcutsDialog
+        objectName: "shortcutsDialog"
     }
 
     // --- shortcuts (blocked automatically while a modal dialog is open) -----
@@ -340,5 +364,17 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+,"
         onActivated: window.openSettings()
+    }
+    Shortcut {
+        sequences: ["F6"]
+        onActivated: window.focusPane(1)
+    }
+    Shortcut {
+        sequences: ["Shift+F6"]
+        onActivated: window.focusPane(-1)
+    }
+    Shortcut {
+        sequences: [StandardKey.HelpContents]
+        onActivated: window.openShortcuts()
     }
 }

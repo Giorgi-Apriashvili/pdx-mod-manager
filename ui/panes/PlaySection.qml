@@ -132,6 +132,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 running: root.launcher.busy
                 color: Theme.accentText
+                Accessible.ignored: true
             }
         }
 
@@ -145,6 +146,12 @@ Rectangle {
             wrapMode: Text.Wrap
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+            // Launch progress is spoken as it happens; failures interrupt.
+            onTextChanged: {
+                if (text.length > 0)
+                    Accessible.announce(text, root.launcher.state === "failed" ? Accessible.Assertive
+                                                                               : Accessible.Polite)
+            }
         }
 
         Flow {

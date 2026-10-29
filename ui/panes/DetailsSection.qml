@@ -60,6 +60,8 @@ ColumnLayout {
             wrapMode: Text.Wrap
             maximumLineCount: 3
             elide: Text.ElideRight
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         GridLayout {
@@ -68,39 +70,50 @@ ColumnLayout {
             columnSpacing: 10
             rowSpacing: 3
 
-            DetailLabel { text: qsTr("Status") }
-            DetailValue { text: root.details.statusText }
+            DetailLabel { id: statusKey; text: qsTr("Status") }
+            DetailValue { labelText: statusKey.text; text: root.details.statusText }
 
-            DetailLabel { text: qsTr("Source") }
-            DetailValue { text: root.details.sourceLabel }
+            DetailLabel { id: sourceKey; text: qsTr("Source") }
+            DetailValue { labelText: sourceKey.text; text: root.details.sourceLabel }
 
-            DetailLabel { text: root.details.source === "local" ? qsTr("Folder ID") : qsTr("Workshop ID") }
+            DetailLabel {
+                id: idKey
+                text: root.details.source === "local" ? qsTr("Folder ID") : qsTr("Workshop ID")
+            }
             DetailValue {
+                labelText: idKey.text
                 text: root.details.providerId
                 selectable: true
                 monospace: true
             }
 
-            DetailLabel { text: qsTr("Version") }
-            DetailValue { text: root.details.version.length > 0 ? root.details.version : qsTr("unknown") }
-
-            DetailLabel { text: qsTr("Supports") }
+            DetailLabel { id: versionKey; text: qsTr("Version") }
             DetailValue {
+                labelText: versionKey.text
+                text: root.details.version.length > 0 ? root.details.version : qsTr("unknown")
+            }
+
+            DetailLabel { id: supportsKey; text: qsTr("Supports") }
+            DetailValue {
+                labelText: supportsKey.text
                 text: root.details.supportedVersion.length > 0 ? root.details.supportedVersion : qsTr("not declared")
             }
 
             DetailLabel {
+                id: locationKey
                 visible: root.details.contentPath.length > 0
                 text: qsTr("Location")
             }
             DetailValue {
                 visible: root.details.contentPath.length > 0
+                labelText: locationKey.text
                 text: root.details.contentPath
                 elideMode: Text.ElideMiddle
                 toolTipText: root.details.contentPath
             }
 
             DetailLabel {
+                id: tagsKey
                 visible: root.tagList.length > 0
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: 1
@@ -110,11 +123,14 @@ ColumnLayout {
                 Layout.fillWidth: true
                 visible: root.tagList.length > 0
                 spacing: 3
+                Accessible.role: Accessible.StaticText
+                Accessible.name: tagsKey.text + ": " + root.tagList.join(", ")
                 Repeater {
                     model: root.tagList
                     delegate: Chip {
                         required property string modelData
                         text: modelData
+                        Accessible.ignored: true
                     }
                 }
             }
@@ -127,6 +143,8 @@ ColumnLayout {
             font.pixelSize: Theme.fontSizeSmall
             font.weight: Font.DemiBold
             color: Theme.textMuted
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
         Text {
             Layout.fillWidth: true
@@ -143,7 +161,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 6
                 Accessible.role: Accessible.StaticText
-                Accessible.name: modelData.name + ": " + modelData.text
+                Accessible.name: dep.modelData.name + ": " + dep.modelData.text
 
                 Icon {
                     Layout.alignment: Qt.AlignTop

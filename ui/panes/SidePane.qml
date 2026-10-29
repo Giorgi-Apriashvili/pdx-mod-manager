@@ -20,6 +20,13 @@ Rectangle {
     readonly property bool hasGame: Backend.games.currentSupported && Backend.games.currentInstalled
     readonly property bool hasPlayset: Backend.playsets.activeId >= 0
 
+    // F6 target: the first enabled control (Import code when a game is ready).
+    function focusFirst() {
+        const next = root.nextItemInFocusChain(true)
+        if (next)
+            next.forceActiveFocus(Qt.TabFocusReason)
+    }
+
     color: Theme.pane
 
     ColumnLayout {

@@ -25,6 +25,20 @@ Rectangle {
         otherGameCount = n
     }
 
+    // F6 target: the selected game, else the first focusable control.
+    function focusFirst() {
+        for (let i = 0; i < gameRepeater.count; ++i) {
+            const item = gameRepeater.itemAt(i) as GameDelegate
+            if (item && item.visible && item.current) {
+                item.forceActiveFocus(Qt.TabFocusReason)
+                return
+            }
+        }
+        const next = root.nextItemInFocusChain(true)
+        if (next)
+            next.forceActiveFocus(Qt.TabFocusReason)
+    }
+
     color: Theme.pane
 
     ColumnLayout {
@@ -57,6 +71,7 @@ Rectangle {
                 rightPadding: 4
 
                 Repeater {
+                    id: gameRepeater
                     model: Backend.games
                     delegate: GameDelegate {
                         width: gameColumn.width - 8
@@ -137,6 +152,7 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     running: Backend.games.scanning
                     size: 12
+                    Accessible.ignored: true
                 }
             }
             AppButton {
@@ -149,6 +165,7 @@ Rectangle {
                 onClicked: root.locateRequested()
             }
             AppButton {
+                objectName: "settingsButton"
                 Layout.fillWidth: true
                 Layout.topMargin: 4
                 text: qsTr("Settings")

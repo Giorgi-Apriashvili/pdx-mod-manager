@@ -47,6 +47,9 @@ Rectangle {
     property int anchorRow: -1
     property bool bulkSelecting: false
     property string dependencyFeedback
+    // Focus given programmatically (start-up, after dialogs) shows no list ring
+    // until the user moves focus away and back.
+    property bool quietListFocus: false
 
     // Drag-and-drop state (proxy rows; reordering only happens in the unfiltered load-order view).
     property int dragFrom: -1
@@ -109,7 +112,34 @@ Rectangle {
     }
 
     function focusList() {
+        quietListFocus = !modList.activeFocus
         modList.forceActiveFocus(Qt.OtherFocusReason)
+    }
+
+    // F6 target: the mod list, else the first control of the pane.
+    function focusFirst() {
+        if (modList.visible) {
+            quietListFocus = false
+            modList.forceActiveFocus(Qt.TabFocusReason)
+            return
+        }
+        const next = root.nextItemInFocusChain(true)
+        if (next)
+            next.forceActiveFocus(Qt.TabFocusReason)
+    }
+
+    // Spoken by screen readers without moving focus (Qt 6.8+).
+    function announce(text: string) {
+        modList.Accessible.announce(text)
+    }
+
+    function popupContextMenu() {
+        const item = modList.currentItem
+        if (!item)
+            return
+        const p = item.mapToItem(listArea, 60, item.height)
+        contextMenu.popup(listArea, p.x, p.y)
+        contextMenu.currentIndex = 0
     }
 
     function showLoadOrder() {
@@ -251,10 +281,21 @@ Rectangle {
         const item = modList.currentItem as ModRow
         if (!item)
             return
-        if (selectedCount <= 1 && isSelected(modList.currentIndex) || selectedCount === 0)
-            Backend.mods.setEnabled(Backend.modView.sourceRow(modList.currentIndex), !item.modEnabled)
-        else
-            setEnabledSelected(!item.modEnabled)
+        const on = !item.modEnabled
+        if (selectedCount <= 1 && isSelected(modList.currentIndex) || selectedCount === 0) {
+            Backend.mods.setEnabled(Backend.modView.sourceRow(modList.currentIndex), on)
+            announce(on ? qsTr("Enabled %1").arg(item.model.name) : qsTr("Disabled %1").arg(item.model.name))
+        } else {
+            const n = selectedCount
+            setEnabledSelected(on)
+            announce(on ? qsTr("Enabled %1 mods").arg(n) : qsTr("Disabled %1 mods").arg(n))
+        }
+    }
+
+    // Ctrl+Space: add the current row to the selection or take it out.
+    function toggleCurrentSelected() {
+        if (modList.currentIndex >= 0)
+            toggleRow(modList.currentIndex)
     }
 
     function requestRemove() {
@@ -292,6 +333,13 @@ Rectangle {
         const moved = rows.map(r => Backend.modView.proxyRow(r + delta))
         selectRows(moved)
         setCurrent(current + delta)
+        if (rows.length === 1) {
+            const entry = Backend.mods.get(rows[0] + delta)
+            announce(qsTr("%1 moved to position %2").arg(entry.name).arg(entry.position))
+        } else {
+            announce(delta < 0 ? qsTr("%1 mods moved up").arg(rows.length)
+                               : qsTr("%1 mods moved down").arg(rows.length))
+        }
     }
 
     // Drag of a multi-selection: the selection is gathered into one block whose
@@ -310,8 +358,11 @@ Rectangle {
         const from = modList.currentIndex
         if (from < 0 || target === from)
             return
-        Backend.mods.moveRow(Backend.modView.sourceRow(from), Backend.modView.sourceRow(target))
+        const to = Backend.modView.sourceRow(target)
+        Backend.mods.moveRow(Backend.modView.sourceRow(from), to)
         selectOnly(target)
+        const entry = Backend.mods.get(to)
+        announce(qsTr("%1 moved to position %2").arg(entry.name).arg(entry.position))
     }
 
     function afterModelUpdate() {
@@ -384,7 +435,11 @@ Rectangle {
 
     Connections {
         target: Backend.mods
-        function onDependencyFeedback(text: string) { root.dependencyFeedback = text }
+        function onDependencyFeedback(text: string) {
+            root.dependencyFeedback = text
+            if (text.length > 0)
+                root.announce(qsTr("Dependency issues after enabling: %1").arg(text))
+        }
     }
 
     Timer {
@@ -454,6 +509,8 @@ Rectangle {
                     iconName: "search"
                     clearable: true
                     placeholderText: qsTr("Search name or ID (Ctrl+F)")
+                    Accessible.name: qsTr("Search mods by name or ID")
+                    Accessible.description: qsTr("Ctrl+F. Down arrow moves to the list, Escape clears the search.")
                     enabled: root.canEdit
                     onTextEdited: searchDebounce.restart()
                     onCleared: {
@@ -533,7 +590,7 @@ Rectangle {
                     iconName: "plus"
                     variant: "flat"
                     enabled: root.canEdit
-                    toolTipText: qsTr("Add installed mods to this playset")
+                    toolTipText: qsTr("Add installed mods to this playset (Ctrl+Shift+A)")
                     onClicked: root.addModsRequested()
                 }
                 ToolSeparator {}
@@ -543,6 +600,7 @@ Rectangle {
                     variant: "flat"
                     enabled: root.hasTarget
                     toolTipText: qsTr("Enable the selected mods (Space toggles)")
+                    Accessible.name: qsTr("Enable selected mods")
                     onClicked: root.setEnabledSelected(true)
                 }
                 AppButton {
@@ -551,6 +609,7 @@ Rectangle {
                     variant: "flat"
                     enabled: root.hasTarget
                     toolTipText: qsTr("Disable the selected mods (Space toggles)")
+                    Accessible.name: qsTr("Disable selected mods")
                     onClicked: root.setEnabledSelected(false)
                 }
                 AppButton {
@@ -559,6 +618,7 @@ Rectangle {
                     variant: "flat"
                     enabled: root.hasTarget
                     toolTipText: qsTr("Remove the selected mods from this playset (Delete). They stay installed.")
+                    Accessible.name: qsTr("Remove selected mods from playset")
                     onClicked: root.requestRemove()
                 }
                 ToolSeparator {}
@@ -567,8 +627,9 @@ Rectangle {
                     iconName: "arrow-up"
                     variant: "flat"
                     enabled: root.canMoveUp
-                    toolTipText: Backend.modView.reorderAllowed ? qsTr("Load earlier (Ctrl+Up)")
+                    toolTipText: Backend.modView.reorderAllowed ? qsTr("Load earlier (Alt+Up or Ctrl+Up)")
                                                                 : Backend.modView.reorderBlockedReason
+                    Accessible.name: qsTr("Move up in load order")
                     onClicked: root.moveSelection(-1)
                 }
                 AppButton {
@@ -576,8 +637,9 @@ Rectangle {
                     iconName: "arrow-down"
                     variant: "flat"
                     enabled: root.canMoveDown
-                    toolTipText: Backend.modView.reorderAllowed ? qsTr("Load later (Ctrl+Down)")
+                    toolTipText: Backend.modView.reorderAllowed ? qsTr("Load later (Alt+Down or Ctrl+Down)")
                                                                 : Backend.modView.reorderBlockedReason
+                    Accessible.name: qsTr("Move down in load order")
                     onClicked: root.moveSelection(1)
                 }
 
@@ -588,6 +650,8 @@ Rectangle {
                 Text {
                     visible: root.selectedCount > 1
                     text: qsTr("%1 selected").arg(Theme.formatCount(root.selectedCount))
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.textMuted
                     rightPadding: 6
@@ -692,7 +756,13 @@ Rectangle {
 
                 Accessible.role: Accessible.List
                 Accessible.name: qsTr("Mods in playset %1").arg(Backend.playsets.activeName)
+                Accessible.description: qsTr("Space toggles, Alt+Up and Alt+Down move, Delete removes, "
+                                             + "Shift+F10 opens the context menu")
 
+                onActiveFocusChanged: {
+                    if (!activeFocus)
+                        root.quietListFocus = false
+                }
                 onCurrentIndexChanged: {
                     root.updateDetailsRow()
                     root.updateMoveState()
@@ -723,17 +793,19 @@ Rectangle {
                     }
                 }
 
+                // Alt or Ctrl with Up/Down moves the selection in the load order.
                 Keys.onPressed: event => {
                     const ctrl = (event.modifiers & Qt.ControlModifier) !== 0
                     const shift = (event.modifiers & Qt.ShiftModifier) !== 0
+                    const move = ctrl || (event.modifiers & Qt.AltModifier) !== 0
                     const page = Math.max(1, Math.floor(height / Theme.rowHeight) - 1)
                     switch (event.key) {
                     case Qt.Key_Up:
-                        if (ctrl) root.moveSelection(-1)
+                        if (move) root.moveSelection(-1)
                         else root.navigate(currentIndex - 1, shift)
                         break
                     case Qt.Key_Down:
-                        if (ctrl) root.moveSelection(1)
+                        if (move) root.moveSelection(1)
                         else root.navigate(currentIndex < 0 ? 0 : currentIndex + 1, shift)
                         break
                     case Qt.Key_PageUp:
@@ -749,24 +821,35 @@ Rectangle {
                         root.navigate(count - 1, shift)
                         break
                     case Qt.Key_Space:
-                        root.toggleSelected()
+                        if (ctrl) root.toggleCurrentSelected()
+                        else root.toggleSelected()
                         break
                     case Qt.Key_Delete:
                         root.requestRemove()
                         break
-                    case Qt.Key_Menu: {
-                        const item = currentItem
-                        if (item) {
-                            const p = item.mapToItem(listArea, 60, item.height)
-                            contextMenu.popup(listArea, p.x, p.y)
-                        }
+                    case Qt.Key_Menu:
+                        root.popupContextMenu()
                         break
-                    }
+                    case Qt.Key_F10:
+                        if (!shift)
+                            return
+                        root.popupContextMenu()
+                        break
                     default:
                         return
                     }
+                    root.quietListFocus = false
                     event.accepted = true
                 }
+            }
+
+            // Keyboard focus on the list before a row is current.
+            FocusRing {
+                anchors.fill: modList
+                inset: 1
+                baseRadius: 1
+                visible: modList.visible && modList.activeFocus && modList.currentIndex < 0
+                         && !root.quietListFocus
             }
 
             // Drag handle column: press on a grip and drag to reorder.
@@ -809,7 +892,7 @@ Rectangle {
 
                 ToolTip.visible: containsMouse && !pressed && !root.dragActive
                 ToolTip.delay: 900
-                ToolTip.text: qsTr("Drag to change the load order")
+                ToolTip.text: qsTr("Drag to change the load order (keyboard: Alt+Up / Alt+Down)")
             }
 
             // Insertion marker
@@ -1035,14 +1118,14 @@ Rectangle {
         AppMenuItem {
             text: qsTr("Move up")
             iconName: "arrow-up"
-            shortcutText: qsTr("Ctrl+Up")
+            shortcutText: qsTr("Alt+Up")
             enabled: root.canMoveUp
             onTriggered: root.moveSelection(-1)
         }
         AppMenuItem {
             text: qsTr("Move down")
             iconName: "arrow-down"
-            shortcutText: qsTr("Ctrl+Down")
+            shortcutText: qsTr("Alt+Down")
             enabled: root.canMoveDown
             onTriggered: root.moveSelection(1)
         }

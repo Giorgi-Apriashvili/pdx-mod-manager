@@ -49,6 +49,8 @@ AppDialog {
         currentManual = row ? row.manualLocation : false
     }
 
+    onOpened: installBrowse.forceActiveFocus(Qt.TabFocusReason)
+
     Instantiator {
         id: gameRows
         model: Backend.games
@@ -87,8 +89,10 @@ AppDialog {
             Accessible.name: qsTr("Installation folder")
         }
         AppButton {
+            id: installBrowse
             text: qsTr("Browse…")
             iconName: "folder"
+            Accessible.name: qsTr("Browse for the installation folder")
             onClicked: installPicker.open()
         }
 
@@ -111,6 +115,7 @@ AppDialog {
         AppButton {
             text: qsTr("Browse…")
             iconName: "folder"
+            Accessible.name: qsTr("Browse for the user-data folder")
             onClicked: userDataPicker.open()
         }
         Text {

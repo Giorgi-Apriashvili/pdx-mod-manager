@@ -96,6 +96,7 @@ Rectangle {
             text: qsTr("Retry")
             implicitHeight: 22
             toolTipText: qsTr("Try this download again")
+            Accessible.name: qsTr("Retry download of %1").arg(job.model.name)
             onClicked: Backend.acquisition.retry(job.model.jobId)
         }
 
@@ -108,7 +109,7 @@ Rectangle {
             indeterminate: job.progress < 0
             value: Math.max(0, job.progress)
             barHeight: 4
-            Accessible.name: job.model.stateText
+            Accessible.name: qsTr("%1: %2").arg(job.model.name).arg(job.model.stateText)
         }
 
         Text {
@@ -130,6 +131,7 @@ Rectangle {
             Layout.columnSpan: 2
             visible: job.model.canOpenFallback
             text: qsTr("Open in Steam (manual fallback)")
+            Accessible.name: qsTr("Open %1 in Steam (manual fallback)").arg(job.model.name)
             font.pixelSize: Theme.fontSizeSmall
             toolTipText: qsTr("Manual step: opens the Workshop page in the Steam client so you can subscribe yourself. "
                               + "The manager detects the download when Steam finishes it.")

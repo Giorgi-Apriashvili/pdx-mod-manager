@@ -60,13 +60,12 @@ AppDialog {
                 iconName: "search"
                 clearable: true
                 placeholderText: qsTr("Filter by name or ID")
+                Accessible.name: qsTr("Filter installed mods by name or ID")
                 onTextEdited: filterDebounce.restart()
                 onCleared: Backend.inventory.filter = ""
-                Keys.onDownPressed: {
-                    inventoryList.forceActiveFocus()
-                    if (inventoryList.currentIndex < 0 && inventoryList.count > 0)
-                        inventoryList.currentIndex = 0
-                }
+                Keys.onDownPressed: inventoryList.forceActiveFocus(Qt.TabFocusReason)
+                Keys.onReturnPressed: inventoryList.forceActiveFocus(Qt.TabFocusReason)
+                Keys.onEnterPressed: inventoryList.forceActiveFocus(Qt.TabFocusReason)
             }
             AppButton {
                 iconName: "refresh"
@@ -143,12 +142,18 @@ AppDialog {
                 ScrollBar.vertical: AppScrollBar {}
                 Accessible.role: Accessible.List
                 Accessible.name: qsTr("Installed mods")
+                Accessible.description: qsTr("Space selects or deselects the current mod")
 
+                onActiveFocusChanged: {
+                    if (activeFocus && currentIndex < 0 && count > 0)
+                        currentIndex = 0
+                }
                 Keys.onSpacePressed: {
                     const item = currentItem as InventoryRow
                     if (item)
                         dialog.toggle(item.model.identityKey, item.model.inPlayset)
                 }
+                Keys.onPressed: event => event.accepted = Theme.pageList(inventoryList, event.key)
 
                 delegate: InventoryRow {
                     width: inventoryList.width
