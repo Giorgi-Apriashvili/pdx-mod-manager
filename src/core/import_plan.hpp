@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace pmm {
@@ -53,7 +54,9 @@ struct ImportCounts {
 struct ImportPlan {
     GameKey game;
     std::string requestedName;
-    std::string proposedName; // unique among existing playsets: "Name", "Name (2)", ...
+    // Unique among existing playsets ("Name", "Name (2)", ...) and at most
+    // kMaxPlaysetNameBytes long (see uniquePlaysetName()).
+    std::string proposedName;
     std::vector<ImportPlanEntry> entries;
     ImportCounts counts;
     // Every missing Workshop entry, disabled ones included, in playset order,
@@ -79,9 +82,17 @@ ImportPlan buildImportPlan(const GameKey& game, const std::string& playsetName,
                            const std::string& installedGameVersion,
                            const std::string& gameVersionHint);
 
-// "Name" if unused, otherwise "Name (2)", "Name (3)", ... Comparison is ASCII
-// case-insensitive. An empty name becomes "Imported playset".
-std::string uniquePlaysetName(const std::string& name,
-                              const std::vector<std::string>& existingNames);
+// Longest playset name in bytes: what fits into a share code (the same value as
+// sharing::kMaxPlaysetNameBytes, which core cannot include).
+inline constexpr std::size_t kMaxPlaysetNameBytes = 256;
+
+// `name` + `suffix` if unused, otherwise with " (2)", " (3)", ... appended.
+// Comparison is ASCII case-insensitive. An empty name becomes "Imported
+// playset". Only `name` is shortened, on a UTF-8 character boundary and
+// without trailing whitespace, so that the result (counter included) never
+// exceeds `maxBytes`; `suffix` (e.g. " (copy)") and the counter stay whole.
+std::string uniquePlaysetName(std::string_view name, const std::vector<std::string>& existingNames,
+                              std::string_view suffix = {},
+                              std::size_t maxBytes = kMaxPlaysetNameBytes);
 
 } // namespace pmm

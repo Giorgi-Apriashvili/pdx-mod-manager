@@ -1,5 +1,6 @@
 #include "core/import_plan.hpp"
 #include "core/readiness.hpp"
+#include "core/utf8.hpp"
 #include "playset_test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -99,6 +100,47 @@ TEST_CASE("Proposed names never collide with existing playsets", "[core][import]
     const Scenario s;
     CHECK(s.plan({"Shared setup", "Shared setup (2)"}).proposedName == "Shared setup (3)");
     CHECK(s.plan({"Shared setup"}).requestedName == "Shared setup");
+}
+
+TEST_CASE("Proposed names stay within the name limit and cut on character boundaries",
+          "[core][import]") {
+    // 255 bytes: "a" + 127 two-byte characters. " (2)" only fits after cutting
+    // whole characters (and never half of one).
+    std::string longName = "a";
+    for (int i = 0; i < 127; ++i)
+        longName += "\xC3\xA9";
+    REQUIRE(longName.size() == 255);
+    CHECK(uniquePlaysetName(longName, {}) == longName);
+
+    const std::string second = uniquePlaysetName(longName, {longName});
+    CHECK(second.size() <= kMaxPlaysetNameBytes);
+    CHECK(second.ends_with(" (2)"));
+    CHECK(isValidUtf8(second));
+    CHECK(longName.starts_with(second.substr(0, second.size() - 4)));
+    CHECK(second.size() == 1 + 2 * 125 + 4); // two characters cut, not three bytes
+
+    const std::string third = uniquePlaysetName(longName, {longName, second});
+    CHECK(third.ends_with(" (3)"));
+    CHECK(third.size() <= kMaxPlaysetNameBytes);
+
+    // Whitespace left at the end of a shortened name is dropped.
+    const std::string spaced = std::string(250, 'x') + "   yy";
+    CHECK(uniquePlaysetName(spaced, {spaced}) == std::string(250, 'x') + " (2)");
+    // A name that is too long by itself is shortened even without a clash.
+    CHECK(uniquePlaysetName(std::string(300, 'z'), {}) == std::string(256, 'z'));
+
+    // The suffix and counter stay whole; a custom limit is honoured.
+    CHECK(uniquePlaysetName("Main", {}, " (copy)") == "Main (copy)");
+    CHECK(uniquePlaysetName("Main", {"main (copy)"}, " (copy)") == "Main (copy) (2)");
+    CHECK(uniquePlaysetName("Long playset", {}, " (copy)", 12) == "Long (copy)");
+    CHECK(uniquePlaysetName("", {}, {}, 8) == "Imported");
+
+    // The import plan proposes a name that fits as well.
+    const Scenario s;
+    ImportPlan plan =
+        buildImportPlan("stellaris", longName, s.requested, s.inventory, {longName}, "", "");
+    CHECK(plan.proposedName == second);
+    CHECK(plan.toPlayset().name.size() <= kMaxPlaysetNameBytes);
 }
 
 TEST_CASE("Import warnings cover versions and always state the content caveat", "[core][import]") {

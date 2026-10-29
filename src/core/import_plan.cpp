@@ -1,11 +1,17 @@
 #include "core/import_plan.hpp"
 
+#include "core/utf8.hpp"
+
 #include <set>
 #include <string_view>
 #include <unordered_set>
 
 namespace pmm {
 namespace {
+
+bool isAsciiSpace(char c) noexcept {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' || c == '\v';
+}
 
 std::string trimmed(std::string_view text) {
     const auto isSpace = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
@@ -81,19 +87,28 @@ Playset ImportPlan::toPlayset() const {
     return playset;
 }
 
-std::string uniquePlaysetName(const std::string& name,
-                              const std::vector<std::string>& existingNames) {
-    const std::string base = name.empty() ? std::string("Imported playset") : name;
+std::string uniquePlaysetName(std::string_view name, const std::vector<std::string>& existingNames,
+                              std::string_view suffix, std::size_t maxBytes) {
+    const std::string_view base = name.empty() ? std::string_view("Imported playset") : name;
     std::unordered_set<std::string> taken;
     for (const std::string& existing : existingNames)
         taken.insert(folded(existing));
-    if (taken.count(folded(base)) == 0)
-        return base;
-    for (std::size_t n = 2;; ++n) {
-        std::string candidate = base + " (" + std::to_string(n) + ")";
-        if (taken.count(folded(candidate)) == 0)
-            return candidate;
-    }
+    const auto candidate = [&](std::string_view counter) {
+        const std::size_t tail = suffix.size() + counter.size();
+        std::string_view stem = utf8Prefix(base, maxBytes > tail ? maxBytes - tail : 0);
+        if (stem.size() < base.size()) {
+            while (!stem.empty() && isAsciiSpace(stem.back()))
+                stem.remove_suffix(1);
+        }
+        std::string out(stem);
+        out.append(suffix);
+        out.append(counter);
+        return out;
+    };
+    std::string result = candidate({});
+    for (std::size_t n = 2; taken.count(folded(result)) != 0; ++n)
+        result = candidate(" (" + std::to_string(n) + ")");
+    return result;
 }
 
 ImportPlan buildImportPlan(const GameKey& game, const std::string& playsetName,

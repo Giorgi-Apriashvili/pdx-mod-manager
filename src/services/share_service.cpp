@@ -1,6 +1,7 @@
 #include "services/share_service.hpp"
 
 #include "core/log.hpp"
+#include "core/utf8.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/installation_repository.hpp"
 #include "persistence/inventory_repository.hpp"
@@ -52,7 +53,7 @@ std::string fitHint(std::string_view text, std::size_t maxBytes) {
     }
     out = detail::trimmed(out);
     if (out.size() > maxBytes)
-        out = detail::trimmed(detail::utf8Prefix(out, maxBytes));
+        out = detail::trimmed(utf8Prefix(out, maxBytes));
     return out;
 }
 
@@ -218,8 +219,6 @@ ImportPreview ShareService::previewImport(std::string_view text) {
         game, manifest.value().playsetName, sharing::playsetEntriesFromManifest(manifest.value()),
         detail::toMap(mods.value()), names, preview.installedGameVersion,
         manifest.value().gameVersionHint);
-    // Core's proposal can exceed the name limit once " (2)" is appended.
-    plan.proposedName = detail::uniquePlaysetName(manifest.value().playsetName, names);
     if (!preview.gameInstalled) {
         plan.warnings.insert(
             plan.warnings.begin(),
@@ -271,7 +270,6 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
         buildImportPlan(game, manifest.playsetName, requested, detail::toMap(mods.value()), names,
                         installation.value() ? installation.value()->version : std::string(),
                         manifest.gameVersionHint);
-    plan.proposedName = detail::uniquePlaysetName(manifest.playsetName, names); // as in preview
     const std::vector<PlaysetEntry> entries = plan.toPlayset().entries;
     if (entries != requested)
         return makeError(ErrorCode::Internal,
@@ -288,7 +286,7 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
             // A typed name that is too long is refused, not silently cut.
             if (Status valid = checkPlaysetName(newName); !valid)
                 return notSaved(valid.error());
-            applied.playsetName = detail::uniquePlaysetName(newName, names);
+            applied.playsetName = uniquePlaysetName(newName, names);
         }
         if (Status valid = checkPlaysetName(applied.playsetName); !valid)
             return notSaved(valid.error());
