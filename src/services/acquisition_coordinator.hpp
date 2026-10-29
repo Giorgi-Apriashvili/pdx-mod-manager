@@ -23,6 +23,11 @@
 //     of the game is waiting for Steam;
 //   - maps helper events with observationFromHelperEvent() and actions with
 //     helperCommandFor(), batching state queries into one command;
+//   - with a metadata host, holds every Subscribe and RequestDownload until
+//     the Web API has confirmed that the item exists and belongs to the game
+//     (share codes are untrusted input); state queries and the verification
+//     of content Steam already installed go ahead. Without a verdict within
+//     identityTimeoutMs the job needs the user; Retry asks the Web API again;
 //   - verifies reported content with providers::verifyWorkshopContent();
 //   - persists jobs when the reducer says so (progress-only changes are
 //     coalesced to one write per progressPersistIntervalMs);
@@ -97,6 +102,9 @@ struct CoordinatorOptions {
     std::int64_t progressPersistIntervalMs = 2'000;
     // Content check for VerifyContent; defaults to providers::verifyWorkshopContent.
     std::function<Status(const std::filesystem::path&)> verifyContent;
+    // With a metadata host, how long a subscribe or download request waits
+    // for the Web API to confirm the item before the job needs the user.
+    std::int64_t identityTimeoutMs = 15'000;
 };
 
 struct JobSnapshot {
@@ -201,6 +209,8 @@ private:
         std::int64_t persistedAtMs = 0;
         bool dirty = false;   // coalesced progress not written yet
         bool stopped = false; // a duplicate of another unfinished job; forgotten after the pass
+        // Set while a subscribe/download waits for the Web API verdict.
+        std::optional<std::int64_t> heldSinceMs;
     };
     enum class SessionState { Closed, Opening, Ready, Failed };
     // Why a session could not be provided; applied to every job asking for it.
@@ -243,6 +253,15 @@ private:
     Runtime* adopt(const AcquisitionJob& job, bool resume);
     void dropSuperseded(std::int64_t jobId);
     void requestMetadata(const GameKey& game, const std::vector<std::string>& ids);
+    // Requests verdicts for Workshop identities with neither a verdict nor a
+    // request in flight.
+    void requestVerdicts(const GameKey& game, const std::vector<ModIdentity>& identities);
+    // Drops a missing or negative verdict so that the next request asks again.
+    bool forgetUnconfirmed(const ModIdentity& identity);
+    bool holdForIdentity(std::int64_t jobId, Runtime& runtime,
+                         const providers::Transition& transition);
+    void failUnconfirmed(Runtime& runtime);
+    Result<CoordinatorUpdate> retryJob(std::int64_t jobId, bool recheckIdentity);
     void rememberNames(const std::vector<AcquisitionJob>& jobs);
     std::optional<GameInstallation> storedInstallation(const GameKey& game) const;
     std::string appIdFor(const GameKey& game) const;
@@ -264,7 +283,8 @@ private:
     std::deque<std::pair<std::int64_t, providers::Observation>> m_queue;
     std::set<GameKey> m_rescanPending;
     std::map<ModIdentity, std::string> m_names;
-    std::set<ModIdentity> m_metadataRequested;
+    std::set<ModIdentity> m_metadataRequested; // Web API requests in flight
+    std::map<ModIdentity, Status> m_verdicts;  // Web API: ok, or why it cannot be acquired
     std::uint64_t m_pass = 0;
     bool m_draining = false;
     bool m_changed = false;

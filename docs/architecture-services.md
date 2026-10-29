@@ -57,7 +57,10 @@ layer implements:
 - `WorkshopMetadataHost`: `request(game, ids)` performs the key-less Web API
   `GetPublishedFileDetails` call (QNetworkAccessManager). It parses the reply with
   `providers::parsePublishedFileDetailsResponse()` and passes it to
-  `onMetadata()`. A failed request (offline) may go unanswered.
+  `onMetadata()`. A failed request (offline) may go unanswered; jobs that
+  would subscribe then wait for the user after
+  `CoordinatorOptions::identityTimeoutMs`. Passing no metadata host disables
+  the Web API checks, including the identity gate.
 
 `CoordinatorOptions::helperExecutable` names the helper binary shipped next to
 the application. When that file is missing, jobs are told so instead of failing
@@ -186,6 +189,14 @@ helper session per game. Its responsibilities:
 
 - Map events with `observationFromHelperEvent()` and actions with
   `helperCommandFor()`, batching state queries into one command.
+- Gate network actions on the Web API verdict. A share code is untrusted
+  input, so with a metadata host no Subscribe or RequestDownload is sent until
+  `onMetadata()` has confirmed that the item exists and belongs to the game.
+  Verdicts are cached per mod for the session. The gate lives in the
+  coordinator (the reducer is unchanged): a held transition is dropped and the
+  job's Steam timeouts are suspended, so commands are never queued behind it.
+  Without a verdict within `CoordinatorOptions::identityTimeoutMs` the job
+  needs the user rather than subscribing unverified.
 - Verify content (`verifyWorkshopContent()`).
 - Persist jobs when the reducer asks, coalescing progress-only changes.
 - Run at most one job per mod. A job that starts (a new import, a retry)
@@ -268,10 +279,12 @@ enabled.
 ## Data flow: acquisition
 
 ```text
- start(game): listUnfinished() jobs of the game -> startAcquisition() each
+ start(game): listUnfinished() jobs of the game
+              -> metadata host: request(ids without a verdict; names, wrong-game /
+                 deleted check), sent before any session opens
+              -> startAcquisition() each
               (restart reconciliation: the reducer queries Steam first, so nothing
                is re-subscribed blindly and installed items are verified)
-              -> metadata host: request(names, wrong-game / deleted check)
 
  action QuerySession -> session open? ready event cached -> ProviderReady
                         no installation / no Steam app id / steam_api library missing
@@ -281,6 +294,14 @@ enabled.
  helper "ready" fail -> provider status steam_not_running | not_logged_on | unavailable;
                         jobs NeedsUserAction (or Failed + automatic retry for crashes)
  actions QueryState / Subscribe / RequestDownload -> outbox -> host.send (state batched)
+ identity gate (metadata host only): Subscribe / RequestDownload are held until
+                        onMetadata confirms the item (found, not banned, consumer
+                        app = the game); the transition is dropped, no Steam timeout
+                        runs, and the verdict starts a fresh run (state queried again)
+     rejected        -> ItemRejected -> Unavailable (wrong_game, item_unavailable)
+     no verdict within identityTimeoutMs (15 s) -> NeedsUserAction ("could not
+                        confirm"); Retry / retryAllFailed ask the Web API again
+     QueryState and verifying content Steam already installed never wait
  helper events -> observationFromHelperEvent -> reduceAcquisition -> persist if asked
  action VerifyContent -> verifyWorkshopContent(installPath) -> ContentVerified
  job Installed -> GameService::rescanMods(game) -> CoordinatorUpdate::rescanned

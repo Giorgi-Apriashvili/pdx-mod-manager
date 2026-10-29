@@ -238,6 +238,8 @@ void AcquisitionCoordinator::process(std::int64_t jobId,
 
 void AcquisitionCoordinator::apply(std::int64_t jobId, providers::Transition transition) {
     Runtime& runtime = m_jobs.at(jobId);
+    if (holdForIdentity(jobId, runtime, transition))
+        return;
     const AcquisitionState before = runtime.context.job.state;
     runtime.context = std::move(transition.context);
     if (transition.persist) {
@@ -253,6 +255,62 @@ void AcquisitionCoordinator::apply(std::int64_t jobId, providers::Transition tra
     }
     for (const providers::Action& action : transition.actions)
         perform(jobId, action);
+}
+
+// Subscribe and RequestDownload act on the user's Steam account, so with a
+// metadata host they wait until the Web API has confirmed that the item exists
+// and belongs to the game. A held transition is dropped: the job keeps waiting
+// for the state report it just received, Steam's response timeouts do not run
+// (tick() skips held jobs), and a fresh run starts once the verdict arrives.
+bool AcquisitionCoordinator::holdForIdentity(std::int64_t jobId, Runtime& runtime,
+                                             const providers::Transition& transition) {
+    const bool network =
+        m_metadata != nullptr && std::any_of(transition.actions.begin(), transition.actions.end(),
+                                             [](const providers::Action& action) {
+                                                 return action.kind == ActionKind::Subscribe ||
+                                                        action.kind == ActionKind::RequestDownload;
+                                             });
+    const auto verdict = m_verdicts.find(runtime.context.job.identity);
+    if (!network || (verdict != m_verdicts.end() && verdict->second.ok())) {
+        // A stale observation (no action, still waiting for the state) keeps the hold.
+        if (!transition.actions.empty() || transition.context.awaiting != AwaitStep::State)
+            runtime.heldSinceMs.reset();
+        return false;
+    }
+    if (verdict != m_verdicts.end()) {
+        const Error& error = verdict->second.error();
+        enqueue(jobId, obs::ItemRejected{error.code, error.message});
+        return true;
+    }
+    if (!runtime.heldSinceMs) {
+        runtime.heldSinceMs = m_ctx.now();
+        m_changed = true;
+        logInfo(kComponent, "waiting for the web api to confirm a workshop item",
+                {{"mod", toString(runtime.context.job.identity)}});
+    }
+    return true;
+}
+
+// The Web API did not answer in time (offline, blocked, slow): nothing was
+// subscribed, and the job waits for the user instead of acting unverified.
+void AcquisitionCoordinator::failUnconfirmed(Runtime& runtime) {
+    providers::AcquisitionContext& context = runtime.context;
+    runtime.heldSinceMs.reset();
+    m_metadataRequested.erase(context.job.identity); // the request may be lost
+    context.awaiting = AwaitStep::Nothing;
+    context.retryAtMs = 0;
+    context.job.state = AcquisitionState::NeedsUserAction;
+    context.job.errorCode = std::string(errorCodeName(ErrorCode::Timeout));
+    context.job.errorMessage =
+        "Paradox Mod Manager could not confirm with Steam that Workshop item " +
+        context.job.identity.id + " exists and belongs to " + gameDisplayName(runtime.game) +
+        ", so it did not subscribe to it. Retry when this computer is online, or open the "
+        "item's Workshop page manually.";
+    context.job.updatedAt = std::max(context.clockMs, m_ctx.now());
+    logWarning(kComponent, "workshop item not confirmed by the web api in time",
+               {{"mod", toString(context.job.identity)}});
+    m_changed = true;
+    persist(runtime, true);
 }
 
 void AcquisitionCoordinator::perform(std::int64_t jobId, const providers::Action& action) {
@@ -617,6 +675,30 @@ void AcquisitionCoordinator::requestMetadata(const GameKey& game,
         m_metadata->request(game, batch);
 }
 
+void AcquisitionCoordinator::requestVerdicts(const GameKey& game,
+                                             const std::vector<ModIdentity>& identities) {
+    if (!m_metadata)
+        return;
+    std::vector<std::string> ids;
+    for (const ModIdentity& identity : identities) {
+        if (identity.source == source::SteamWorkshop && !m_verdicts.count(identity) &&
+            m_metadataRequested.insert(identity).second)
+            ids.push_back(identity.id);
+    }
+    requestMetadata(game, ids);
+}
+
+bool AcquisitionCoordinator::forgetUnconfirmed(const ModIdentity& identity) {
+    if (!m_metadata || identity.source != source::SteamWorkshop)
+        return false;
+    if (const auto verdict = m_verdicts.find(identity);
+        verdict != m_verdicts.end() && verdict->second.ok())
+        return false;
+    m_verdicts.erase(identity);
+    m_metadataRequested.erase(identity);
+    return true;
+}
+
 CoordinatorUpdate AcquisitionCoordinator::start(const GameKey& game) {
     return run([&] {
         persistence::AcquisitionJobRepository repo(m_ctx.database);
@@ -634,19 +716,23 @@ CoordinatorUpdate AcquisitionCoordinator::start(const GameKey& game) {
         if (fresh.empty())
             return;
         rememberNames(fresh);
-        std::vector<std::string> ids;
+        // Asked before any session opens; subscribing waits for the verdict.
+        std::vector<ModIdentity> identities;
+        for (const AcquisitionJob& job : fresh)
+            identities.push_back(job.identity);
+        requestVerdicts(game, identities);
         for (const AcquisitionJob& job : fresh) {
             logInfo(kComponent, "resuming acquisition job",
                     {{"job", std::to_string(job.id)},
                      {"mod", toString(job.identity)},
                      {"state", pmm::toString(job.state)}});
             adopt(job, true);
-            if (job.identity.source == source::SteamWorkshop &&
-                m_metadataRequested.insert(job.identity).second)
-                ids.push_back(job.identity.id);
+            const auto verdict = m_verdicts.find(job.identity);
+            if (verdict != m_verdicts.end() && !verdict->second.ok())
+                enqueue(job.id, obs::ItemRejected{verdict->second.error().code,
+                                                  verdict->second.error().message});
         }
         m_changed = true;
-        requestMetadata(game, ids);
     });
 }
 
@@ -768,6 +854,7 @@ AcquisitionCoordinator::onMetadata(const GameKey& game,
                                    const std::vector<providers::WorkshopItemMetadata>& items) {
     return run([&] {
         const std::string appId = appIdFor(game);
+        std::vector<std::int64_t> confirmed;
         for (const providers::WorkshopItemMetadata& item : items) {
             const ModIdentity identity{game, source::SteamWorkshop, item.id};
             if (item.found && !item.title.empty()) {
@@ -780,12 +867,26 @@ AcquisitionCoordinator::onMetadata(const GameKey& game,
             if (appId.empty())
                 continue;
             const Status valid = providers::validateWorkshopItemForGame(item, appId);
-            if (valid)
-                continue;
-            for (const auto& [id, runtime] : m_jobs) {
-                if (runtime.context.job.identity == identity)
+            m_metadataRequested.erase(identity);
+            m_verdicts.insert_or_assign(identity, valid);
+            for (auto& [id, runtime] : m_jobs) {
+                if (runtime.context.job.identity != identity)
+                    continue;
+                if (!valid)
                     enqueue(id, obs::ItemRejected{valid.error().code, valid.error().message});
+                else if (runtime.heldSinceMs)
+                    confirmed.push_back(id);
             }
+        }
+        // Held jobs start a fresh run: it queries the item state again, so
+        // the decision to subscribe rests on a current report.
+        for (const std::int64_t id : confirmed) {
+            Runtime& runtime = m_jobs.at(id);
+            if (!runtime.heldSinceMs)
+                continue; // the item was listed twice
+            runtime.heldSinceMs.reset();
+            apply(id,
+                  providers::startAcquisition(runtime.context.job, m_ctx.now(), m_options.policy));
         }
     });
 }
@@ -796,6 +897,11 @@ CoordinatorUpdate AcquisitionCoordinator::tick(std::int64_t nowMs) {
         for (auto& [id, runtime] : m_jobs) {
             if (runtime.dirty && now - runtime.persistedAtMs >= m_options.progressPersistIntervalMs)
                 persist(runtime, true);
+            if (runtime.heldSinceMs) {
+                if (now - *runtime.heldSinceMs >= m_options.identityTimeoutMs)
+                    failUnconfirmed(runtime);
+                continue; // waiting for the Web API, not for Steam
+            }
             if (busy(runtime) || runtime.context.retryAtMs > 0)
                 enqueue(id, obs::Tick{nowMs});
         }
@@ -803,6 +909,13 @@ CoordinatorUpdate AcquisitionCoordinator::tick(std::int64_t nowMs) {
 }
 
 Result<CoordinatorUpdate> AcquisitionCoordinator::retry(std::int64_t jobId) {
+    return retryJob(jobId, true);
+}
+
+// `recheckIdentity`: ask the Web API again unless the item is confirmed (a
+// rejection may no longer hold, an unanswered request may have been lost).
+Result<CoordinatorUpdate> AcquisitionCoordinator::retryJob(std::int64_t jobId,
+                                                           bool recheckIdentity) {
     persistence::AcquisitionJobRepository repo(m_ctx.database);
     const auto it = m_jobs.find(jobId);
     AcquisitionJob job;
@@ -838,7 +951,12 @@ Result<CoordinatorUpdate> AcquisitionCoordinator::retry(std::int64_t jobId) {
     if (it == m_jobs.end())
         adopt(job, false);
     dropSuperseded(jobId);
-    return run([&] { enqueue(jobId, obs::Retry{}); });
+    const bool recheck = recheckIdentity && forgetUnconfirmed(job.identity);
+    return run([&] {
+        if (recheck)
+            requestVerdicts(job.identity.game, {job.identity});
+        enqueue(jobId, obs::Retry{});
+    });
 }
 
 CoordinatorUpdate AcquisitionCoordinator::retryAllFailed(const GameKey& game) {
@@ -846,11 +964,19 @@ CoordinatorUpdate AcquisitionCoordinator::retryAllFailed(const GameKey& game) {
     auto stored = repo.listForGame(game);
     std::vector<AcquisitionJob> jobs = detail::overlayJobs(
         stored ? std::move(stored).value() : std::vector<AcquisitionJob>{}, liveJobs(game));
-    CoordinatorUpdate update;
+    std::vector<AcquisitionJob> failed;
+    std::vector<ModIdentity> recheck;
     for (const AcquisitionJob& job : detail::latestPerIdentity(jobs)) {
         if (job.state != AcquisitionState::Failed && job.state != AcquisitionState::NeedsUserAction)
             continue;
-        auto retried = retry(job.id);
+        failed.push_back(job);
+        if (forgetUnconfirmed(job.identity))
+            recheck.push_back(job.identity);
+    }
+    requestVerdicts(game, recheck); // one batched request for all of them
+    CoordinatorUpdate update;
+    for (const AcquisitionJob& job : failed) {
+        auto retried = retryJob(job.id, false);
         if (!retried) {
             logWarning(kComponent, "retry skipped",
                        {{"job", std::to_string(job.id)}, {"error", retried.error().message}});
@@ -1015,8 +1141,12 @@ AcquisitionSnapshot AcquisitionCoordinator::snapshot(const GameKey& game) const 
         item.name = nameFor(job);
         item.progress = progressOf(job);
         item.active = inMemory && busy(runtime->second);
-        item.stateText =
-            (!inMemory && !isTerminal(job.state)) ? "Waiting to resume" : stateTextOf(job);
+        if (!inMemory && !isTerminal(job.state))
+            item.stateText = "Waiting to resume";
+        else if (inMemory && runtime->second.heldSinceMs)
+            item.stateText = "Checking the item with Steam";
+        else
+            item.stateText = stateTextOf(job);
         item.canRetry = retryable(job.state);
         item.canOpenFallback = job.identity.source == source::SteamWorkshop &&
                                providers::isValidPublishedFileId(job.identity.id) &&
