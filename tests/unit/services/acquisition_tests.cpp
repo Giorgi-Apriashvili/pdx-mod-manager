@@ -1,3 +1,4 @@
+#include "core/log.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/inventory_repository.hpp"
 #include "persistence/playset_repository.hpp"
@@ -11,6 +12,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
+#include <map>
 #include <memory>
 
 using namespace pmm;
@@ -22,13 +25,14 @@ namespace {
 
 constexpr const char* kItem = "2000000101";
 
-// World + fake helper + coordinator, wired like the application does.
+// World + fake helper + fake Web API + coordinator, wired like the application does.
 struct Rig {
     World w;
     FakeSteam steam{w.workshop};
     FakeMetadata metadata;
     GameService games{w.ctx};
     CoordinatorOptions options;
+    bool webApi = true; // false: the coordinator gets no metadata host
     std::unique_ptr<AcquisitionCoordinator> coordinator;
 
     Rig() {
@@ -38,15 +42,15 @@ struct Rig {
 
     // A new coordinator over the same database: what an application restart sees.
     AcquisitionCoordinator& restart() {
-        coordinator =
-            std::make_unique<AcquisitionCoordinator>(w.ctx, games, steam, &metadata, options);
+        coordinator = std::make_unique<AcquisitionCoordinator>(
+            w.ctx, games, steam, webApi ? &metadata : nullptr, options);
         return *coordinator;
     }
 
     AcquisitionCoordinator& c() { return *coordinator; }
 
-    // Delivers helper events and advances the clock until no job of the game
-    // is in progress or waiting for an automatic retry.
+    // Delivers Web API replies and helper events and advances the clock until
+    // no job of the game is in progress or waiting for an automatic retry.
     std::vector<GameState> settle(int maxSteps = 400) {
         std::vector<GameState> rescans;
         const auto collect = [&rescans](CoordinatorUpdate update) {
@@ -54,6 +58,8 @@ struct Rig {
                 rescans.push_back(std::move(state));
         };
         for (int i = 0; i < maxSteps; ++i) {
+            for (CoordinatorUpdate& update : metadata.answer(c()))
+                collect(std::move(update));
             for (CoordinatorUpdate& update : steam.pump(c()))
                 collect(std::move(update));
             if (!c().hasActiveWork(kGame) && steam.pending.empty())
@@ -75,9 +81,11 @@ struct Rig {
     }
 
     // Playset with the given entries plus jobs for the missing ones, started.
+    // The Web API answers (when `metadata.answering`) before the helper does.
     std::int64_t acquire(std::vector<PlaysetEntry> entries) {
         const std::int64_t id = playset(std::move(entries));
         require(c().acquireMissing(id));
+        metadata.answer(c());
         return id;
     }
 
@@ -118,6 +126,49 @@ bool installedInInventory(World& w, const std::string& id) {
     persistence::InventoryRepository inventory(*w.db);
     return require(inventory.find({kGame, source::SteamWorkshop, id})).has_value();
 }
+
+// Web API reply for an item that belongs to EU4, not to the fake Stellaris.
+providers::WorkshopItemMetadata eu4Item(const std::string& id) {
+    providers::WorkshopItemMetadata item;
+    item.id = id;
+    item.found = true;
+    item.resultCode = 1;
+    item.title = "Some EU4 Mod";
+    item.consumerAppId = "236850";
+    item.creatorAppId = "236850";
+    return item;
+}
+
+// Largest number of unfinished in-memory jobs that share one mod.
+std::size_t unfinishedPerMod(const AcquisitionCoordinator& coordinator) {
+    std::map<ModIdentity, std::size_t> counts;
+    std::size_t most = 0;
+    for (const AcquisitionJob& job : coordinator.liveJobs(kGame)) {
+        if (!isTerminal(job.state))
+            most = std::max(most, ++counts[job.identity]);
+    }
+    return most;
+}
+
+// Captures log records for the lifetime of the object.
+class LogCapture {
+public:
+    LogCapture() {
+        setLogSink([this](const LogRecord& record) { m_records.push_back(record); });
+    }
+    ~LogCapture() { setLogSink({}); }
+    LogCapture(const LogCapture&) = delete;
+    LogCapture& operator=(const LogCapture&) = delete;
+
+    std::size_t count(std::string_view message) const {
+        return static_cast<std::size_t>(
+            std::count_if(m_records.begin(), m_records.end(),
+                          [&](const LogRecord& record) { return record.message == message; }));
+    }
+
+private:
+    std::vector<LogRecord> m_records;
+};
 
 } // namespace
 
@@ -177,6 +228,7 @@ TEST_CASE("An imported missing mod is subscribed, downloaded, verified and resca
 TEST_CASE("Content Steam already installed is verified, never downloaded again",
           "[services][acquisition]") {
     Rig r;
+    r.metadata.answering = false;               // verifying needs no Web API confirmation
     r.w.addWorkshopMod(kItem, "Already There"); // on disk, inventory not rescanned yet
     r.steam.items[kItem].flags = providers::item_flag::Subscribed | providers::item_flag::Installed;
     r.acquire({workshopEntry(kItem, "Already There", false)}); // disabled entries are acquired too
@@ -264,6 +316,7 @@ TEST_CASE("Deleted, private or wrong-game items become unavailable and stay in t
     }
     SECTION("the Web API reports it missing or for another game") {
         constexpr const char* kOther = "2000000102";
+        r.metadata.answering = false; // answered by hand below
         r.acquire({workshopEntry(kItem, "Gone"), workshopEntry(kOther, "Wrong game")});
         REQUIRE(r.metadata.requests.size() == 1);
         CHECK(r.metadata.requests[0].size() == 2);
@@ -505,4 +558,269 @@ TEST_CASE("Launch preparation parks jobs and closes the helper session",
     r.c().start(kGame);
     r.settle();
     CHECK(r.job(kItem).state == AcquisitionState::Installed);
+}
+
+TEST_CASE("A failed job waiting for its automatic retry resumes after a launch or a restart",
+          "[services][acquisition]") {
+    Rig r;
+    r.steam.items[kItem].subscribeResult = 3; // NoConnection: retried automatically
+    r.acquire({workshopEntry(kItem, "Retry Example")});
+    r.steam.pump(r.c());
+    REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+    REQUIRE(r.c().hasActiveWork(kGame));
+    const int attempts = r.job(kItem).attempts;
+
+    SECTION("across a game launch") {
+        r.c().closeSessionsForLaunch(kGame);
+        CHECK(r.c().liveJobs(kGame).empty());
+    }
+    SECTION("across an application restart") {
+        r.c().shutdown();
+        r.restart();
+    }
+    // Saved as the queued run the retry would have started, so start(game)
+    // resumes it; the text no longer promises a retry that nothing schedules.
+    const AcquisitionJob parked = r.job(kItem);
+    CHECK(parked.state == AcquisitionState::Pending);
+    CHECK(parked.attempts == attempts + 1);
+    CHECK_THAT(parked.errorMessage, !ContainsSubstring("Retrying automatically"));
+    CHECK(r.snapshotJob(r.c().snapshot(kGame), kItem).stateText == "Waiting to resume");
+
+    r.steam.items[kItem].subscribeResult = 1;
+    r.c().start(kGame);
+    r.settle();
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    CHECK(r.job(kItem).id == parked.id);
+    CHECK(r.steam.sentIds<providers::SubscribeCommand>().size() == 2);
+}
+
+TEST_CASE("A newer job for the same mod supersedes an older failed one",
+          "[services][acquisition]") {
+    Rig r;
+    LogCapture logs;
+    SECTION("while the older job waits for its automatic retry") {
+        r.steam.items[kItem].subscribeResult = 3; // NoConnection: retried in 5 s
+        r.acquire({workshopEntry(kItem, "Example")});
+        r.steam.pump(r.c());
+        REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+        REQUIRE(r.c().hasActiveWork(kGame));
+    }
+    SECTION("after the older job's automatic retries are exhausted") {
+        r.steam.items[kItem].subscribeResult = 16; // Timeout
+        r.acquire({workshopEntry(kItem, "Example")});
+        r.settle();
+        REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+        REQUIRE(r.job(kItem).attempts == 3);
+    }
+    const std::int64_t older = r.job(kItem).id;
+    r.steam.items[kItem].subscribeResult = 1;
+    r.steam.items[kItem].steps = 4;
+
+    // The user imports a code with the same mod: a new job, since Failed is terminal.
+    ShareService share(r.w.ctx);
+    const AppliedImport applied = require(share.applyImport(
+        share.previewImport(codeFor({workshopEntry(kItem, "Example")})), ImportMode::New));
+    REQUIRE(applied.jobs.size() == 1);
+    const std::int64_t newer = applied.jobs[0].id;
+    REQUIRE(newer != older);
+    const std::size_t subscribesBefore = r.steam.sentIds<providers::SubscribeCommand>().size();
+
+    r.c().start(kGame);
+    bool settled = false;
+    for (int i = 0; i < 100 && !settled; ++i) {
+        r.steam.pump(r.c());
+        CHECK(unfinishedPerMod(r.c()) <= 1);
+        settled = !r.c().hasActiveWork(kGame) && r.steam.pending.empty();
+        r.w.clockMs += 1000;
+        r.c().tick(r.w.clockMs);
+        CHECK(unfinishedPerMod(r.c()) <= 1);
+    }
+    REQUIRE(settled);
+
+    CHECK(r.job(kItem).id == newer);
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    CHECK(require(repo.get(older)).state == AcquisitionState::Failed);
+    CHECK(r.steam.sentIds<providers::SubscribeCommand>().size() == subscribesBefore + 1);
+    CHECK(logs.count("saving an acquisition job failed") == 0);
+    for (const AcquisitionJob& job : r.c().liveJobs(kGame))
+        CHECK(job.id != older);
+}
+
+TEST_CASE("Retrying an older job is refused while a newer one waits for its automatic retry",
+          "[services][acquisition]") {
+    Rig r;
+    LogCapture logs;
+    r.steam.items[kItem].subscribeResult = 16; // Timeout: retries exhaust
+    r.acquire({workshopEntry(kItem, "Example")});
+    r.settle();
+    const std::int64_t older = r.job(kItem).id;
+    REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+
+    r.steam.items[kItem].subscribeResult = 3; // NoConnection: retried automatically
+    ShareService share(r.w.ctx);
+    const AppliedImport applied = require(share.applyImport(
+        share.previewImport(codeFor({workshopEntry(kItem, "Example")})), ImportMode::New));
+    REQUIRE(applied.jobs.size() == 1);
+    r.c().start(kGame);
+    r.steam.pump(r.c());
+    REQUIRE(r.job(kItem).id == applied.jobs[0].id);
+    REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+    REQUIRE(r.c().hasActiveWork(kGame));
+
+    const auto retried = r.c().retry(older);
+    REQUIRE_FALSE(retried);
+    CHECK(retried.error().code == ErrorCode::AlreadyExists);
+    CHECK(unfinishedPerMod(r.c()) <= 1);
+
+    r.steam.items[kItem].subscribeResult = 1;
+    r.settle();
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    CHECK(require(repo.get(older)).state == AcquisitionState::Failed);
+    CHECK(logs.count("saving an acquisition job failed") == 0);
+}
+
+TEST_CASE("An older job revived next to a running one stops at its first save",
+          "[services][acquisition]") {
+    Rig r;
+    LogCapture logs;
+    r.steam.items[kItem].subscribeResult = 16; // Timeout: retries exhaust
+    r.acquire({workshopEntry(kItem, "Example")});
+    r.settle();
+    const std::int64_t older = r.job(kItem).id;
+
+    r.steam.items[kItem].subscribeResult = 1;
+    r.steam.items[kItem].steps = 6;
+    ShareService share(r.w.ctx);
+    require(share.applyImport(share.previewImport(codeFor({workshopEntry(kItem, "Example")})),
+                              ImportMode::New));
+    r.c().start(kGame);
+    r.steam.pump(r.c());
+    REQUIRE(r.job(kItem).state == AcquisitionState::Downloading);
+
+    // The manual fallback of the older job brings it back into memory, where
+    // the running download's state reports reach it too and would revive it.
+    require(r.c().openFallback(older));
+    r.settle();
+
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    CHECK(require(repo.get(older)).state == AcquisitionState::NeedsUserAction);
+    CHECK(logs.count("saving an acquisition job failed") == 0);
+    CHECK(logs.count("stopped a duplicate acquisition job") == 1);
+    for (const AcquisitionJob& job : r.c().liveJobs(kGame))
+        CHECK(job.id != older);
+}
+
+TEST_CASE("Nothing is subscribed until the Web API confirms the item belongs to the game",
+          "[services][acquisition]") {
+    Rig r;
+    r.metadata.answering = false; // the helper answers before the Web API
+
+    SECTION("confirmed late: subscribed once, then installed") {
+        r.acquire({workshopEntry(kItem, "Late Example")});
+        r.steam.pump(r.c());
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>().empty());
+        CHECK(r.job(kItem).state == AcquisitionState::Pending);
+        CHECK(r.c().hasActiveWork(kGame));
+        CHECK(r.c().sessionOpen(kGame));
+        CHECK(r.snapshotJob(r.c().snapshot(kGame), kItem).stateText ==
+              "Checking the item with Steam");
+        // Still held a few seconds later.
+        for (int i = 0; i < 8; ++i) {
+            r.w.clockMs += 1000;
+            r.c().tick(r.w.clockMs);
+            r.steam.pump(r.c());
+        }
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>().empty());
+        CHECK(r.job(kItem).state == AcquisitionState::Pending);
+
+        r.metadata.answering = true;
+        r.settle();
+        CHECK(r.job(kItem).state == AcquisitionState::Installed);
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>() == std::vector<std::string>{kItem});
+        CHECK(r.steam.sentIds<providers::DownloadCommand>() == std::vector<std::string>{kItem});
+    }
+    SECTION("held longer than Steam's response timeout") {
+        r.options.identityTimeoutMs = 120'000;
+        r.restart();
+        r.acquire({workshopEntry(kItem, "Slow Web API")});
+        r.steam.pump(r.c());
+        for (int i = 0; i < 60; ++i) {
+            r.w.clockMs += 1000;
+            r.c().tick(r.w.clockMs);
+            r.steam.pump(r.c());
+        }
+        CHECK(r.job(kItem).state == AcquisitionState::Pending); // no "did not answer" failure
+        r.metadata.answering = true;
+        r.settle();
+        CHECK(r.job(kItem).state == AcquisitionState::Installed);
+        CHECK(r.job(kItem).attempts == 1);
+    }
+    SECTION("rejected late: never subscribed, and Retry checks again") {
+        r.metadata.items[kItem] = eu4Item(kItem);
+        r.acquire({workshopEntry(kItem, "Wrong game")});
+        r.steam.pump(r.c());
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>().empty());
+        r.metadata.answering = true;
+        r.settle();
+        CHECK(r.job(kItem).state == AcquisitionState::Unavailable);
+        CHECK(r.job(kItem).errorCode == "wrong_game");
+
+        require(r.c().retry(r.job(kItem).id));
+        CHECK(r.metadata.requests.size() == 2); // asked again, not subscribed blindly
+        r.settle();
+        CHECK(r.job(kItem).state == AcquisitionState::Unavailable);
+        CHECK(r.job(kItem).errorCode == "wrong_game");
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>().empty());
+        CHECK(r.steam.sentIds<providers::DownloadCommand>().empty());
+    }
+    SECTION("already subscribed elsewhere: no download is requested either") {
+        r.metadata.items[kItem] = eu4Item(kItem);
+        r.steam.items[kItem].flags = providers::item_flag::Subscribed;
+        r.acquire({workshopEntry(kItem, "Wrong game")});
+        r.steam.pump(r.c());
+        r.metadata.answering = true;
+        r.settle();
+        CHECK(r.job(kItem).state == AcquisitionState::Unavailable);
+        CHECK(r.steam.sentIds<providers::DownloadCommand>().empty());
+    }
+    SECTION("never answered: the job waits for the user and Retry asks again") {
+        const std::int64_t id = r.acquire({workshopEntry(kItem, "Unconfirmed")});
+        r.settle();
+        const AcquisitionJob job = r.job(kItem);
+        CHECK(job.state == AcquisitionState::NeedsUserAction);
+        CHECK(job.errorCode == "timeout");
+        CHECK_THAT(job.errorMessage, ContainsSubstring("could not confirm"));
+        CHECK_THAT(job.errorMessage, ContainsSubstring("Stellaris"));
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>().empty());
+        CHECK_FALSE(r.c().sessionOpen(kGame));
+        const JobSnapshot& item = r.snapshotJob(r.c().snapshot(kGame), kItem);
+        CHECK(item.canRetry);
+        CHECK(item.canOpenFallback);
+        CHECK_FALSE(require(loadPlaysetView(r.w.ctx, id, r.c().liveJobs(kGame))).launch.canLaunch);
+
+        r.metadata.answering = true;
+        SECTION("Retry") {
+            require(r.c().retry(job.id));
+        }
+        SECTION("Retry all") {
+            CHECK(r.c().retryAllFailed(kGame).changed);
+        }
+        CHECK(r.metadata.requests.size() == 2);
+        r.settle();
+        CHECK(r.job(kItem).state == AcquisitionState::Installed);
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>() == std::vector<std::string>{kItem});
+    }
+    SECTION("without a Web API host nothing waits") {
+        r.webApi = false;
+        r.restart();
+        r.acquire({workshopEntry(kItem, "No Web API")});
+        r.steam.pump(r.c());
+        CHECK(r.steam.sentIds<providers::SubscribeCommand>() == std::vector<std::string>{kItem});
+        r.settle();
+        CHECK(r.job(kItem).state == AcquisitionState::Installed);
+        CHECK(r.metadata.requests.empty());
+    }
 }

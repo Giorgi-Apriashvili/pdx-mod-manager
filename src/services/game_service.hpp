@@ -10,9 +10,10 @@
 // GameState::scanError, never as a failure of the whole refresh.
 //
 // The inventory cache lets the application show the last known state at
-// start-up (cachedStates()) before the first rescan finishes. Local-mod
-// fingerprints are carried over from the cache when a mod's content path and
-// modification time are unchanged, so they are only computed once.
+// start-up (cachedStates()) before the first rescan finishes. A rescan drops
+// cached local-mod fingerprints: editing a file inside a mod folder does not
+// change the folder's modification time, so nothing cheap proves that a cached
+// fingerprint still matches. ShareService::exportCode() recomputes them.
 
 #include "core/model.hpp"
 #include "core/result.hpp"
@@ -66,9 +67,10 @@ public:
     Result<std::optional<GameInstallation>> installation(const GameKey& key);
 
     // Creates a playset from the game's current mod configuration (for
-    // example dlc_load.json) and makes it the active playset. The name
-    // defaults to "Current game configuration" and is made unique. Returns
-    // the new playset id.
+    // example dlc_load.json) and makes it the active playset. The name is
+    // checked like PlaysetService names (InvalidArgument otherwise), defaults
+    // to "Current game configuration" and is made unique within 256 bytes.
+    // Returns the new playset id.
     Result<std::int64_t> importCurrentConfiguration(const GameKey& key,
                                                     const std::string& name = {});
 

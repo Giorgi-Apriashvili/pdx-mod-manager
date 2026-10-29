@@ -4,8 +4,8 @@
 // whose names contain spaces and non-ASCII characters, an in-memory database
 // on a fake clock, a configuration-transaction journal), a fake game adapter
 // that scans plain folders, a fake Steam helper host that simulates
-// subscribe/download, and fake process starter/lister. Nothing here touches a
-// real game, Steam folder or process.
+// subscribe/download, a fake Web API, and fake process starter/lister.
+// Nothing here touches a real game, Steam folder, process or the network.
 
 #include "core/model.hpp"
 #include "games/game_adapter.hpp"
@@ -414,11 +414,44 @@ private:
     fs::path m_workshop;
 };
 
+// Simulated Web API. Every request is recorded; answer() replies to the
+// outstanding ones from `items` (default: a public item of kAppId) while
+// `answering` is set. Unanswered requests model an unreachable Web API.
 class FakeMetadata : public WorkshopMetadataHost {
 public:
     std::vector<std::vector<std::string>> requests;
+    std::deque<std::vector<std::string>> unanswered;
+    std::map<std::string, providers::WorkshopItemMetadata> items;
+    bool answering = true;
+
     void request(const GameKey&, const std::vector<std::string>& ids) override {
         requests.push_back(ids);
+        unanswered.push_back(ids);
+    }
+
+    providers::WorkshopItemMetadata item(const std::string& id) const {
+        if (const auto it = items.find(id); it != items.end())
+            return it->second;
+        providers::WorkshopItemMetadata m;
+        m.id = id;
+        m.found = true;
+        m.resultCode = 1;
+        m.consumerAppId = kAppId;
+        m.creatorAppId = kAppId;
+        return m;
+    }
+
+    std::vector<CoordinatorUpdate> answer(AcquisitionCoordinator& coordinator) {
+        std::vector<CoordinatorUpdate> updates;
+        while (answering && !unanswered.empty()) {
+            const std::vector<std::string> ids = std::move(unanswered.front());
+            unanswered.pop_front();
+            std::vector<providers::WorkshopItemMetadata> reply;
+            for (const std::string& id : ids)
+                reply.push_back(item(id));
+            updates.push_back(coordinator.onMetadata(kGame, reply));
+        }
+        return updates;
     }
 };
 

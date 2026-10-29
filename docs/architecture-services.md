@@ -57,7 +57,10 @@ layer implements:
 - `WorkshopMetadataHost`: `request(game, ids)` performs the key-less Web API
   `GetPublishedFileDetails` call (QNetworkAccessManager). It parses the reply with
   `providers::parsePublishedFileDetailsResponse()` and passes it to
-  `onMetadata()`. A failed request (offline) may go unanswered.
+  `onMetadata()`. A failed request (offline) may go unanswered; jobs that
+  would subscribe then wait for the user after
+  `CoordinatorOptions::identityTimeoutMs`. Passing no metadata host disables
+  the Web API checks, including the identity gate.
 
 `CoordinatorOptions::helperExecutable` names the helper binary shipped next to
 the application. When that file is missing, jobs are told so instead of failing
@@ -115,8 +118,11 @@ obscurely.
   inventory, and a manual folder that became invalid is reported rather than
   silently replaced.
 - `rescanMods(key)` rescans the stored installation without rediscovery (used
-  after a Workshop item is installed). Local-mod fingerprints carry over while
-  a mod's content path and modification time stay the same.
+  after a Workshop item is installed). A rescan drops cached local-mod
+  fingerprints: editing a file inside a mod folder, or anywhere in its
+  subfolders, leaves the folder's own modification time unchanged on NTFS,
+  ext4 and APFS, so nothing cheap proves that a cached fingerprint still
+  matches.
 - `setManualLocation` / `clearManualLocation`. Nothing is stored when the
   adapter rejects the folders.
 - `cachedStates()` / `cachedInventory()`: the last known state, read from the
@@ -127,8 +133,11 @@ obscurely.
 ### PlaysetService (`playset_service.hpp`)
 
 - Management: list, create, duplicate, rename (names unique per game, ASCII
-  case-insensitive), soft delete with a snapshot, `restoreLastDeleted()`,
-  `history()` and `restoreHistory()`.
+  case-insensitive, at most 256 bytes so that they fit into share codes),
+  soft delete with a snapshot, `restoreLastDeleted()`, `history()` and
+  `restoreHistory()`. Where a name is made unique (create, duplicate, import,
+  current configuration), a " (2)" suffix that would not fit shortens the
+  name on a character boundary instead.
 - The active playset per game is stored in settings
   (`game.<key>.activePlaysetId`), together with `app.lastGameKey`.
 - Editing (core `playset_ops`): `setEnabled(indices, on)` returns the
@@ -159,10 +168,13 @@ database rows.
 ### ShareService (`share_service.hpp`)
 
 - `exportCode(playsetId)`: every entry, disabled ones included, in exact order.
-  Installed entries carry their descriptor name and version as hints, and local
-  mods carry a content fingerprint. The fingerprint is computed once with the
-  injected function and cached in the inventory. `gameVersionHint` is the
-  installed game version. Hints are trimmed to what the manifest accepts.
+  Installed entries carry their descriptor name and version as hints, and
+  installed local mods carry a content fingerprint. The fingerprint is
+  recomputed with the injected function on every export (exports are rare and
+  `fingerprintDirectory()` enforces size and file-count limits) and cached in
+  the inventory for readiness comparisons until the next rescan. When it cannot
+  be computed, the entry carries none. `gameVersionHint` is the installed game
+  version. Hints are trimmed to what the manifest accepts.
   Identities, order and enabled flags are copied verbatim.
 - `previewImport(text)`: decodes, validates and builds the `ImportPlan` against
   the cached inventory of the manifest's game. It is read-only: no database
@@ -177,8 +189,23 @@ helper session per game. Its responsibilities:
 
 - Map events with `observationFromHelperEvent()` and actions with
   `helperCommandFor()`, batching state queries into one command.
+- Gate network actions on the Web API verdict. A share code is untrusted
+  input, so with a metadata host no Subscribe or RequestDownload is sent until
+  `onMetadata()` has confirmed that the item exists and belongs to the game.
+  Verdicts are cached per mod for the session. The gate lives in the
+  coordinator (the reducer is unchanged): a held transition is dropped rather
+  than queued, and the job's Steam timeouts are suspended while it waits, so
+  no subscribe or response timeout fires for a command that was never sent.
+  Without a verdict within `CoordinatorOptions::identityTimeoutMs` the job
+  needs the user rather than subscribing unverified.
 - Verify content (`verifyWorkshopContent()`).
 - Persist jobs when the reducer asks, coalescing progress-only changes.
+- Run at most one job per mod. A job that starts (a new import, a retry)
+  supersedes the older, finished in-memory jobs of the same mod; their rows
+  stay. A user retry is refused while another job of the mod is in progress or
+  waiting for its automatic retry. As a last line of defence, a job whose save
+  is rejected because another unfinished job owns the mod is stopped at its
+  last saved state instead of retrying the write on every tick.
 - Rescan the inventory when an item becomes Installed.
 - Report provider status: `ready`, `steam_not_running`, `not_logged_on`,
   `not_owned`, `unavailable`, with recovery text.
@@ -253,10 +280,12 @@ enabled.
 ## Data flow: acquisition
 
 ```text
- start(game): listUnfinished() jobs of the game -> startAcquisition() each
+ start(game): listUnfinished() jobs of the game
+              -> metadata host: request(ids without a verdict; names, wrong-game /
+                 deleted check), sent before any session opens
+              -> startAcquisition() each
               (restart reconciliation: the reducer queries Steam first, so nothing
                is re-subscribed blindly and installed items are verified)
-              -> metadata host: request(names, wrong-game / deleted check)
 
  action QuerySession -> session open? ready event cached -> ProviderReady
                         no installation / no Steam app id / steam_api library missing
@@ -266,6 +295,14 @@ enabled.
  helper "ready" fail -> provider status steam_not_running | not_logged_on | unavailable;
                         jobs NeedsUserAction (or Failed + automatic retry for crashes)
  actions QueryState / Subscribe / RequestDownload -> outbox -> host.send (state batched)
+ identity gate (metadata host only): Subscribe / RequestDownload are held until
+                        onMetadata confirms the item (found, not banned, consumer
+                        app = the game); the transition is dropped, no Steam timeout
+                        runs, and the verdict starts a fresh run (state queried again)
+     rejected        -> ItemRejected -> Unavailable (wrong_game, item_unavailable)
+     no verdict within identityTimeoutMs (15 s) -> NeedsUserAction ("could not
+                        confirm"); Retry / retryAllFailed ask the Web API again
+     QueryState and verifying content Steam already installed never wait
  helper events -> observationFromHelperEvent -> reduceAcquisition -> persist if asked
  action VerifyContent -> verifyWorkshopContent(installPath) -> ContentVerified
  job Installed -> GameService::rescanMods(game) -> CoordinatorUpdate::rescanned
@@ -287,7 +324,11 @@ are left out, because usable installed content wins over job state.
 While a helper session is open, Steam treats the game as running. Before a
 launch, `closeSessionsForLaunch(game)` therefore saves progress, closes the
 session and parks the game's unfinished jobs. The next `start(game)` reconciles
-them with Steam. `shutdown()` does the same for every game on exit.
+them with Steam. `start()` resumes only unfinished jobs, so a failed job whose
+automatic retry is due is parked as the queued run that the retry would have
+started (attempt counted, retry text cleared) instead of staying "failed" with
+a promise nothing keeps. `shutdown()` saves progress and parks those retries for
+every game on exit.
 
 ## Data flow: launch
 

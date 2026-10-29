@@ -7,17 +7,20 @@
 #include "services/playset_view.hpp"
 #include "services/share_service.hpp"
 #include "sharing/share_code.hpp"
+#include "sharing/utf8.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <fstream>
 #include <sstream>
 
 using namespace pmm;
 using namespace pmm::services;
 using namespace pmm::services::test;
 using Catch::Matchers::ContainsSubstring;
+using Catch::Matchers::EndsWith;
 
 namespace {
 
@@ -86,6 +89,15 @@ std::string senderCode() {
     return require(share.exportCode(id));
 }
 
+// Rewrites a file in place: no new directory entry, unlike writeFileAtomic().
+void rewriteInPlace(const fs::path& path, std::string_view text) {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    REQUIRE(out);
+    out << text;
+    out.close();
+    REQUIRE(out);
+}
+
 void injectJobInsertFailure(World& w) {
     auto access = w.db->access();
     requireOk(access.connection().exec(
@@ -136,13 +148,117 @@ TEST_CASE("Export carries every entry in order with installed hints and local fi
     CHECK(manifest.mods[2].versionHint == "2.0");
     CHECK(manifest.mods[3].nameHint.size() == sharing::kMaxNameHintBytes);
 
-    // The fingerprint is cached in the inventory; exporting again is deterministic.
+    // The fingerprint is cached in the inventory for readiness comparisons.
+    // Exporting again recomputes it (a cached value cannot be trusted) and is
+    // deterministic.
     persistence::InventoryRepository inventory(*w.db);
     const auto cached = require(inventory.find({kGame, source::Local, "example_local_tweaks"}));
     REQUIRE(cached);
     CHECK(cached->fingerprint == expectedFingerprint);
     CHECK(require(share.exportCode(id)) == code);
-    CHECK(w.fingerprintCalls == 1);
+    CHECK(w.fingerprintCalls == 2);
+}
+
+TEST_CASE("Exported local fingerprints follow edits that leave the mod folder's time unchanged",
+          "[services][share]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    const fs::path modDir = w.userData / "mod" / "example_local_tweaks";
+    const std::int64_t id =
+        makePlayset(w, {localEntry("example_local_tweaks", "Tweaks")}, "Local only");
+    ShareService share(w.ctx);
+    GameService games(w.ctx);
+    const auto exported = [&] {
+        const sharing::Manifest manifest =
+            require(sharing::decodeShareCode(require(share.exportCode(id))));
+        REQUIRE(manifest.mods.size() == 1);
+        return manifest.mods[0].fingerprint;
+    };
+    const auto cached = [&] {
+        persistence::InventoryRepository inventory(*w.db);
+        const auto mod = require(inventory.find({kGame, source::Local, "example_local_tweaks"}));
+        REQUIRE(mod);
+        return mod->fingerprint;
+    };
+    const std::string original = exported();
+    CHECK(original == require(providers::fingerprintDirectory(modDir)));
+
+    // Editing files inside a folder does not change the folder's own time on
+    // NTFS, ext4 or APFS; restoring it makes that deterministic here.
+    std::error_code ec;
+    const fs::file_time_type folderTime = fs::last_write_time(modDir, ec);
+    REQUIRE_FALSE(ec);
+    const std::int64_t folderSeconds = platform::lastWriteUnixSeconds(modDir);
+    const auto keepFolderTime = [&] {
+        fs::last_write_time(modDir, folderTime, ec);
+        REQUIRE_FALSE(ec);
+        REQUIRE(platform::lastWriteUnixSeconds(modDir) == folderSeconds);
+    };
+
+    SECTION("a nested file edited in place and a file added to a subfolder") {
+        rewriteInPlace(modDir / "common" / "example_tweaks.txt", "example_value = 43\n");
+        writeText(modDir / "common" / "added.txt", "added = yes\n");
+        keepFolderTime();
+        require(games.refreshGame(kGame));
+    }
+    SECTION("a file at the folder root edited in place") {
+        rewriteInPlace(modDir / "descriptor.mod",
+                       readText(modDir / "descriptor.mod") + "picture=\"thumbnail.png\"\n");
+        keepFolderTime();
+        require(games.rescanMods(kGame));
+    }
+    const std::string current = require(providers::fingerprintDirectory(modDir));
+    REQUIRE(current != original);
+    CHECK(exported() == current);
+    CHECK(cached() == current);
+}
+
+TEST_CASE("A code whose playset name is at the length limit imports again under a unique name",
+          "[services][share]") {
+    constexpr std::size_t kMax = sharing::kMaxPlaysetNameBytes;
+    std::string name;
+    SECTION("ASCII") {
+        name = std::string(kMax, 'n');
+    }
+    SECTION("multi-byte, where a plain byte cut would split a character") {
+        name = "a";
+        while (name.size() + 3 <= kMax)
+            name += "\xE6\x97\xA5"; // U+65E5
+    }
+    REQUIRE(name.size() == kMax);
+    sharing::Manifest manifest;
+    manifest.game = kGame;
+    manifest.playsetName = name;
+    manifest.mods.push_back({source::SteamWorkshop, "2000000001", "UI", true, {}, {}});
+    const std::string code = require(sharing::encodeShareCode(manifest));
+
+    World w;
+    w.refresh();
+    ShareService share(w.ctx);
+    CHECK(require(share.applyImport(share.previewImport(code), ImportMode::New)).playsetName ==
+          name);
+
+    const ImportPreview again = share.previewImport(code);
+    REQUIRE(again.ok());
+    const std::string proposed = again.plan->proposedName;
+    CHECK(proposed.size() <= kMax);
+    CHECK(sharing::isValidUtf8(proposed));
+    CHECK_THAT(proposed, EndsWith(" (2)"));
+    CHECK(require(share.applyImport(again, ImportMode::New)).playsetName == proposed);
+
+    // A typed name that collides is shortened the same way; a typed name that
+    // is too long is refused rather than cut.
+    const std::string typed =
+        require(share.applyImport(share.previewImport(code), ImportMode::New, std::nullopt, name))
+            .playsetName;
+    CHECK(typed.size() <= kMax);
+    CHECK(sharing::isValidUtf8(typed));
+    CHECK_THAT(typed, EndsWith(" (3)"));
+    const auto tooLong =
+        share.applyImport(share.previewImport(code), ImportMode::New, std::nullopt, name + "x");
+    REQUIRE_FALSE(tooLong);
+    CHECK(tooLong.error().code == ErrorCode::InvalidArgument);
 }
 
 TEST_CASE("Previewing an import is read-only", "[services][share]") {
