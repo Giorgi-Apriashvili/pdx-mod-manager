@@ -84,6 +84,27 @@ over a JSON-lines pipe. Read-only probe results and the remaining
 verification steps are recorded in [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md)
 and [`docs/steam-workshop.md`](steam-workshop.md).
 
+Probe result (2026-10-29, Stellaris 4.5.2, Windows 11, read-only commands
+only), status **verified for session and item-state access**:
+
+- The helper, a separate unsigned executable outside the game folder,
+  initialised the Steam API through the game's `steam_api64.dll`
+  (`SteamAPI_InitSafe`, interface `STEAMUGC_INTERFACE_VERSION016`) and
+  reported `loggedOn: true`, `ownsApp: true`, 27 subscribed items.
+- `GetItemState`/`GetItemInstallInfo` returned flags 5 (subscribed +
+  installed), install folders, sizes and timestamps that match Steam's own
+  `appworkshop_281990.acf` exactly; an unsubscribed item returned flags 0.
+- Side effect: each helper session counts as a Stellaris launch for Steam
+  (the app manifest's LastPlayed changed); Steam may show the user as
+  playing the game while the helper runs.
+- The Steam library writes the user's SteamID to the helper's stderr; that
+  stream is treated as sensitive and redacted in diagnostics.
+
+Still **unverified** on a live account: `SubscribeItem` / `DownloadItem` and
+the subscribe call result. Running them changes the user's Workshop
+subscriptions, so they are executed only with the user's explicit approval
+(procedure in `docs/steam-workshop.md`).
+
 Requirements for this path: Steam client running, user logged in, user owns
 the game (checked with `ISteamApps::BIsSubscribedApp`). No credentials are
 collected or stored. While a helper session is open Steam may show the user
