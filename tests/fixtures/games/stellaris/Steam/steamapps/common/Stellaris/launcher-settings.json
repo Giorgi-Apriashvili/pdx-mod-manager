@@ -1,0 +1,21 @@
+{
+	"gameId": "stellaris",
+	"version": "Cygnus v4.5.2 (9776)",
+	"modsCompatibilityVersion": "4.5",
+	"rawVersion": "v4.5.2",
+	"distPlatform": "steam",
+	"gameDataPath": "%USER_DOCUMENTS%/Paradox Interactive/Stellaris",
+	"themeFile": "./assets/theme-settings.json",
+	"browserDlcUrl": "https://store.steampowered.com/dlc/281990/Stellaris/",
+	"exePath": "./stellaris.exe",
+	"exeArgs": [ "-gdpr-compliant" ]
+		,"ingameSettingsLayoutPath": "./settings-layout.json"
+	,"alternativeExecutables": [
+		{
+			"exePath": "./stellaris.exe",
+			"exeArgs": ["-gdpr-compliant", "-nakama"],
+			"label": { "en": "Cross-Store Multiplayer" },
+			"visibleIn": [ "GAME_SETTINGS", "HOME_PAGE" ]
+		}
+	]
+}
