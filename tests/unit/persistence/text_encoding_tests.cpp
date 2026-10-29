@@ -35,7 +35,7 @@ TEST_CASE("sanitizeUtf8 replaces each maximal ill-formed subpart once", "[persis
 }
 
 TEST_CASE("UTF-16 conversion replaces unpaired surrogates", "[persistence][encoding]") {
-    const std::u16string text = u"café \U0001F600";
+    const std::u16string text = u"caf\xE9 \U0001F600";
     CHECK(isValidUtf16(text));
     CHECK(utf16ToUtf8(text) == "caf\xC3\xA9 \xF0\x9F\x98\x80");
     CHECK(utf8ToUtf16("caf\xC3\xA9 \xF0\x9F\x98\x80") == text);
@@ -48,8 +48,8 @@ TEST_CASE("UTF-16 conversion replaces unpaired surrogates", "[persistence][encod
     CHECK_FALSE(isValidUtf16(reversed));
     CHECK(utf16ToUtf8(reversed) == kFffd + kFffd);
 
-    CHECK(utf8ToUtf16("caf\xE9") == u"caf�");
-    CHECK(utf8ToUtf16("\xED\xA0\x80") == u"���");
+    CHECK(utf8ToUtf16("caf\xE9") == u"caf\xFFFD");
+    CHECK(utf8ToUtf16("\xED\xA0\x80") == u"\xFFFD\xFFFD\xFFFD");
     CHECK(utf8ToUtf16("").empty());
 }
 
@@ -59,7 +59,7 @@ TEST_CASE("Valid paths are stored as exact UTF-8 and read back unchanged",
                              "\xF0\x9F\x98\x80/descriptor.mod";
     const fs::path path = pathFromText(text);
     CHECK(pathToText(path) == text);
-    CHECK(path == fs::path(u8"C:/Users/Ün\u00ef/日本 😀/descriptor.mod"));
+    CHECK(path == fs::path(u8"C:/Users/Ünï/日本 😀/descriptor.mod"));
     CHECK(pathToText(fs::path()).empty());
     CHECK(pathFromText("").empty());
     CHECK(isStorablePath(path));

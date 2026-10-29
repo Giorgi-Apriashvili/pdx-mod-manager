@@ -478,13 +478,14 @@ TEST_CASE("A playset whose stored ids cannot be snapshotted is left intact",
 TEST_CASE("Restoring a snapshot that lists a mod twice fails with a clear error",
           "[persistence][playsets]") {
     // Older builds replaced invalid UTF-8 in snapshot ids with U+FFFD, which
-    // could turn two distinct ids into one.
+    // turned "caf\xE9" and "caf\xE8" into the same id.
     Fixture f;
     const auto id = f.create("Collapsed ids", workshopEntries(1));
     const auto deleted = require(f.repo.remove(id));
     const std::string entryJson =
-        R"({"source":"local","id":"caf�","enabled":true,"nameHint":"","versionHint":"",)"
-        R"("fingerprint":""})";
+        R"({"source":"local","id":"caf)"
+        "\xEF\xBF\xBD"
+        R"(","enabled":true,"nameHint":"","versionHint":"","fingerprint":""})";
     const std::string json =
         R"({"format":1,"name":"Collapsed ids","createdAt":1000000,"updatedAt":1000000,)"
         R"("entries":[)" +
