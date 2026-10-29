@@ -2,7 +2,7 @@
 
 // Shared implementation for games whose mod configuration is
 // "<user data>/dlc_load.json + <user data>/mod/*.mod" (the scheme the Paradox
-// launcher v2 uses for Stellaris and, per leftover launcher output, EU4).
+// launcher v2 uses for Stellaris and EU4, observed on both).
 // Everything that may differ per game is a GameTraits field; each game keeps
 // its own adapter class so that it can diverge once evidence requires it.
 //

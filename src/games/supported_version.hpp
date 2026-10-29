@@ -12,7 +12,8 @@
 // its logs/error.log reports "Invalid supported_version" for "v4.*.*", "v4.*"
 // and "*", but not for "v4.5.*", "4.0.*" or "v4.1.7" (observed on the
 // development machine, see docs/games/stellaris.md). No such rule is known for
-// EU4: its leftover error.log on that machine contains no such messages.
+// EU4: its error.log files on that machine contain no such messages, although
+// v1.37.*.* and v1.37.* descriptors are registered.
 
 #include <cstdint>
 #include <optional>
