@@ -30,6 +30,12 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(CompilerWarnings)
 include(Dependencies)
 
+if(PMM_BUILD_APP)
+  find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Network Concurrent)
+  qt_standard_project_setup(REQUIRES 6.5)
+  add_subdirectory(ui)
+endif()
+
 add_subdirectory(src)
 
 if(PMM_BUILD_STEAM_HELPER)
