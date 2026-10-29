@@ -1,0 +1,23 @@
+# Build outputs
+/build/
+/out/
+/install/
+/dist/
+CMakeUserPresets.json
+compile_commands.json
+*.user
+.vs/
+.vscode/
+.idea/
+.cache/
+.claude/
+Testing/
+
+# Never commit game content, downloaded mods, credentials or local databases
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+steam_api*.dll
+libsteam_api.*
+*.log

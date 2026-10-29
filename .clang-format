@@ -1,0 +1,27 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++20
+IndentWidth: 4
+ColumnLimit: 100
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+BreakBeforeBraces: Attach
+DerivePointerAlignment: false
+PointerAlignment: Left
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"'
+    Priority: 1
+  - Regex: '^<(Q|q)'
+    Priority: 3
+  - Regex: '^<.*\.h(pp)?>'
+    Priority: 2
+  - Regex: '^<'
+    Priority: 4
+NamespaceIndentation: None
+SortIncludes: CaseSensitive
+SpaceBeforeParens: ControlStatements
+...
