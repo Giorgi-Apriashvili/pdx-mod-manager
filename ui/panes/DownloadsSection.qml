@@ -78,7 +78,8 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: root.jobCount === 0
-        text: Backend.mods.missingCount > 0
+        text: Backend.playsets.activeId < 0 ? qsTr("No downloads.")
+            : Backend.mods.missingCount > 0
               ? qsTr("%1 referenced mods are not installed.").arg(Theme.formatCount(Backend.mods.missingCount))
               : qsTr("No downloads. Everything in this playset is installed.")
         font.pixelSize: Theme.fontSize
@@ -108,6 +109,7 @@ ColumnLayout {
 
     Flow {
         Layout.fillWidth: true
+        visible: Backend.mods.missingCount > 0 || root.jobCount > 0 || root.acquisition.active
         spacing: 4
 
         AppButton {
