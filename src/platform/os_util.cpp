@@ -12,6 +12,47 @@
 #endif
 
 namespace pmm::platform::detail {
+namespace {
+
+// Length of the well-formed UTF-8 sequence starting at text[pos], or 0 if it
+// is ill-formed.
+std::size_t utf8SequenceLength(std::string_view text, std::size_t pos) noexcept {
+    const auto byte = [&](std::size_t i) { return static_cast<unsigned char>(text[i]); };
+    const unsigned char lead = byte(pos);
+    if (lead < 0x80)
+        return 1;
+
+    std::size_t length = 0;
+    unsigned char lo = 0x80; // allowed range of the second byte (excludes
+    unsigned char hi = 0xBF; // overlongs, surrogates and > U+10FFFF)
+    if (lead >= 0xC2 && lead <= 0xDF) {
+        length = 2;
+    } else if (lead >= 0xE0 && lead <= 0xEF) {
+        length = 3;
+        if (lead == 0xE0)
+            lo = 0xA0;
+        else if (lead == 0xED)
+            hi = 0x9F;
+    } else if (lead >= 0xF0 && lead <= 0xF4) {
+        length = 4;
+        if (lead == 0xF0)
+            lo = 0x90;
+        else if (lead == 0xF4)
+            hi = 0x8F;
+    } else {
+        return 0;
+    }
+
+    if (text.size() - pos < length || byte(pos + 1) < lo || byte(pos + 1) > hi)
+        return 0;
+    for (std::size_t i = 2; i < length; ++i) {
+        if ((byte(pos + i) & 0xC0) != 0x80)
+            return 0;
+    }
+    return length;
+}
+
+} // namespace
 
 int lastOsError() noexcept {
 #if defined(_WIN32)
@@ -125,7 +166,33 @@ Error fsError(const std::error_code& ec, ErrorCode fallback, std::string message
 
 std::string quotedName(const std::filesystem::path& path) {
     const std::filesystem::path name = path.has_filename() ? path.filename() : path;
-    return "\"" + pathToUtf8(name) + "\"";
+    return "\"" + toValidUtf8(pathToUtf8(name)) + "\"";
+}
+
+bool isWellFormedUtf8(std::string_view text) noexcept {
+    for (std::size_t pos = 0; pos < text.size();) {
+        const std::size_t length = utf8SequenceLength(text, pos);
+        if (length == 0)
+            return false;
+        pos += length;
+    }
+    return true;
+}
+
+std::string toValidUtf8(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t pos = 0; pos < text.size();) {
+        const std::size_t length = utf8SequenceLength(text, pos);
+        if (length == 0) {
+            out += "\xEF\xBF\xBD";
+            ++pos;
+        } else {
+            out.append(text.substr(pos, length));
+            pos += length;
+        }
+    }
+    return out;
 }
 
 void syncDirectoryBestEffort(const std::filesystem::path& directory) noexcept {

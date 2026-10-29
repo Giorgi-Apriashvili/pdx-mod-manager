@@ -101,13 +101,13 @@ json toJson(const TransactionRecord& record) {
     json root = json::object();
     root["format"] = kJournalFormat;
     root["id"] = record.id;
-    root["label"] = record.label;
+    root["label"] = detail::toValidUtf8(record.label);
     root["state"] = toString(record.state);
     root["createdUnixMs"] = record.createdUnixMs;
     root["updatedUnixMs"] = record.updatedUnixMs;
     root["entries"] = std::move(entries);
     if (!record.lastError.empty())
-        root["lastError"] = record.lastError;
+        root["lastError"] = detail::toValidUtf8(record.lastError);
     return root;
 }
 
@@ -155,8 +155,16 @@ Result<TransactionRecord> fromJson(const std::string& text) {
 
 Status writeJournal(TransactionRecord& record) {
     record.updatedUnixMs = nowUnixMs();
-    // replace: a label with invalid UTF-8 must not make the journal unwritable.
-    const std::string text = toJson(record).dump(2, ' ', false, json::error_handler_t::replace);
+    // strict: toJson() already made the free text valid UTF-8, so anything
+    // still invalid is a target path, and replacing bytes in it would make the
+    // journal name a different file.
+    std::string text;
+    try {
+        text = toJson(record).dump(2, ' ', false, json::error_handler_t::strict);
+    } catch (const json::exception& e) {
+        return makeError(ErrorCode::IoError, "Could not record the configuration change.",
+                         e.what());
+    }
     return writeFileAtomic(record.directory / kJournalFile, text);
 }
 
@@ -265,11 +273,15 @@ Result<TransactionRecord> FileTransactionManager::apply(std::string label,
         if (!write.target.is_absolute() || !write.target.has_filename())
             return makeError(ErrorCode::InvalidArgument,
                              "Configuration files must be given as absolute file paths.", utf8);
-        if (pathFromUtf8(utf8) != write.target)
+        // The journal stores targets as UTF-8; a lossy path would be journaled
+        // as a different file and recover()/restore() would write there.
+        if (!isUtf8Representable(write.target))
             return makeError(ErrorCode::InvalidArgument,
-                             "The file name " + quotedName(write.target) +
-                                 " cannot be recorded for recovery.",
-                             utf8);
+                             "The path to " + quotedName(write.target) +
+                                 " contains characters that cannot be recorded for recovery. "
+                                 "Rename the affected folder or file so that its name is valid "
+                                 "Unicode.",
+                             detail::toValidUtf8(utf8));
         std::string key = comparisonKey(write.target);
         if (std::find(keys.begin(), keys.end(), key) != keys.end())
             return makeError(ErrorCode::InvalidArgument,

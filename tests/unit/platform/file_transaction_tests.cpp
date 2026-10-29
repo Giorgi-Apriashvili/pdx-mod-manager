@@ -6,6 +6,7 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <string>
+#include <system_error>
 #include <vector>
 
 #if !defined(_WIN32)
@@ -297,6 +298,51 @@ TEST_CASE("apply validates its input", "[platform][transaction]") {
     CHECK(manager.load("20260101T000000000Z-0000").error().code == ErrorCode::NotFound);
     CHECK(manager.list()->empty());
     s.checkOriginal();
+}
+
+TEST_CASE("apply refuses a target path that has no exact UTF-8 form", "[platform][transaction]") {
+    // The journal records targets as UTF-8 text. A path that does not survive
+    // that round trip would be journaled as a different file, so recover() and
+    // restore() would write there and still report success.
+    Scenario s;
+#if defined(_WIN32)
+    // NTFS accepts names with unpaired surrogates.
+    const fs::path folder = s.gameDir / fs::path(L"caf\xD800");
+#else
+    // "café" in Latin-1, e.g. a legacy home folder name.
+    const fs::path folder = s.gameDir / fs::path("caf\xE9");
+#endif
+    const fs::path target = folder / "dlc_load.json";
+    // Some filesystems (APFS) reject such names; then there is no original.
+    std::error_code ec;
+    const bool hasOriginal = fs::create_directory(folder, ec);
+    if (hasOriginal)
+        test::writeText(target, "ORIGINAL");
+
+    FileTransactionManager manager(s.journal);
+    const auto result = manager.apply("lossy", {{s.first, "new"}, {target, "NEW"}});
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.error().code == ErrorCode::InvalidArgument);
+    CHECK(result.error().message.find("dlc_load.json") != std::string::npos);
+    CHECK(result.error().detail.find("caf\xEF\xBF\xBD") != std::string::npos); // valid UTF-8
+    if (hasOriginal)
+        CHECK(test::readText(target) == "ORIGINAL");
+    else
+        CHECK_FALSE(fs::exists(target, ec));
+    s.checkOriginal();
+    CHECK_FALSE(fs::exists(s.journal));
+}
+
+TEST_CASE("A label that is not valid UTF-8 is journaled with replacement characters",
+          "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const auto record = manager.apply("launch \xFF", {{s.first, "new"}});
+    REQUIRE(record.ok());
+    const auto loaded = manager.load(record->id);
+    REQUIRE(loaded.ok());
+    CHECK(loaded->label == "launch \xEF\xBF\xBD");
+    CHECK(loaded->state == TransactionState::Committed);
 }
 
 TEST_CASE("Transaction ids sort by creation time and prune keeps the newest",

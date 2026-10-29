@@ -175,6 +175,26 @@ TEST_CASE("UTF-8 path conversion round-trips non-ASCII names", "[platform][fs]")
     CHECK(pathFromUtf8("").empty());
 }
 
+TEST_CASE("isUtf8Representable rejects paths that have no exact UTF-8 form", "[platform][fs]") {
+    CHECK(
+        isUtf8Representable(pathFromUtf8("Ünïcødé dir/日本語 folder/emoji \xF0\x9F\x98\x80.txt")));
+    CHECK(isUtf8Representable(fs::path()));
+#if defined(_WIN32)
+    CHECK(isUtf8Representable(fs::path(L"pair \xD83D\xDE00")));
+    CHECK_FALSE(isUtf8Representable(fs::path(L"C:\\caf\xD800\\dlc_load.json"))); // lone high
+    CHECK_FALSE(isUtf8Representable(fs::path(L"lone \xDC00 low")));
+    CHECK_FALSE(isUtf8Representable(fs::path(L"reversed \xDE00\xD83D")));
+    CHECK_FALSE(isUtf8Representable(fs::path(L"trailing \xD83D")));
+#else
+    CHECK(isUtf8Representable(fs::path("max \xF4\x8F\xBF\xBF")));
+    for (const char* name :
+         {"/home/caf\xE9/dlc_load.json", // Latin-1
+          "overlong \xC0\xAF", "surrogate \xED\xA0\x80", "above max \xF4\x90\x80\x80",
+          "truncated \xE6\x97", "stray \x80 continuation", "five bytes \xF8\x88\x80\x80\x80"})
+        CHECK_FALSE(isUtf8Representable(fs::path(name)));
+#endif
+}
+
 TEST_CASE("lastWriteUnixSeconds reflects the modification time", "[platform][fs]") {
     TempDir temp;
     const fs::path file = temp / "stamp.txt";
