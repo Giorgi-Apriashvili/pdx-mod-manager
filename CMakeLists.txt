@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
 
+# On Windows default to MSVC, which matches the msvc2022_64 Qt binaries, unless
+# a compiler was chosen explicitly (-DCMAKE_CXX_COMPILER, CC/CXX). Otherwise a
+# clang on PATH could be picked up when the VS environment is not loaded.
+if(CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
+  set(CMAKE_C_COMPILER cl)
+  set(CMAKE_CXX_COMPILER cl)
+endif()
+
 project(ParadoxModManager
   VERSION 0.1.0
   DESCRIPTION "Compact cross-platform mod manager for Paradox games"
@@ -31,6 +39,18 @@ include(CompilerWarnings)
 include(Dependencies)
 
 if(PMM_BUILD_APP)
+  # Local convenience: with no Qt location given (QT_ROOT_DIR, CMAKE_PREFIX_PATH
+  # or Qt6_DIR), use the newest standard installation and say which one.
+  if(NOT DEFINED Qt6_DIR AND "${CMAKE_PREFIX_PATH}" STREQUAL "")
+    file(GLOB _pmm_qt_candidates LIST_DIRECTORIES true
+      "C:/Qt/6.*/msvc*_64" "$ENV{HOME}/Qt/6.*/gcc_64" "$ENV{HOME}/Qt/6.*/macos")
+    if(_pmm_qt_candidates)
+      list(SORT _pmm_qt_candidates COMPARE NATURAL ORDER DESCENDING)
+      list(GET _pmm_qt_candidates 0 _pmm_qt_root)
+      message(STATUS "QT_ROOT_DIR not set; using Qt found at ${_pmm_qt_root}")
+      list(APPEND CMAKE_PREFIX_PATH "${_pmm_qt_root}")
+    endif()
+  endif()
   find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Network Concurrent)
   qt_standard_project_setup(REQUIRES 6.5)
   add_subdirectory(ui)

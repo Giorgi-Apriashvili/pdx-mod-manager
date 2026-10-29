@@ -68,7 +68,19 @@ python -m aqt install-qt mac desktop 6.10.3 clang_64 -O ~/Qt                 # m
 ```
 
 Then point `QT_ROOT_DIR` at the kit, for example `C:/Qt/6.10.3/msvc2022_64`,
-`~/Qt/6.10.3/gcc_64` or `~/Qt/6.10.3/macos`.
+`~/Qt/6.10.3/gcc_64` or `~/Qt/6.10.3/macos`. When neither `QT_ROOT_DIR`,
+`CMAKE_PREFIX_PATH` nor `Qt6_DIR` is set, configure uses the newest kit found
+under `C:/Qt` or `~/Qt` and prints which one.
+
+VS Code (CMake Tools): open the folder and select a configure preset. On
+Windows the presets declare the x64 MSVC toolset, so CMake Tools loads the
+Visual Studio developer environment for the Ninja generator. A machine-specific
+`CMakeUserPresets.json` (gitignored) can pin the Qt kit and compiler, e.g. a
+preset inheriting `debug` with `"environment": {"QT_ROOT_DIR": "..."}` and
+`"cacheVariables": {"CMAKE_CXX_COMPILER": "cl", "CMAKE_C_COMPILER": "cl"}`.
+In a plain terminal on Windows, load the environment first (Developer
+PowerShell, or `source scripts/msvc-env.sh` in Git Bash); otherwise configure
+stops with "cl ... was not found in the PATH".
 
 | OS | Compiler | Tested | Additional packages |
 | --- | --- | --- | --- |
