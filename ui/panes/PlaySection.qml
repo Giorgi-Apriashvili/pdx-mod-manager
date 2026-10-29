@@ -97,6 +97,8 @@ Rectangle {
             leftPadding: 19
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         Repeater {
             model: root.blockerLines.length === 0 ? root.warningLines.slice(0, 2) : []

@@ -43,6 +43,8 @@ ColumnLayout {
         font.pixelSize: Theme.fontSize
         color: Theme.textMuted
         wrapMode: Text.Wrap
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
     }
 
     ColumnLayout {
@@ -152,6 +154,8 @@ ColumnLayout {
             text: qsTr("None declared.")
             font.pixelSize: Theme.fontSize
             color: Theme.textFaint
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         Repeater {
             model: root.details.dependencies

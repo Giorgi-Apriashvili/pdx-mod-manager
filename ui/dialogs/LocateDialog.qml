@@ -79,6 +79,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             font.weight: Font.DemiBold
             color: Theme.text
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         AppTextField {
             Layout.columnSpan: 2
@@ -103,6 +105,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             font.weight: Font.DemiBold
             color: Theme.text
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         AppTextField {
             Layout.columnSpan: 2
@@ -125,6 +129,8 @@ AppDialog {
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
     }
 

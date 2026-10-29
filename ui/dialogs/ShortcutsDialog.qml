@@ -108,7 +108,7 @@ AppDialog {
                 required property string action
                 required property int index
                 width: shortcutList.width
-                implicitHeight: Math.max(Theme.rowHeight, actionText.implicitHeight + 8)
+                implicitHeight: Math.max(Theme.rowHeight, Math.max(keysText.implicitHeight, actionText.implicitHeight) + 8)
                 color: index % 2 === 1 ? Theme.alternateBase : Theme.base
                 Accessible.role: Accessible.ListItem
                 Accessible.name: keys + ": " + action
@@ -130,6 +130,7 @@ AppDialog {
                     spacing: 12
 
                     Text {
+                        id: keysText
                         Layout.preferredWidth: 200
                         Layout.alignment: Qt.AlignVCenter
                         text: row.keys

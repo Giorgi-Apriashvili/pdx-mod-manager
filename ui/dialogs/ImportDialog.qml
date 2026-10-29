@@ -121,6 +121,8 @@ AppDialog {
                 font.weight: Font.DemiBold
                 color: Theme.text
                 elide: Text.ElideMiddle
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
             }
             AppButton {
                 text: qsTr("Paste from clipboard")
@@ -169,6 +171,8 @@ AppDialog {
             font.pixelSize: Theme.fontSize
             color: Theme.textMuted
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         // Preview
@@ -189,6 +193,8 @@ AppDialog {
                     font.weight: Font.DemiBold
                     color: Theme.text
                     elide: Text.ElideRight
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
                 Chip {
                     text: dialog.preview.gameName ?? ""

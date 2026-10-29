@@ -100,6 +100,8 @@ Rectangle {
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.textFaint
                     wrapMode: Text.Wrap
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
 
                 Repeater {
@@ -136,6 +138,8 @@ Rectangle {
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.warning
                 wrapMode: Text.Wrap
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
             }
 
             AppButton {

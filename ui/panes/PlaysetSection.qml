@@ -68,6 +68,8 @@ ColumnLayout {
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.textMuted
         elide: Text.ElideRight
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
     }
 
     // Text-only so all four fit on one row in the narrowest right column.

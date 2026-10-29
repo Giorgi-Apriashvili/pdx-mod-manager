@@ -110,6 +110,8 @@ AppDialog {
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
             wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
     }
 

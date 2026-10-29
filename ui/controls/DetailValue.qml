@@ -49,6 +49,7 @@ Item {
         selectedTextColor: Theme.accentText
         verticalAlignment: TextEdit.AlignVCenter
         activeFocusOnPress: true
+        Accessible.name: root.labelText.length > 0 ? root.labelText : root.text
     }
 
     HoverHandler {

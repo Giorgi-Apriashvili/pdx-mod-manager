@@ -172,6 +172,8 @@ AppDialog {
                                                               : qsTr("No installed mods were found. Try Rescan.")
                     font.pixelSize: Theme.fontSize
                     color: Theme.textMuted
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
             }
         }
@@ -185,6 +187,8 @@ AppDialog {
                                                              .arg(Theme.formatCount(dialog.pickedCount))
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.textMuted
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
             }
         ]
         AppButton {
