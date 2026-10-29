@@ -37,8 +37,13 @@ endorsed by Valve or Paradox Interactive.
 
 ## Qt (LGPLv3)
 
-The desktop application uses these Qt 6 modules: Qt Core, Qt Gui, Qt Qml,
-Qt Quick, Qt Quick Controls 2, Qt Network and Qt Concurrent. They are used
+The desktop application uses these Qt 6 modules: Qt Core, Qt Gui, Qt Network,
+Qt Qml, Qt Quick, Qt Quick Controls 2 (Basic style), Qt Quick Layouts,
+Qt Quick Shapes and Qt Quick Dialogs. Packages also contain the Qt libraries
+and plugins these modules load: Qt OpenGL, Qt QML Models, Qt QML WorkerScript,
+Qt QML Meta, Qt Quick Templates 2, Qt Quick Effects, Qt Svg, Qt Labs
+FolderListModel, and the platform, image format, icon engine, TLS and network
+information plugins. All of them are used
 under the GNU Lesser General Public License version 3
 ([`packaging/licenses/LGPL-3.0.txt`](packaging/licenses/LGPL-3.0.txt)), which
 incorporates the GNU General Public License version 3
@@ -139,9 +144,11 @@ Boost Software License 1.0, <https://www.boost.org/LICENSE_1_0.txt>.
 
 ### Microsoft Visual C++ runtime (Windows packages)
 
-The runtime DLLs (`msvcp140*.dll`, `vcruntime140*.dll`, ...) are redistributed
-app-locally under the Microsoft Visual Studio license terms for distributable
-code (`redist.txt`).
+The runtime DLLs (`concrt140.dll`, `msvcp140*.dll`, `vcruntime140*.dll`) are
+redistributed app-locally under the Microsoft Visual Studio license terms for
+distributable code (`redist.txt`). No Windows system files are redistributed:
+the Universal C runtime, ICU (`icu.dll`, `icuuc.dll`) and the Direct3D shader
+compiler (`D3DCompiler_47.dll`) are used from Windows itself.
 
 ### Qt
 

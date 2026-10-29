@@ -87,9 +87,25 @@ set_target_properties(pmm-app PROPERTIES QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS
 install(TARGETS pmm-app
   BUNDLE DESTINATION .
   RUNTIME DESTINATION bin)
+# Ship only what the application loads: no Qt translations (it installs no
+# translator), no QML debugging or generic input plugins. On Windows Qt Quick
+# renders with Direct3D 11 (WARP when no GPU driver works): no software OpenGL
+# library, no Direct3D 12 shader compiler (DXC), and D3DCompiler_47.dll is part
+# of Windows 10+. packaging/windows/ then removes the remaining unused files.
+set(pmm_deploy_tool_options "")
+if(WIN32)
+  set(pmm_deploy_tool_options DEPLOY_TOOL_OPTIONS
+    --no-system-d3d-compiler --no-system-dxc-compiler --no-opengl-sw)
+endif()
 qt_generate_deploy_qml_app_script(TARGET pmm-app
   OUTPUT_SCRIPT pmm_deploy_script
   NO_UNSUPPORTED_PLATFORM_ERROR
   NO_COMPILER_RUNTIME
+  NO_TRANSLATIONS
+  EXCLUDE_PLUGIN_TYPES qmltooling generic
+  ${pmm_deploy_tool_options}
   DEPLOY_USER_QML_MODULES_ON_UNSUPPORTED_PLATFORM)
 install(SCRIPT "${pmm_deploy_script}")
+if(WIN32)
+  install(SCRIPT "${PROJECT_SOURCE_DIR}/packaging/windows/prune-qt-deployment.cmake")
+endif()

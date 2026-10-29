@@ -1,4 +1,5 @@
-# Install layout and CPack configuration (see docs/packaging.md).
+# Install layout, Windows file metadata and CPack configuration (see
+# docs/packaging.md).
 #
 # Included at the end of the top-level CMakeLists.txt, after every target is
 # defined, so the rules below can depend on which targets exist. The Qt
@@ -19,6 +20,7 @@ include(GNUInstallDirs)
 
 set(PMM_APP_TARGET pmm-app)
 set(PMM_HELPER_TARGET pmm-steam-helper)
+set(PMM_PACKAGE_VENDOR "Giorgi Apriashvili")
 
 # --- Install layout -----------------------------------------------------------
 # The helper must sit next to the application executable: bin/ on Windows and
@@ -46,8 +48,10 @@ endif()
 # follows the FHS layout of the TGZ (share/doc/ParadoxModManager).
 if(WIN32 OR APPLE)
   set(PMM_INSTALL_DOC_DIR ".")
+  set(PMM_INSTALL_LICENSES_DIR "licenses")
 else()
   set(PMM_INSTALL_DOC_DIR "${CMAKE_INSTALL_DOCDIR}")
+  set(PMM_INSTALL_LICENSES_DIR "${CMAKE_INSTALL_DOCDIR}/licenses")
 endif()
 
 if(TARGET ${PMM_HELPER_TARGET})
@@ -68,7 +72,7 @@ if(TARGET ${PMM_APP_TARGET})
   set(_pmm_qt_licenses
     "${PROJECT_SOURCE_DIR}/packaging/licenses/LGPL-3.0.txt"
     "${PROJECT_SOURCE_DIR}/packaging/licenses/GPL-3.0.txt")
-  install(FILES ${_pmm_qt_licenses} DESTINATION "${PMM_INSTALL_DOC_DIR}/licenses")
+  install(FILES ${_pmm_qt_licenses} DESTINATION "${PMM_INSTALL_LICENSES_DIR}")
   if(_pmm_bundle_name)
     # Users usually copy only the bundle out of the disk image, so the notices
     # travel inside it as well.
@@ -88,6 +92,36 @@ if(MSVC)
   set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION "${CMAKE_INSTALL_BINDIR}")
   set(CMAKE_INSTALL_UCRT_LIBRARIES OFF)
   include(InstallRequiredSystemLibraries)
+endif()
+
+# --- Windows executables --------------------------------------------------------
+# Every shipped executable gets a version resource (Explorer > Properties >
+# Details). With MSVC it records only the PDB's file name instead of the
+# absolute build-tree path (/PDBALTPATH; PDBs are not packaged), and the
+# RelWithDebInfo build of the release preset is linked without incremental
+# linking and with unreferenced code removed, which halves the executables.
+if(WIN32)
+  set(PMM_RC_VERSION_NUMBERS
+    "${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0")
+  set(PMM_RC_VENDOR "${PMM_PACKAGE_VENDOR}")
+  foreach(_pmm_exe IN ITEMS ${PMM_APP_TARGET} ${PMM_HELPER_TARGET})
+    if(NOT TARGET ${_pmm_exe})
+      continue()
+    endif()
+    set(PMM_RC_NAME "${_pmm_exe}")
+    if(_pmm_exe STREQUAL PMM_APP_TARGET)
+      set(PMM_RC_DESCRIPTION "Paradox Mod Manager")
+    else()
+      set(PMM_RC_DESCRIPTION "Paradox Mod Manager Steam Workshop helper")
+    endif()
+    set(_pmm_rc "${PROJECT_BINARY_DIR}/packaging/${_pmm_exe}.rc")
+    configure_file("${PROJECT_SOURCE_DIR}/packaging/windows/version.rc.in" "${_pmm_rc}" @ONLY)
+    target_sources(${_pmm_exe} PRIVATE "${_pmm_rc}")
+    if(MSVC)
+      target_link_options(${_pmm_exe} PRIVATE "/PDBALTPATH:%_PDB%"
+        "$<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO;/OPT:REF;/OPT:ICF>")
+    endif()
+  endforeach()
 endif()
 
 # --- Package metadata ---------------------------------------------------------
@@ -119,7 +153,7 @@ elseif(_pmm_arch MATCHES "^(arm64|aarch64)$")
 endif()
 
 set(CPACK_PACKAGE_NAME "ParadoxModManager")
-set(CPACK_PACKAGE_VENDOR "Giorgi Apriashvili")
+set(CPACK_PACKAGE_VENDOR "${PMM_PACKAGE_VENDOR}")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
 set(CPACK_PACKAGE_HOMEPAGE_URL "${PROJECT_HOMEPAGE_URL}")
