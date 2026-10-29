@@ -6,8 +6,9 @@
 // Everything that may differ per game is a GameTraits field; each game keeps
 // its own adapter class so that it can diverge once evidence requires it.
 //
-// Files read: <install>/launcher-settings.json (or launcher/...), Steam
-// libraryfolders.vdf, appmanifest_<app>.acf, appworkshop_<app>.acf,
+// Files read: <install>/launcher-settings.json (or launcher/...),
+// <install>/userdir.txt, Steam libraryfolders.vdf, appmanifest_<app>.acf,
+// appworkshop_<app>.acf,
 // <library>/steamapps/workshop/content/<app>/<id>/descriptor.mod,
 // <user data>/mod/*.mod and <user data>/dlc_load.json.
 // Files written (through LaunchPlan::configWrites only): dlc_load.json and
@@ -22,9 +23,14 @@
 //     so a developer's local copy that carries a remote_file_id stays local;
 //   - Workshop content folders without a registration: steam-workshop, with
 //     descriptorRef "mod/ugc_<id>.mod" (generated at launch).
+//
+// User data: a folder chosen by the user, else an absolute path in
+// <install>/userdir.txt (games with GameTraits::userDirFile), else
+// launcher-settings.json "gameDataPath", else the OS default.
 
 #include "games/game_adapter.hpp"
 
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -44,6 +50,12 @@ struct GameTraits {
     std::span<const std::string_view> windowsLauncherProcesses;
     std::span<const std::string_view> linuxLauncherProcesses;
     std::span<const std::string_view> macLauncherProcesses;
+    // File in the installation folder that relocates the user-data folder
+    // ("userdir.txt"); empty when the game has no such file.
+    std::string_view userDirFile;
+    // launcher-settings.json arguments that are never passed on the user's
+    // behalf, compared ASCII case-insensitively ("-enabletelemetry").
+    std::span<const std::string_view> droppedArguments;
     // Wildcards before the patch number make the game log "Invalid
     // supported_version" (see games/supported_version.hpp).
     bool rejectsEarlyWildcards = false;
@@ -82,6 +94,8 @@ public:
     fs::path defaultUserDataPath(const DiscoveryEnvironment& env) const;
     // Fallback executable relative to the installation folder.
     fs::path defaultExecutable(OsPlatform os) const;
+    // `arguments` without the droppedArguments, order kept.
+    std::vector<std::string> launchArguments(const std::vector<std::string>& arguments) const;
 
 private:
     enum class Mode { Discovered, Manual };
@@ -100,5 +114,12 @@ std::optional<std::string> workshopIdFromPath(const fs::path& path, std::string_
 
 // "mod/ugc_123.mod" style reference for a descriptor file name.
 std::string descriptorReference(const fs::path& descriptorFile);
+
+// The user-data folder named by a userdir.txt file: its first non-empty line,
+// without surrounding whitespace and one pair of quotes, lexically
+// normalised. nullopt when the file is missing or blank. ValidationFailed
+// when the line is not an absolute path (relative paths are not supported:
+// what they would be relative to is unverified) or not valid UTF-8.
+Result<std::optional<fs::path>> readUserDirFile(const fs::path& file);
 
 } // namespace pmm::games

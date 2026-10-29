@@ -28,6 +28,7 @@ using platform::toGenericUtf8;
 using steam::keyEquals;
 
 constexpr std::uint64_t kMaxDlcLoadBytes = 16ull * 1024 * 1024;
+constexpr std::uint64_t kMaxUserDirBytes = 64ull * 1024;
 constexpr const char* kDlcLoadFile = "dlc_load.json";
 constexpr const char* kModFolder = "mod";
 constexpr const char* kContentDescriptor = "descriptor.mod";
@@ -410,7 +411,55 @@ std::string modLabel(const InstalledMod& mod) {
     return "\"" + (name.empty() ? mod.identity.id : name) + "\"";
 }
 
+std::string_view trimmed(std::string_view text) {
+    constexpr std::string_view space = " \t\r\n\f\v";
+    const std::size_t first = text.find_first_not_of(space);
+    if (first == std::string_view::npos)
+        return {};
+    return text.substr(first, text.find_last_not_of(space) - first + 1);
+}
+
 } // namespace
+
+Result<std::optional<fs::path>> readUserDirFile(const fs::path& file) {
+    if (!isRegularFile(file))
+        return std::optional<fs::path>();
+    Result<std::string> text = platform::readFile(file, kMaxUserDirBytes);
+    if (!text)
+        return std::move(text).error();
+    std::string_view rest = *text;
+    if (rest.substr(0, 3) == "\xEF\xBB\xBF")
+        rest.remove_prefix(3);
+    std::string_view line;
+    while (line.empty() && !rest.empty()) {
+        const std::size_t end = rest.find('\n');
+        line = trimmed(rest.substr(0, end));
+        rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
+    }
+    if (line.size() >= 2 && (line.front() == '"' || line.front() == '\'') &&
+        line.back() == line.front())
+        line = trimmed(line.substr(1, line.size() - 2));
+    if (line.empty())
+        return std::optional<fs::path>();
+
+    const auto ignored = [&](std::string_view reason) {
+        return makeError(ErrorCode::ValidationFailed,
+                         "userdir.txt in the game folder is ignored: " + std::string(reason) + ".",
+                         pathToUtf8(file) + ": " + sanitizeUtf8(line));
+    };
+    const bool control = std::any_of(line.begin(), line.end(), [](char c) {
+        return static_cast<unsigned char>(c) < 0x20 || c == '\x7f';
+    });
+    if (control || !isValidUtf8(line))
+        return ignored("it does not contain a valid path");
+    fs::path path = pathFromUtf8(line);
+    if (!path.is_absolute())
+        return ignored("only absolute paths are supported");
+    path = path.lexically_normal();
+    if (!path.has_filename() && path.has_relative_path())
+        path = path.parent_path(); // trailing separator
+    return std::optional<fs::path>(std::move(path));
+}
 
 std::optional<std::string> workshopIdFromPath(const fs::path& path, std::string_view appId,
                                               fs::path* libraryRoot) {
@@ -478,6 +527,19 @@ fs::path DlcLoadJsonAdapter::defaultExecutable(OsPlatform os) const {
     return pathFromUtf8(m_traits.linuxExecutable);
 }
 
+std::vector<std::string>
+DlcLoadJsonAdapter::launchArguments(const std::vector<std::string>& arguments) const {
+    std::vector<std::string> out;
+    for (const std::string& argument : arguments) {
+        const bool dropped =
+            std::any_of(m_traits.droppedArguments.begin(), m_traits.droppedArguments.end(),
+                        [&](std::string_view flag) { return keyEquals(argument, flag); });
+        if (!dropped)
+            out.push_back(argument);
+    }
+    return out;
+}
+
 Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPath,
                                                       const fs::path& userDataPath,
                                                       const DiscoveryEnvironment& env,
@@ -522,7 +584,7 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
         Result<fs::path> exe = resolveLauncherExecutable(*settings, inst.installPath, env.platform);
         if (exe && !launcherProcess(*exe)) {
             inst.executablePath = *exe;
-            inst.defaultArguments = settings->exeArgs;
+            inst.defaultArguments = launchArguments(settings->exeArgs);
         } else {
             logWarning(
                 m_traits.logComponent,
@@ -567,16 +629,31 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
         const fs::path userAbsolute = fs::absolute(userDataPath, ec);
         inst.userDataPath = (ec ? userDataPath : userAbsolute).lexically_normal();
     } else {
+        std::optional<fs::path> fromUserDir;
+        if (!m_traits.userDirFile.empty()) {
+            Result<std::optional<fs::path>> read =
+                readUserDirFile(inst.installPath / pathFromUtf8(m_traits.userDirFile));
+            if (!read) {
+                logWarning(m_traits.logComponent, "Ignoring the game's userdir.txt",
+                           {{"error", read.error().message}, {"detail", read.error().detail}});
+            } else if (*read) {
+                fromUserDir = **read;
+                logInfo(m_traits.logComponent, "Using the user data folder from userdir.txt",
+                        {{"path", pathToUtf8(*fromUserDir)}});
+            }
+        }
         const fs::path& base =
             env.platform == OsPlatform::Linux ? env.xdgDataHome : env.documentsDir;
         std::optional<fs::path> fromSettings;
-        if (settings && !settings->gameDataPath.empty()) {
+        if (!fromUserDir && settings && !settings->gameDataPath.empty()) {
             fromSettings = resolveGameDataPath(settings->gameDataPath, base);
             if (!fromSettings)
                 logWarning(m_traits.logComponent, "Ignoring an unsupported gameDataPath",
                            {{"gameDataPath", settings->gameDataPath}});
         }
-        inst.userDataPath = fromSettings ? *fromSettings : defaultUserDataPath(env);
+        inst.userDataPath = fromUserDir    ? *fromUserDir
+                            : fromSettings ? *fromSettings
+                                           : defaultUserDataPath(env);
         if (inst.userDataPath.empty())
             return makeError(ErrorCode::NotFound, "The " + gameName +
                                                       " user data folder could not be determined. "
@@ -800,7 +877,8 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     plan.game = std::string(m_traits.key);
     plan.executable = installation.executablePath;
     plan.workingDirectory = installation.installPath;
-    plan.arguments = installation.defaultArguments;
+    // Also filtered here: installations stored before a flag was dropped.
+    plan.arguments = launchArguments(installation.defaultArguments);
     if (installation.distribution == DistributionSource::Steam &&
         !installation.steamAppId.empty()) {
         plan.environment.emplace_back("SteamAppId", installation.steamAppId);

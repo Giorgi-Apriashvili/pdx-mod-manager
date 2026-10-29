@@ -9,6 +9,9 @@ namespace {
 constexpr std::array<std::string_view, 2> kWindowsLauncher{"Paradox Launcher.exe", "dowser.exe"};
 constexpr std::array<std::string_view, 2> kLinuxLauncher{"dowser", "paradox-launcher"};
 constexpr std::array<std::string_view, 1> kMacLauncher{"Paradox Launcher"};
+// launcher-settings.json of v1.37.5.0 asks for "-enabletelemetry"; the
+// manager never opts the user into the game's telemetry.
+constexpr std::array<std::string_view, 1> kDroppedArguments{"-enabletelemetry"};
 
 constexpr GameTraits kTraits{
     .key = "eu4",
@@ -21,6 +24,9 @@ constexpr GameTraits kTraits{
     .windowsLauncherProcesses = kWindowsLauncher,
     .linuxLauncherProcesses = kLinuxLauncher,
     .macLauncherProcesses = kMacLauncher,
+    // v1.37.5.0 ships an empty userdir.txt, and eu4.exe references the file.
+    .userDirFile = "userdir.txt",
+    .droppedArguments = kDroppedArguments,
     // No evidence of such a rule for EU4: its leftover error.log has no
     // "Invalid supported_version" lines.
     .rejectsEarlyWildcards = false,

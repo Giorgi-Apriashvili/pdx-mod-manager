@@ -1,6 +1,6 @@
-// EU4 adapter against a fixture modelled on the Stellaris layout and on the
-// leftover EU4 launcher output found on the development machine. EU4 itself
-// is not installed there, so these tests pin the implemented behaviour only.
+// EU4 adapter against a fixture modelled on the real EU4 v1.37.5.0 Steam
+// installation of the development machine (read-only observations, see
+// docs/evidence/real-scan-2026-10-29.md).
 
 #include "games/eu4.hpp"
 #include "games/stellaris.hpp"
@@ -58,11 +58,13 @@ TEST_CASE("EU4 is discovered through the injected Steam environment", "[games][e
     CHECK(samePath(inst.installPath, f.install()));
     CHECK(samePath(inst.userDataPath, f.userData()));
     CHECK(samePath(inst.executablePath, f.install() / "eu4.exe"));
-    CHECK(inst.defaultArguments.empty());
+    // exeArgs is ["-enabletelemetry", "-gdpr-compliant"]: telemetry is never
+    // enabled on the user's behalf.
+    CHECK(inst.defaultArguments == std::vector<std::string>{"-gdpr-compliant"});
     CHECK(inst.distribution == DistributionSource::Steam);
     CHECK(inst.steamAppId == "236850");
     CHECK(inst.version == "v1.37.5.0");
-    CHECK(inst.versionLabel == "v1.37.5.0 Inca");
+    CHECK(inst.versionLabel == "EU4 v1.37.5.0 Inca (491d)");
 
     CHECK(StellarisAdapter().discover(f.env).empty());
     CHECK(StellarisAdapter().inspectInstallation(f.install(), {}, f.env).error().code ==
@@ -155,7 +157,7 @@ TEST_CASE("EU4 current configuration and launch plan", "[games][eu4]") {
                                       f.mod(mods, "zipped_local"), f.mod(mods, "2000000003")};
     auto plan = f.adapter.buildLaunchPlan(inst, ordered);
     REQUIRE(plan.ok());
-    CHECK(plan->arguments.empty());
+    CHECK(plan->arguments == std::vector<std::string>{"-gdpr-compliant"});
     CHECK(plan->environment == std::vector<std::pair<std::string, std::string>>{
                                    {"SteamAppId", "236850"}, {"SteamGameId", "236850"}});
     REQUIRE(plan->configWrites.size() == 2);
@@ -190,4 +192,97 @@ TEST_CASE("EU4 compatibility warnings are lenient about wildcards", "[games][eu4
     CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "2000000003")) ==
           std::vector<std::string>{
               "Made for Europa Universalis IV 1.34.5; the installed version is v1.37.5.0."});
+}
+
+TEST_CASE("userdir.txt is read conservatively", "[games][eu4]") {
+    test::TempDir temp;
+    const fs::path file = temp.path() / "userdir.txt";
+    const fs::path target = temp.path() / u8path("Ünïcødé data/EU4 user");
+    const std::string absolute = platform::toGenericUtf8(target);
+    const auto read = [&](std::string_view text) {
+        test::writeText(file, text);
+        return readUserDirFile(file);
+    };
+
+    auto missing = readUserDirFile(file);
+    REQUIRE(missing.ok());
+    CHECK_FALSE(*missing);
+    for (const std::string_view blank : {"", " \r\n\t\n", "\"\"", "\xEF\xBB\xBF  \r\n"}) {
+        auto none = read(blank);
+        REQUIRE(none.ok());
+        CHECK_FALSE(*none);
+    }
+
+    // First non-empty line; BOM, CRLF, whitespace, one pair of quotes and a
+    // trailing separator are tolerated.
+    for (const std::string& text :
+         {absolute, "\xEF\xBB\xBF\r\n  \t\r\n  \"" + absolute + "/\"  \r\nsecond line\r\n",
+          "'" + absolute + "'", "  " + absolute + "  "}) {
+        auto found = read(text);
+        REQUIRE(found.ok());
+        REQUIRE(*found);
+        CHECK(samePath(**found, target));
+        CHECK((*found)->has_filename());
+    }
+
+    // Relative paths, other encodings and control characters are ignored.
+    for (const std::string& text :
+         {std::string("Custom Data/EU4"), std::string("./user"), std::string("..\\user"),
+          std::string("\xFF\xFE") + absolute, absolute + "\x01", "\"" + absolute + "\x7f\""}) {
+        auto ignored = read(text);
+        REQUIRE_FALSE(ignored.ok());
+        CHECK(ignored.error().code == ErrorCode::ValidationFailed);
+        CHECK(ignored.error().message.find("userdir.txt") != std::string::npos);
+    }
+}
+
+TEST_CASE("EU4 honours an absolute path in userdir.txt", "[games][eu4]") {
+    Eu4Fixture f;
+    const fs::path userDirFile = f.install() / "userdir.txt";
+    const fs::path custom = f.path("Custom Data/EU4 dätä");
+    fs::create_directories(custom);
+
+    // The game ships the file empty: the default folder is used.
+    CHECK(test::readText(userDirFile).empty());
+    CHECK(samePath(f.discovered().userDataPath, f.userData()));
+
+    test::writeText(userDirFile, "\"" + f.generic("Custom Data/EU4 dätä") + "/\"\r\n");
+    CHECK(samePath(f.discovered().userDataPath, custom));
+    auto manual = f.adapter.inspectInstallation(f.install(), {}, f.env);
+    REQUIRE(manual.ok());
+    CHECK(samePath(manual->userDataPath, custom));
+    // A folder chosen by the user still wins.
+    auto chosen = f.adapter.inspectInstallation(f.install(), f.userData(), f.env);
+    REQUIRE(chosen.ok());
+    CHECK(samePath(chosen->userDataPath, f.userData()));
+    // Scanning and the launch plan follow the relocated folder.
+    const GameInstallation relocated = f.discovered();
+    CHECK(f.scan(relocated).size() == 3); // only the Workshop content folders
+    auto plan = f.adapter.buildLaunchPlan(relocated, {});
+    REQUIRE(plan.ok());
+    REQUIRE(plan->configWrites.size() == 1);
+    CHECK(samePath(plan->configWrites[0].target, custom / "dlc_load.json"));
+
+    // Relative paths are not supported: the default folder is used.
+    test::writeText(userDirFile, "Custom Data/EU4 dätä");
+    CHECK(samePath(f.discovered().userDataPath, f.userData()));
+}
+
+TEST_CASE("Launch arguments never enable the game's telemetry", "[games][eu4]") {
+    Eu4Fixture f;
+    GameInstallation inst = f.discovered();
+    CHECK(inst.defaultArguments == std::vector<std::string>{"-gdpr-compliant"});
+    auto manual = f.adapter.inspectInstallation(f.install(), {}, f.env);
+    REQUIRE(manual.ok());
+    CHECK(manual->defaultArguments == std::vector<std::string>{"-gdpr-compliant"});
+
+    // An installation stored before the flag was dropped: filtered at launch,
+    // case-insensitively, other arguments kept in order.
+    inst.defaultArguments = {"-EnableTelemetry", "-gdpr-compliant", "-debug_mode",
+                             "-enabletelemetry"};
+    auto plan = f.adapter.buildLaunchPlan(inst, {});
+    REQUIRE(plan.ok());
+    CHECK(plan->arguments == std::vector<std::string>{"-gdpr-compliant", "-debug_mode"});
+    CHECK(f.adapter.launchArguments({"-enabletelemetryfoo"}) ==
+          std::vector<std::string>{"-enabletelemetryfoo"});
 }

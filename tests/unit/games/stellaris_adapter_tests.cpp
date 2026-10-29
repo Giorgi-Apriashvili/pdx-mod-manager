@@ -188,6 +188,21 @@ TEST_CASE("Unsafe launcher-settings executables are ignored", "[games][stellaris
     CHECK(inst.version == "v4.5.2");
 }
 
+TEST_CASE("Stellaris drops -enabletelemetry and honours userdir.txt", "[games][stellaris]") {
+    StellarisFixture f;
+    const fs::path settings = f.install() / "launcher-settings.json";
+    test::writeText(settings, test::replaceAll(test::readText(settings), "\"-gdpr-compliant\"",
+                                               "\"-ENABLETELEMETRY\", \"-gdpr-compliant\""));
+    CHECK(f.discovered().defaultArguments == std::vector<std::string>{"-gdpr-compliant"});
+
+    // No userdir.txt ships with Stellaris; an absolute one is honoured.
+    CHECK_FALSE(fs::exists(f.install() / "userdir.txt"));
+    const fs::path custom = f.path("Stellaris Data");
+    fs::create_directories(custom);
+    test::writeText(f.install() / "userdir.txt", f.generic("Stellaris Data") + "\n");
+    CHECK(samePath(f.discovered().userDataPath, custom));
+}
+
 TEST_CASE("Manual Stellaris locations are inspected", "[games][stellaris]") {
     StellarisFixture f;
     const DiscoveryEnvironment& env = f.env;
