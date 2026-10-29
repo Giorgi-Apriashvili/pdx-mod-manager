@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Layouts
 import Pmm.Ui
 
 // Keyboard reference (F1). The list is focusable so each shortcut can be read
@@ -123,16 +122,16 @@ AppDialog {
                     radius: 2
                 }
 
-                RowLayout {
+                // Fixed columns (no layout): the row height follows the wrapped texts.
+                Item {
                     anchors.fill: parent
                     anchors.leftMargin: 10
                     anchors.rightMargin: 10
-                    spacing: 12
 
                     Text {
                         id: keysText
-                        Layout.preferredWidth: 200
-                        Layout.alignment: Qt.AlignVCenter
+                        width: 200
+                        anchors.verticalCenter: parent.verticalCenter
                         text: row.keys
                         font.pixelSize: Theme.fontSize
                         font.family: Theme.monoFamily
@@ -141,8 +140,9 @@ AppDialog {
                     }
                     Text {
                         id: actionText
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
+                        x: keysText.width + 12
+                        width: parent.width - x
+                        anchors.verticalCenter: parent.verticalCenter
                         text: row.action
                         font.pixelSize: Theme.fontSize
                         color: Theme.textMuted
