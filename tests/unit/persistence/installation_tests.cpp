@@ -96,3 +96,25 @@ TEST_CASE("Installations require a game key", "[persistence][installations]") {
     REQUIRE_FALSE(status.ok());
     CHECK(status.error().code == ErrorCode::InvalidArgument);
 }
+
+#if defined(_WIN32)
+TEST_CASE("An installation path that is not valid UTF-16 is rejected instead of throwing",
+          "[persistence][installations]") {
+    auto db = openMemory();
+    InstallationRepository repo(*db);
+    const auto original = stellaris();
+    requireOk(repo.upsert(original));
+
+    auto changed = original;
+    changed.userDataPath = loneSurrogatePath(L"C:/Users/Example/Documents/Stellaris", L"");
+    Status status;
+    REQUIRE_NOTHROW(status = repo.upsert(changed));
+    REQUIRE_FALSE(status.ok());
+    CHECK(status.error().code == ErrorCode::InvalidArgument);
+    CHECK(status.error().detail.find("Stellaris\xEF\xBF\xBD") != std::string::npos);
+
+    auto loaded = require(repo.get("stellaris"));
+    REQUIRE(loaded.has_value());
+    checkEqual(*loaded, original);
+}
+#endif

@@ -10,4 +10,5 @@ pmm_add_test(pmm_persistence_tests
     playset_tests.cpp
     settings_tests.cpp
     sqlite_tests.cpp
+    text_encoding_tests.cpp
   LIBS pmm_persistence)

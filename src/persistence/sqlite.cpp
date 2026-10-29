@@ -1,5 +1,7 @@
 #include "persistence/sqlite.hpp"
 
+#include "persistence/internal/mapping.hpp"
+
 #include <sqlite3.h>
 
 #include <algorithm>
@@ -39,11 +41,6 @@ std::string abbreviate(std::string_view sql) {
 std::string_view sqlText(sqlite3_stmt* stmt) noexcept {
     const char* sql = stmt != nullptr ? sqlite3_sql(stmt) : nullptr;
     return sql != nullptr ? std::string_view(sql) : std::string_view();
-}
-
-std::string toUtf8(const std::filesystem::path& path) {
-    const auto u8 = path.u8string();
-    return {reinterpret_cast<const char*>(u8.data()), u8.size()};
 }
 
 } // namespace
@@ -162,7 +159,10 @@ Result<sqlite3*> openHandle(const std::string& utf8Name, std::string_view what) 
 } // namespace
 
 Result<Connection> Connection::open(const std::filesystem::path& file) {
-    const std::string utf8 = toUtf8(file);
+    // SQLite takes the name as UTF-8 (native bytes on POSIX); a lossy form
+    // would open a different file.
+    PMM_TRY(internal::checkStorablePath(file, "The database file"));
+    const std::string utf8 = internal::pathToText(file);
     if (utf8.empty())
         return makeError(ErrorCode::InvalidArgument, "No database file name was given.");
     auto handle = openHandle(utf8, utf8);

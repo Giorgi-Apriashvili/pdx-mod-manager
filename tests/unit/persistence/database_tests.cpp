@@ -81,6 +81,26 @@ TEST_CASE("Opening creates the database and parent folders in a Unicode path",
     CHECK(queryInt(*db, "PRAGMA busy_timeout") == Database::kBusyTimeoutMs);
 }
 
+#if defined(_WIN32)
+TEST_CASE("A database file name that is not valid UTF-16 is refused instead of throwing",
+          "[persistence][database]") {
+    // A lossy conversion would make SQLite open (and create) a different file.
+    TempDir temp;
+    const fs::path file = temp.path() / loneSurrogatePath(L"state", L".sqlite");
+    Result<std::unique_ptr<Database>> opened = makeError(ErrorCode::Internal, "not run");
+    REQUIRE_NOTHROW(opened = Database::open(file));
+    REQUIRE_FALSE(opened.ok());
+    CHECK(opened.error().code == ErrorCode::InvalidArgument);
+    CHECK(opened.error().detail.find("state\xEF\xBF\xBD.sqlite") != std::string::npos);
+    CHECK(directoryListing(temp.path()).empty());
+
+    Result<Connection> connection = makeError(ErrorCode::Internal, "not run");
+    REQUIRE_NOTHROW(connection = Connection::open(file));
+    REQUIRE_FALSE(connection.ok());
+    CHECK(connection.error().code == ErrorCode::InvalidArgument);
+}
+#endif
+
 TEST_CASE("A new database is migrated from empty to the latest schema", "[persistence][database]") {
     auto db = openMemory();
     const int latest = Database::latestSchemaVersion();

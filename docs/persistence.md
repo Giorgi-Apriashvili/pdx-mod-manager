@@ -39,7 +39,9 @@ per-user data directory, i.e.
 
 `Database::open()` creates missing parent directories. Paths are handed to
 SQLite as UTF-8 (SQLite's Windows VFS converts them to UTF-16), so folders with
-spaces and non-ASCII characters work on every OS. While the application runs,
+spaces and non-ASCII characters work on every OS. A Windows path that is not
+valid UTF-16 (see Conventions) is refused with `ErrorCode::InvalidArgument`
+rather than opened under an altered name. While the application runs,
 SQLite keeps `state.sqlite-wal` and `state.sqlite-shm` next to the file; they
 are folded back into the main file when the last connection closes.
 Upgrade backups are written next to the database (see below).
@@ -85,7 +87,14 @@ Tests use `Database::openInMemory()` or a unique temporary directory.
 * Provider ids are always `TEXT` (a Workshop id such as
   `18446744073709551615` or `000123` round-trips exactly); empty ids are
   rejected by `CHECK` constraints.
-* Paths are UTF-8 `TEXT` in native format, so they round-trip exactly.
+* Paths are `TEXT` in native format: the native bytes on POSIX (any bytes,
+  stored exactly), UTF-8 on Windows. Path conversion never throws. NTFS
+  allows names that are not valid UTF-16 (an unpaired surrogate, usually
+  created by a tool); they have no UTF-8 form, so the inventory, installation
+  and database-open paths reject them with `ErrorCode::InvalidArgument`
+  instead of storing an altered path. Every stored path therefore
+  round-trips exactly; ill-formed UTF-8 found in a stored Windows path
+  (damaged or foreign data) is read with U+FFFD instead of failing.
 * Enumerations are stored as their stable `toString()` names (`steam`,
   `windows`, `ready`, `download_requested`, ...). Unknown stored values are
   reported as damaged data rather than guessed. Adding an enumeration value

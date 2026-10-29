@@ -1,6 +1,7 @@
 #include "persistence/inventory_repository.hpp"
 
 #include "persistence/internal/mapping.hpp"
+#include "persistence/internal/utf8.hpp"
 
 #include <limits>
 #include <set>
@@ -76,6 +77,11 @@ Status validateMods(const GameKey& game, const std::vector<InstalledMod>& mods) 
         if (!seen.emplace(id.source, id.id).second)
             return makeError(ErrorCode::InvalidArgument,
                              "The same mod was found twice in one scan.", toString(id));
+        const std::string label =
+            sanitizeUtf8(mod.descriptor.name.empty() ? id.id : mod.descriptor.name);
+        PMM_TRY(checkStorablePath(mod.contentPath, "The folder of the mod '" + label + "'"));
+        PMM_TRY(checkStorablePath(mod.descriptorPath,
+                                  "The descriptor file of the mod '" + label + "'"));
     }
     return {};
 }
