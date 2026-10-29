@@ -326,7 +326,7 @@ void ModListModel::undo() {
                 return {done.error(), {}};
             return {};
         },
-        true);
+        true, false);
 }
 
 void ModListModel::redo() {
@@ -340,10 +340,11 @@ void ModListModel::redo() {
                 return {done.error(), {}};
             return {};
         },
-        true);
+        true, false);
 }
 
-void ModListModel::runEdit(const QString& failureTitle, EditOp op, bool affectsLaunch) {
+void ModListModel::runEdit(const QString& failureTitle, EditOp op, bool affectsLaunch,
+                           bool undoable) {
     if (m_playsetId < 0)
         return;
     struct Outcome {
@@ -356,6 +357,11 @@ void ModListModel::runEdit(const QString& failureTitle, EditOp op, bool affectsL
     const QueryOptions options = m_backend->queryOptions();
     if (++m_pendingEdits == 1)
         emit busyChanged();
+    if (undoable && !m_undo.canUndo) {
+        // Every edit can be undone; the saved state brings the exact label.
+        m_undo.canUndo = true;
+        emit undoChanged();
+    }
     m_backend->runner().call(
         this,
         [op = std::move(op), playsetId, game, options, affectsLaunch](AppRuntime& runtime) {
@@ -389,12 +395,16 @@ void ModListModel::finishEdit(std::int64_t playsetId, const QString& failureTitl
     }
     if (!outcome.feedback.isEmpty())
         emit dependencyFeedback(outcome.feedback);
+    // Results arrive in order: the newest launch verdict is the relevant one
+    // (edits without one, i.e. moves, do not change readiness).
+    if (launch)
+        m_latestLaunch = std::move(launch);
     if (m_pendingEdits > 0 || state.playsetId != m_playsetId)
         return; // a later result carries the newer state
     m_name = state.name;
     reconcile(std::move(state.rows));
     setUndo(state.undo);
-    m_backend->playsetEdited(launch);
+    m_backend->playsetEdited(std::exchange(m_latestLaunch, std::nullopt));
     emit edited();
 }
 
@@ -567,6 +577,7 @@ void ModListModel::emitChangedRuns(const std::vector<char>& changed) {
 
 void ModListModel::resetTo(PlaysetStateData state) {
     const std::size_t before = m_rows.size();
+    m_latestLaunch.reset();
     beginResetModel();
     m_playsetId = state.playsetId;
     m_game = state.game;

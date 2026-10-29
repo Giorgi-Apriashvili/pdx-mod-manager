@@ -142,7 +142,7 @@ private:
     };
     using EditOp = std::function<EditOutcome(AppRuntime&, std::int64_t playsetId)>;
 
-    void runEdit(const QString& failureTitle, EditOp op, bool affectsLaunch);
+    void runEdit(const QString& failureTitle, EditOp op, bool affectsLaunch, bool undoable = true);
     void finishEdit(std::int64_t playsetId, const QString& failureTitle, EditOutcome outcome,
                     PlaysetStateData state, std::optional<LaunchData> launch);
     bool refuseReorder();
@@ -166,6 +166,7 @@ private:
     CountsData m_counts;
     UndoData m_undo;
     int m_pendingEdits = 0;
+    std::optional<LaunchData> m_latestLaunch; // from results skipped while edits were pending
 };
 
 } // namespace pmm::app
