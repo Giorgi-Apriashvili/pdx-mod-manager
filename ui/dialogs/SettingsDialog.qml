@@ -59,6 +59,24 @@ AppDialog {
                 text: Qt.platform.os === "windows" ? "Windows" : Qt.platform.os === "osx" ? "macOS"
                     : Qt.platform.os === "linux" ? "Linux" : Qt.platform.os
             }
+            DetailLabel { text: qsTr("Data folder") }
+            DetailValue {
+                text: Backend.dataDir
+                selectable: true
+                elideMode: Text.ElideMiddle
+                toolTipText: Backend.dataDir
+            }
+            DetailLabel { text: qsTr("Logs") }
+            DetailValue {
+                text: Backend.logsDir
+                selectable: true
+                elideMode: Text.ElideMiddle
+                toolTipText: Backend.logsDir
+            }
+        }
+        LinkButton {
+            text: qsTr("Open logs folder")
+            onClicked: Backend.openLogsFolder()
         }
         Text {
             Layout.fillWidth: true

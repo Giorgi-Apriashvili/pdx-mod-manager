@@ -53,10 +53,10 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: root.hasPlayset
-        text: qsTr("%1 · %2 enabled · %3 playsets for %4")
+        text: qsTr("%1 · %2 enabled · %3 for %4")
               .arg(Theme.plural(Backend.mods.count, qsTr("mod"), qsTr("mods")))
               .arg(Theme.formatCount(Backend.mods.enabledCount))
-              .arg(Backend.playsets.count)
+              .arg(Theme.plural(Backend.playsets.count, qsTr("playset"), qsTr("playsets")))
               .arg(Backend.games.currentName)
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.textMuted
@@ -112,10 +112,10 @@ ColumnLayout {
         visible: Backend.playsets.canRestore
         level: "info"
         iconName: "history"
-        text: qsTr("A deleted or replaced playset can be restored.")
+        text: qsTr("The deleted playset can be restored.")
         LinkButton {
             text: qsTr("Restore")
-            toolTipText: qsTr("Restore the most recently deleted or replaced playset")
+            toolTipText: qsTr("Restore the most recently deleted playset (replaced ones are in History)")
             onClicked: Backend.playsets.restoreLast()
         }
     }

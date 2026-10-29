@@ -15,6 +15,7 @@ AppDialog {
     property url userDataUrl
     property string currentInstall
     property string currentUserData
+    property bool currentManual
 
     title: qsTr("Locate %1").arg(gameName)
     subtitle: qsTr("Use this when the game is installed outside your Steam libraries or was not detected.")
@@ -24,6 +25,7 @@ AppDialog {
         required property string key
         required property string installPath
         required property string userDataPath
+        required property bool manualLocation
     }
 
     // Display paths of `key`, read from the games model rows.
@@ -44,6 +46,7 @@ AppDialog {
         const row = find(gameKey)
         currentInstall = row ? row.installPath : ""
         currentUserData = row ? row.userDataPath : ""
+        currentManual = row ? row.manualLocation : false
     }
 
     Instantiator {
@@ -124,6 +127,7 @@ AppDialog {
         leading: [
             LinkButton {
                 anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+                visible: dialog.currentManual
                 text: qsTr("Reset to automatic detection")
                 toolTipText: qsTr("Forget the manual folders and use the detected Steam libraries")
                 onClicked: {

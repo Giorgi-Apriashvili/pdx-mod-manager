@@ -14,27 +14,27 @@ ListModel {
     signal configurationImported()
 
     ListElement {
-        key: "stellaris"; name: "Stellaris"; supported: true; installed: true
+        key: "stellaris"; name: "Stellaris"; supported: true; installed: true; manualLocation: false
         statusText: "Installed \u00b7 v4.5.2"; version: "4.5.2"
         installPath: "C:/Games/Steam/steamapps/common/Stellaris"
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Stellaris"
     }
     ListElement {
-        key: "eu4"; name: "Europa Universalis IV"; supported: true; installed: false
+        key: "eu4"; name: "Europa Universalis IV"; supported: true; installed: false; manualLocation: false
         statusText: "Not found"; version: ""
         installPath: ""
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Europa Universalis IV"
     }
     ListElement {
-        key: "hoi4"; name: "Hearts of Iron IV"; supported: false; installed: false
+        key: "hoi4"; name: "Hearts of Iron IV"; supported: false; installed: false; manualLocation: false
         statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""
     }
     ListElement {
-        key: "ck3"; name: "Crusader Kings III"; supported: false; installed: false
+        key: "ck3"; name: "Crusader Kings III"; supported: false; installed: false; manualLocation: false
         statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""
     }
     ListElement {
-        key: "vic3"; name: "Victoria 3"; supported: false; installed: false
+        key: "vic3"; name: "Victoria 3"; supported: false; installed: false; manualLocation: false
         statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""
     }
 
@@ -80,6 +80,7 @@ ListModel {
         if (String(userDataDirUrl).length > 0)
             setProperty(row, "userDataPath", String(userDataDirUrl).replace(/^file:\/\/\/?/, ""))
         setProperty(row, "installed", true)
+        setProperty(row, "manualLocation", true)
         setProperty(row, "statusText", "Installed \u00b7 manual location")
         syncCurrent()
         if (key === currentKey)

@@ -10,19 +10,13 @@ Rectangle {
     readonly property var launcher: Backend.launcher
     readonly property bool hasGame: Backend.games.currentSupported && Backend.games.currentInstalled
     readonly property bool hasPlayset: Backend.playsets.activeId >= 0
-    // Play also needs an installed game and an active playset; explain that
-    // locally in case the backend has not reported a blocker for it.
+    // The backend always explains why Play is unavailable (game not located,
+    // no active playset, mods not ready, game or launcher running, ...).
     readonly property list<string> blockerLines: {
         const lines = Theme.lines(launcher.blockers)
-        if (lines.length > 0)
+        if (lines.length > 0 || Backend.games.currentName.length > 0)
             return lines
-        if (!hasGame)
-            return [Backend.games.currentName.length > 0
-                    ? qsTr("%1 was not found. Locate the installation first.").arg(Backend.games.currentName)
-                    : qsTr("Select a supported game first.")]
-        if (!hasPlayset)
-            return [qsTr("Create or select a playset first.")]
-        return []
+        return [qsTr("Select a supported game first.")]
     }
     readonly property bool playable: launcher.canPlay && !launcher.busy && hasGame && hasPlayset
     readonly property list<string> warningLines: Theme.lines(launcher.warnings)

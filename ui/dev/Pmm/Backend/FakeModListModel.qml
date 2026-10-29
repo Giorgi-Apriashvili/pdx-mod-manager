@@ -28,6 +28,7 @@ ListModel {
     property var redoStack: []
 
     signal contentChanged()
+    signal dependencyFeedback(string text)
 
     readonly property var roleNames: ["position", "enabled", "name", "source", "sourceLabel", "providerId",
         "status", "statusText", "warnings", "hasWarnings", "progress", "blocking", "version",
@@ -166,7 +167,10 @@ ListModel {
         afterChange(false)
         if (feedback.length > 6)
             feedback = feedback.slice(0, 6).concat(["… and " + (feedback.length - 6) + " more."])
-        return feedback.join("\n")
+        // Like the C++ model: feedback arrives through the signal, the return value is empty.
+        if (on && feedback.length > 0)
+            dependencyFeedback(feedback.join("\n"))
+        return ""
     }
 
     function refuseReorder(): bool {
@@ -193,6 +197,38 @@ ListModel {
 
     function moveDown(row: int) {
         moveRow(row, row + 1)
+    }
+
+    // One undo step: delta -1/+1 moves each selected row one step unless the
+    // edge or a selected row that cannot move blocks it; larger deltas gather
+    // the selection into a block whose first row lands at rows[0] + delta.
+    function moveRows(rows: list<int>, delta: int) {
+        const sorted = Array.prototype.slice.call(rows).filter(r => r >= 0 && r < count).sort((a, b) => a - b)
+        if (refuseReorder() || sorted.length === 0 || delta === 0)
+            return
+        pushUndo("move " + sorted.length + (sorted.length === 1 ? " mod" : " mods"))
+        if (delta === -1 || delta === 1) {
+            const blocked = {}
+            for (const r of delta < 0 ? sorted : sorted.slice().reverse()) {
+                const to = r + delta
+                if (to < 0 || to >= count || blocked[to]) {
+                    blocked[r] = true
+                    continue
+                }
+                move(r, to, 1)
+                if (view)
+                    view.move(r, to, 1)
+            }
+            afterChange(false)
+            return
+        }
+        const items = sorted.map(r => rowData(r))
+        for (const r of sorted.slice().reverse())
+            remove(r, 1)
+        const first = Math.max(0, Math.min(count, sorted[0] + delta))
+        for (let i = 0; i < items.length; ++i)
+            insert(first + i, items[i])
+        afterChange(true)
     }
 
     function removeRows(rows: list<int>) {

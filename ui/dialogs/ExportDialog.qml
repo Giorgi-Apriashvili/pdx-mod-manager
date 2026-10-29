@@ -8,7 +8,8 @@ import Pmm.Backend
 AppDialog {
     id: dialog
 
-    property string code
+    // exportCode() starts the export; the code arrives in lastExportCode.
+    readonly property string code: Backend.sharing.lastExportCode
 
     title: qsTr("Export share code")
     subtitle: qsTr("“%1” · %2 · %3 enabled")
@@ -17,7 +18,7 @@ AppDialog {
               .arg(Theme.formatCount(Backend.mods.enabledCount))
     preferredWidth: 640
 
-    onAboutToShow: code = Backend.sharing.exportCode()
+    onAboutToShow: Backend.sharing.exportCode()
     onOpened: copyButton.forceActiveFocus()
 
     FileDialog {
@@ -38,6 +39,7 @@ AppDialog {
             Layout.preferredHeight: 150
             readOnly: true
             text: dialog.code
+            placeholderText: Backend.sharing.busy ? qsTr("Preparing the share code…") : ""
             Accessible.name: qsTr("Share code")
         }
 

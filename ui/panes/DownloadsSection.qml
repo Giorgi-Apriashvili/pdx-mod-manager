@@ -116,7 +116,8 @@ ColumnLayout {
             text: qsTr("Download missing")
             iconName: "download"
             visible: Backend.mods.missingCount > 0
-            enabled: root.providerReady
+            // Steam's state is only known once a session was opened, which this starts.
+            enabled: root.acquisition.downloadsEnabled
             toolTipText: qsTr("Subscribe to and download every missing Workshop mod of this playset, including disabled ones")
             onClicked: root.acquisition.acquireMissing()
         }
@@ -145,6 +146,7 @@ ColumnLayout {
 
     MessageLine {
         Layout.fillWidth: true
+        visible: root.acquisition.downloadsEnabled
         level: "info"
         textColor: Theme.textMuted
         text: qsTr("While downloads run, Steam shows you as playing %1.").arg(Backend.games.currentName)

@@ -9,6 +9,7 @@ QtObject {
     property string summary
     property string providerStatus: "ready"
     property string providerMessage
+    readonly property bool downloadsEnabled: true
     property string gameKey: "stellaris"
     property ListModel jobs: ListModel {}
 

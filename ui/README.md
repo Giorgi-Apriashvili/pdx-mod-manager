@@ -42,8 +42,13 @@ Things the QML relies on beyond the tables in the contract:
 - String-list roles/properties (`warnings`, `blockers`, `tags`, ...) may be a
   `QStringList`; `Theme.lines()` also accepts a newline-separated string.
 - Backend properties are observed through bindings, so any NOTIFY signal name
-  works. Model updates must use the normal `QAbstractItemModel` signals
-  (`rowsMoved` for reorders keeps the selection on the moved rows).
+  works. Model updates use the normal `QAbstractItemModel` signals. Mod list
+  edits apply synchronously, and reorders arrive as `dataChanged` (a proxy
+  model would turn moves into a layout reset that scrolls the list to the
+  top), so the panes re-select moved rows themselves right after a move.
+- Results of service work arrive asynchronously: the export code through
+  `sharing.lastExportCode`, dependency feedback through
+  `mods.dependencyFeedback(text)`, previews through `sharing.preview`.
 - `ModFilterModel.index(row, 0)` (inherited from `QAbstractItemModel`) feeds an
   `ItemSelectionModel` for multi-select.
 - Object names for automation: `modsPane`, `modList`, `searchField`,
