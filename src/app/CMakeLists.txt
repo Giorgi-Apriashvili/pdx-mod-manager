@@ -12,6 +12,8 @@ add_library(pmm_appcore STATIC
   core/file_log_sink.hpp
   core/metadata_host.cpp
   core/metadata_host.hpp
+  core/profile_lock.cpp
+  core/profile_lock.hpp
   core/qt_util.cpp
   core/qt_util.hpp
   core/service_runner.cpp
@@ -44,6 +46,8 @@ add_library(pmm_appgui STATIC
   gui/mod_filter_model.hpp
   gui/mod_list_model.cpp
   gui/mod_list_model.hpp
+  gui/network_guard.cpp
+  gui/network_guard.hpp
   gui/notification_center.cpp
   gui/notification_center.hpp
   gui/playsets_model.cpp

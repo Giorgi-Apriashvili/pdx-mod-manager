@@ -26,6 +26,13 @@ accepted.
 - Qt Quick Controls style: `Basic`, customised through the `Theme` QML
   singleton in `Pmm.Ui` (colours, spacing, fonts). There are light and dark
   palettes; `Theme.dark` follows `Backend.settings.effectiveDark`.
+- Strings from this contract are data, not markup: names and hints come from
+  share codes, Workshop descriptors and folder names. Every `Text`, `Label`
+  or text edit whose text is not a fixed literal sets
+  `textFormat: Text.PlainText` (`Text.AutoText` would render a string that
+  starts with a tag as rich text and load its images), and the shared tool
+  tip shows plain text. `tests/app/ui_text_tests.cpp` checks the sources.
+  The engine itself has no network access (`app.md`).
 - `ui/dev/Pmm/Backend` is a QML-only stand-in that implements this contract
   for previews, screenshots and QML tests without the C++ build.
 
@@ -151,8 +158,15 @@ flight:
 - `removeRows(rows)`: snapshotted first. `addMods(identityKeys)`: keys from
   `InventoryModel.identityKey`, appended at the end, enabled. Adding mods
   already in the playset is refused.
-- `undo()`, `redo()`.
+- `undo()`, `redo()`: not applied up front; the model follows when the
+  saved state arrives.
 - `get(row) -> map` (role name → value; for tests and scripting).
+
+Row arguments name the rows the list shows when the invokable is called. The
+services receive the identities of those entries (and, for a move, the entry
+it lands in front of), so an edit made while an undo or redo is still in
+flight changes the entries the user saw. An edit whose entries that undo or
+redo removed is refused with a notification.
 
 Signals: `dependencyFeedback(text)`, `edited()`.
 
@@ -237,9 +251,10 @@ Invokables:
   - `mode` is "new" (default) or "replace" (explicit; the previous state is
     snapshotted and restorable from the history).
   - It persists the exact playset, queues acquisition of missing Workshop
-    entries (disabled ones included; not with Steam off) and activates the
-    playset. Signal `imported(playsetId)`, -1 on failure, with a
-    notification.
+    entries (disabled ones included) and activates the playset. With Steam
+    off nothing is queued, not even for a later session: the entries stay
+    "Missing" until `acquireMissing()`. Signal `imported(playsetId)`, -1 on
+    failure, with a notification.
   - A code for another supported game is imported as a new playset of that
     game (replace is refused), and the window switches to that game.
 - `clearPreview()`

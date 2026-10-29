@@ -66,6 +66,7 @@ AppDialog {
             Text {
                 anchors.verticalCenter: parent ? parent.verticalCenter : undefined
                 text: qsTr("%1 characters").arg(Theme.formatCount(dialog.code.length))
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.textMuted
                 Accessible.role: Accessible.StaticText

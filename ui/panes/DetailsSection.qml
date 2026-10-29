@@ -180,6 +180,7 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         text: dep.modelData.name
+                        textFormat: Text.PlainText
                         font.pixelSize: Theme.fontSize
                         color: Theme.text
                         elide: Text.ElideRight
@@ -187,6 +188,7 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         text: dep.modelData.text
+                        textFormat: Text.PlainText
                         font.pixelSize: Theme.fontSizeSmall
                         color: dep.modelData.state === "ok" ? Theme.textMuted : root.dependencyColor(dep.modelData.state)
                         wrapMode: Text.Wrap

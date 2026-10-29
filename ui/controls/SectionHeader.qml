@@ -19,6 +19,7 @@ Item {
 
         Text {
             text: root.text.toUpperCase()
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall - 1
             font.weight: Font.DemiBold
             font.letterSpacing: 0.6

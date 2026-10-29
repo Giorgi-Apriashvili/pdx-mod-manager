@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <climits>
+#include <string>
+#include <unordered_map>
 
 namespace pmm::app {
 namespace {
@@ -65,6 +67,64 @@ std::size_t gapForTarget(const std::vector<std::size_t>& sorted, std::size_t siz
             return gap;
     }
     return size;
+}
+
+// The stored load order of a playset, by identity. Edits name their rows by
+// identity and are resolved against it on the worker when they run: an undo
+// or redo still in flight changes what the GUI's row indices point at.
+class StoredOrder {
+public:
+    static Result<StoredOrder> load(AppRuntime& runtime, std::int64_t playsetId) {
+        auto playset = runtime.playsets().playset(playsetId);
+        if (!playset)
+            return std::move(playset).error();
+        StoredOrder order;
+        const std::vector<PlaysetEntry>& entries = playset.value().entries;
+        order.m_size = entries.size();
+        order.m_index.reserve(entries.size());
+        for (std::size_t i = 0; i < entries.size(); ++i)
+            order.m_index.emplace(key(entries[i].identity), i);
+        return order;
+    }
+
+    std::optional<std::size_t> find(const ModIdentity& identity) const {
+        const auto it = m_index.find(key(identity));
+        return it == m_index.end() ? std::nullopt : std::optional<std::size_t>(it->second);
+    }
+
+    // Indices of the identities that are still present, ascending.
+    std::vector<std::size_t> indicesOf(const std::vector<ModIdentity>& identities) const {
+        std::vector<std::size_t> out;
+        out.reserve(identities.size());
+        for (const ModIdentity& identity : identities) {
+            if (const auto index = find(identity))
+                out.push_back(*index);
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+
+    // Insertion gap in front of `anchor` (nullopt: the end of the list).
+    std::optional<std::size_t> gapBefore(const std::optional<ModIdentity>& anchor) const {
+        return anchor ? find(*anchor) : std::optional<std::size_t>(m_size);
+    }
+
+private:
+    static std::string key(const ModIdentity& identity) {
+        std::string out = identity.source;
+        out += '\0';
+        out += identity.id;
+        return out;
+    }
+
+    std::unordered_map<std::string, std::size_t> m_index;
+    std::size_t m_size = 0;
+};
+
+Error changedMeanwhile() {
+    return makeError(ErrorCode::NotFound,
+                     "The playset was changed by an undo or redo in the meantime, so the edit no "
+                     "longer applies. Nothing was changed.");
 }
 
 } // namespace
@@ -170,8 +230,15 @@ QString ModListModel::setEnabledRows(const QList<int>& rows, bool on) {
     recount();
     runEdit(
         on ? tr("Could not enable the mods") : tr("Could not disable the mods"),
-        [indices, on](AppRuntime& runtime, std::int64_t playsetId) -> EditOutcome {
-            auto issues = runtime.playsets().setEnabled(playsetId, indices, on);
+        [targets = identitiesAt(indices), on](AppRuntime& runtime,
+                                              std::int64_t playsetId) -> EditOutcome {
+            auto order = StoredOrder::load(runtime, playsetId);
+            if (!order)
+                return {order.error(), {}};
+            const std::vector<std::size_t> current = order.value().indicesOf(targets);
+            if (current.empty())
+                return {changedMeanwhile(), {}};
+            auto issues = runtime.playsets().setEnabled(playsetId, current, on);
             if (!issues)
                 return {issues.error(), {}};
             return {std::nullopt, on ? formatIssues(issues.value()) : QString()};
@@ -186,17 +253,27 @@ void ModListModel::moveRow(int from, int to) {
     if (refuseReorder())
         return;
     std::vector<PlaysetEntry> ordered = entries();
-    if (!moveEntry(ordered, static_cast<std::size_t>(from), static_cast<std::size_t>(to)))
+    const auto target = static_cast<std::size_t>(to);
+    if (!moveEntry(ordered, static_cast<std::size_t>(from), target))
         return;
+    const ModIdentity moved = ordered[target].identity;
+    const std::optional<ModIdentity> anchor = anchorAfter(ordered, target + 1);
     applyOrder(ordered);
     const ViewFilter filter = viewFilter();
     runEdit(
         tr("Could not move the mod"),
-        [from, to, filter](AppRuntime& runtime, std::int64_t playsetId) -> EditOutcome {
-            Status moved = runtime.playsets().move(playsetId, static_cast<std::size_t>(from),
-                                                   static_cast<std::size_t>(to), filter);
-            if (!moved)
-                return {moved.error(), {}};
+        [moved, anchor, filter](AppRuntime& runtime, std::int64_t playsetId) -> EditOutcome {
+            auto order = StoredOrder::load(runtime, playsetId);
+            if (!order)
+                return {order.error(), {}};
+            const std::optional<std::size_t> current = order.value().find(moved);
+            const std::optional<std::size_t> gap = order.value().gapBefore(anchor);
+            if (!current || !gap)
+                return {changedMeanwhile(), {}};
+            const std::size_t destination = *gap > *current ? *gap - 1 : *gap;
+            Status done = runtime.playsets().move(playsetId, *current, destination, filter);
+            if (!done)
+                return {done.error(), {}};
             return {};
         },
         false);
@@ -219,15 +296,23 @@ void ModListModel::moveRows(const QList<int>& rows, int delta) {
     std::vector<PlaysetEntry> ordered = entries();
     const std::vector<PlaysetEntry> before = ordered;
     const ViewFilter filter = viewFilter();
+    std::vector<ModIdentity> targets = identitiesAt(indices);
     EditOp op;
     if (delta == -1 || delta == 1) {
         auto moved =
             delta < 0 ? moveSelectionUp(ordered, indices) : moveSelectionDown(ordered, indices);
         if (!moved)
             return;
-        op = [indices, delta, filter](AppRuntime& runtime, std::int64_t playsetId) -> EditOutcome {
-            auto result = delta < 0 ? runtime.playsets().moveUp(playsetId, indices, filter)
-                                    : runtime.playsets().moveDown(playsetId, indices, filter);
+        op = [targets = std::move(targets), delta, filter](AppRuntime& runtime,
+                                                           std::int64_t playsetId) -> EditOutcome {
+            auto order = StoredOrder::load(runtime, playsetId);
+            if (!order)
+                return {order.error(), {}};
+            const std::vector<std::size_t> current = order.value().indicesOf(targets);
+            if (current.empty())
+                return {changedMeanwhile(), {}};
+            auto result = delta < 0 ? runtime.playsets().moveUp(playsetId, current, filter)
+                                    : runtime.playsets().moveDown(playsetId, current, filter);
             if (!result)
                 return {result.error(), {}};
             return {};
@@ -238,11 +323,22 @@ void ModListModel::moveRows(const QList<int>& rows, int delta) {
         const long long wanted = static_cast<long long>(indices.front()) + delta;
         const std::size_t target = static_cast<std::size_t>(
             std::clamp<long long>(wanted, 0, static_cast<long long>(maxTarget)));
-        const std::size_t gap = gapForTarget(indices, size, target);
-        if (!moveBlock(ordered, indices, gap))
+        auto start = moveBlock(ordered, indices, gapForTarget(indices, size, target));
+        if (!start)
             return;
-        op = [indices, gap, filter](AppRuntime& runtime, std::int64_t playsetId) -> EditOutcome {
-            auto result = runtime.playsets().moveBlock(playsetId, indices, gap, filter);
+        // The block lands in front of the entry that follows it now.
+        const std::optional<ModIdentity> anchor =
+            anchorAfter(ordered, start.value() + indices.size());
+        op = [targets = std::move(targets), anchor, filter](AppRuntime& runtime,
+                                                            std::int64_t playsetId) -> EditOutcome {
+            auto order = StoredOrder::load(runtime, playsetId);
+            if (!order)
+                return {order.error(), {}};
+            const std::vector<std::size_t> current = order.value().indicesOf(targets);
+            const std::optional<std::size_t> gap = order.value().gapBefore(anchor);
+            if (current.empty() || !gap)
+                return {changedMeanwhile(), {}};
+            auto result = runtime.playsets().moveBlock(playsetId, current, *gap, filter);
             if (!result)
                 return {result.error(), {}};
             return {};
@@ -258,6 +354,7 @@ void ModListModel::removeRows(const QList<int>& rows) {
     const std::vector<std::size_t> indices = validRows(rows);
     if (indices.empty())
         return;
+    std::vector<ModIdentity> targets = identitiesAt(indices);
     for (std::size_t k = indices.size(); k > 0;) {
         const std::size_t last = indices[--k];
         std::size_t first = last;
@@ -278,8 +375,14 @@ void ModListModel::removeRows(const QList<int>& rows) {
     const int removed = static_cast<int>(indices.size());
     runEdit(
         tr("Could not remove the mods"),
-        [indices](AppRuntime& runtime, std::int64_t playsetId) -> EditOutcome {
-            Status done = runtime.playsets().removeEntries(playsetId, indices);
+        [targets = std::move(targets)](AppRuntime& runtime, std::int64_t playsetId) -> EditOutcome {
+            auto order = StoredOrder::load(runtime, playsetId);
+            if (!order)
+                return {order.error(), {}};
+            const std::vector<std::size_t> current = order.value().indicesOf(targets);
+            if (current.empty())
+                return {changedMeanwhile(), {}};
+            Status done = runtime.playsets().removeEntries(playsetId, current);
             if (!done)
                 return {done.error(), {}};
             return {};
@@ -437,6 +540,21 @@ std::vector<std::size_t> ModListModel::validRows(const QList<int>& rows) const {
     std::sort(out.begin(), out.end());
     out.erase(std::unique(out.begin(), out.end()), out.end());
     return out;
+}
+
+std::vector<ModIdentity> ModListModel::identitiesAt(const std::vector<std::size_t>& indices) const {
+    std::vector<ModIdentity> out;
+    out.reserve(indices.size());
+    for (std::size_t i : indices)
+        out.push_back(m_rows[i].entry.identity);
+    return out;
+}
+
+std::optional<ModIdentity> ModListModel::anchorAfter(const std::vector<PlaysetEntry>& ordered,
+                                                     std::size_t index) {
+    if (index >= ordered.size())
+        return std::nullopt;
+    return ordered[index].identity;
 }
 
 std::vector<PlaysetEntry> ModListModel::entries() const {

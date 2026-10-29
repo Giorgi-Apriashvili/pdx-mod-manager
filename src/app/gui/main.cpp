@@ -4,9 +4,11 @@
 //   <- QML module Pmm.Ui (ui/), loaded with the Backend registered as the
 //   singleton Pmm.Backend.
 
+#include "app/core/profile_lock.hpp"
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
+#include "app/gui/network_guard.hpp"
 #include "app/gui/verification.hpp"
 #include "core/log.hpp"
 
@@ -183,8 +185,28 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setDesktopFileName(QStringLiteral("paradox-mod-manager"));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QGuiApplication app(argc, argv);
+    // Every QML engine of the process: no network access (outlives them).
+    OfflineNetworkAccessManagerFactory networkFactory;
 
     const CommandLine line = parseCommandLine(app);
+
+    // One instance per profile: the journal, the acquisition jobs and the
+    // helper sessions assume it. Held until the runner has shut down.
+    const services::AppPaths paths = line.profile
+                                         ? services::AppPaths::fromProfileDir(*line.profile)
+                                         : services::AppPaths::standard();
+    auto profileLock = ProfileLock::acquire(paths.dataDir);
+    if (!profileLock) {
+        const QString message = qs(profileLock.error().message);
+        if (line.verification.active()) {
+            std::fprintf(stderr, "pmm-app: %s\n", message.toUtf8().constData());
+            return 2;
+        }
+        QQmlApplicationEngine engine;
+        engine.setNetworkAccessManagerFactory(&networkFactory);
+        showFatalError(engine, message);
+        return app.exec();
+    }
 
     RunnerOptions runnerOptions;
     runnerOptions.runtime.profileDir = line.profile;
@@ -202,6 +224,7 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<Backend> backend;
     QQmlApplicationEngine engine;
+    engine.setNetworkAccessManagerFactory(&networkFactory);
     if (!start.ok) {
         logError("app", "start-up failed", {{"error", utf8(start.errorMessage)}});
         if (line.verification.active()) {

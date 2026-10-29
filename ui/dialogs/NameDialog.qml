@@ -40,6 +40,7 @@ AppDialog {
 
         Text {
             text: dialog.label
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSize
             color: Theme.textMuted
         }

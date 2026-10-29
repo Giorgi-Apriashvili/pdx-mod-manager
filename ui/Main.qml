@@ -171,6 +171,9 @@ ApplicationWindow {
     palette.link: Theme.link
 
     Component.onCompleted: {
+        // Tool tips show model data (warnings, paths). The shared Basic tool
+        // tip would render text that starts with a tag as rich text.
+        split.ToolTip.toolTip.contentItem.textFormat = Text.PlainText // qmllint disable missing-property
         restoreGeometry()
         modsPane.focusList()
     }

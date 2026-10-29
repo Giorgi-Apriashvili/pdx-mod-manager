@@ -652,6 +652,7 @@ Rectangle {
                     text: qsTr("%1 selected").arg(Theme.formatCount(root.selectedCount))
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text
+                    textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.textMuted
                     rightPadding: 6
@@ -948,6 +949,7 @@ Rectangle {
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.dragName
+                    textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSize
                     color: Theme.text
                     elide: Text.ElideRight

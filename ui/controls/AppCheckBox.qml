@@ -55,6 +55,7 @@ CheckBox {
     contentItem: Text {
         leftPadding: control.text.length > 0 ? control.indicator.width + control.spacing : 0
         text: control.text
+        textFormat: Text.PlainText
         font: control.font
         color: control.enabled ? Theme.text : Theme.textFaint
         elide: Text.ElideRight

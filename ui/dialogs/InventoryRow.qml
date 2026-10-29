@@ -108,6 +108,7 @@ Rectangle {
         Text {
             Layout.preferredWidth: 60
             text: row.model.version
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
             elide: Text.ElideRight
@@ -115,6 +116,7 @@ Rectangle {
         Text {
             Layout.preferredWidth: 64
             text: row.model.sourceLabel
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
             elide: Text.ElideRight
@@ -122,6 +124,7 @@ Rectangle {
         Text {
             Layout.preferredWidth: 110
             text: row.model.stateText
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
             elide: Text.ElideRight

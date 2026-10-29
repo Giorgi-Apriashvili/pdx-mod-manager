@@ -59,6 +59,7 @@ ComboBox {
                     const value = item.model[role]
                     return value === undefined ? String(item.model.modelData?.[role] ?? "") : String(value)
                 }
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSize
                 font.weight: control.currentIndex === item.index ? Font.DemiBold : Font.Normal
                 color: item.highlighted ? Theme.accentText : Theme.text
@@ -74,6 +75,7 @@ ComboBox {
                     const value = item.model[control.detailRole]
                     return value === undefined ? "" : String(value)
                 }
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSizeSmall
                 color: item.highlighted ? Theme.accentText : Theme.textMuted
             }
@@ -93,6 +95,7 @@ ComboBox {
 
     contentItem: Text {
         text: control.displayText
+        textFormat: Text.PlainText
         font: control.font
         color: control.enabled ? Theme.text : Theme.textFaint
         elide: Text.ElideRight

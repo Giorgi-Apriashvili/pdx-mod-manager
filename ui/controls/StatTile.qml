@@ -34,6 +34,7 @@ Rectangle {
             }
             Text {
                 text: Theme.formatCount(root.value)
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSizeTitle
                 font.weight: Font.DemiBold
                 font.features: { "tnum": 1 }
@@ -42,6 +43,7 @@ Rectangle {
         }
         Text {
             text: root.label
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
         }

@@ -66,6 +66,7 @@ Button {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: text.length > 0
                 text: control.text
+                textFormat: Text.PlainText
                 font: control.font
                 color: control._accent ? Theme.accentText
                      : control.variant === "danger" ? Theme.danger : Theme.text

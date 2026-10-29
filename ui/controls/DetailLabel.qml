@@ -5,6 +5,7 @@ import Pmm.Ui
 // next to it carries the label in its accessible name (DetailValue.labelText).
 Text {
     Accessible.ignored: true
+    textFormat: Text.PlainText
     font.pixelSize: Theme.fontSize
     color: Theme.textMuted
 }

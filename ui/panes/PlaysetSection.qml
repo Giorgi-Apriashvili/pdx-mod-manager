@@ -50,6 +50,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         text: root.hasPlayset ? Backend.playsets.activeName : qsTr("No playset selected")
+        textFormat: Text.PlainText
         font.pixelSize: Theme.fontSizeLarge
         font.weight: Font.DemiBold
         color: root.hasPlayset ? Theme.text : Theme.textMuted
@@ -65,6 +66,7 @@ ColumnLayout {
               .arg(Theme.formatCount(Backend.mods.enabledCount))
               .arg(Theme.plural(Backend.playsets.count, qsTr("playset"), qsTr("playsets")))
               .arg(Backend.games.currentName)
+        textFormat: Text.PlainText
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.textMuted
         elide: Text.ElideRight

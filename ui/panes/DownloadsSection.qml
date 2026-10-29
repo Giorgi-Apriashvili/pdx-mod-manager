@@ -56,6 +56,7 @@ ColumnLayout {
             id: providerLine
             Layout.fillWidth: true
             text: root.providerText(root.acquisition.providerStatus)
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSize
             color: Theme.textMuted
             elide: Text.ElideRight
@@ -75,6 +76,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: root.acquisition.summary.length > 0
         text: root.acquisition.summary
+        textFormat: Text.PlainText
         font.pixelSize: Theme.fontSize
         color: Theme.text
         wrapMode: Text.Wrap
@@ -89,6 +91,7 @@ ColumnLayout {
             : Backend.mods.missingCount > 0
               ? qsTr("%1 referenced mods are not installed.").arg(Theme.formatCount(Backend.mods.missingCount))
               : qsTr("No downloads. Everything in this playset is installed.")
+        textFormat: Text.PlainText
         font.pixelSize: Theme.fontSize
         color: Theme.textMuted
         wrapMode: Text.Wrap

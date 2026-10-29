@@ -5,8 +5,10 @@
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
+#include "persistence/acquisition_job_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/settings_repository.hpp"
+#include "platform/steam.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -14,7 +16,9 @@
 #include <QPointer>
 #include <QThread>
 
+#include <algorithm>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace pmm;
@@ -49,6 +53,28 @@ std::vector<std::string> ids(const ModListModel& model) {
     for (const ModRowData& row : model.rows())
         out.push_back(row.entry.identity.id);
     return out;
+}
+
+// Creates playsets of the fake game on the worker; the last one becomes active.
+std::vector<std::int64_t> createPlaysets(ServiceRunner& runner,
+                                         const std::vector<std::string>& names) {
+    return runner.callBlocking([names](AppRuntime& runtime) {
+        std::vector<std::int64_t> out;
+        for (const std::string& name : names) {
+            auto id = runtime.playsets().create(kGame, name);
+            if (!id || !runtime.playsets().setActivePlayset(kGame, id.value()))
+                return std::vector<std::int64_t>{};
+            out.push_back(id.value());
+        }
+        return out;
+    });
+}
+
+std::int64_t storedActivePlayset(ServiceRunner& runner) {
+    return runner.callBlocking([](AppRuntime& runtime) -> std::int64_t {
+        auto active = runtime.playsets().activePlaysetId(kGame);
+        return active && active.value() ? *active.value() : -1;
+    });
 }
 
 } // namespace
@@ -335,4 +361,227 @@ TEST_CASE("Backend restores settings and creates playsets from the game configur
     CHECK(backend.settings()->lastGameKey() == "stellaris");
     CHECK(backend.mods()->count() == 2); // last active playset restored at start-up
     runner.shutdown();
+}
+
+TEST_CASE("Backend follows the stored active playset when a reply was superseded",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    SECTION("a playset created during the initial rescan stays active") {
+        const std::vector<std::int64_t> playsets = createPlaysets(runner, {"P1"});
+        REQUIRE(playsets.size() == 1);
+        Backend backend(runner, {});
+        backend.initialize(start); // P1 shown, the rescan is queued
+        REQUIRE(backend.activePlaysetId() == playsets[0]);
+        backend.playsets()->create(QStringLiteral("Fresh"));
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+
+        const std::int64_t stored = storedActivePlayset(runner);
+        CHECK(stored != playsets[0]);
+        CHECK(backend.activePlaysetId() == stored);
+        CHECK(backend.playsets()->activeId() == stored);
+        CHECK(backend.playsets()->activeName() == "Fresh");
+        CHECK(backend.mods()->playsetId() == stored);
+    }
+    SECTION("a failed creation brings back the activation it superseded") {
+        const std::vector<std::int64_t> playsets = createPlaysets(runner, {"P1", "P2"});
+        REQUIRE(playsets.size() == 2);
+        Backend backend(runner, {});
+        backend.initialize(start);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        REQUIRE(backend.mods()->playsetId() == playsets[1]);
+
+        backend.playsets()->activate(static_cast<int>(playsets[0]));
+        backend.playsets()->create(QString(300, QLatin1Char('x'))); // over the name limit
+        REQUIRE(waitUntil([&] {
+            return backend.notifications()->latest().value("title").toString() ==
+                   "Could not create the playset";
+        }));
+        CHECK(storedActivePlayset(runner) == playsets[0]);
+        CHECK(backend.activePlaysetId() == playsets[0]);
+        CHECK(backend.playsets()->activeId() == playsets[0]);
+        CHECK(backend.mods()->playsetId() == playsets[0]);
+    }
+    runner.shutdown();
+}
+
+TEST_CASE("Row edits made while an undo is in flight hit the entries the user saw",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    for (const char* mod : {"1001", "1002", "1003", "1004", "1005", "1006"})
+        world.addWorkshopMod(mod, std::string("Mod ") + mod);
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    backend.playsets()->create(QStringLiteral("Undo race"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    const std::int64_t id = backend.activePlaysetId();
+    ModListModel& mods = *backend.mods();
+    mods.addMods({"steam-workshop:1001", "steam-workshop:1002", "steam-workshop:1003",
+                  "steam-workshop:1004", "steam-workshop:1005"});
+    REQUIRE(waitUntil([&] { return mods.count() == 5 && !mods.busy(); }));
+    const auto settled = [&] { return waitUntil([&] { return !mods.busy(); }); };
+    using Ids = std::vector<std::string>;
+
+    // Each section saves an edit, then undoes it and edits a row by index in
+    // the same tick: the index refers to the row the list showed.
+    SECTION("enable/disable") {
+        mods.removeRows({2}); // 1003
+        REQUIRE(settled());
+        mods.undo();
+        REQUIRE(mods.rows()[2].entry.identity.id == "1004");
+        mods.setEnabled(2, false);
+        REQUIRE(settled());
+        const std::vector<PlaysetEntry> stored = storedEntries(runner, id);
+        CHECK(ids(stored) == Ids{"1001", "1002", "1003", "1004", "1005"});
+        REQUIRE(stored.size() == 5);
+        CHECK(stored[2].enabled);       // the restored entry is untouched
+        CHECK_FALSE(stored[3].enabled); // the row the user disabled
+        CHECK(ids(mods) == ids(stored));
+        CHECK(mods.enabledCount() == 4);
+    }
+    SECTION("keyboard move") {
+        mods.moveRows({1}, 1); // 1002 down
+        REQUIRE(settled());
+        mods.undo();
+        REQUIRE(mods.rows()[2].entry.identity.id == "1002");
+        mods.moveRows({2}, 1);
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1001", "1003", "1002", "1004", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("drag and drop") {
+        mods.removeRows({1}); // 1002
+        REQUIRE(settled());
+        mods.undo();
+        mods.moveRows({0}, 2); // 1001 dropped in front of 1005
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1002", "1003", "1004", "1001", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("single move") {
+        mods.removeRows({2}); // 1003
+        REQUIRE(settled());
+        mods.undo();
+        mods.moveRow(0, 2); // 1001 in front of 1005
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1002", "1003", "1004", "1001", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("removal") {
+        mods.removeRows({1}); // 1002
+        REQUIRE(settled());
+        mods.undo();
+        REQUIRE(mods.rows()[1].entry.identity.id == "1003");
+        mods.removeRows({1});
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1001", "1002", "1004", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("an entry that the undo takes away is refused") {
+        mods.addMods({"steam-workshop:1006"});
+        REQUIRE(waitUntil([&] { return mods.count() == 6 && !mods.busy(); }));
+        mods.undo();
+        mods.setEnabled(5, false); // 1006, which the undo removes
+        REQUIRE(settled());
+        const std::vector<PlaysetEntry> stored = storedEntries(runner, id);
+        CHECK(ids(stored) == Ids{"1001", "1002", "1003", "1004", "1005"});
+        CHECK(std::all_of(stored.begin(), stored.end(),
+                          [](const PlaysetEntry& entry) { return entry.enabled; }));
+        CHECK(ids(mods) == ids(stored));
+        const QVariantMap latest = backend.notifications()->latest();
+        CHECK(latest.value("level").toString() == "warning");
+        CHECK(latest.value("text").toString().contains("undo or redo"));
+    }
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Importing with downloads off leaves nothing for a later session to download",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("4001", "Kept");
+    world.addWorkshopMod("4002", "Gone");
+    // Lets a coordinator open a Steam session for the game (never loaded here).
+    writeText(world.install / platform::steam::steamApiLibraryName(), "placeholder");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    {
+        ServiceRunner runner(runnerOptions(profile, adapter)); // --no-steam
+        const RunnerStart start = runner.start();
+        REQUIRE(start.ok);
+        Backend backend(runner, {});
+        backend.initialize(start);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        REQUIRE_FALSE(backend.steamEnabled());
+        backend.playsets()->create(QStringLiteral("Source"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        const std::int64_t source = backend.activePlaysetId();
+        backend.mods()->addMods({"steam-workshop:4001", "steam-workshop:4002"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+        backend.sharing()->exportCode();
+        REQUIRE(waitUntil([&] { return !backend.sharing()->lastExportCode().isEmpty(); }));
+
+        // 4002 is not on this computer any more when the code is imported.
+        fs::remove_all(world.workshop / "4002");
+        const bool rescanned = runner.callBlocking(
+            [](AppRuntime& runtime) { return runtime.games().rescanMods(kGame).ok(); });
+        REQUIRE(rescanned);
+        backend.sharing()->previewImport(backend.sharing()->lastExportCode());
+        REQUIRE(waitUntil(
+            [&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+        REQUIRE(backend.sharing()->preview().value("missing").toInt() == 1);
+        REQUIRE(backend.sharing()->confirmImport("new", -1, QStringLiteral("Imported")));
+        REQUIRE(waitUntil([&] {
+            return backend.activePlaysetId() != source &&
+                   backend.mods()->playsetId() == backend.activePlaysetId() &&
+                   backend.mods()->count() == 2;
+        }));
+
+        const std::size_t unfinished = runner.callBlocking([](AppRuntime& runtime) {
+            auto jobs = persistence::AcquisitionJobRepository(runtime.database()).listUnfinished();
+            return jobs ? jobs.value().size() : std::size_t{99};
+        });
+        CHECK(unfinished == 0);
+        const ModRowData* gone = backend.mods()->row(1);
+        REQUIRE(gone);
+        CHECK(gone->entry.identity.id == "4002");
+        CHECK(gone->status == "missing");
+        CHECK(gone->statusText == "Missing");
+        CHECK(backend.notifications()->latest().value("text").toString().contains(
+            "1 missing Workshop mod listed; downloads are off in this session."));
+        backend.shutdown();
+        runner.shutdown();
+    }
+
+    // A later session with Steam resumes unfinished jobs on its own: none.
+    struct RecordingSessions : services::WorkshopSessionHost {
+        bool open(const GameKey&, const std::string&, const fs::path&) override {
+            ++opened;
+            return true;
+        }
+        void send(const GameKey&, const providers::HelperCommand&) override { ++sent; }
+        void close(const GameKey&) override {}
+        int opened = 0;
+        int sent = 0;
+    } sessions;
+    RuntimeHosts hosts;
+    hosts.sessions = &sessions;
+    auto runtime = require(AppRuntime::create(hermeticOptions(profile, adapter), hosts));
+    REQUIRE(runtime->acquisition());
+    runtime->acquisition()->start(kGame);
+    CHECK(sessions.opened == 0);
+    CHECK(sessions.sent == 0);
 }

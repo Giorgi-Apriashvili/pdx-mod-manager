@@ -41,6 +41,11 @@ cmake --build --preset debug --target pmm_ui pmm_uiplugin
 
 Things the QML relies on beyond the tables in the contract:
 
+- Backend strings are data, never markup. A `Text` whose text is not a fixed
+  literal sets `textFormat: Text.PlainText` (the default `AutoText` renders a
+  name like `<img src=...>` as rich text and fetches the image);
+  `tests/app/ui_text_tests.cpp` fails otherwise. Tool tips share one
+  instance, which `Main.qml` switches to plain text.
 - String-list roles/properties (`warnings`, `blockers`, `tags`, ...) may be a
   `QStringList`; `Theme.lines()` also accepts a newline-separated string.
 - Backend properties are observed through bindings, so any NOTIFY signal name

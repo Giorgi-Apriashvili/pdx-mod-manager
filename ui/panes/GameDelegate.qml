@@ -64,6 +64,7 @@ ItemDelegate {
             Text {
                 width: parent.width
                 text: control.model.name
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSize
                 font.weight: control.current ? Font.DemiBold : Font.Normal
                 color: control.supported ? Theme.text : Theme.textMuted
@@ -72,6 +73,7 @@ ItemDelegate {
             Text {
                 width: parent.width
                 text: control.model.statusText
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSizeSmall
                 color: control.supported ? Theme.textMuted : Theme.textFaint
                 font.italic: !control.supported
