@@ -349,10 +349,11 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
                                      .arg(countText(outcome.queued, "missing Workshop mod",
                                                     "missing Workshop mods")));
             m_backend->notifications()->info(tr("Import complete"), text);
+            // The stored active playset: the import, or an activation since.
             if (game != m_backend->currentGame())
                 m_backend->selectGame(game);
             else
-                m_backend->reloadContext(outcome.playsetId);
+                m_backend->reloadContext();
             emit imported(static_cast<int>(outcome.playsetId));
         });
     return true;

@@ -109,6 +109,8 @@ public:
     void renamePlayset(std::int64_t playsetId, const QString& name);
     void removePlayset(std::int64_t playsetId);
     void restoreHistory(std::int64_t historyId, bool lastDeleted);
+    // Without a playset id: the stored active playset. Calls run in order, so
+    // that includes every activation, creation or import submitted earlier.
     void reloadContext(std::optional<std::int64_t> playsetId = std::nullopt,
                        std::function<void()> then = {});
     void refreshInventory();

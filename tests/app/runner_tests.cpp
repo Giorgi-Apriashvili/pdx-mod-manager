@@ -14,7 +14,9 @@
 #include <QPointer>
 #include <QThread>
 
+#include <algorithm>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace pmm;
@@ -49,6 +51,28 @@ std::vector<std::string> ids(const ModListModel& model) {
     for (const ModRowData& row : model.rows())
         out.push_back(row.entry.identity.id);
     return out;
+}
+
+// Creates playsets of the fake game on the worker; the last one becomes active.
+std::vector<std::int64_t> createPlaysets(ServiceRunner& runner,
+                                         const std::vector<std::string>& names) {
+    return runner.callBlocking([names](AppRuntime& runtime) {
+        std::vector<std::int64_t> out;
+        for (const std::string& name : names) {
+            auto id = runtime.playsets().create(kGame, name);
+            if (!id || !runtime.playsets().setActivePlayset(kGame, id.value()))
+                return std::vector<std::int64_t>{};
+            out.push_back(id.value());
+        }
+        return out;
+    });
+}
+
+std::int64_t storedActivePlayset(ServiceRunner& runner) {
+    return runner.callBlocking([](AppRuntime& runtime) -> std::int64_t {
+        auto active = runtime.playsets().activePlaysetId(kGame);
+        return active && active.value() ? *active.value() : -1;
+    });
 }
 
 } // namespace
@@ -334,5 +358,53 @@ TEST_CASE("Backend restores settings and creates playsets from the game configur
     CHECK(backend.settings()->windowWidth() == 1234);
     CHECK(backend.settings()->lastGameKey() == "stellaris");
     CHECK(backend.mods()->count() == 2); // last active playset restored at start-up
+    runner.shutdown();
+}
+
+TEST_CASE("Backend follows the stored active playset when a reply was superseded",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    SECTION("a playset created during the initial rescan stays active") {
+        const std::vector<std::int64_t> playsets = createPlaysets(runner, {"P1"});
+        REQUIRE(playsets.size() == 1);
+        Backend backend(runner, {});
+        backend.initialize(start); // P1 shown, the rescan is queued
+        REQUIRE(backend.activePlaysetId() == playsets[0]);
+        backend.playsets()->create(QStringLiteral("Fresh"));
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+
+        const std::int64_t stored = storedActivePlayset(runner);
+        CHECK(stored != playsets[0]);
+        CHECK(backend.activePlaysetId() == stored);
+        CHECK(backend.playsets()->activeId() == stored);
+        CHECK(backend.playsets()->activeName() == "Fresh");
+        CHECK(backend.mods()->playsetId() == stored);
+    }
+    SECTION("a failed creation brings back the activation it superseded") {
+        const std::vector<std::int64_t> playsets = createPlaysets(runner, {"P1", "P2"});
+        REQUIRE(playsets.size() == 2);
+        Backend backend(runner, {});
+        backend.initialize(start);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        REQUIRE(backend.mods()->playsetId() == playsets[1]);
+
+        backend.playsets()->activate(static_cast<int>(playsets[0]));
+        backend.playsets()->create(QString(300, QLatin1Char('x'))); // over the name limit
+        REQUIRE(waitUntil([&] {
+            return backend.notifications()->latest().value("title").toString() ==
+                   "Could not create the playset";
+        }));
+        CHECK(storedActivePlayset(runner) == playsets[0]);
+        CHECK(backend.activePlaysetId() == playsets[0]);
+        CHECK(backend.playsets()->activeId() == playsets[0]);
+        CHECK(backend.mods()->playsetId() == playsets[0]);
+    }
     runner.shutdown();
 }

@@ -324,9 +324,7 @@ void Backend::rescan(bool userRequested) {
                 finishInitialRefresh();
                 return;
             }
-            reloadContext(m_playsetId >= 0 ? std::optional<std::int64_t>(m_playsetId)
-                                           : std::nullopt,
-                          [this] { finishInitialRefresh(); });
+            reloadContext(std::nullopt, [this] { finishInitialRefresh(); });
         });
 }
 
@@ -359,8 +357,7 @@ bool Backend::locateGame(const QString& key, const QUrl& installDir, const QUrl&
                 tr("Installation located"),
                 tr("%1 will use %2.").arg(result.second.name, result.second.installPath));
             if (key == m_game)
-                reloadContext(m_playsetId >= 0 ? std::optional<std::int64_t>(m_playsetId)
-                                               : std::nullopt);
+                reloadContext();
             else
                 selectGame(key);
         });
@@ -410,6 +407,9 @@ bool Backend::importCurrentConfiguration() {
             auto id = runtime.games().importCurrentConfiguration(utf8(game));
             if (!id) {
                 outcome.error = id.error();
+                // Requests submitted earlier (an activation) may have been
+                // superseded by this one: show what is stored.
+                outcome.context = queries::gameContext(runtime, game, std::nullopt, options);
                 return outcome;
             }
             outcome.context = queries::gameContext(runtime, game, id.value(), options);
@@ -419,6 +419,8 @@ bool Backend::importCurrentConfiguration() {
             if (outcome.error) {
                 m_notifications->error(tr("Could not use the game configuration"),
                                        qs(outcome.error->message));
+                if (generation == m_contextGeneration)
+                    applyContext(std::move(outcome.context));
                 return;
             }
             const QString name = outcome.context.playset.name;
@@ -471,24 +473,25 @@ void Backend::createPlayset(const QString& name, std::optional<std::int64_t> dup
             Outcome outcome;
             auto id = duplicateOf ? runtime.playsets().duplicate(*duplicateOf, utf8(name))
                                   : runtime.playsets().create(utf8(game), utf8(name));
+            std::optional<std::int64_t> shown;
             if (!id) {
                 outcome.error = id.error();
-                return outcome;
-            }
-            if (Status active = runtime.playsets().setActivePlayset(utf8(game), id.value());
-                !active)
+            } else if (Status active = runtime.playsets().setActivePlayset(utf8(game), id.value());
+                       !active) {
                 outcome.error = active.error();
-            outcome.context = queries::gameContext(runtime, game, id.value(), options);
+            } else {
+                shown = id.value();
+            }
+            // On failure the stored active playset, which may come from an
+            // activation this request superseded.
+            outcome.context = queries::gameContext(runtime, game, shown, options);
             return outcome;
         },
         [this, generation, duplicateOf](Outcome outcome) {
-            if (outcome.error) {
+            if (outcome.error)
                 m_notifications->error(duplicateOf ? tr("Could not duplicate the playset")
                                                    : tr("Could not create the playset"),
                                        qs(outcome.error->message));
-                if (outcome.context.game.isEmpty())
-                    return;
-            }
             if (generation == m_contextGeneration)
                 applyContext(std::move(outcome.context));
         });
@@ -700,8 +703,7 @@ void Backend::rescanCurrentMods() {
                 tr("%1 found.")
                     .arg(countText(result.second.modCount, "installed mod", "installed mods")));
             if (game == m_game)
-                reloadContext(m_playsetId >= 0 ? std::optional<std::int64_t>(m_playsetId)
-                                               : std::nullopt);
+                reloadContext();
         });
 }
 
@@ -721,8 +723,7 @@ void Backend::onAcquisitionChanged(const QStringList& rescanned) {
             [](AppRuntime& runtime) { return queries::gameRows(runtime.games().cachedStates()); },
             [this](std::vector<GameRowData> rows) { m_games->setRows(std::move(rows)); });
         if (rescanned.contains(m_game)) {
-            reloadContext(m_playsetId >= 0 ? std::optional<std::int64_t>(m_playsetId)
-                                           : std::nullopt);
+            reloadContext();
             return;
         }
     }
