@@ -17,7 +17,8 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Subscribe (`SubscribeItem` + call result 1313) and download (`DownloadItem`) | Implemented; tested only against the fake library; **unverified on a live account** |
 | Acquisition state machine (retry, cancel, restart reconciliation, stall detection) | Implemented, unit tested (pure logic) |
 | Manual fallback (open Workshop page, then rescan) | Implemented. **Limited**: does not satisfy automatic download |
-| Web API metadata (names, sizes, wrong-game check) | Request builder and parser implemented and tested; the HTTP call belongs to the app layer |
+| Web API metadata (names, sizes, wrong-game check) | Request builder and parser in `providers`; the app layer's `QtWorkshopMetadataHost` makes the call (tested against a local stub) |
+| Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
 | Linux / macOS helper | Written for both, **not compiled or run** (no machines available) |
 | Europa Universalis IV | Same mechanism expected (the game ships `steam_api64.dll`); **unverified** because EU4 is not installed here |
 
@@ -178,9 +179,11 @@ rebuilt by calling `startAcquisition` again after a restart.
         v   QueryState
   [await State] --ItemState--> decide:
         |  installed & current & subscribed & path ---------------------> VerifyContent(path)
-        |  not subscribed (needs loggedOn & ownsApp) --> Subscribing --> [await SubscribeResult]
+        |  not subscribed (needs loggedOn & ownsApp) --> Subscribing --> [await SubscribeResult] (*)
         |  subscribed, downloading/pending ---------------------------> [Progress]
-        |  subscribed, not installed / needs update (needs online) ---> [await DownloadAccepted]
+        |  subscribed, not installed / needs update (needs online) ---> [await DownloadAccepted] (*)
+        |
+        |  (*) the Subscribe / RequestDownload action first passes the identity gate (below)
         |
   [await SubscribeResult] --OK--> Subscribed, QueryState --> [await State]
         |                  --error--> Unavailable | NeedsUserAction | Failed (see section 4)
@@ -219,6 +222,40 @@ Default policy (`AcquisitionPolicy`): 3 automatic runs per retry cycle; backoff 
 at 120 s; 30 s response timeout (60 s for subscribe); 5 min stall timeout; state polling every 1 s
 while downloading; high-priority downloads. A user `Retry` always starts a fresh cycle.
 
+### Identity gate (services)
+
+Share codes are untrusted input, and Subscribe and RequestDownload act on the user's Steam
+account. So when a Web API metadata host is configured (the app sets one up whenever Workshop
+acquisition is enabled),
+`services::AcquisitionCoordinator` sends these two actions only for items the Web API has
+confirmed: the item exists, is not banned, and its `consumer_app_id` is the game's app id
+(`validateWorkshopItemForGame()`, section 7). The reducer above stays pure; the gate sits between
+its transitions and the helper.
+
+```text
+ job starts or resumes --> Web API request for its item (batched per game, before any session opens)
+
+ reducer emits Subscribe or RequestDownload:
+        |-- item confirmed --------------------> action goes to the helper as usual
+        |-- item rejected ---------------------> ItemRejected -> Unavailable
+        |                                         (item_unavailable / wrong_game)
+        '-- no verdict yet --> [held] the transition is dropped; Steam timeouts do not run
+                 |-- verdict: confirmed ----------> fresh run: startAcquisition -> QueryState ->
+                 |                                  decide again from a current ItemState
+                 |-- verdict: rejected -----------> ItemRejected -> Unavailable
+                 '-- no verdict within identityTimeoutMs (15 s) -->
+                                                    NeedsUserAction (timeout): "could not confirm
+                                                    ... so it did not subscribe to it"
+```
+
+- QuerySession, QueryState and the verification of content Steam already installed are never
+  held, so installed items still reach `Installed` while the Web API is unreachable.
+- A rejection stops every job of that item at whatever step it is in, not only held ones.
+- Verdicts are kept per item for the session. `Retry` (and "retry all") asks the Web API again
+  unless the item was already confirmed, because a rejection may no longer hold and an unanswered
+  request may have been lost.
+- Without a metadata host (some tests), nothing is held.
+
 ### Driver responsibilities (application layer)
 
 - Keep one helper per game while jobs for that game are active, and send `quit` when idle.
@@ -226,6 +263,7 @@ while downloading; high-priority downloads. A user `Retry` always starts a fresh
   helper exits unexpectedly, feed `ProviderUnavailable{HelperFailed}` to its jobs.
 - Map helper events with `observationFromHelperEvent()` and actions with `helperCommandFor()`.
   Batch `QueryState` actions from several jobs into one `state` command.
+- Hold Subscribe and RequestDownload behind the identity gate (above).
 - Run `verifyWorkshopContent()` (a non-empty `descriptor.mod` in the folder, or a non-empty
   single file for legacy items) on a worker thread, then feed `ContentVerified`.
 - Feed `Tick` about once per second. Save `context.job` when `persist` is set; progress-only
@@ -292,7 +330,8 @@ reported as 2. A result that takes longer than 120 s is reported as 16 (Timeout)
 | Library missing / not loadable | NeedsUserAction | verify the game files in Steam, or use the manual fallback |
 | Library lacks the API (`symbols_missing`) | NeedsUserAction | manual fallback, then rescan |
 | Helper crash / no answer | Failed, retried automatically | after 3 runs: Retry or manual fallback |
-| Deleted / private / banned / invalid / wrong game | Unavailable | entry stays in the playset, visibly unresolved |
+| Deleted / private / banned / invalid / wrong game (Steam or the Web API says so) | Unavailable | entry stays in the playset, visibly unresolved |
+| Web API gives no verdict within 15 s (offline, blocked) | NeedsUserAction (timeout) | nothing was subscribed; Retry asks the Web API again, or use the manual fallback |
 | Offline / timeouts / Steam busy | Failed, retried with backoff | after 3 runs: "Automatic retries are exhausted" |
 | Download stalls (no progress for 5 min) | Failed (timeout) | check Steam's Downloads page (paused, disk space), retry |
 | Installed content unusable (no `descriptor.mod`) | Failed (validation_failed) | verify files in Steam or resubscribe there, retry |
@@ -323,6 +362,7 @@ numbers as JSON numbers. Hidden or missing items come back as `{"publishedfileid
 The parser accepts both numbers and numeric strings. `validateWorkshopItemForGame()` returns
 `ItemUnavailable` for result 9, other non-OK results and banned items, and `WrongGame` when
 `consumer_app_id` differs from the game's app id. Feed failures to the job as `ItemRejected`.
+The services coordinator does this and uses the verdicts as the identity gate (section 3).
 
 ## 8. Local mod fingerprints
 

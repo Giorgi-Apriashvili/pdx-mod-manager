@@ -136,8 +136,10 @@ obscurely.
   case-insensitive, at most 256 bytes so that they fit into share codes),
   soft delete with a snapshot, `restoreLastDeleted()`, `history()` and
   `restoreHistory()`. Where a name is made unique (create, duplicate, import,
-  current configuration), a " (2)" suffix that would not fit shortens the
-  name on a character boundary instead.
+  current configuration), core `uniquePlaysetName()` is used: a " (copy)" or
+  " (2)" suffix that would not fit shortens the name on a character boundary
+  instead. `buildImportPlan()` proposes names the same way, so the import
+  preview's proposed name is always one that can be saved.
 - The active playset per game is stored in settings
   (`game.<key>.activePlaysetId`), together with `app.lastGameKey`.
 - Editing (core `playset_ops`): `setEnabled(indices, on)` returns the
@@ -216,14 +218,17 @@ It never unsubscribes or deletes anything.
 
 ### LaunchService (`launch_service.hpp`)
 
-- `check(game, playset)` collects blockers and warnings without changing
-  anything:
+- `check(game, playset, options)` collects blockers and warnings without
+  changing anything:
   - the installation is present and its executable exists;
   - direct launch is available;
   - every enabled entry is Ready (disabled entries never block; they produce a
     warning);
   - a playset with no enabled mods is allowed, with a warning;
-  - the user-data and mod folders are writable;
+  - the user-data and mod folders are writable (probed with a temporary file;
+    `LaunchCheckOptions::probeWriteAccess = false` skips the probes, which the
+    app's read-only verification mode does so that it reports every other
+    blocker without writing into game folders);
   - no game instance and no Paradox launcher is running;
   - no interrupted configuration transaction is waiting for recovery.
 - `launch()`: see the launch flow below.
