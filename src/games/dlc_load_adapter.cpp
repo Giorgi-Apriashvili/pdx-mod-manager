@@ -353,9 +353,10 @@ InstalledMod localMod(const GameKey& game, const Registration& reg) {
     return mod;
 }
 
+// "mod/<file>" (prefix compared case-insensitively, as Windows would).
 bool isPlainModReference(std::string_view ref) {
     const std::string prefix = std::string(kModFolder) + "/";
-    if (ref.size() <= prefix.size() || ref.substr(0, prefix.size()) != prefix)
+    if (ref.size() <= prefix.size() || !keyEquals(ref.substr(0, prefix.size()), prefix))
         return false;
     const std::string_view name = ref.substr(prefix.size());
     return name.find_first_of("/\\:") == std::string_view::npos && name != "." && name != "..";
@@ -373,23 +374,27 @@ std::string referenceStem(std::string_view ref) {
 // dlc_load.json with `refs` as enabled_mods and every other key preserved.
 struct DlcLoadOutput {
     std::string contents;
-    std::optional<std::string> existing; // current file contents, if any
+    // The existing file already says the same (byte-identical, or the same
+    // JSON in another layout): no write is needed.
+    bool unchanged = false;
     std::vector<std::string> warnings;
 };
 
 Result<DlcLoadOutput> composeDlcLoad(const fs::path& file, const std::vector<std::string>& refs) {
     DlcLoadOutput out;
     nlohmann::ordered_json document;
+    std::optional<nlohmann::ordered_json> existing;
     if (isRegularFile(file)) {
         Result<std::string> text = platform::readFile(file, kMaxDlcLoadBytes);
         if (!text)
             return std::move(text).error(); // never clobber DLC choices we could not read
-        out.existing = *text;
         document = nlohmann::ordered_json::parse(*text, nullptr, false);
         if (document.is_discarded() || !document.is_object()) {
             out.warnings.push_back("dlc_load.json was not valid JSON and is rebuilt; DLC choices "
                                    "stored in it could not be preserved.");
             document = nlohmann::ordered_json();
+        } else {
+            existing = document;
         }
     }
     if (!document.is_object() || document.empty())
@@ -404,6 +409,7 @@ Result<DlcLoadOutput> composeDlcLoad(const fs::path& file, const std::vector<std
         document = std::move(rebuilt);
     }
     out.contents = document.dump(-1, ' ', false, nlohmann::ordered_json::error_handler_t::replace);
+    out.unchanged = existing && *existing == document;
     return out;
 }
 
@@ -944,9 +950,11 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
                                  "it.",
                              toString(mod.identity) + ": " + pathToUtf8(mod.contentPath));
 
+        // References name the file only ("mod/<file>"), so a descriptor must
+        // lie directly in the mod folder.
         if (mod.identity.source == source::Local) {
             if (mod.descriptorPath.empty() || !isRegularFile(mod.descriptorPath) ||
-                !platform::isWithin(mod.descriptorPath, modDir))
+                !samePath(mod.descriptorPath.parent_path(), modDir))
                 return makeError(ErrorCode::NotFound,
                                  "The local mod " + label +
                                      " has no descriptor in the game's mod "
@@ -966,7 +974,7 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
         const fs::path ugcFile = modDir / pathFromUtf8("ugc_" + mod.identity.id + ".mod");
         fs::path registered = mod.descriptorPath;
         if (registered.empty() || !isRegularFile(registered) ||
-            !platform::isWithin(registered, modDir))
+            !samePath(registered.parent_path(), modDir))
             registered = ugcFile;
         std::optional<DescriptorDocument> registeredDocument;
         if (isRegularFile(registered)) {
@@ -978,6 +986,18 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
                 continue;
             }
             registeredDocument = reg.document;
+        }
+        // mod/ugc_<id>.mod is (re)written below; never over another mod's
+        // registration (e.g. a local mod that happens to use that name).
+        if (isRegularFile(ugcFile)) {
+            const Registration owner =
+                readRegistration(ugcFile, installation.userDataPath, m_traits.steamAppId);
+            if (owner.workshopId != mod.identity.id)
+                return makeError(ErrorCode::ValidationFailed,
+                                 "The Workshop mod " + label + " cannot be registered because " +
+                                     owner.ref +
+                                     " belongs to another mod. Rename that file, then rescan.",
+                                 toString(mod.identity) + ": " + pathToUtf8(ugcFile));
         }
 
         // The content copy's own path= is often stale (the author's machine),
@@ -1022,7 +1042,7 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     if (!dlcLoad)
         return std::move(dlcLoad).error();
     plan.warnings = std::move(dlcLoad->warnings);
-    if (dlcLoad->existing != dlcLoad->contents)
+    if (!dlcLoad->unchanged)
         plan.configWrites.push_back(
             ConfigWrite{dlcLoadFile, std::move(dlcLoad->contents), "load order (dlc_load.json)"});
     return plan;
