@@ -123,9 +123,9 @@ ModRowData modRow(const services::PlaysetRow& row,
         for (const std::string& problem : mod.problems)
             data.problems.push_back(qs(problem));
         data.contentPath = qpath(mod.contentPath);
-        std::error_code ec;
-        data.canOpenFolder = !mod.contentPath.empty() && (fs::is_directory(mod.contentPath, ec) ||
-                                                          fs::is_regular_file(mod.contentPath, ec));
+        // Existence is checked when the folder is opened, not for every row of
+        // every refresh.
+        data.canOpenFolder = !mod.contentPath.empty();
     } else if (!row.entry.versionHint.empty()) {
         data.version = trimmedQ(row.entry.versionHint);
     }

@@ -9,9 +9,11 @@
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/core/session_host.hpp"
+#include "app/gui/backend.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "services/playset_view.hpp"
+#include "sharing/share_code.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -235,6 +237,76 @@ TEST_CASE("acquisition runs subscribe, download and install through the runner (
         return !runner.callBlocking(
             [](AppRuntime& runtime) { return runtime.acquisition()->sessionOpen(kGame); });
     }));
+    runner.shutdown();
+}
+
+TEST_CASE("an imported code with a missing Workshop mod becomes playable (fake Steam, Backend)",
+          "[app][helper][acquisition][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    installFakeLibrary(world.install);
+    world.addWorkshopMod("111111111", "Installed Item");
+    FakeAdapter adapter(world);
+
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = true;
+    options.metadata = false;
+    options.helperExecutable = qs(PMM_STEAM_HELPER_PATH);
+    options.tickInterval = std::chrono::milliseconds(100);
+    const fs::path itemFolder = world.workshop / "222222222";
+    options.configureCoordinator = [itemFolder](services::CoordinatorOptions& coordinator) {
+        coordinator.policy.pollIntervalMs = 100;
+        coordinator.verifyContent = [itemFolder](const fs::path&) -> Status {
+            std::error_code ec;
+            fs::create_directories(itemFolder, ec);
+            return platform::writeFileAtomic(itemFolder / "name.txt", "Downloaded Item");
+        };
+    };
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    CHECK(backend.acquisition()->downloadsEnabled());
+
+    // A friend's code: one installed mod and one missing, enabled Workshop mod.
+    sharing::Manifest manifest;
+    manifest.game = kGame;
+    manifest.playsetName = "From a friend";
+    manifest.mods = {{source::SteamWorkshop, "111111111", "Installed Item", true, {}, {}},
+                     {source::SteamWorkshop, "222222222", "Downloaded Item", true, {}, {}}};
+    const QString code = qs(require(sharing::encodeShareCode(manifest)));
+
+    backend.sharing()->previewImport(code);
+    REQUIRE(
+        waitUntil([&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+    const QVariantMap preview = backend.sharing()->preview();
+    REQUIRE(preview.value("ok").toBool());
+    CHECK(preview.value("missing").toInt() == 1);
+    CHECK(preview.value("missingEnabled").toInt() == 1);
+
+    REQUIRE(backend.sharing()->confirmImport("new", -1, preview.value("proposedName").toString()));
+    REQUIRE(waitUntil([&] { return backend.mods()->count() == 2; }));
+    // Missing enabled content blocks Play until it is installed.
+    CHECK_FALSE(backend.launcher()->canPlay());
+
+    // The coordinator works the queued job: subscribe, download, verify, rescan.
+    REQUIRE(waitUntil(
+        [&] {
+            const ModRowData* row = backend.mods()->row(1);
+            return row && row->status == QLatin1String("ready");
+        },
+        std::chrono::seconds(60)));
+    CHECK(backend.mods()->rows()[1].name == "Downloaded Item");
+    CHECK(backend.mods()->missingCount() == 0);
+    CHECK(backend.acquisition()->providerStatus() == "ready");
+    REQUIRE(waitUntil([&] { return backend.launcher()->blockers().isEmpty(); }));
+    CHECK(backend.launcher()->canPlay());
+    CHECK(backend.inventory()->totalCount() == 2);
+
+    backend.shutdown();
     runner.shutdown();
 }
 

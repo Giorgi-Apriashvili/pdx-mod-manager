@@ -211,8 +211,11 @@ temporary profiles. The Play area therefore shows the read-only blocker.
 | Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` | `<dir>\cache\` |
 
 The Linux and macOS locations are listed in
-[`architecture.md`](architecture.md#data-locations). Settings → About shows
-the folders of the running profile and opens the logs folder.
+[`architecture.md`](architecture.md) (section "State and file locations").
+Settings → About shows the folders of the running profile and opens the logs
+folder. Qt keeps its own graphics pipeline cache in the standard per-user
+cache folder (`ParadoxModManager/Paradox Mod Manager/cache`), even with
+`--profile`.
 
 UI settings (theme, window geometry, pane and column widths) are stored in
 the database's settings table under `ui.*`, next to the services' keys
