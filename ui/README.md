@@ -20,7 +20,9 @@ domain logic lives here.
 
 Icons are vector paths on a 16x16 grid (`controls/IconPaths.js`) drawn with
 `QtQuick.Shapes`, so they stay sharp at any scale factor. Status is always a
-distinct glyph plus text, never colour alone.
+distinct glyph plus text, never colour alone. Keyboard access, accessible
+names, announcements, contrast and high-DPI behaviour are described in
+[`docs/accessibility.md`](../docs/accessibility.md).
 
 ## Integration with the application
 
@@ -51,19 +53,22 @@ Things the QML relies on beyond the tables in the contract:
   `mods.dependencyFeedback(text)`, previews through `sharing.preview`.
 - `ModFilterModel.index(row, 0)` (inherited from `QAbstractItemModel`) feeds an
   `ItemSelectionModel` for multi-select.
-- Object names for automation: `modsPane`, `modList`, `searchField`,
-  `statusFilter`, `sortSelector`, `playsetSelector`, `columnHeader`,
-  `dragHandleArea`, `playButton`, `importDialog`, `importNameField`,
-  `importConfirmButton`, `confirmDialog`, `confirmButton`.
+- Object names for automation: `gamesPane`, `modsPane`, `sidePane`,
+  `modList`, `searchField`, `statusFilter`, `sortSelector`,
+  `playsetSelector`, `columnHeader`, `dragHandleArea`, `playButton`,
+  `settingsButton`, `importDialog`, `importNameField`, `importConfirmButton`,
+  `confirmDialog`, `confirmButton`, `settingsDialog`, `shortcutsDialog`,
+  `shortcutList`.
 
 ## Interaction reference
 
 | Key | Action |
 |---|---|
+| Tab / Shift+Tab, F6 / Shift+F6 | Next / previous control; next / previous column |
 | Up / Down, PgUp / PgDn, Home / End | Move the current row (Shift extends the selection) |
-| Ctrl / Shift + click | Toggle / extend the selection |
+| Ctrl / Shift + click, Ctrl+Space | Toggle / extend the selection; toggle the current row |
 | Space | Toggle enabled for the current row or the selection |
-| Ctrl+Up / Ctrl+Down | Move the selection earlier / later in the load order |
+| Alt+Up / Alt+Down (or Ctrl+Up / Ctrl+Down) | Move the selection earlier / later in the load order |
 | Delete | Remove the selection from the playset (asks first; undoable) |
 | Ctrl+A | Select all visible rows |
 | Ctrl+F, Esc | Focus search; Esc clears it, a second Esc returns to the list |
@@ -71,9 +76,11 @@ Things the QML relies on beyond the tables in the contract:
 | Ctrl+I, Ctrl+E | Import / export a share code |
 | Ctrl+N, Ctrl+Shift+A | New playset / add mods |
 | F5, Ctrl+, | Rescan / settings |
-| Menu key, right click | Row context menu |
+| Shift+F10, Menu key, right click | Row context menu |
+| Enter / Space, Esc | Activate the focused button; close a dialog or menu (focus returns) |
+| F1 | Keyboard shortcuts list |
 
-Reordering (drag handle, Move up/down, Ctrl+Up/Down) is only possible in the
+Reordering (drag handle, Move up/down, Alt/Ctrl+Up/Down) is only possible in the
 unfiltered load-order view (`modView.reorderAllowed`); otherwise a slim banner
 shows `reorderBlockedReason` with a "Show load order" action. Column widths are
 dragged in the header; Name takes the remaining width. Window geometry, pane
@@ -93,6 +100,7 @@ ui/dev/preview.sh                # interactive window
 ui/dev/preview.sh --screenshot   # regenerate docs/screenshots/*.png (1400x860)
 ui/dev/preview.sh --test         # QML smoke tests (qmltestrunner, dev/tests)
 ui/dev/preview.sh --lint         # qmllint on every module file
+python3 ui/dev/check_contrast.py # WCAG contrast of the Theme.qml colour pairs
 ```
 
 No C++ build is needed: the script generates `build/ui-preview/Pmm/Ui/qmldir`
@@ -110,4 +118,5 @@ scale factor of 1 so they are exactly 1400x860 regardless of the display.
 `docs/screenshots/`: `main-light`, `main-dark`, `main-filtered` (reorder
 disabled banner), `import-preview` / `import-preview-dark`, `export-code`
 (with a toast above the dialog), `add-mods`, `settings`, `playset-deleted`
-(Restore affordance), `history`, `game-not-found`.
+(Restore affordance), `history`, `game-not-found`, `a11y-focus-light`
+(keyboard focus ring and tool tip), `a11y-shortcuts-dark` (F1 list).
