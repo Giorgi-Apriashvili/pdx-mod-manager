@@ -141,6 +141,7 @@ public:
     std::optional<Error> scanError;
     std::optional<Error> planError;
     std::vector<PlaysetEntry> currentConfiguration;
+    std::string loadOrderNote;
     mutable int scans = 0;
     mutable std::vector<std::vector<ModIdentity>> launchRequests;
 
@@ -249,7 +250,7 @@ public:
     }
 
     games::LoadOrderInfo loadOrderInfo() const override {
-        return games::LoadOrderInfo{"index 0 first (fake)", false, {}};
+        return games::LoadOrderInfo{"index 0 first (fake)", false, {}, loadOrderNote};
     }
 
     std::vector<std::string> compatibilityWarnings(const GameInstallation& installation,

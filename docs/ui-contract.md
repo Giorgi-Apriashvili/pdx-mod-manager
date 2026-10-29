@@ -73,10 +73,18 @@ Roles:
 - `statusText` ("Installed · v4.5.2", "Installed · v4.5.2 · manual location",
   "Not found", "Not supported yet"), `version`;
 - `installPath`, `userDataPath` (display only);
-- `manualLocation` (bool: the installation was located manually).
+- `manualLocation` (bool: the installation was located manually);
+- `loadOrderNote` (string): set when the game does not apply the playset
+  order as written, empty otherwise. EU4 (observed in-game 2026-10-30): "Europa
+  Universalis IV does not use this order when two mods change the same file:
+  the mod whose name comes first alphabetically wins. The order is still
+  saved, shared and written for the game." The mods pane shows it as a
+  closable info banner above the list (hidden for that game for the rest of
+  the session once closed).
 
 Properties: `currentKey` (string), `currentName`, `currentInstalled` (bool),
-`currentSupported` (bool), `scanning` (bool), `count`.
+`currentSupported` (bool), `currentLoadOrderNote` (string), `scanning`
+(bool), `count`.
 
 Invokables:
 - `select(key)`: switches to a supported game, restoring its last active

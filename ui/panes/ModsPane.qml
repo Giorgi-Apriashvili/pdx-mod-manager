@@ -47,6 +47,8 @@ Rectangle {
     property int anchorRow: -1
     property bool bulkSelecting: false
     property string dependencyFeedback
+    // Game whose load-order note the user closed this session.
+    property string loadOrderNoteHiddenFor
     // Focus given programmatically (start-up, after dialogs) shows no list ring
     // until the user moves focus away and back.
     property bool quietListFocus: false
@@ -698,6 +700,21 @@ Rectangle {
                 toolTipText: qsTr("Clear search and filter and sort by load order")
                 onClicked: root.showLoadOrder()
             }
+        }
+        Banner {
+            objectName: "loadOrderNote"
+            Layout.fillWidth: true
+            Layout.margins: 6
+            Layout.bottomMargin: 0
+            // The game does not apply the playset order as written (EU4).
+            visible: root.canEdit && Backend.games.currentLoadOrderNote.length > 0
+                     && Backend.mods.count > 1
+                     && root.loadOrderNoteHiddenFor !== Backend.games.currentKey
+            level: "info"
+            iconName: "info"
+            text: Backend.games.currentLoadOrderNote
+            closable: true
+            onClosed: root.loadOrderNoteHiddenFor = Backend.games.currentKey
         }
         Banner {
             Layout.fillWidth: true

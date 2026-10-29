@@ -37,6 +37,7 @@ struct GameState {
     // the previously cached one.
     std::optional<Error> scanError;
     Capabilities capabilities; // of the installation; all false without one
+    std::string loadOrderNote; // games::LoadOrderInfo::userNote of the adapter
 };
 
 class GameService {

@@ -103,6 +103,9 @@ TEST_CASE("EU4 default locations per OS", "[games][eu4]") {
     CHECK(names.conflictingWriters == std::vector<std::string>{"dowser", "paradox-launcher"});
     CHECK(adapter.loadOrderInfo().verifiedInGame);
     CHECK(adapter.loadOrderInfo().summary.find("name sorts first") != std::string::npos);
+    // Users are told that reordering does not change which mod wins.
+    CHECK(adapter.loadOrderInfo().userNote.find("comes first alphabetically wins") !=
+          std::string::npos);
 }
 
 TEST_CASE("EU4 scan understands archives and relative paths", "[games][eu4]") {

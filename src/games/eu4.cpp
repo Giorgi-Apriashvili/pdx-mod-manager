@@ -40,6 +40,9 @@ constexpr GameTraits kTraits{
     .loadOrderEvidence = "docs/evidence/live-validation-2026-10-30.md (probe mods, EU4 1.37.5, "
                          "Windows 11)",
     .loadOrderVerifiedInGame = true,
+    .loadOrderUserNote = "Europa Universalis IV does not use this order when two mods change the "
+                         "same file: the mod whose name comes first alphabetically wins. The order "
+                         "is still saved, shared and written for the game.",
     .logComponent = "games.eu4",
 };
 

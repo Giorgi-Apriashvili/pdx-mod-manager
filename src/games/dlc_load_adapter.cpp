@@ -1097,6 +1097,7 @@ LoadOrderInfo DlcLoadJsonAdapter::loadOrderInfo() const {
     info.summary = std::string(m_traits.loadOrderSummary);
     info.verifiedInGame = m_traits.loadOrderVerifiedInGame;
     info.evidence = std::string(m_traits.loadOrderEvidence);
+    info.userNote = std::string(m_traits.loadOrderUserNote);
     return info;
 }
 

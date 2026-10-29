@@ -55,6 +55,8 @@ GameState GameService::baseState(const GameKey& key) const {
     state.displayName = gameDisplayName(key);
     const GameCatalogEntry* entry = findGame(key);
     state.supported = entry && entry->adapterAvailable && m_ctx.adapterFor(key) != nullptr;
+    if (const games::GameAdapter* adapter = m_ctx.adapterFor(key))
+        state.loadOrderNote = adapter->loadOrderInfo().userNote;
     return state;
 }
 

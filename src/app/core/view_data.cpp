@@ -190,6 +190,7 @@ GameRowData gameRow(const services::GameState& state) {
     row.supported = state.supported;
     row.installed = state.installation.has_value();
     row.modCount = static_cast<int>(state.inventory.size());
+    row.loadOrderNote = qs(state.loadOrderNote);
     if (state.scanError)
         row.scanError = qs(state.scanError->message);
     if (!state.supported) {

@@ -835,6 +835,7 @@ TEST_CASE("Stellaris process names and load-order information", "[games][stellar
 
     const LoadOrderInfo info = adapter.loadOrderInfo();
     CHECK(info.verifiedInGame);
+    CHECK(info.userNote.empty()); // the playset order is the effective order
     CHECK(info.summary.find("index 0 first") != std::string::npos);
     CHECK(info.summary.find("later in the list wins") != std::string::npos);
     CHECK(info.evidence.find("live-validation-2026-10-30.md") != std::string::npos);

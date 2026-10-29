@@ -17,6 +17,11 @@ change what codes look like or which codes are accepted say so explicitly.
   ([evidence](docs/evidence/live-validation-2026-10-30.md)): direct launches
   of Stellaris 4.5.2 and EU4 1.37.5 with probe mods, a real EU4 Workshop
   subscription and download, restart persistence, and the failure cases.
+- EU4 playsets show a closable note above the mod list: EU4 does not use
+  the playset order when two mods change the same file (the mod whose name
+  comes first alphabetically wins). `GamesModel` gains the `loadOrderNote`
+  role and `currentLoadOrderNote`; adapters expose it as
+  `LoadOrderInfo::userNote`.
 - `pmm-app --live-test <steps>` (hidden, requires `--profile`): the
   self-test steps plus `play`, `play-fails`, `wait-ready`, `restore`,
   `select`, `locate`, `blockers`, `jobs`, with timestamped job, launch and

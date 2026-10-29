@@ -68,12 +68,12 @@ Done on 2026-10-30 ([results](validation.md#6-results)): EU4 steps 1-6, 8,
 | Steam's own offline mode | the Web API was made unreachable instead |
 | EU4 mods with `dependencies` and override precedence | not covered by the probes |
 
-**Product decision needed (EU4 order):** the app lets users reorder EU4
-playsets, but EU4 does not use that order for file overrides. The adapter's
-`LoadOrderInfo` now says so (`verifiedInGame = true`), but nothing in the UI
-shows it yet. Options: show the rule as a note above the mod list for games
-whose order is not effective; and/or warn when two enabled EU4 mods contain
-the same file. Not decided.
+**EU4 order:** EU4 does not use the playset order for file overrides. The
+adapter's `LoadOrderInfo` says so (`verifiedInGame = true`), and the mods
+pane shows its `userNote` as a closable info banner for EU4 playsets
+(`GamesModel.currentLoadOrderNote`, [ui-contract](ui-contract.md)). Not
+done (possible later): a warning when two enabled EU4 mods contain the same
+file.
 
 ### 2. Other platforms
 
@@ -147,11 +147,9 @@ Packaging ([`packaging.md`](packaging.md)):
 
 ## Next steps (in order)
 
-1. Decide how the UI presents EU4's override rule (see above) and implement
-   it with tests.
-2. With the user's permission, push so CI runs once on Windows, Linux and
-   macOS (first run of the application tests on Linux and macOS); fix what it
-   finds.
+1. Check the first CI run on Windows, Linux and macOS (first run of the
+   application tests on Linux and macOS) and fix what it finds.
+2. Optional: warn when two enabled EU4 mods contain the same file.
 3. Implement the services and application items above (import options,
    helper exit wait, launch refresh), then the discard flow for unrecoverable
    transactions, each with tests.

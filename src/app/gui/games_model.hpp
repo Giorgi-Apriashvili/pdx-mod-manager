@@ -21,6 +21,7 @@ class GamesModel : public QAbstractListModel {
     Q_PROPERTY(QString currentName READ currentName NOTIFY currentChanged)
     Q_PROPERTY(bool currentInstalled READ currentInstalled NOTIFY currentChanged)
     Q_PROPERTY(bool currentSupported READ currentSupported NOTIFY currentChanged)
+    Q_PROPERTY(QString currentLoadOrderNote READ currentLoadOrderNote NOTIFY currentChanged)
     Q_PROPERTY(bool scanning READ scanning NOTIFY scanningChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
 
@@ -35,6 +36,7 @@ public:
         InstallPathRole,
         UserDataPathRole,
         ManualLocationRole,
+        LoadOrderNoteRole,
     };
 
     explicit GamesModel(Backend* backend, QObject* parent = nullptr);
@@ -47,6 +49,7 @@ public:
     QString currentName() const;
     bool currentInstalled() const;
     bool currentSupported() const;
+    QString currentLoadOrderNote() const;
     bool scanning() const { return m_scanning; }
     int count() const { return static_cast<int>(m_rows.size()); }
 

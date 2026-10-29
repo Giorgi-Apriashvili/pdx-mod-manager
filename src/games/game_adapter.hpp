@@ -47,6 +47,9 @@ struct LoadOrderInfo {
     std::string summary;
     bool verifiedInGame = false; // true only with recorded in-game evidence
     std::string evidence;        // where the evidence is documented
+    // Shown to users when the playset order is not the order the game applies
+    // (EU4 picks the winner of a shared file by mod name); empty otherwise.
+    std::string userNote;
 };
 
 struct ProcessNames {

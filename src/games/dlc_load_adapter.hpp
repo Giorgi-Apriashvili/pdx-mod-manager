@@ -66,6 +66,7 @@ struct GameTraits {
     std::string_view loadOrderSummary;
     std::string_view loadOrderEvidence;
     bool loadOrderVerifiedInGame = false; // probe-mod run recorded in the evidence
+    std::string_view loadOrderUserNote;   // LoadOrderInfo::userNote
     std::string_view logComponent;        // "games.stellaris"
 };
 

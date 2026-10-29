@@ -8,6 +8,7 @@ ListModel {
     property string currentName
     property bool currentInstalled: false
     property bool currentSupported: false
+    property string currentLoadOrderNote
     property bool scanning: false
 
     signal gameSelected(string key)
@@ -18,24 +19,26 @@ ListModel {
         statusText: "Installed \u00b7 v4.5.2"; version: "4.5.2"
         installPath: "C:/Games/Steam/steamapps/common/Stellaris"
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Stellaris"
+        loadOrderNote: ""
     }
     ListElement {
         key: "eu4"; name: "Europa Universalis IV"; supported: true; installed: false; manualLocation: false
         statusText: "Not found"; version: ""
         installPath: ""
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Europa Universalis IV"
+        loadOrderNote: "Europa Universalis IV does not use this order when two mods change the same file: the mod whose name comes first alphabetically wins. The order is still saved, shared and written for the game."
     }
     ListElement {
         key: "hoi4"; name: "Hearts of Iron IV"; supported: false; installed: false; manualLocation: false
-        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""
+        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""; loadOrderNote: ""
     }
     ListElement {
         key: "ck3"; name: "Crusader Kings III"; supported: false; installed: false; manualLocation: false
-        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""
+        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""; loadOrderNote: ""
     }
     ListElement {
         key: "vic3"; name: "Victoria 3"; supported: false; installed: false; manualLocation: false
-        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""
+        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""; loadOrderNote: ""
     }
 
     function indexOfKey(key: string): int {
@@ -60,6 +63,7 @@ ListModel {
         currentName = row >= 0 ? get(row).name : ""
         currentInstalled = row >= 0 && get(row).installed
         currentSupported = row >= 0 && get(row).supported
+        currentLoadOrderNote = row >= 0 ? get(row).loadOrderNote : ""
     }
 
     function rescan() {

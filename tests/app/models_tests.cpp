@@ -246,6 +246,15 @@ TEST_CASE("GamesModel, PlaysetsModel and JobsModel update in place", "[app][mode
     CHECK(gameResets.count() == 0);
     CHECK(games.currentInstalled());
     CHECK(games.data(games.index(0), GamesModel::ManualLocationRole).toBool());
+    CHECK(games.currentLoadOrderNote().isEmpty());
+    QSignalSpy currentChanges(&games, &GamesModel::currentChanged);
+    gameRows[0].loadOrderNote = "The order is not applied as written.";
+    games.setRows(gameRows);
+    CHECK(gameResets.count() == 0);
+    CHECK(currentChanges.count() >= 1);
+    CHECK(games.currentLoadOrderNote() == "The order is not applied as written.");
+    CHECK(games.data(games.index(0), GamesModel::LoadOrderNoteRole).toString() ==
+          gameRows[0].loadOrderNote);
 
     PlaysetsModel playsets(nullptr);
     QAbstractItemModelTester playsetsTester(

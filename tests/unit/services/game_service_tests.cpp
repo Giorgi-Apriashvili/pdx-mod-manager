@@ -60,12 +60,14 @@ TEST_CASE("Profile paths keep every application file under one folder", "[servic
 TEST_CASE("Refreshing discovers, persists and scans supported games only", "[services][games]") {
     World w;
     w.installFixtureMods();
+    w.adapter.loadOrderNote = "Order is not applied as written.";
     GameService games(w.ctx);
 
     const std::vector<GameState> states = games.refreshAll();
     REQUIRE(states.size() == gameCatalog().size());
     const GameState& stellaris = stateFor(states, kGame);
     CHECK(stellaris.supported);
+    CHECK(stellaris.loadOrderNote == "Order is not applied as written."); // from the adapter
     REQUIRE(stellaris.installation);
     CHECK(stellaris.installation->installPath == w.install);
     CHECK_FALSE(stellaris.installation->manuallyConfigured);

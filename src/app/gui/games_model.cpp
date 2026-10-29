@@ -9,7 +9,8 @@ bool sameRow(const GameRowData& a, const GameRowData& b) {
     return a.key == b.key && a.name == b.name && a.supported == b.supported &&
            a.installed == b.installed && a.manualLocation == b.manualLocation &&
            a.statusText == b.statusText && a.version == b.version &&
-           a.installPath == b.installPath && a.userDataPath == b.userDataPath;
+           a.installPath == b.installPath && a.userDataPath == b.userDataPath &&
+           a.loadOrderNote == b.loadOrderNote;
 }
 
 } // namespace
@@ -45,6 +46,8 @@ QVariant GamesModel::data(const QModelIndex& index, int role) const {
         return row.userDataPath;
     case ManualLocationRole:
         return row.manualLocation;
+    case LoadOrderNoteRole:
+        return row.loadOrderNote;
     default:
         return {};
     }
@@ -59,7 +62,8 @@ QHash<int, QByteArray> GamesModel::roleNames() const {
             {VersionRole, "version"},
             {InstallPathRole, "installPath"},
             {UserDataPathRole, "userDataPath"},
-            {ManualLocationRole, "manualLocation"}};
+            {ManualLocationRole, "manualLocation"},
+            {LoadOrderNoteRole, "loadOrderNote"}};
 }
 
 QString GamesModel::currentName() const {
@@ -75,6 +79,11 @@ bool GamesModel::currentInstalled() const {
 bool GamesModel::currentSupported() const {
     const GameRowData* row = find(m_current);
     return row && row->supported;
+}
+
+QString GamesModel::currentLoadOrderNote() const {
+    const GameRowData* row = find(m_current);
+    return row ? row->loadOrderNote : QString();
 }
 
 void GamesModel::select(const QString& key) {
