@@ -187,7 +187,7 @@ std::vector<Verification::Step> Verification::selfTestSteps() {
                     return;
                 }
                 waitFor([mods] { return !mods->hasPendingEdits(); },
-                        [this, name, argument, next] {
+                        [name, argument, next] {
                             say(QStringLiteral("%1 %2 saved").arg(name, argument));
                             next();
                         },

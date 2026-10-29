@@ -100,8 +100,10 @@ void LaunchController::play() {
             return outcome;
         },
         [this, game](Outcome outcome) {
-            apply(std::move(outcome.launch));
-            const QString gameName = m_backend->games()->currentName();
+            if (game == m_backend->currentGame())
+                apply(std::move(outcome.launch));
+            const GameRowData* row = m_backend->games()->find(game);
+            const QString gameName = row ? row->name : game;
             if (outcome.error) {
                 m_lastError = qs(outcome.error->message);
                 m_lastErrorDetail = qs(outcome.error->detail);
