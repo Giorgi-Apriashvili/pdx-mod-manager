@@ -8,6 +8,7 @@
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
+#include "app/gui/network_guard.hpp"
 #include "app/gui/verification.hpp"
 #include "core/log.hpp"
 
@@ -184,6 +185,8 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setDesktopFileName(QStringLiteral("paradox-mod-manager"));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QGuiApplication app(argc, argv);
+    // Every QML engine of the process: no network access (outlives them).
+    OfflineNetworkAccessManagerFactory networkFactory;
 
     const CommandLine line = parseCommandLine(app);
 
@@ -200,6 +203,7 @@ int main(int argc, char* argv[]) {
             return 2;
         }
         QQmlApplicationEngine engine;
+        engine.setNetworkAccessManagerFactory(&networkFactory);
         showFatalError(engine, message);
         return app.exec();
     }
@@ -220,6 +224,7 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<Backend> backend;
     QQmlApplicationEngine engine;
+    engine.setNetworkAccessManagerFactory(&networkFactory);
     if (!start.ok) {
         logError("app", "start-up failed", {{"error", utf8(start.errorMessage)}});
         if (line.verification.active()) {

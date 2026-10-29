@@ -46,6 +46,8 @@ add_library(pmm_appgui STATIC
   gui/mod_filter_model.hpp
   gui/mod_list_model.cpp
   gui/mod_list_model.hpp
+  gui/network_guard.cpp
+  gui/network_guard.hpp
   gui/notification_center.cpp
   gui/notification_center.hpp
   gui/playsets_model.cpp
