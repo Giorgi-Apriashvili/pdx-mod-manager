@@ -311,9 +311,11 @@ void Backend::rescan(bool userRequested) {
             if (!problems.isEmpty())
                 m_notifications->warning(tr("Scan problems"), problems.join(QLatin1Char('\n')));
             if (userRequested)
-                m_notifications->info(tr("Scan complete"),
-                                      tr("Found %n installed game(s)", "", scan.installed) +
-                                          tr(" with %n installed mod(s).", "", scan.mods));
+                m_notifications->info(
+                    tr("Scan complete"),
+                    tr("Found %1 with %2.")
+                        .arg(countText(scan.installed, "installed game", "installed games"),
+                             countText(scan.mods, "installed mod", "installed mods")));
             const GameRowData* current = m_games->find(m_game);
             if (!current || !current->supported) {
                 const QString game = pickInitialGame();
@@ -424,10 +426,9 @@ bool Backend::importCurrentConfiguration() {
             if (generation == m_contextGeneration)
                 applyContext(std::move(outcome.context));
             m_notifications->info(tr("Playset created"),
-                                  tr("“%1” has the %n mod(s) enabled in the game's own "
-                                     "configuration, in the same order.",
-                                     "", total)
-                                      .arg(name));
+                                  tr("“%1” has the %2 enabled in the game's own configuration, "
+                                     "in the same order.")
+                                      .arg(name, countText(total, "mod", "mods")));
         });
     return true;
 }
@@ -694,8 +695,10 @@ void Backend::rescanCurrentMods() {
                 return;
             }
             m_games->updateRow(result.second);
-            m_notifications->info(tr("Rescan finished"),
-                                  tr("%n installed mod(s) found.", "", result.second.modCount));
+            m_notifications->info(
+                tr("Rescan finished"),
+                tr("%1 found.")
+                    .arg(countText(result.second.modCount, "installed mod", "installed mods")));
             if (game == m_game)
                 reloadContext(m_playsetId >= 0 ? std::optional<std::int64_t>(m_playsetId)
                                                : std::nullopt);

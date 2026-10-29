@@ -32,4 +32,7 @@ std::filesystem::path toPath(const QString& path);
 // "source:id", the key InventoryModel and ModListModel use for identities.
 QString identityKey(std::string_view source, std::string_view id);
 
+// "1 mod", "3 mods" (the user interface is English only for now).
+QString countText(qsizetype count, const char* one, const char* many);
+
 } // namespace pmm::app

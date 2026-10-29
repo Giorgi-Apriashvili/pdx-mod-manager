@@ -60,6 +60,7 @@ private:
     void runSteps();
     void fail(const QString& message);
     void finish();
+    void quit(int code);
     QQuickWindow* window() const;
     void callWindow(const char* method, const QString& argument = {});
     void callWindow(const char* method, int argument);

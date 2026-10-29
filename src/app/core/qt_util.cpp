@@ -28,4 +28,8 @@ QString identityKey(std::string_view source, std::string_view id) {
     return qs(source) + QLatin1Char(':') + qs(id);
 }
 
+QString countText(qsizetype count, const char* one, const char* many) {
+    return QString::number(count) + QLatin1Char(' ') + QString::fromUtf8(count == 1 ? one : many);
+}
+
 } // namespace pmm::app

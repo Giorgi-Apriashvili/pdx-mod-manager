@@ -287,8 +287,8 @@ void ModListModel::removeRows(const QList<int>& rows) {
         true);
     m_backend->notifications()->info(
         tr("Removed from playset"),
-        tr("%n mod(s) removed from the playset. They stay installed; press Ctrl+Z to undo.", "",
-           removed));
+        tr("%1 removed from the playset. Removed mods stay installed; press Ctrl+Z to undo.")
+            .arg(countText(removed, "mod", "mods")));
 }
 
 void ModListModel::addMods(const QStringList& identityKeys) {

@@ -79,12 +79,20 @@ void Verification::fail(const QString& message) {
         return;
     m_failed = true;
     say(QStringLiteral("FAILED: ") + message);
-    QCoreApplication::exit(1);
+    quit(1);
 }
 
 void Verification::finish() {
     say(QStringLiteral("done"));
-    QCoreApplication::exit(0);
+    quit(0);
+}
+
+void Verification::quit(int code) {
+    // Like a user closing the window: stop rendering before the window and
+    // the engine are destroyed.
+    if (QQuickWindow* w = window())
+        w->hide();
+    QTimer::singleShot(200, QCoreApplication::instance(), [code] { QCoreApplication::exit(code); });
 }
 
 QQuickWindow* Verification::window() const {

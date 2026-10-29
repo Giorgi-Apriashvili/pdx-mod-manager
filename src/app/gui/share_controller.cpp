@@ -342,11 +342,12 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
                                          .arg(outcome.entries);
             if (outcome.queued > 0)
                 text += QLatin1Char(' ') +
-                        (steam ? tr("%n missing Workshop mod(s) queued for download.", "",
-                                    outcome.queued)
-                               : tr("%n missing Workshop mod(s) are listed; downloads are off "
-                                    "in this session.",
-                                    "", outcome.queued));
+                        (steam ? tr("%1 queued for download.")
+                                     .arg(countText(outcome.queued, "missing Workshop mod",
+                                                    "missing Workshop mods"))
+                               : tr("%1 listed; downloads are off in this session.")
+                                     .arg(countText(outcome.queued, "missing Workshop mod",
+                                                    "missing Workshop mods")));
             m_backend->notifications()->info(tr("Import complete"), text);
             if (game != m_backend->currentGame())
                 m_backend->selectGame(game);

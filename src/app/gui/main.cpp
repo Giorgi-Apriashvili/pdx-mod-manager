@@ -238,10 +238,13 @@ int main(int argc, char* argv[]) {
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, [&] {
         if (!line.verification.active())
             backend->shutdown(); // settings; verification runs leave the profile as it was
+        logInfo("app", "Paradox Mod Manager stopping");
         runner.shutdown();
-        logInfo("app", "Paradox Mod Manager stopped");
     });
     const int code = app.exec();
+    // Late Qt messages (teardown, static destructors) must not reach the
+    // application's log code any more.
+    qInstallMessageHandler(nullptr);
     verification.reset();
     return code;
 }
