@@ -455,6 +455,34 @@ TEST_CASE("More than 10000 entries are rejected", "[sharing][code][limits]") {
     CHECK_THAT(e.message, ContainsSubstring("mods"));
 }
 
+TEST_CASE("A newer-schema code over this version's limits asks for an update",
+          "[sharing][code][limits]") {
+    // A future schema may raise the entry limit (protocol section 7.2).
+    std::string mods = "[";
+    for (std::size_t i = 0; i <= kMaxEntries; ++i) {
+        if (i > 0)
+            mods += ',';
+        mods += R"({"source":"steam-workshop","id":")" + std::to_string(100000 + i) +
+                R"(","enabled":true})";
+    }
+    mods += "]";
+    const std::string tail = R"("game":"stellaris","playsetName":"P","mods":)" + mods;
+    for (const std::string& json :
+         {R"({"schemaVersion":2,)" + tail + "}", "{" + tail + R"(,"schemaVersion":2})"}) {
+        const Error e = decodeError(codeFromJson(json));
+        CHECK(e.code == ErrorCode::UnsupportedVersion);
+        CHECK_THAT(e.message, ContainsSubstring("Update the app"));
+    }
+
+    // The 8 MiB inflate cap is enforced before any JSON is read, so relaxing
+    // it needs a new envelope (section 7.2); schemaVersion cannot help there.
+    const std::string json =
+        R"({"schemaVersion":2,"game":"stellaris","playsetName":"P","mods":[]})";
+    const std::string overLimit =
+        deflateRepeated(json, ' ', kMaxDecompressedBytes - json.size() + 1);
+    CHECK(decodeError(codeFromCompressed(overLimit)).code == ErrorCode::LimitExceeded);
+}
+
 TEST_CASE("A 10000-entry playset encodes and decodes within limits", "[sharing][code][limits]") {
     Manifest m;
     m.game = "stellaris";

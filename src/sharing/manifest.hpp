@@ -60,7 +60,9 @@ Status validateManifest(const Manifest& manifest);
 // order; rejects everything validateManifest() rejects plus ParseError for
 // malformed JSON or UTF-8 and ValidationFailed for duplicate keys, unknown keys,
 // missing required fields and wrong types. An empty optional string is treated
-// like an omitted field.
+// like an omitted field. A root schemaVersion other than 1 yields
+// UnsupportedVersion even when the document also exceeds the structural limits
+// (entries, nesting, keys per object), since a newer schema may relax them.
 Result<Manifest> parseManifestJson(std::string_view json);
 
 // Canonical compact JSON (docs/share-code-protocol.md, "Canonical form").

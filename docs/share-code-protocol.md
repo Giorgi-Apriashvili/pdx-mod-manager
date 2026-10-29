@@ -70,11 +70,24 @@ persisted and no download starts until a code has passed every check.
 | 10 | The stream ends (`Z_STREAM_END`), has no preset dictionary and no bytes follow it           | `ParseError`           |
 | 11 | Well-formed UTF-8 (RFC 3629: no overlongs, surrogates or code points above U+10FFFF), no byte order mark | `ParseError` |
 | 12 | Valid JSON (RFC 8259, no comments, no trailing commas, one value)                           | `ParseError`           |
-| 13 | No duplicate keys in any object; at most 16 levels of nesting; at most 64 keys per object; arrays at most 10,000 elements | `ValidationFailed` / `LimitExceeded` |
+| 13 | No duplicate keys in any object; at most 16 levels of nesting; at most 64 keys per object; arrays at most 10,000 elements | `ValidationFailed` / `LimitExceeded`; `UnsupportedVersion` for a limit when the root `schemaVersion` is not 1 (see below) |
 | 14 | Manifest schema (section 3)                                                                 | see section 3          |
 
 Whitespace *inside* a code is not accepted: it is a sign that the code was
 reflowed or damaged, and silently removing it could hide truncation.
+
+**Version before limits.** Checks 1 to 12 do not depend on the manifest
+schema. The structural limits of check 13 (nesting depth, keys per object,
+array elements) do, because a later schema may relax them (section 7). They
+are enforced while parsing, before the document exists, so when one of them
+fails the decoder still determines the root `schemaVersion`: either it was
+already parsed, or the rest of the text is scanned for it without building
+anything. If it is an integer other than 1, the result is the same
+`UnsupportedVersion` that check 14 reports, with the limit named in the error
+detail. Otherwise (no root `schemaVersion`, a non-integer value, or malformed
+JSON before it) the limit error stands. Only the first root `schemaVersion`
+counts; one inside a nested object is ignored. Duplicate keys found before a
+limit fails are reported as `ValidationFailed` in every schema version.
 
 ## 2. File format
 
@@ -107,7 +120,7 @@ input do not matter; the encoder always writes the canonical form.
 
 | Field             | Type    | Required | Rules                                                                                       |
 | ----------------- | ------- | -------- | ------------------------------------------------------------------------------------------- |
-| `schemaVersion`   | integer | yes      | Must be `1`. Any other integer: `UnsupportedVersion`. Non-integer (including `1.0`, `"1"`): `ValidationFailed`. Checked before every other field. |
+| `schemaVersion`   | integer | yes      | Must be `1`. Any other integer: `UnsupportedVersion`. Non-integer (including `1.0`, `"1"`): `ValidationFailed`. Checked before every other field, and takes precedence over the structural limits (section 1, "Version before limits"). |
 | `game`            | string  | yes      | A key from the game catalog (`src/core/catalog.cpp`). Unknown key: `ValidationFailed`. Known game without an adapter in this release (e.g. `hoi4`): `UnsupportedGame`. Checked right after `schemaVersion`. |
 | `playsetName`     | string  | yes      | 1 to 256 bytes of UTF-8, no control characters.                                             |
 | `gameVersionHint` | string  | no       | At most 64 bytes, no control characters. Informational.                                     |
@@ -180,23 +193,41 @@ integer `1`; booleans as `true`/`false`.
 
 ## 5. Limits
 
-| Limit                        | Value      | Enforced                                         |
-| ---------------------------- | ---------- | ------------------------------------------------ |
-| Encoded input                | 2 MiB      | on the raw, untrimmed input before any parsing   |
-| Decompressed JSON            | 8 MiB      | during inflation; aborts at the first byte over  |
-| Entries                      | 10,000     | while parsing and in validation                  |
-| Nesting depth / keys per object | 16 / 64 | while parsing, before the document is built      |
+| Limit                           | Value     | Enforced                                         | Can be raised compatibly by |
+| ------------------------------- | --------- | ------------------------------------------------ | --------------------------- |
+| Encoded input                   | 2 MiB     | on the raw, untrimmed input before any parsing   | nothing                     |
+| Decompressed JSON               | 8 MiB     | during inflation; aborts at the first byte over  | a new envelope (`PMM2`)     |
+| Entries                         | 10,000    | while parsing and in validation                  | `schemaVersion` 2           |
+| Nesting depth / keys per object | 16 / 64   | while parsing, before the document is built      | `schemaVersion` 2           |
+| Field lengths and id rules      | section 3 | in validation, after `schemaVersion`             | `schemaVersion` 2           |
 
 A 10,000-entry playset with realistic names (about 1.3 MiB of JSON) encodes to
 roughly 0.1 MiB, well within the input limit. The encoder refuses manifests whose code would exceed
 2 MiB (possible only with near-maximal, incompressible fields).
+
+A limit can only be raised by a version that old decoders check before they
+enforce that limit; otherwise they report "too large" or "invalid" instead of
+"update the app":
+
+* The entry, nesting and key limits defer to a root `schemaVersion` other
+  than 1 (section 1, "Version before limits"), and the field-level rules of
+  section 3 are validated after `schemaVersion`, so `schemaVersion` 2 can
+  raise any of them.
+* The 8 MiB decompressed limit fires during inflation, before any JSON is
+  read, so `schemaVersion` cannot help. Raising it needs `PMM2`: old decoders
+  reject `PMM<n>.` at check 3, before inflation, with "update the app".
+* The 2 MiB input limit is check 1, before even the envelope prefix. No
+  version change can raise it compatibly: old decoders would call a larger
+  code too large.
 
 ## 6. Security considerations
 
 * Decoding is bounded in memory and time: input size, decompressed size,
   nesting depth, key count and entry count are capped before the work they
   bound is done. A decompression bomb is rejected after at most 8 MiB + 1 byte
-  of output.
+  of output. When a structural limit fails before the root `schemaVersion` is
+  known, the remaining text is only scanned, without building a document, so
+  time and memory stay linear in the at most 8 MiB of JSON.
 * The JSON parser runs iteratively (no recursion on attacker-controlled depth)
   and duplicate keys are rejected, so two decoders can never disagree about
   which of two values "wins".
@@ -216,13 +247,17 @@ roughly 0.1 MiB, well within the input limit. The encoder refuses manifests whos
 2. **Strict readers, versioned writers.** A version 1 decoder rejects what it
    does not understand instead of guessing. Consequently every change that an
    existing decoder would reject or misread requires a new version:
-   * a new or renamed field, a changed type or meaning, or relaxed limits
-     need `schemaVersion` 2 (the envelope can stay `PMM1`);
-   * a different compression, digest, text encoding or envelope layout needs
-     `PMM2`.
+   * a new or renamed field, a changed type or meaning, or relaxed field
+     lengths, id rules, entry, nesting or key limits need `schemaVersion` 2
+     (the envelope can stay `PMM1`);
+   * a different compression, digest, text encoding or envelope layout, or a
+     decompressed size above 8 MiB, needs `PMM2`;
+   * the 2 MiB input limit can never be raised compatibly (section 5).
    Old applications then report "created by a newer version; update the app"
-   rather than a generic error, because `schemaVersion` and the envelope
-   prefix are checked before anything version-specific.
+   rather than a generic error, because the envelope prefix is checked before
+   inflation and `schemaVersion` takes precedence over every rule that
+   depends on the schema, including the structural limits enforced while
+   parsing (section 1, "Version before limits").
 3. **Value-space growth without a version bump.** New catalog game keys and
    new provider keys do not change the schema. Older applications reject such
    codes with an actionable "unknown game/source; update the app" message, and

@@ -24,6 +24,24 @@ std::string entryJson(std::string_view members) {
     return "[{" + std::string(members) + "}]";
 }
 
+std::string repeatedArray(std::string_view element, std::size_t count) {
+    std::string json = "[";
+    for (std::size_t i = 0; i < count; ++i) {
+        if (i > 0)
+            json += ',';
+        json += element;
+    }
+    return json + "]";
+}
+
+// `count` members "k0":0, "k1":0, ... without the surrounding braces.
+std::string numberedMembers(std::size_t count) {
+    std::string json;
+    for (std::size_t i = 0; i < count; ++i)
+        json += (i > 0 ? ",\"k" : "\"k") + std::to_string(i) + "\":0";
+    return json;
+}
+
 } // namespace
 
 TEST_CASE("Canonical serialization uses fixed key order and omits empty optional fields",
@@ -380,6 +398,62 @@ TEST_CASE("Objects with very many keys are rejected early", "[sharing][manifest]
     const Error e = parseError(json);
     CHECK(e.code == ErrorCode::ValidationFailed);
     CHECK_THAT(e.message, ContainsSubstring("too many keys"));
+}
+
+TEST_CASE("A newer schemaVersion takes precedence over the structural limits",
+          "[sharing][manifest][limits]") {
+    // Protocol section 7.2: a later schema may relax the entry, nesting and
+    // key limits, so its codes must get "update the app" rather than a limit
+    // error, wherever schemaVersion appears in the document.
+    const std::string oversized[] = {
+        R"("mods":)" + repeatedArray("{}", kMaxEntries + 1),
+        R"("newField":)" + repeatedArray("0", kMaxEntries + 1),
+        R"("newField":)" + std::string(18, '[') + std::string(18, ']'), // limit: 16 levels
+        R"("newField":{)" + numberedMembers(70) + "}",                  // limit: 64 keys
+        numberedMembers(70),                                            // at the root
+    };
+    for (const std::string& member : oversized) {
+        INFO(member.substr(0, 60));
+        const Error limit = parseError("{\"schemaVersion\":1," + member + "}");
+        CHECK(
+            (limit.code == ErrorCode::LimitExceeded || limit.code == ErrorCode::ValidationFailed));
+
+        for (const std::string& json : {
+                 "{\"schemaVersion\":2," + member + "}",
+                 "{" + member + ",\"schemaVersion\":2}",
+                 "{\"game\":\"stellaris\"," + member + ",\"x\":[{\"y\":1}],\"schemaVersion\":3}",
+             }) {
+            const Error e = parseError(json);
+            CHECK(e.code == ErrorCode::UnsupportedVersion);
+            CHECK_THAT(e.message, ContainsSubstring("newer version"));
+            CHECK_THAT(e.message, ContainsSubstring("Update the app"));
+            CHECK(e.detail == "also exceeds this version's limits: " + limit.message);
+        }
+        CHECK(parseError("{" + member + ",\"schemaVersion\":0}").code ==
+              ErrorCode::UnsupportedVersion);
+
+        // Schema 1, or no usable root schemaVersion: the limit error stands.
+        for (const std::string& json : {
+                 "{" + member + ",\"schemaVersion\":1}",
+                 "{" + member + "}",
+                 "{" + member + ",\"schemaVersion\":\"2\"}",
+                 "{" + member + ",\"schemaVersion\":2.0}",
+                 "{" + member + ",\"schemaVersion\":[2]}",
+                 "{" + member + ",\"x\":{\"schemaVersion\":2}}",
+                 "{" + member + ",\"x\":tru,\"schemaVersion\":2}",
+                 "{" + member + ",\"schemaVersion\":1,\"schemaVersion\":2}",
+                 "{\"schemaVersion\":1," + member + ",\"schemaVersion\":2}",
+             }) {
+            const Error e = parseError(json);
+            CHECK(e.code == limit.code);
+            CHECK(e.message == limit.message);
+        }
+    }
+
+    // The root key that overflows the key limit may itself be schemaVersion.
+    const Error e = parseError("{" + numberedMembers(64) + ",\"schemaVersion\":2}");
+    CHECK(e.code == ErrorCode::UnsupportedVersion);
+    CHECK_THAT(e.detail, ContainsSubstring("too many keys"));
 }
 
 TEST_CASE("serializeManifestJson refuses invalid manifests", "[sharing][manifest]") {
