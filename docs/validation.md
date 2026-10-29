@@ -5,16 +5,20 @@ acceptance") for **Stellaris** and **Europa Universalis IV**. Automated tests
 cannot cover it: it needs a real game installation, a Steam account that owns
 the game, and observation of the running game.
 
-**No results have been recorded yet.** The [results table](#6-results) is
-empty on purpose. Record only what you observed; a failed or skipped step is a
-valid result and must be written down as such. The
+**Only read-only partial runs have been recorded so far** (steps 1, 2, 3
+and 5 on one machine with isolated profiles; see the
+[results table](#6-results)). Steps 4 and 6 to 9 write game files, start the
+game or talk to Steam and have not been run; they need the explicit approval
+of the machine's owner. Record only what you observed; a failed or skipped
+step is a valid result and must be written down as such. The
 [support matrix](support-matrix.md) is updated only from rows in that table.
 
-Status note: the procedure uses `pmm-app` and `pmm-cli`, which are in
-progress. Steps refer to the UI described in [`ui-contract.md`](ui-contract.md)
-(Import code, Export code, Play, ...). Where the exact command or menu name
-differs in the shipped build, follow the build and note the difference in the
-results.
+The procedure uses the desktop application `pmm-app` and the UI described in
+[`ui-contract.md`](ui-contract.md) (Import code, Export code, Play, ...).
+There is no command-line tool; where a step can be scripted, it uses
+`pmm-app`'s verification switches ([app.md](app.md#command-line)), which
+never write game files. Where the exact menu name differs in the build you
+test, follow the build and note the difference in the results.
 
 ## 1. Before you start
 
@@ -31,18 +35,23 @@ results.
 
 ### Isolated application profile
 
-`pmm-app --profile <dir>` and `pmm-cli --profile <dir>` (planned option; check
-`--help` in the build you test) keep the application database, logs, cache and
-configuration journals inside `<dir>` instead of the standard per-user folders
-([architecture §6](architecture.md#6-state-and-file-locations)). Use a new,
-empty directory, preferably with a space and non-ASCII characters in its path,
-for example `C:\pmm validation\Prüfung B`. The game's own folders are still the
-real ones.
+`pmm-app --profile <dir>` keeps the application database, configuration
+journals, profile lock, logs and cache inside `<dir>` instead of the standard
+per-user folders ([app.md](app.md#files-and-folders)). Use a new, empty
+directory, preferably with a space and non-ASCII characters in its path, for
+example `C:\pmm validation\Prüfung B`. The game's own folders are still the
+real ones. Only one `pmm-app` can run per profile; A and B can run at the
+same time because they use different profiles.
+
+Add `--read-only` for any step that must not write game files or launch the
+game (it also turns Workshop downloads off), and `--no-steam` to keep the
+Steam helper from starting while Steam downloads should stay untouched.
 
 ### Tools
 
-- A build of `pmm-app` (and `pmm-cli`) from a known commit. Record the version
-  and `git rev-parse --short HEAD`.
+- A build of `pmm-app` from a known commit (from the build tree with Qt's
+  `bin` folder on `PATH`, or an extracted package). Record the version and
+  `git rev-parse --short HEAD`.
 - Python 3 for `tools/probe-mods/probe_mods.py` (observable probe mods,
   [ADR 0006](adr/0006-probe-mod-verification.md)) and
   `scripts/share-code.py` (independent share-code decoder).
@@ -118,6 +127,12 @@ Each step lists the action, the expected observation, and what to record.
 3. Record: version shown, number of Workshop and local mods in the app versus
    on disk (`ls "<...>/workshop/content/<appid>" | wc -l`).
 
+Workshop items that are registered with the game (a `mod/ugc_<id>.mod` file)
+but whose content folder is missing, for example right after a reinstall,
+are not listed as installed mods. A playset entry that refers to one shows as
+**Missing** (and can be acquired), not as Broken. **Broken** is reserved for
+installed mods whose descriptor or folder cannot be used.
+
 ### Step 2: create the validation playset (A)
 
 Create a playset named `PMM validation` with exactly this order:
@@ -143,21 +158,39 @@ app. Record: a screenshot of the list.
    `python scripts/share-code.py decode validation.code`.
    Expected: `game` is the game key, six `mods` in the order above, the enabled
    flags above, no paths.
-3. On B: start `pmm-app --profile "<new empty dir>"` (or a fresh installation
-   on another machine), select the game, **Import code**, paste or open
-   `validation.code`.
+3. On B: start `pmm-app --profile "<new empty dir>" --game <game>` (or a
+   fresh installation on another machine), **Import code**, paste or open
+   `validation.code`. The profile must be new: its database is created on
+   this start and holds no playsets.
 4. Expected preview: playset name, 6 entries, 4 enabled, W3 listed as missing
    (enabled), probes matched to the installed local probes, any warnings shown.
    Nothing is created until you confirm. Confirm with the default
    **new playset**.
 5. Record: screenshot of the preview.
 
+Read-only, scripted variant of steps 2, 3 and 5 (single machine, no
+Workshop download; used for the recorded partial runs). Each command uses a
+new profile folder; the verification switches imply `--read-only`:
+
+```sh
+pmm-app --profile "<dir A>" --game <game> \
+        --self-test "config,disable:1,move:0:3,export:validation.code,dump:a.json"
+pmm-app --profile "<new empty dir B>" --game <game> --self-test "import:validation.code,dump:b.json"
+cmp a.json b.json        # identities, order and enabled flags must be identical
+```
+
+`config` builds the playset from the game's current configuration instead of
+the probe playset above, `disable:1` and `move:0:3` make one entry disabled
+and the order non-default, and `dump` writes the active playset's identities,
+order and enabled flags as JSON.
+
 ### Step 4: resolve the missing Workshop mod (B)
 
 Single machine only: before importing, unsubscribe from W3 in the Steam client
 and wait until `workshop/content/<appid>/<W3>` disappears.
 
-1. Acquisition of W3 starts after the import (or with **Acquire missing**).
+1. Acquisition of W3 starts after the import (or with **Download missing**).
+   B must run without `--read-only` and `--no-steam` for this step.
 2. Expected states, in order: pending, subscribing, subscribed, download
    requested and/or downloading, installed. The Steam client shows the
    subscription; `workshop/content/<appid>/<W3>/descriptor.mod` exists; the
@@ -274,4 +307,6 @@ One row per game, OS and distribution combination (repeat rows for reruns).
 
 | Game | Game version (build) | OS | Distribution | App version (commit) | Date | Steps run | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| | | | | | | | | |
+| Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (branch `agent/app`) | 2026-10-29 | 2, 3, 5 read-only, scripted variant (one machine, isolated profiles, playset from the game's configuration) | partial: 4, 6-9 not run | [app.md](app.md#hidden-verification-switches) |
+| Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (`66d91d4`) | 2026-10-30 | 1 read-only, without the probe mods ([real scan](evidence/real-scan-2026-10-29.md)); 2, 3, 5 read-only, scripted variant | partial: 4, 6-9 not run | [round trip](evidence/app-round-trip-2026-10-30.md) |
+| Europa Universalis IV | v1.37.5.0 (15918133) | Windows 11 23H2 | Steam | 0.1.0-dev (`66d91d4`) | 2026-10-30 | 1 read-only, without the probe mods ([real scan](evidence/real-scan-2026-10-29.md)); 2, 3, 5 read-only, scripted variant | partial: 4, 6-9 not run | [round trip](evidence/app-round-trip-2026-10-30.md) |
