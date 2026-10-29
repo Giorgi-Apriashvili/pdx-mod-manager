@@ -58,8 +58,7 @@ struct Error {
         : code(c), message(std::move(msg)), detail(std::move(det)) {}
 };
 
-template <class T>
-class [[nodiscard]] Result {
+template <class T> class [[nodiscard]] Result {
 public:
     Result(T value) : m_data(std::in_place_index<0>, std::move(value)) {}
     Result(Error error) : m_data(std::in_place_index<1>, std::move(error)) {}
@@ -93,8 +92,7 @@ public:
         return std::get<1>(std::move(m_data));
     }
 
-    template <class U>
-    T valueOr(U&& fallback) const& {
+    template <class U> T valueOr(U&& fallback) const& {
         return ok() ? value() : static_cast<T>(std::forward<U>(fallback));
     }
 
@@ -102,8 +100,7 @@ private:
     std::variant<T, Error> m_data;
 };
 
-template <>
-class [[nodiscard]] Result<void> {
+template <> class [[nodiscard]] Result<void> {
 public:
     Result() = default;
     Result(Error error) : m_error(std::move(error)) {}

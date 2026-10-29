@@ -21,8 +21,8 @@ TEST_CASE("EItemState flags decode individually and combined", "[providers][work
     CHECK_FALSE(installed.legacy);
     CHECK(installed.installedAndCurrent());
 
-    for (std::uint32_t extra : {item_flag::NeedsUpdate, item_flag::Downloading,
-                                item_flag::DownloadPending}) {
+    for (std::uint32_t extra :
+         {item_flag::NeedsUpdate, item_flag::Downloading, item_flag::DownloadPending}) {
         const ItemFlags f = decodeItemFlags(item_flag::Subscribed | item_flag::Installed | extra);
         CHECK(f.installed);
         CHECK_FALSE(f.installedAndCurrent());
@@ -137,8 +137,8 @@ TEST_CASE("Manual fallback links are built only from valid ids", "[providers][fa
     CHECK(links->steamClientUrl == "steam://url/CommunityFilePage/1121692237");
     CHECK(links->webUrl == "https://steamcommunity.com/sharedfiles/filedetails/?id=1121692237");
 
-    for (const char* bad : {"", "0", "12&evil=1", "../../x", "javascript:alert(1)",
-                            "123456789012345678901", "1 2"}) {
+    for (const char* bad :
+         {"", "0", "12&evil=1", "../../x", "javascript:alert(1)", "123456789012345678901", "1 2"}) {
         INFO("id: " << bad);
         auto r = manualFallbackLinks(bad);
         REQUIRE_FALSE(r.ok());

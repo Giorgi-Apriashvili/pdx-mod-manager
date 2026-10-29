@@ -22,8 +22,7 @@ Result<std::string> steamClientItemUrl(std::string_view publishedFileId) {
 
 Result<std::string> workshopWebItemUrl(std::string_view publishedFileId) {
     PMM_TRY(checkId(publishedFileId));
-    return "https://steamcommunity.com/sharedfiles/filedetails/?id=" +
-           std::string(publishedFileId);
+    return "https://steamcommunity.com/sharedfiles/filedetails/?id=" + std::string(publishedFileId);
 }
 
 Result<ManualFallbackLinks> manualFallbackLinks(std::string_view publishedFileId) {

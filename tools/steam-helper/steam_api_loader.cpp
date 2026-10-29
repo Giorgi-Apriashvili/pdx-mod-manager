@@ -35,8 +35,8 @@ using FnHSteamUser = HSteamUser(PMM_STEAM_CALL*)();
 using FnAccessor = void*(PMM_STEAM_CALL*)();
 using FnFindOrCreateUserInterface = void*(PMM_STEAM_CALL*)(HSteamUser, const char*);
 using FnUgcGetItemState = std::uint32_t(PMM_STEAM_CALL*)(void*, PublishedFileId);
-using FnUgcGetItemInstallInfo = bool(PMM_STEAM_CALL*)(void*, PublishedFileId, std::uint64_t*,
-                                                      char*, std::uint32_t, std::uint32_t*);
+using FnUgcGetItemInstallInfo = bool(PMM_STEAM_CALL*)(void*, PublishedFileId, std::uint64_t*, char*,
+                                                      std::uint32_t, std::uint32_t*);
 using FnUgcGetItemDownloadInfo = bool(PMM_STEAM_CALL*)(void*, PublishedFileId, std::uint64_t*,
                                                        std::uint64_t*);
 using FnUgcSubscribeItem = SteamApiCall(PMM_STEAM_CALL*)(void*, PublishedFileId);
@@ -46,14 +46,12 @@ using FnUgcDownloadItem = bool(PMM_STEAM_CALL*)(void*, PublishedFileId, bool);
 // argument cleanup (cdecl) and register arguments are simply ignored.
 using FnUgcGetNumSubscribedItems = std::uint32_t(PMM_STEAM_CALL*)(void*, bool);
 using FnUtilsIsApiCallCompleted = bool(PMM_STEAM_CALL*)(void*, SteamApiCall, bool*);
-using FnUtilsGetApiCallResult = bool(PMM_STEAM_CALL*)(void*, SteamApiCall, void*, int, int,
-                                                      bool*);
+using FnUtilsGetApiCallResult = bool(PMM_STEAM_CALL*)(void*, SteamApiCall, void*, int, int, bool*);
 using FnUtilsGetAppId = std::uint32_t(PMM_STEAM_CALL*)(void*);
 using FnUserBLoggedOn = bool(PMM_STEAM_CALL*)(void*);
 using FnAppsBIsSubscribedApp = bool(PMM_STEAM_CALL*)(void*, AppId);
 
-template <class Fn>
-Fn as(void* p) {
+template <class Fn> Fn as(void* p) {
     static_assert(sizeof(Fn) == sizeof(void*));
     Fn f;
     std::memcpy(&f, &p, sizeof f);
@@ -118,10 +116,9 @@ std::string lastLoaderError() {
 #if defined(_WIN32)
     const DWORD code = GetLastError();
     wchar_t* text = nullptr;
-    const DWORD len = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                                         FORMAT_MESSAGE_IGNORE_INSERTS,
-                                     nullptr, code, 0, reinterpret_cast<wchar_t*>(&text), 0,
-                                     nullptr);
+    const DWORD len = FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr, code, 0, reinterpret_cast<wchar_t*>(&text), 0, nullptr);
     std::string out;
     if (len > 0 && text) {
         const int n = WideCharToMultiByte(CP_UTF8, 0, text, static_cast<int>(len), nullptr, 0,
@@ -182,9 +179,8 @@ std::optional<Failure> SteamApi::load(const fs::path& library) {
     return std::nullopt;
 }
 
-bool SteamApi::resolveAccessor(const char* accessorPrefix, const char* versionPrefix,
-                               int highest, int lowest, void*& accessorFn,
-                               std::string& version) const {
+bool SteamApi::resolveAccessor(const char* accessorPrefix, const char* versionPrefix, int highest,
+                               int lowest, void*& accessorFn, std::string& version) const {
     for (int v = highest; v >= lowest; --v) {
         const std::string name = accessorPrefix + threeDigits(v);
         if (void* p = symbol(name.c_str())) {
@@ -244,8 +240,8 @@ std::optional<Failure> SteamApi::resolveSymbols() {
     need(m_utilsIsApiCallCompleted, "SteamAPI_ISteamUtils_IsAPICallCompleted");
     need(m_utilsGetApiCallResult, "SteamAPI_ISteamUtils_GetAPICallResult");
 
-    if (!resolveAccessor("SteamAPI_SteamUGC_v", "STEAMUGC_INTERFACE_VERSION", 21, 10,
-                         m_ugcAccessor, m_ugcVersion))
+    if (!resolveAccessor("SteamAPI_SteamUGC_v", "STEAMUGC_INTERFACE_VERSION", 21, 10, m_ugcAccessor,
+                         m_ugcVersion))
         missing.emplace_back("ISteamUGC accessor (SteamAPI_SteamUGC_v010..v021)");
     if (!resolveAccessor("SteamAPI_SteamUtils_v", "SteamUtils", 12, 7, m_utilsAccessor,
                          m_utilsVersion))
@@ -315,9 +311,9 @@ std::optional<Failure> SteamApi::init(AppId appId) {
     if (!m_appsVersion.empty())
         m_apps = acquireInterface(m_appsAccessor, m_appsVersion);
     if (!m_ugc || !m_utils) {
-        return Failure{HelperFailure::InitFailed,
-                       "Steam did not provide the " + (m_ugc ? m_utilsVersion : m_ugcVersion) +
-                           " interface."};
+        return Failure{HelperFailure::InitFailed, "Steam did not provide the " +
+                                                      (m_ugc ? m_utilsVersion : m_ugcVersion) +
+                                                      " interface."};
     }
     if (const auto running = runningAppId(); running && *running != appId) {
         return Failure{HelperFailure::InitFailed,
@@ -376,8 +372,8 @@ std::optional<InstallInfo> SteamApi::installInfo(PublishedFileId id) const {
             &info.timestamp))
         return std::nullopt;
     folder.back() = '\0';
-    folder.resize(static_cast<std::size_t>(std::find(folder.begin(), folder.end(), '\0') -
-                                           folder.begin()));
+    folder.resize(
+        static_cast<std::size_t>(std::find(folder.begin(), folder.end(), '\0') - folder.begin()));
     info.folder = std::move(folder);
     return info;
 }
@@ -386,8 +382,7 @@ bool SteamApi::downloadInfo(PublishedFileId id, std::uint64_t& downloaded,
                             std::uint64_t& total) const {
     downloaded = 0;
     total = 0;
-    return as<FnUgcGetItemDownloadInfo>(m_ugcGetItemDownloadInfo)(m_ugc, id, &downloaded,
-                                                                  &total);
+    return as<FnUgcGetItemDownloadInfo>(m_ugcGetItemDownloadInfo)(m_ugc, id, &downloaded, &total);
 }
 
 SteamApiCall SteamApi::subscribe(PublishedFileId id) {

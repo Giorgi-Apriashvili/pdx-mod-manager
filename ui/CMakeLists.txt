@@ -2,6 +2,7 @@
 # The backend singleton "Pmm.Backend" is registered at run time by src/app, so
 # it is not a build-time dependency of this module. ui/dev holds a QML-only
 # stand-in used for previews, screenshots and linting; it is never built here.
+set(CMAKE_AUTOMOC ON) # QML type registration needs moc metatypes
 qt_add_library(pmm_ui STATIC)
 
 # Generate a qmldir in controls/, panes/ and dialogs/ so files there resolve the

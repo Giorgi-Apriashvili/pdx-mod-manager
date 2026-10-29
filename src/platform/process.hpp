@@ -18,9 +18,9 @@ namespace pmm::platform {
 namespace fs = std::filesystem;
 
 struct ProcessSpec {
-    fs::path executable;  // absolute path; must exist and be a regular file
+    fs::path executable; // absolute path; must exist and be a regular file
     fs::path workingDirectory;
-    std::vector<std::string> arguments; // argv[1..], UTF-8
+    std::vector<std::string> arguments;                           // argv[1..], UTF-8
     std::vector<std::pair<std::string, std::string>> environment; // added to the inherited env
 };
 

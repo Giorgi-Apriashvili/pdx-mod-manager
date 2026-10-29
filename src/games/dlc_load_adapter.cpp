@@ -179,11 +179,12 @@ struct WorkshopContent {
     }
 };
 
-WorkshopContent scanWorkshopContent(const std::vector<fs::path>& libraries,
-                                    std::string_view appId, std::string_view logComponent) {
+WorkshopContent scanWorkshopContent(const std::vector<fs::path>& libraries, std::string_view appId,
+                                    std::string_view logComponent) {
     WorkshopContent content;
     for (const fs::path& library : libraries) {
-        for (const fs::path& folder : sortedEntries(steam::workshopContentDir(library, appId), true)) {
+        for (const fs::path& folder :
+             sortedEntries(steam::workshopContentDir(library, appId), true)) {
             const std::string id = pathToUtf8(folder.filename());
             if (isWorkshopId(id))
                 content.folders.emplace(id, folder);
@@ -271,7 +272,8 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
         }
     } else if (reg != nullptr && !reg->declared.empty()) {
         contentPath = reg->declared;
-        contentPresent = reg->declaredArchive ? isRegularFile(contentPath) : isDirectory(contentPath);
+        contentPresent =
+            reg->declaredArchive ? isRegularFile(contentPath) : isDirectory(contentPath);
     }
     mod.contentPath = contentPath;
 
@@ -332,7 +334,8 @@ InstalledMod localMod(const GameKey& game, const Registration& reg) {
         return mod;
     }
     mod.contentPath = reg.declared;
-    const bool present = reg.declaredArchive ? isRegularFile(reg.declared) : isDirectory(reg.declared);
+    const bool present =
+        reg.declaredArchive ? isRegularFile(reg.declared) : isDirectory(reg.declared);
     if (!present)
         markBroken(mod, std::string(reg.declaredArchive ? "The mod archive " : "The mod folder ") +
                             toGenericUtf8(reg.declared) + " does not exist.");
@@ -481,7 +484,8 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
                                                       Mode mode) const {
     const std::string gameName(catalog().displayName);
     if (!isDirectory(installPath))
-        return makeError(ErrorCode::NotFound, "The selected " + gameName + " folder does not exist.",
+        return makeError(ErrorCode::NotFound,
+                         "The selected " + gameName + " folder does not exist.",
                          pathToUtf8(installPath));
 
     GameInstallation inst;
@@ -501,7 +505,8 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
         logWarning(m_traits.logComponent, "Ignoring unusable launcher-settings.json",
                    {{"error", read.error().message}, {"detail", read.error().detail}});
     }
-    if (settings && !settings->gameId.empty() && !keyEquals(settings->gameId, m_traits.launcherGameId))
+    if (settings && !settings->gameId.empty() &&
+        !keyEquals(settings->gameId, m_traits.launcherGameId))
         return makeError(ErrorCode::WrongGame,
                          "The selected folder contains another game (\"" + settings->gameId +
                              "\"), not " + gameName + ".",
@@ -519,11 +524,11 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
             inst.executablePath = *exe;
             inst.defaultArguments = settings->exeArgs;
         } else {
-            logWarning(m_traits.logComponent,
-                       "launcher-settings.json names no usable game executable; using the default",
-                       {{"exePath", settings->exePath},
-                        {"error", exe ? std::string("names the Paradox launcher")
-                                      : exe.error().message}});
+            logWarning(
+                m_traits.logComponent,
+                "launcher-settings.json names no usable game executable; using the default",
+                {{"exePath", settings->exePath},
+                 {"error", exe ? std::string("names the Paradox launcher") : exe.error().message}});
         }
         inst.version = settings->rawVersion;
         inst.versionLabel = settings->version.empty() ? settings->rawVersion : settings->version;
@@ -546,8 +551,8 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
             if (mode == Mode::Manual)
                 return makeError(ErrorCode::NotFound,
                                  "The selected folder does not contain the " + gameName +
-                                     " executable (" + toGenericUtf8(defaultExecutable(env.platform)) +
-                                     ").",
+                                     " executable (" +
+                                     toGenericUtf8(defaultExecutable(env.platform)) + ").",
                                  pathToUtf8(inst.executablePath));
             logWarning(m_traits.logComponent, "The game executable was not found",
                        {{"path", pathToUtf8(inst.executablePath)}});
@@ -562,7 +567,8 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
         const fs::path userAbsolute = fs::absolute(userDataPath, ec);
         inst.userDataPath = (ec ? userDataPath : userAbsolute).lexically_normal();
     } else {
-        const fs::path& base = env.platform == OsPlatform::Linux ? env.xdgDataHome : env.documentsDir;
+        const fs::path& base =
+            env.platform == OsPlatform::Linux ? env.xdgDataHome : env.documentsDir;
         std::optional<fs::path> fromSettings;
         if (settings && !settings->gameDataPath.empty()) {
             fromSettings = resolveGameDataPath(settings->gameDataPath, base);
@@ -572,9 +578,9 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
         }
         inst.userDataPath = fromSettings ? *fromSettings : defaultUserDataPath(env);
         if (inst.userDataPath.empty())
-            return makeError(ErrorCode::NotFound,
-                             "The " + gameName + " user data folder could not be determined. "
-                                                 "Choose it manually.");
+            return makeError(ErrorCode::NotFound, "The " + gameName +
+                                                      " user data folder could not be determined. "
+                                                      "Choose it manually.");
     }
     return inst;
 }
@@ -614,8 +620,9 @@ std::vector<GameInstallation> DlcLoadJsonAdapter::discover(const DiscoveryEnviro
     return found;
 }
 
-Result<GameInstallation> DlcLoadJsonAdapter::inspectInstallation(
-    const fs::path& installPath, const fs::path& userDataPath, const DiscoveryEnvironment& env) const {
+Result<GameInstallation>
+DlcLoadJsonAdapter::inspectInstallation(const fs::path& installPath, const fs::path& userDataPath,
+                                        const DiscoveryEnvironment& env) const {
     Result<GameInstallation> inst = describe(installPath, userDataPath, env, Mode::Manual);
     if (!inst)
         return inst;
@@ -672,9 +679,8 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         });
         const Registration* chosen = primary != regs.end() ? *primary : regs.front();
         const auto folder = content.folders.find(id);
-        InstalledMod mod = workshopMod(game, id, chosen,
-                                       folder != content.folders.end() ? &folder->second : nullptr,
-                                       content);
+        InstalledMod mod = workshopMod(
+            game, id, chosen, folder != content.folders.end() ? &folder->second : nullptr, content);
         for (const Registration* other : regs) {
             if (other != chosen)
                 mod.problems.push_back("Also registered as " + other->ref + ".");
@@ -685,9 +691,8 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         if (byWorkshopId.count(id) == 0)
             mods.push_back(workshopMod(game, id, nullptr, &folder, content));
     }
-    std::sort(mods.begin(), mods.end(), [](const InstalledMod& a, const InstalledMod& b) {
-        return a.identity < b.identity;
-    });
+    std::sort(mods.begin(), mods.end(),
+              [](const InstalledMod& a, const InstalledMod& b) { return a.identity < b.identity; });
     logInfo(m_traits.logComponent, "Mod scan finished",
             {{"mods", std::to_string(mods.size())},
              {"registered", std::to_string(registrations.size())},
@@ -782,8 +787,9 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     const std::string gameName(catalog().displayName);
     if (!isRegularFile(installation.executablePath))
         return makeError(ErrorCode::NotFound,
-                         "The " + gameName + " executable was not found. Rescan, or choose the "
-                                             "game folder again.",
+                         "The " + gameName +
+                             " executable was not found. Rescan, or choose the "
+                             "game folder again.",
                          pathToUtf8(installation.executablePath));
     if (installation.userDataPath.empty())
         return makeError(ErrorCode::InvalidArgument,
@@ -795,7 +801,8 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     plan.executable = installation.executablePath;
     plan.workingDirectory = installation.installPath;
     plan.arguments = installation.defaultArguments;
-    if (installation.distribution == DistributionSource::Steam && !installation.steamAppId.empty()) {
+    if (installation.distribution == DistributionSource::Steam &&
+        !installation.steamAppId.empty()) {
         plan.environment.emplace_back("SteamAppId", installation.steamAppId);
         plan.environment.emplace_back("SteamGameId", installation.steamAppId);
     }
@@ -805,25 +812,27 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     for (const InstalledMod& mod : orderedEnabledMods) {
         const std::string label = modLabel(mod);
         if (mod.identity.game != m_traits.key)
-            return makeError(ErrorCode::WrongGame,
-                             "The mod " + label + " belongs to another game.", toString(mod.identity));
+            return makeError(ErrorCode::WrongGame, "The mod " + label + " belongs to another game.",
+                             toString(mod.identity));
         if (!seen.insert(mod.identity).second)
-            return makeError(ErrorCode::InvalidArgument,
-                             "The mod " + label + " is listed twice.", toString(mod.identity));
+            return makeError(ErrorCode::InvalidArgument, "The mod " + label + " is listed twice.",
+                             toString(mod.identity));
 
         std::error_code ec;
         if (mod.contentPath.empty() || !fs::exists(mod.contentPath, ec))
             return makeError(ErrorCode::NotFound,
-                             "The files of the mod " + label + " are missing. Rescan or reinstall "
-                                                               "it.",
+                             "The files of the mod " + label +
+                                 " are missing. Rescan or reinstall "
+                                 "it.",
                              toString(mod.identity) + ": " + pathToUtf8(mod.contentPath));
 
         if (mod.identity.source == source::Local) {
             if (mod.descriptorPath.empty() || !isRegularFile(mod.descriptorPath) ||
                 !platform::isWithin(mod.descriptorPath, modDir))
                 return makeError(ErrorCode::NotFound,
-                                 "The local mod " + label + " has no descriptor in the game's mod "
-                                                            "folder. Reinstall it, then rescan.",
+                                 "The local mod " + label +
+                                     " has no descriptor in the game's mod "
+                                     "folder. Reinstall it, then rescan.",
                                  toString(mod.identity) + ": " + pathToUtf8(mod.descriptorPath));
             refs.push_back(descriptorReference(mod.descriptorPath));
             continue;
@@ -838,7 +847,8 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
         const bool archive = isRegularFile(mod.contentPath);
         const fs::path ugcFile = modDir / pathFromUtf8("ugc_" + mod.identity.id + ".mod");
         fs::path registered = mod.descriptorPath;
-        if (registered.empty() || !isRegularFile(registered) || !platform::isWithin(registered, modDir))
+        if (registered.empty() || !isRegularFile(registered) ||
+            !platform::isWithin(registered, modDir))
             registered = ugcFile;
         std::optional<DescriptorDocument> registeredDocument;
         if (isRegularFile(registered)) {
@@ -864,8 +874,9 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
         if (!basis) {
             if (mod.descriptor.name.empty())
                 return makeError(ErrorCode::NotFound,
-                                 "The Workshop mod " + label + " has no readable descriptor. "
-                                                               "Verify its files in Steam.",
+                                 "The Workshop mod " + label +
+                                     " has no readable descriptor. "
+                                     "Verify its files in Steam.",
                                  toString(mod.identity));
             basis = toDocument(mod.descriptor);
         }
@@ -877,9 +888,8 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
         refs.push_back(ref);
         if (fileHolds(ugcFile, contents))
             continue;
-        plan.configWrites.push_back(ConfigWrite{ugcFile, std::move(contents),
-                                                "Workshop descriptor for " + label + " (" + ref +
-                                                    ")"});
+        plan.configWrites.push_back(ConfigWrite{
+            ugcFile, std::move(contents), "Workshop descriptor for " + label + " (" + ref + ")"});
     }
 
     for (const std::string& ref : refs) {
@@ -895,8 +905,8 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
         return std::move(dlcLoad).error();
     plan.warnings = std::move(dlcLoad->warnings);
     if (dlcLoad->existing != dlcLoad->contents)
-        plan.configWrites.push_back(ConfigWrite{dlcLoadFile, std::move(dlcLoad->contents),
-                                                "load order (dlc_load.json)"});
+        plan.configWrites.push_back(
+            ConfigWrite{dlcLoadFile, std::move(dlcLoad->contents), "load order (dlc_load.json)"});
     return plan;
 }
 

@@ -14,13 +14,14 @@
 #include "steam_api_loader.hpp"
 
 #if defined(_WIN32)
-#include <windows.h>
 #include <io.h>
+#include <windows.h>
 #else
-#include <cerrno>
-#include <csignal>
 #include <fcntl.h>
 #include <unistd.h>
+
+#include <cerrno>
+#include <csignal>
 #endif
 
 #include <algorithm>
@@ -210,7 +211,8 @@ public:
                 } else if constexpr (std::is_same_v<T, SubscribeCommand>) {
                     subscribe(c.id);
                 } else if constexpr (std::is_same_v<T, DownloadCommand>) {
-                    const bool accepted = m_api.download(*parsePublishedFileId(c.id), c.highPriority);
+                    const bool accepted =
+                        m_api.download(*parsePublishedFileId(c.id), c.highPriority);
                     send(DownloadRequestedEvent{c.id, accepted});
                 } else {
                     static_assert(std::is_same_v<T, QuitCommand>);
@@ -332,9 +334,8 @@ int run(const std::vector<fs::path>& args) {
         return fail(HelperFailure::InvalidArguments, kUsage);
     if (auto valid = validateHelperArguments(appId, library); !valid) {
         const Error& e = valid.error();
-        const HelperFailure kind = e.code == ErrorCode::NotFound
-                                       ? HelperFailure::LibraryLoadFailed
-                                       : HelperFailure::InvalidArguments;
+        const HelperFailure kind = e.code == ErrorCode::NotFound ? HelperFailure::LibraryLoadFailed
+                                                                 : HelperFailure::InvalidArguments;
         return fail(kind, e.detail.empty() ? e.message : e.message + " (" + e.detail + ")");
     }
     const std::uint32_t appIdNumber = *parseSteamAppId(appId);

@@ -97,8 +97,8 @@ TEST_CASE("Details response fixture parses found, missing, wrong-game and banned
     CHECK(validateWorkshopItemForGame(hoi, "394360").ok());
 
     const WorkshopItemMetadata& banned = items[3];
-    CHECK(banned.fileSize == 2048);             // a number here
-    CHECK(banned.timeUpdated == 1700000001);    // numeric string here
+    CHECK(banned.fileSize == 2048);          // a number here
+    CHECK(banned.timeUpdated == 1700000001); // numeric string here
     CHECK(banned.banned);
     CHECK(banned.banReason == "Example reason");
     CHECK(banned.visibility == static_cast<int>(WorkshopVisibility::Private));

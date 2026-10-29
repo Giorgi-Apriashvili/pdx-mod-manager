@@ -22,8 +22,7 @@ std::string minutes(std::int64_t ms) {
 // machine in a consistent (state, awaiting) pair.
 class Reducer {
 public:
-    Reducer(const AcquisitionContext& context, const AcquisitionPolicy& policy)
-        : m_policy(policy) {
+    Reducer(const AcquisitionContext& context, const AcquisitionPolicy& policy) : m_policy(policy) {
         m_t.context = context;
     }
 
@@ -86,8 +85,7 @@ public:
                       "downloads need. Use the manual Workshop page, then rescan.");
             return;
         case R::HelperFailed:
-            failRetryable(ErrorCode::ProviderUnavailable,
-                          "The Steam helper stopped unexpectedly.");
+            failRetryable(ErrorCode::ProviderUnavailable, "The Steam helper stopped unexpectedly.");
             return;
         }
     }
@@ -494,7 +492,8 @@ private:
             emit(ActionKind::Subscribe);
             return;
         }
-        if (job().state == AcquisitionState::Pending || job().state == AcquisitionState::Subscribing)
+        if (job().state == AcquisitionState::Pending ||
+            job().state == AcquisitionState::Subscribing)
             setState(AcquisitionState::Subscribed);
         if (f.downloading || f.downloadPending) {
             enterProgress();
@@ -710,8 +709,8 @@ Status verifyWorkshopContent(const fs::path& installPath) {
     std::error_code ec;
     const auto st = fs::status(installPath, ec);
     if (ec || !fs::exists(st)) {
-        return makeError(ErrorCode::NotFound,
-                         "the content folder reported by Steam does not exist", shown);
+        return makeError(ErrorCode::NotFound, "the content folder reported by Steam does not exist",
+                         shown);
     }
     if (fs::is_regular_file(st)) {
         const auto size = fs::file_size(installPath, ec);

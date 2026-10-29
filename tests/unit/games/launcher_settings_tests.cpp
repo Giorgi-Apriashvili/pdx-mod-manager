@@ -14,8 +14,8 @@ using pmm::test::TempDir;
 namespace {
 
 std::string stellarisSettingsText() {
-    return test::readText(
-        test::fixturePath("games/stellaris/Steam/steamapps/common/Stellaris/launcher-settings.json"));
+    return test::readText(test::fixturePath(
+        "games/stellaris/Steam/steamapps/common/Stellaris/launcher-settings.json"));
 }
 
 } // namespace
@@ -33,8 +33,9 @@ TEST_CASE("launcher-settings.json is parsed", "[games][launcher_settings]") {
     CHECK(settings->file.empty());
 
     // Optional fields may be missing or null; unknown fields are ignored.
-    auto minimal = parseLauncherSettings("\xEF\xBB\xBF{\"exePath\": \"eu4.exe\", \"exeArgs\": null, "
-                                         "\"version\": null, \"unknown\": [1, {}]}");
+    auto minimal =
+        parseLauncherSettings("\xEF\xBB\xBF{\"exePath\": \"eu4.exe\", \"exeArgs\": null, "
+                              "\"version\": null, \"unknown\": [1, {}]}");
     REQUIRE(minimal.ok());
     CHECK(minimal->exePath == "eu4.exe");
     CHECK(minimal->exeArgs.empty());
@@ -46,15 +47,15 @@ TEST_CASE("launcher-settings.json is validated", "[games][launcher_settings]") {
         std::string json;
         ErrorCode code;
     };
-    const auto c = GENERATE(
-        Case{"{\"exePath\": ", ErrorCode::ParseError}, Case{"[1, 2]", ErrorCode::ValidationFailed},
-        Case{"{\"exePath\": 5}", ErrorCode::ValidationFailed},
-        Case{"{\"gameId\": {\"x\": 1}}", ErrorCode::ValidationFailed},
-        Case{"{\"exeArgs\": \"-gdpr-compliant\"}", ErrorCode::ValidationFailed},
-        Case{"{\"exeArgs\": [\"-a\", 3]}", ErrorCode::ValidationFailed},
-        Case{"{\"exeArgs\": [[\"-a\"]]}", ErrorCode::ValidationFailed},
-        Case{"{\"exeArgs\": [\"a\\u0000b\"]}", ErrorCode::ValidationFailed},
-        Case{"{\"exePath\": \"x\\u0000.exe\"}", ErrorCode::ValidationFailed});
+    const auto c = GENERATE(Case{"{\"exePath\": ", ErrorCode::ParseError},
+                            Case{"[1, 2]", ErrorCode::ValidationFailed},
+                            Case{"{\"exePath\": 5}", ErrorCode::ValidationFailed},
+                            Case{"{\"gameId\": {\"x\": 1}}", ErrorCode::ValidationFailed},
+                            Case{"{\"exeArgs\": \"-gdpr-compliant\"}", ErrorCode::ValidationFailed},
+                            Case{"{\"exeArgs\": [\"-a\", 3]}", ErrorCode::ValidationFailed},
+                            Case{"{\"exeArgs\": [[\"-a\"]]}", ErrorCode::ValidationFailed},
+                            Case{"{\"exeArgs\": [\"a\\u0000b\"]}", ErrorCode::ValidationFailed},
+                            Case{"{\"exePath\": \"x\\u0000.exe\"}", ErrorCode::ValidationFailed});
     CAPTURE(c.json);
     const auto result = parseLauncherSettings(c.json);
     REQUIRE_FALSE(result.ok());
@@ -65,8 +66,8 @@ TEST_CASE("launcher-settings.json is validated", "[games][launcher_settings]") {
         many += (i == 0 ? "\"-x\"" : ",\"-x\"");
     many += "]}";
     CHECK(parseLauncherSettings(many).error().code == ErrorCode::ValidationFailed);
-    CHECK(parseLauncherSettings("{\"exeArgs\": [\"" + std::string(kMaxLauncherArgumentBytes + 1, 'a') +
-                                "\"]}")
+    CHECK(parseLauncherSettings("{\"exeArgs\": [\"" +
+                                std::string(kMaxLauncherArgumentBytes + 1, 'a') + "\"]}")
               .error()
               .code == ErrorCode::ValidationFailed);
 }

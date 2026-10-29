@@ -45,8 +45,9 @@ inline void logInfo(std::string_view c, std::string_view m,
                     std::initializer_list<std::pair<std::string_view, std::string_view>> f = {}) {
     log(LogLevel::Info, c, m, f);
 }
-inline void logWarning(std::string_view c, std::string_view m,
-                       std::initializer_list<std::pair<std::string_view, std::string_view>> f = {}) {
+inline void
+logWarning(std::string_view c, std::string_view m,
+           std::initializer_list<std::pair<std::string_view, std::string_view>> f = {}) {
     log(LogLevel::Warning, c, m, f);
 }
 inline void logError(std::string_view c, std::string_view m,

@@ -6,9 +6,9 @@
 namespace pmm::providers {
 namespace {
 
-template <class T>
-std::optional<T> parseCanonicalDecimal(std::string_view text) noexcept {
-    constexpr std::size_t kMaxDigits = static_cast<std::size_t>(std::numeric_limits<T>::digits10) + 1;
+template <class T> std::optional<T> parseCanonicalDecimal(std::string_view text) noexcept {
+    constexpr std::size_t kMaxDigits =
+        static_cast<std::size_t>(std::numeric_limits<T>::digits10) + 1;
     if (text.empty() || text.size() > kMaxDigits)
         return std::nullopt;
     if (text.front() == '0') // rejects "0" and leading zeros
@@ -66,10 +66,13 @@ constexpr std::array<ResultRow, 37> kResults{{
     {27, "Expired", ErrorCode::ItemUnavailable, D::Unavailable, "The item has expired"},
     {29, "DuplicateRequest", ErrorCode::Busy, D::Retryable,
      "An identical request is already in progress"},
-    {35, "ConnectFailed", ErrorCode::Offline, D::Retryable, "Steam could not connect to its servers"},
-    {37, "IOFailure", ErrorCode::IoError, D::Retryable, "Steam reported a network or disk I/O failure"},
+    {35, "ConnectFailed", ErrorCode::Offline, D::Retryable,
+     "Steam could not connect to its servers"},
+    {37, "IOFailure", ErrorCode::IoError, D::Retryable,
+     "Steam reported a network or disk I/O failure"},
     {38, "RemoteDisconnect", ErrorCode::Offline, D::Retryable, "Steam lost its server connection"},
-    {40, "Blocked", ErrorCode::AccessDenied, D::Unavailable, "The item's author has blocked access"},
+    {40, "Blocked", ErrorCode::AccessDenied, D::Unavailable,
+     "The item's author has blocked access"},
     {44, "ServiceReadOnly", ErrorCode::ProviderUnavailable, D::Retryable,
      "The Steam Workshop is temporarily read-only"},
     {48, "TryAnotherCM", ErrorCode::Offline, D::Retryable, "Steam is switching servers"},

@@ -22,8 +22,7 @@ std::string readFixture(const char* relative) {
     return out.str();
 }
 
-template <class T>
-const T& as(const HelperEvent& e) {
+template <class T> const T& as(const HelperEvent& e) {
     REQUIRE(std::holds_alternative<T>(e));
     return std::get<T>(e);
 }
@@ -150,7 +149,10 @@ TEST_CASE("Events round-trip through the wire format", "[providers][protocol]") 
     state.status.flags = 1 | 16;
     state.status.bytesDownloaded = 5;
     state.status.bytesTotal = 10'000'000'000ull;
-    state.status.installPath = "D:/Steam Library/\xC3\x9C" "n\xC3\xAF" "c\xC3\xB8" "d\xC3\xA9/\xE6\x97\xA5";
+    state.status.installPath = "D:/Steam Library/\xC3\x9C"
+                               "n\xC3\xAF"
+                               "c\xC3\xB8"
+                               "d\xC3\xA9/\xE6\x97\xA5";
     state.status.sizeOnDisk = 4096;
     state.status.timestamp = 1782489192;
 
@@ -177,8 +179,9 @@ TEST_CASE("Events round-trip through the wire format", "[providers][protocol]") 
     const std::string stateLine = encodeEvent(state);
     CHECK(stateLine.find(R"("subscribed":true,"installed":false,"downloading":true)") !=
           std::string::npos);
-    CHECK(encodeEvent(failed) ==
-          R"({"event":"ready","protocol":1,"ok":false,"error":"steam_not_running","message":"Steam is not running."})");
+    CHECK(
+        encodeEvent(failed) ==
+        R"({"event":"ready","protocol":1,"ok":false,"error":"steam_not_running","message":"Steam is not running."})");
 }
 
 TEST_CASE("Event decoding validates fields and protocol version", "[providers][protocol]") {
@@ -257,7 +260,8 @@ TEST_CASE("Recorded Stellaris helper transcript decodes", "[providers][protocol]
     CHECK(reencoded == transcript);
 }
 
-TEST_CASE("Line splitter handles partial, CRLF, empty and oversized lines", "[providers][protocol]") {
+TEST_CASE("Line splitter handles partial, CRLF, empty and oversized lines",
+          "[providers][protocol]") {
     LineSplitter splitter(16);
     CHECK(splitter.push("{\"a\"").empty());
     auto lines = splitter.push(":1}\r\n\n{\"b\":2}\n{\"c");
@@ -288,7 +292,8 @@ TEST_CASE("Helper argument validation", "[providers][protocol]") {
     CHECK_FALSE(isAcceptedSteamApiLibraryName("evil.dll", OsPlatform::Windows));
 
     pmm::test::TempDir dir("args");
-    const fs::path folder = dir.path() / pmm::test::u8path("Ünïcødé dir") / pmm::test::u8path("日本語");
+    const fs::path folder =
+        dir.path() / pmm::test::u8path("Ünïcødé dir") / pmm::test::u8path("日本語");
     fs::create_directories(folder);
     const char* name = currentOsPlatform() == OsPlatform::Windows ? "steam_api64.dll"
                        : currentOsPlatform() == OsPlatform::MacOS ? "libsteam_api.dylib"

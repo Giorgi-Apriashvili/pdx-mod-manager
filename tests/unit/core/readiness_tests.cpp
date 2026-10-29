@@ -164,7 +164,8 @@ TEST_CASE("Playset readiness uses the latest job and adds dependency warnings",
 }
 
 TEST_CASE("Launch requires every enabled entry to be ready", "[core][readiness]") {
-    std::vector<PlaysetEntry> entries{workshop("1", "Ready mod"), workshop("2", "Missing disabled", false),
+    std::vector<PlaysetEntry> entries{workshop("1", "Ready mod"),
+                                      workshop("2", "Missing disabled", false),
                                       local("x", "Unavailable disabled", false)};
     std::vector<EntryReadiness> readiness(3);
     readiness[0].status = EntryStatus::Ready;

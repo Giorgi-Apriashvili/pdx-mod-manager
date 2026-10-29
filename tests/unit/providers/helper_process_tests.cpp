@@ -12,11 +12,12 @@
 #if defined(_WIN32)
 #include <windows.h>
 #else
-#include <cerrno>
-#include <csignal>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#include <cerrno>
+#include <csignal>
 extern char** environ;
 #endif
 
@@ -122,8 +123,8 @@ public:
         const std::string data = line + "\n";
 #if defined(_WIN32)
         DWORD written = 0;
-        REQUIRE(WriteFile(m_stdin, data.data(), static_cast<DWORD>(data.size()), &written,
-                          nullptr));
+        REQUIRE(
+            WriteFile(m_stdin, data.data(), static_cast<DWORD>(data.size()), &written, nullptr));
 #else
         REQUIRE(::write(m_stdin, data.data(), data.size()) == static_cast<ssize_t>(data.size()));
 #endif
@@ -152,8 +153,7 @@ public:
         return std::move(*event);
     }
 
-    template <class T>
-    T next(std::chrono::milliseconds timeout = 10s) {
+    template <class T> T next(std::chrono::milliseconds timeout = 10s) {
         HelperEvent e = nextEvent(timeout);
         REQUIRE(std::holds_alternative<T>(e));
         return std::get<T>(std::move(e));
@@ -251,8 +251,8 @@ private:
             argv.push_back(s.data());
         argv.push_back(nullptr);
         signal(SIGPIPE, SIG_IGN);
-        const int rc = posix_spawn(&m_pid, argvStrings[0].c_str(), &actions, nullptr,
-                                   argv.data(), environ);
+        const int rc =
+            posix_spawn(&m_pid, argvStrings[0].c_str(), &actions, nullptr, argv.data(), environ);
         posix_spawn_file_actions_destroy(&actions);
         ::close(in[0]);
         ::close(out[1]);
@@ -376,8 +376,9 @@ TEST_CASE("Helper serves state, subscribe and download against a Steam API libra
     const auto installed = helper.next<ItemStateEvent>().status;
     CHECK(installed.id == "111111111");
     CHECK(installed.flags == 5);
-    CHECK(installed.installPath ==
-          "/fake/\xC3\x9Cn\xC3\xAF" "c\xC3\xB8" "d\xC3\xA9 library/steamapps/workshop/content/281990/111111111");
+    CHECK(installed.installPath == "/fake/\xC3\x9Cn\xC3\xAF"
+                                   "c\xC3\xB8"
+                                   "d\xC3\xA9 library/steamapps/workshop/content/281990/111111111");
     CHECK(installed.sizeOnDisk == 4096);
     CHECK(installed.timestamp == 1700000000);
     const auto unknown = helper.next<ItemStateEvent>().status;
@@ -534,8 +535,8 @@ TEST_CASE("Helper rejects bad arguments and unloadable libraries", "[providers][
         CHECK(helper.waitExit(10s) == exitCode(HelperExitCode::LibraryLoadFailed));
     }
     SECTION("unknown argument") {
-        HelperProcess helper(std::vector<std::string>{"--app-id", "281990", "--url",
-                                                      "https://example.invalid"});
+        HelperProcess helper(
+            std::vector<std::string>{"--app-id", "281990", "--url", "https://example.invalid"});
         CHECK(helper.next<ReadyEvent>().error == HelperFailure::InvalidArguments);
         CHECK(helper.waitExit(10s) == exitCode(HelperExitCode::InvalidArguments));
     }

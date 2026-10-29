@@ -244,7 +244,8 @@ Status restoreEntries(std::vector<PlaysetEntry>& entries, std::span<const Remove
     for (std::size_t k = 0; k < sorted.size(); ++k) {
         // Inserting in ascending order, the k-th entry lands among
         // entries.size() + k existing ones.
-        if (sorted[k].index > entries.size() + k || (k > 0 && sorted[k].index == sorted[k - 1].index))
+        if (sorted[k].index > entries.size() + k ||
+            (k > 0 && sorted[k].index == sorted[k - 1].index))
             return makeError(ErrorCode::InvalidArgument,
                              "The removed mods cannot be restored because the playset changed.",
                              "restore index " + std::to_string(sorted[k].index) + " invalid");
@@ -323,8 +324,9 @@ std::vector<std::size_t> visibleIndices(std::span<const PlaysetEntry> entries,
         keyed.reserve(visible.size());
         for (const std::size_t i : visible) {
             const PlaysetEntry& entry = entries[i];
-            keyed.emplace_back(foldCase(entry.nameHint.empty() ? entry.identity.id : entry.nameHint),
-                               entry.identity.id, i);
+            keyed.emplace_back(
+                foldCase(entry.nameHint.empty() ? entry.identity.id : entry.nameHint),
+                entry.identity.id, i);
         }
         std::sort(keyed.begin(), keyed.end());
         for (std::size_t k = 0; k < keyed.size(); ++k)

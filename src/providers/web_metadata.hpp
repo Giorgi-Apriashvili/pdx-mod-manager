@@ -40,8 +40,8 @@ enum class WorkshopVisibility { Public = 0, FriendsOnly = 1, Private = 2, Unlist
 
 struct WorkshopItemMetadata {
     std::string id;
-    bool found = false;  // result == 1
-    int resultCode = 0;  // EResult for this item (9 = not found / not visible)
+    bool found = false; // result == 1
+    int resultCode = 0; // EResult for this item (9 = not found / not visible)
     std::string title;
     std::string consumerAppId; // game the item is for
     std::string creatorAppId;  // tool/game that uploaded it
@@ -57,8 +57,7 @@ struct WorkshopItemMetadata {
 // Parses the reply body. Items appear in reply order. Fails with ParseError on
 // malformed JSON or a missing "response" object, and LimitExceeded when the
 // body is larger than kMaxPublishedFileDetailsResponseBytes.
-Result<std::vector<WorkshopItemMetadata>> parsePublishedFileDetailsResponse(
-    std::string_view body);
+Result<std::vector<WorkshopItemMetadata>> parsePublishedFileDetailsResponse(std::string_view body);
 
 // Checks that an item can be acquired for the game with Steam AppId
 // `expectedAppId`: not found (result 9) -> ItemUnavailable; other non-OK

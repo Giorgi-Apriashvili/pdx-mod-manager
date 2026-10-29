@@ -76,7 +76,8 @@ public:
     // Installed inventory: registered descriptors in the user mod folder plus
     // Workshop content folders (registered or not). Problems are reported per
     // mod, not as a failure of the whole scan.
-    virtual Result<std::vector<InstalledMod>> scanMods(const GameInstallation& installation) const = 0;
+    virtual Result<std::vector<InstalledMod>>
+    scanMods(const GameInstallation& installation) const = 0;
 
     // The game's currently configured enabled mods in order (e.g. from
     // dlc_load.json), resolved against the inventory. Entries that cannot be
@@ -88,8 +89,9 @@ public:
     // Builds a launch plan for the enabled mods in playset order (index 0
     // first). Generates only the minimum required ConfigWrites, preserving
     // unrelated settings (e.g. disabled DLC choices) from existing files.
-    virtual Result<LaunchPlan> buildLaunchPlan(const GameInstallation& installation,
-                                               std::span<const InstalledMod> orderedEnabledMods) const = 0;
+    virtual Result<LaunchPlan>
+    buildLaunchPlan(const GameInstallation& installation,
+                    std::span<const InstalledMod> orderedEnabledMods) const = 0;
 
     virtual ProcessNames processNames(const GameInstallation& installation) const = 0;
     virtual LoadOrderInfo loadOrderInfo() const = 0;

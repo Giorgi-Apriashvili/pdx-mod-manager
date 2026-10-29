@@ -27,7 +27,9 @@ std::vector<std::pair<std::string, std::string>> referenceFiles() {
         {"descriptor.mod", "name=\"Example\"\nversion=\"1.0\"\n"},
         {"common/a.txt", "alpha"},
         {"common/B.txt", "beta"},
-        {"\xC3\x9Cn\xC3\xAF" "c\xC3\xB8" "d\xC3\xA9 dir/\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E.txt",
+        {"\xC3\x9Cn\xC3\xAF"
+         "c\xC3\xB8"
+         "d\xC3\xA9 dir/\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E.txt",
          "unicode \xE2\x9C\x93"},
         {"empty.txt", ""},
         {"gfx/deep/nested/file.dds", binary},
@@ -37,7 +39,8 @@ std::vector<std::pair<std::string, std::string>> referenceFiles() {
 constexpr const char* kGolden =
     "sha256:68f02ff607053aab511d9a2d38db171bcd0ee79321f50c2374531f1a009f0e8d";
 
-void writeTree(const fs::path& root, const std::vector<std::pair<std::string, std::string>>& files) {
+void writeTree(const fs::path& root,
+               const std::vector<std::pair<std::string, std::string>>& files) {
     for (const auto& [rel, contents] : files)
         writeFile(root / u8path(rel), contents);
 }
@@ -128,8 +131,7 @@ TEST_CASE("Fingerprint changes with content, size and path", "[providers][finger
     const auto renamed = fingerprintWith("rename", [](auto& f) { f[1].first = "common/c.txt"; });
     const auto moved = fingerprintWith("move", [](auto& f) { f[1].first = "a.txt"; });
     const auto added = fingerprintWith("add", [](auto& f) { f.emplace_back("extra.txt", ""); });
-    const auto caseChanged =
-        fingerprintWith("case", [](auto& f) { f[2].first = "common/b2.txt"; });
+    const auto caseChanged = fingerprintWith("case", [](auto& f) { f[2].first = "common/b2.txt"; });
 
     for (const auto& fp : {changedByte, renamed, moved, added, caseChanged}) {
         CHECK(fp.starts_with("sha256:"));

@@ -62,10 +62,10 @@ struct GameInstallation {
     std::vector<std::string> defaultArguments; // from the game's own launcher settings
     DistributionSource distribution = DistributionSource::Unknown;
     OsPlatform platform = currentOsPlatform();
-    std::string steamAppId;     // "281990" when installed through Steam
+    std::string steamAppId;                 // "281990" when installed through Steam
     std::filesystem::path steamLibraryPath; // library root containing steamapps/, if Steam
-    std::string version;        // short version, e.g. "v4.5.2"
-    std::string versionLabel;   // full label, e.g. "Cygnus v4.5.2 (9776)"
+    std::string version;                    // short version, e.g. "v4.5.2"
+    std::string versionLabel;               // full label, e.g. "Cygnus v4.5.2 (9776)"
     bool manuallyConfigured = false;
 };
 
@@ -168,8 +168,8 @@ struct AcquisitionJob {
 // Readiness of one playset entry for launching, derived from inventory + jobs.
 enum class EntryStatus {
     Ready,
-    Missing,         // not installed, no job yet
-    Pending,         // acquisition queued / subscribed / download requested
+    Missing, // not installed, no job yet
+    Pending, // acquisition queued / subscribed / download requested
     Downloading,
     Failed,          // acquisition failed; retry possible
     Unavailable,     // cannot be acquired (deleted, private, wrong game)

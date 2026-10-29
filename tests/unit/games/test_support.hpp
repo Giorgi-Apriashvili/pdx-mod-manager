@@ -114,7 +114,8 @@ struct GameFixture {
 
     // Generic absolute form, as written into descriptors.
     std::string generic(std::string_view relative = {}) const {
-        return platform::toGenericUtf8((relative.empty() ? root : root / u8path(relative)).lexically_normal());
+        return platform::toGenericUtf8(
+            (relative.empty() ? root : root / u8path(relative)).lexically_normal());
     }
     fs::path path(std::string_view relative) const { return root / u8path(relative); }
 };

@@ -38,8 +38,8 @@ void addInstalledWarnings(const PlaysetEntry& entry, const InstalledMod& install
 double downloadProgress(const AcquisitionJob& job) {
     if (job.bytesTotal == 0)
         return -1.0; // indeterminate
-    return std::min(1.0, static_cast<double>(job.bytesDownloaded) /
-                             static_cast<double>(job.bytesTotal));
+    return std::min(1.0,
+                    static_cast<double>(job.bytesDownloaded) / static_cast<double>(job.bytesTotal));
 }
 
 EntryReadiness fromJob(const PlaysetEntry& entry, const AcquisitionJob& job) {
@@ -188,9 +188,9 @@ std::vector<EntryReadiness> computePlaysetReadiness(std::span<const PlaysetEntry
     for (const PlaysetEntry& entry : entries) {
         const auto installed = inventory.find(entry.identity);
         const auto job = latest.find(entry.identity);
-        result.push_back(computeReadiness(entry,
-                                          installed != inventory.end() ? &installed->second : nullptr,
-                                          job != latest.end() ? job->second : nullptr));
+        result.push_back(
+            computeReadiness(entry, installed != inventory.end() ? &installed->second : nullptr,
+                             job != latest.end() ? job->second : nullptr));
     }
     for (const DependencyIssue& issue : checkDependencies(entries, inventory))
         result[issue.entryIndex].warnings.push_back(issue.message);

@@ -76,8 +76,7 @@ const ConfigWrite* findWrite(const LaunchPlan& plan, const fs::path& target) {
 
 } // namespace
 
-TEST_CASE("Stellaris is discovered through the injected Steam environment",
-          "[games][stellaris]") {
+TEST_CASE("Stellaris is discovered through the injected Steam environment", "[games][stellaris]") {
     StellarisFixture f;
     const GameInstallation inst = f.discovered();
     CHECK(inst.game == "stellaris");
@@ -223,8 +222,9 @@ TEST_CASE("Manual Stellaris locations are inspected", "[games][stellaris]") {
         fs::create_directories(f.path("Empty"));
         CHECK(f.adapter.inspectInstallation(f.path("Empty"), {}, env).error().code ==
               ErrorCode::NotFound);
-        CHECK(f.adapter.inspectInstallation(f.install(), f.path("missing data"), env).error().code ==
-              ErrorCode::NotFound);
+        CHECK(
+            f.adapter.inspectInstallation(f.install(), f.path("missing data"), env).error().code ==
+            ErrorCode::NotFound);
         CHECK(Eu4Adapter().inspectInstallation(f.install(), {}, env).error().code ==
               ErrorCode::WrongGame);
         test::writeText(f.install() / "launcher-settings.json", "{ broken");
@@ -243,11 +243,10 @@ TEST_CASE("Stellaris scan applies the identity rules", "[games][stellaris]") {
         keys.push_back(m.identity.source + ":" + m.identity.id);
     CHECK(keys == std::vector<std::string>{
                       "local:bad_syntax", "local:local_tweaks", "local:missing_folder",
-                      "local:Ünïcødé mod", "steam-workshop:1000000001",
-                      "steam-workshop:1000000002", "steam-workshop:1000000003",
-                      "steam-workshop:1000000004", "steam-workshop:1000000005",
-                      "steam-workshop:1000000006", "steam-workshop:1000000008",
-                      "steam-workshop:1000000009"});
+                      "local:Ünïcødé mod", "steam-workshop:1000000001", "steam-workshop:1000000002",
+                      "steam-workshop:1000000003", "steam-workshop:1000000004",
+                      "steam-workshop:1000000005", "steam-workshop:1000000006",
+                      "steam-workshop:1000000008", "steam-workshop:1000000009"});
     for (const InstalledMod& m : mods)
         CHECK(m.identity.game == "stellaris");
 
@@ -342,13 +341,13 @@ TEST_CASE("Stellaris scan handles unusual registrations", "[games][stellaris]") 
 
     // Workshop item copied to a custom folder: ugc_<id>.mod + remote_file_id.
     test::writeText(f.path("Custom Content/Thing/descriptor.mod"), "name=\"Custom\"");
-    test::writeText(modDir / "ugc_1000000077.mod",
-                    "name=\"Custom\"\npath=\"" + f.generic("Custom Content/Thing") +
-                        "\"\nremote_file_id=\"1000000077\"");
+    test::writeText(modDir / "ugc_1000000077.mod", "name=\"Custom\"\npath=\"" +
+                                                       f.generic("Custom Content/Thing") +
+                                                       "\"\nremote_file_id=\"1000000077\"");
     // ugc_ name whose remote_file_id does not match: local.
-    test::writeText(modDir / "ugc_1000000078.mod",
-                    "name=\"Impostor\"\npath=\"" + f.generic("Custom Content/Thing") +
-                        "\"\nremote_file_id=\"1\"");
+    test::writeText(modDir / "ugc_1000000078.mod", "name=\"Impostor\"\npath=\"" +
+                                                       f.generic("Custom Content/Thing") +
+                                                       "\"\nremote_file_id=\"1\"");
     // Second registration of an installed Workshop item.
     test::writeText(modDir / "another_name.mod",
                     "name=\"Alias\"\npath=\"" + f.generic(std::string(kContent) + "1000000001") +
@@ -450,8 +449,8 @@ TEST_CASE("Stellaris launch plan writes the minimum configuration", "[games][ste
     const GameInstallation inst = f.discovered();
     const std::vector<InstalledMod> mods = f.scan(inst);
 
-    const LaunchPlan plan =
-        f.plan(inst, mods, {"1000000001", "local_tweaks", "1000000002", "1000000003", "1000000006"});
+    const LaunchPlan plan = f.plan(
+        inst, mods, {"1000000001", "local_tweaks", "1000000002", "1000000003", "1000000006"});
     CHECK(plan.game == "stellaris");
     CHECK(samePath(plan.executable, f.install() / "stellaris.exe"));
     CHECK(samePath(plan.workingDirectory, f.install()));
@@ -477,18 +476,17 @@ TEST_CASE("Stellaris launch plan writes the minimum configuration", "[games][ste
           "\"pmm_fixture_extra\":{\"keep\":[1,2]}}");
 
     // The author's stale path is replaced by the actual content folder.
-    CHECK(plan.configWrites[1].contents ==
-          "version=\"2.6\"\n"
-          "name=\"Example Battles\"\n"
-          "tags={\n\t\"Gameplay\"\n\t\"Graphics\"\n}\n"
-          "picture=\"thumbnail.png\"\n"
-          "supported_version=\"v4.*.*\"\n"
-          "replace_path=\"common/example_battles\"\n"
-          "user_list={\n\t\"alpha\"\n\t\"beta\"\n}\n"
-          "path=\"" +
-              f.generic(std::string(kContent) + "1000000003") +
-              "\"\n"
-              "remote_file_id=\"1000000003\"");
+    CHECK(plan.configWrites[1].contents == "version=\"2.6\"\n"
+                                           "name=\"Example Battles\"\n"
+                                           "tags={\n\t\"Gameplay\"\n\t\"Graphics\"\n}\n"
+                                           "picture=\"thumbnail.png\"\n"
+                                           "supported_version=\"v4.*.*\"\n"
+                                           "replace_path=\"common/example_battles\"\n"
+                                           "user_list={\n\t\"alpha\"\n\t\"beta\"\n}\n"
+                                           "path=\"" +
+                                               f.generic(std::string(kContent) + "1000000003") +
+                                               "\"\n"
+                                               "remote_file_id=\"1000000003\"");
     CHECK(plan.configWrites[0].contents.find(
               "path=\"" + f.generic(std::string(kContent) + "1000000002") + "\"") !=
           std::string::npos);
@@ -499,16 +497,15 @@ TEST_CASE("Stellaris launch plan writes the minimum configuration", "[games][ste
 
     // Once applied, the same plan needs no writes at all.
     apply(plan);
-    const LaunchPlan again =
-        f.plan(inst, mods, {"1000000001", "local_tweaks", "1000000002", "1000000003", "1000000006"});
+    const LaunchPlan again = f.plan(
+        inst, mods, {"1000000001", "local_tweaks", "1000000002", "1000000003", "1000000006"});
     CHECK(again.configWrites.empty());
     // And a rescan sees the generated registrations.
     const std::vector<InstalledMod> rescanned = f.scan(inst);
     CHECK(f.mod(rescanned, "1000000002").problems.empty());
     CHECK(samePath(f.mod(rescanned, "1000000003").descriptorPath, modDir / "ugc_1000000003.mod"));
-    const LaunchPlan afterRescan =
-        f.plan(inst, rescanned,
-               {"1000000001", "local_tweaks", "1000000002", "1000000003", "1000000006"});
+    const LaunchPlan afterRescan = f.plan(
+        inst, rescanned, {"1000000001", "local_tweaks", "1000000002", "1000000003", "1000000006"});
     CHECK(afterRescan.configWrites.empty());
 
     // Reordering only rewrites dlc_load.json.
@@ -627,8 +624,8 @@ TEST_CASE("Stellaris compatibility warnings follow supported_version", "[games][
 
     CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "1000000001")).empty()); // v4.5.*
     const auto older = f.adapter.compatibilityWarnings(inst, f.mod(mods, "1000000002"));
-    CHECK(older == std::vector<std::string>{
-                       "Made for Stellaris v4.4.*; the installed version is v4.5.2."});
+    CHECK(older ==
+          std::vector<std::string>{"Made for Stellaris v4.4.*; the installed version is v4.5.2."});
     const auto early = f.adapter.compatibilityWarnings(inst, f.mod(mods, "1000000003")); // v4.*.*
     REQUIRE(early.size() == 1);
     CHECK(early[0].find("reports supported_version \"v4.*.*\" as invalid") != std::string::npos);

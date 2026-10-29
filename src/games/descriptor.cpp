@@ -82,7 +82,8 @@ Result<std::vector<Token>> tokenize(std::string_view text) {
             const std::size_t start = pos;
             while (pos < text.size() && !endsBareToken(text[pos]))
                 ++pos;
-            tokens.push_back(Token{TokenKind::Text, std::string(text.substr(start, pos - start)), line});
+            tokens.push_back(
+                Token{TokenKind::Text, std::string(text.substr(start, pos - start)), line});
         }
     }
     tokens.push_back(Token{TokenKind::End, {}, line});
@@ -293,8 +294,8 @@ Result<DescriptorDocument> parseDescriptorDocument(std::string_view text) {
         ++index;
         const Token& value = tokens[index];
         if (value.kind == TokenKind::Text) {
-            document.entries.push_back(DescriptorEntry{sanitizeUtf8(key.text),
-                                                       {sanitizeUtf8(value.text)}, false, key.line});
+            document.entries.push_back(DescriptorEntry{
+                sanitizeUtf8(key.text), {sanitizeUtf8(value.text)}, false, key.line});
             ++index;
         } else if (value.kind == TokenKind::Open) {
             ++index;

@@ -85,8 +85,8 @@ struct ReadyEvent {
     bool loggedOn = false;
     bool ownsApp = false;
     std::string appId;
-    std::string ugcInterface; // e.g. "STEAMUGC_INTERFACE_VERSION016"
-    std::string initFunction; // e.g. "SteamAPI_InitSafe"
+    std::string ugcInterface;          // e.g. "STEAMUGC_INTERFACE_VERSION016"
+    std::string initFunction;          // e.g. "SteamAPI_InitSafe"
     std::int64_t subscribedCount = -1; // -1 when unknown
     // Valid when !ok:
     HelperFailure error = HelperFailure::None;

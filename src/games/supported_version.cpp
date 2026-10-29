@@ -80,7 +80,8 @@ std::optional<std::vector<std::string>> parseVersionPattern(std::string_view pat
     }
 }
 
-SupportedVersionCheck checkSupportedVersion(std::string_view pattern, std::string_view gameVersion) {
+SupportedVersionCheck checkSupportedVersion(std::string_view pattern,
+                                            std::string_view gameVersion) {
     SupportedVersionCheck check;
     if (trimmed(pattern).empty())
         return check;

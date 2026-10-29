@@ -68,8 +68,9 @@ public:
     Result<std::vector<PlaysetEntry>>
     readCurrentConfiguration(const GameInstallation& installation,
                              std::span<const InstalledMod> inventory) const override;
-    Result<LaunchPlan> buildLaunchPlan(const GameInstallation& installation,
-                                       std::span<const InstalledMod> orderedEnabledMods) const override;
+    Result<LaunchPlan>
+    buildLaunchPlan(const GameInstallation& installation,
+                    std::span<const InstalledMod> orderedEnabledMods) const override;
     ProcessNames processNames(const GameInstallation& installation) const override;
     LoadOrderInfo loadOrderInfo() const override;
     std::vector<std::string> compatibilityWarnings(const GameInstallation& installation,

@@ -11,12 +11,12 @@
 namespace pmm {
 
 struct GameCatalogEntry {
-    std::string_view key;              // stable protocol key, e.g. "stellaris"
-    std::string_view displayName;      // "Stellaris"
-    std::string_view steamAppId;       // "281990"
-    std::string_view userDataFolder;   // folder under "Paradox Interactive"
+    std::string_view key;                      // stable protocol key, e.g. "stellaris"
+    std::string_view displayName;              // "Stellaris"
+    std::string_view steamAppId;               // "281990"
+    std::string_view userDataFolder;           // folder under "Paradox Interactive"
     std::span<const std::string_view> sources; // provider keys valid for this game
-    bool adapterAvailable;             // implemented in this release
+    bool adapterAvailable;                     // implemented in this release
 };
 
 // All known games, supported ones first.

@@ -26,8 +26,9 @@ struct Fixture {
         add(inventory, installed(core.identity, "UI Overhaul Dynamic"));
         add(inventory, installed(addon.identity, "UI Overhaul Dynamic - Extended Topbar",
                                  {"UI Overhaul Dynamic"}));
-        add(inventory, installed(patch.identity, "Compatibility Patch",
-                                 {"UI Overhaul Dynamic", " Not Installed Mod ", "Installed Elsewhere"}));
+        add(inventory,
+            installed(patch.identity, "Compatibility Patch",
+                      {"UI Overhaul Dynamic", " Not Installed Mod ", "Installed Elsewhere"}));
         // Installed but not part of the test playsets.
         add(inventory, installed({"stellaris", "steam-workshop", "40"}, "Installed Elsewhere"));
         // Same name, other game: must not satisfy anything for Stellaris.
@@ -127,7 +128,8 @@ TEST_CASE("Bulk enable reports only the issues it introduces", "[core][dependenc
     SECTION("enabling a dependency that loads too late turns one issue into another") {
         f.addon.enabled = true;
         const std::vector<PlaysetEntry> entries{f.addon, f.core};
-        REQUIRE(checkDependencies(entries, f.inventory).front().kind == DependencyIssueKind::Disabled);
+        REQUIRE(checkDependencies(entries, f.inventory).front().kind ==
+                DependencyIssueKind::Disabled);
         const auto introduced =
             dependencyIssuesIntroducedByEnabling(entries, f.inventory, std::vector<std::size_t>{1});
         REQUIRE(introduced.size() == 1);

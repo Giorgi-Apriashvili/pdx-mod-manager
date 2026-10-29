@@ -32,11 +32,11 @@ TEST_CASE("Provider/game combinations are validated", "[core][catalog]") {
 
 TEST_CASE("Acquisition states round-trip through their names", "[core][model]") {
     using pmm::AcquisitionState;
-    for (auto s : {AcquisitionState::Pending, AcquisitionState::Subscribing,
-                   AcquisitionState::Subscribed, AcquisitionState::DownloadRequested,
-                   AcquisitionState::Downloading, AcquisitionState::Installed,
-                   AcquisitionState::Failed, AcquisitionState::Unavailable,
-                   AcquisitionState::NeedsUserAction, AcquisitionState::Cancelled}) {
+    for (auto s :
+         {AcquisitionState::Pending, AcquisitionState::Subscribing, AcquisitionState::Subscribed,
+          AcquisitionState::DownloadRequested, AcquisitionState::Downloading,
+          AcquisitionState::Installed, AcquisitionState::Failed, AcquisitionState::Unavailable,
+          AcquisitionState::NeedsUserAction, AcquisitionState::Cancelled}) {
         const auto parsed = pmm::acquisitionStateFromString(pmm::toString(s));
         REQUIRE(parsed.has_value());
         CHECK(*parsed == s);

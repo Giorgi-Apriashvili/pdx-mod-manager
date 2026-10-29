@@ -27,7 +27,9 @@ struct Eu4Fixture : test::GameFixture {
 
     Eu4Fixture() : GameFixture("eu4") {}
 
-    fs::path userData() const { return path("Documents/Paradox Interactive/Europa Universalis IV"); }
+    fs::path userData() const {
+        return path("Documents/Paradox Interactive/Europa Universalis IV");
+    }
     fs::path install() const { return path("Steam/steamapps/common/Europa Universalis IV"); }
 
     GameInstallation discovered() const {
@@ -73,13 +75,16 @@ TEST_CASE("EU4 default locations per OS", "[games][eu4]") {
     env.documentsDir = u8path("/docs");
     env.xdgDataHome = u8path("/xdg");
     env.platform = OsPlatform::Windows;
-    CHECK(adapter.defaultUserDataPath(env) == u8path("/docs/Paradox Interactive/Europa Universalis IV"));
+    CHECK(adapter.defaultUserDataPath(env) ==
+          u8path("/docs/Paradox Interactive/Europa Universalis IV"));
     CHECK(adapter.defaultExecutable(OsPlatform::Windows) == u8path("eu4.exe"));
     env.platform = OsPlatform::MacOS;
-    CHECK(adapter.defaultUserDataPath(env) == u8path("/docs/Paradox Interactive/Europa Universalis IV"));
+    CHECK(adapter.defaultUserDataPath(env) ==
+          u8path("/docs/Paradox Interactive/Europa Universalis IV"));
     CHECK(adapter.defaultExecutable(OsPlatform::MacOS) == u8path("eu4.app/Contents/MacOS/eu4"));
     env.platform = OsPlatform::Linux;
-    CHECK(adapter.defaultUserDataPath(env) == u8path("/xdg/Paradox Interactive/Europa Universalis IV"));
+    CHECK(adapter.defaultUserDataPath(env) ==
+          u8path("/xdg/Paradox Interactive/Europa Universalis IV"));
     CHECK(adapter.defaultExecutable(OsPlatform::Linux) == u8path("eu4"));
     env.xdgDataHome.clear();
     CHECK(adapter.defaultUserDataPath(env).empty());
@@ -116,7 +121,8 @@ TEST_CASE("EU4 scan understands archives and relative paths", "[games][eu4]") {
     const InstalledMod& legacy = f.mod(mods, "2000000002");
     CHECK(legacy.state == InstallState::Ready);
     CHECK(legacy.problems.empty());
-    CHECK(samePath(legacy.contentPath, f.path(std::string(kContent) + "2000000002/legacy_mod.zip")));
+    CHECK(
+        samePath(legacy.contentPath, f.path(std::string(kContent) + "2000000002/legacy_mod.zip")));
     CHECK(legacy.descriptor.name == "Example Legacy Zipped Mod");
     CHECK(legacy.contentUpdatedAt == 1500000000);
 
@@ -178,8 +184,8 @@ TEST_CASE("EU4 compatibility warnings are lenient about wildcards", "[games][eu4
     Eu4Fixture f;
     const GameInstallation inst = f.discovered();
     const std::vector<InstalledMod> mods = f.scan(inst);
-    CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "2000000001")).empty()); // v1.37.*.*
-    CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "local_mod")).empty());  // v1.37.5.0
+    CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "2000000001")).empty());   // v1.37.*.*
+    CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "local_mod")).empty());    // v1.37.5.0
     CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "zipped_local")).empty()); // v1.37.*
     CHECK(f.adapter.compatibilityWarnings(inst, f.mod(mods, "2000000003")) ==
           std::vector<std::string>{

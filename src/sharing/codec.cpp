@@ -40,7 +40,9 @@ std::string base64UrlEncode(std::string_view bytes) {
     std::string out;
     out.reserve((bytes.size() * 4 + 2) / 3);
     std::size_t i = 0;
-    const auto at = [&](std::size_t k) { return static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[k])); };
+    const auto at = [&](std::size_t k) {
+        return static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[k]));
+    };
     for (; i + 3 <= bytes.size(); i += 3) {
         const std::uint32_t v = (at(i) << 16) | (at(i + 1) << 8) | at(i + 2);
         out += kAlphabet[(v >> 18) & 0x3F];
@@ -72,13 +74,12 @@ Result<std::string> base64UrlDecode(std::string_view text) {
                              "The share code is malformed: it contains '=' padding, which is not "
                              "allowed.",
                              "base64url padding at offset " + std::to_string(i));
-        return makeError(ErrorCode::ParseError,
-                         "The share code is malformed: it contains a character that is not "
-                         "allowed. Copy the code again without modifying it.",
-                         "invalid base64url character (byte 0x" +
-                             std::string(1, "0123456789abcdef"[c >> 4]) +
-                             std::string(1, "0123456789abcdef"[c & 0xF]) + ") at offset " +
-                             std::to_string(i));
+        return makeError(
+            ErrorCode::ParseError,
+            "The share code is malformed: it contains a character that is not "
+            "allowed. Copy the code again without modifying it.",
+            "invalid base64url character (byte 0x" + std::string(1, "0123456789abcdef"[c >> 4]) +
+                std::string(1, "0123456789abcdef"[c & 0xF]) + ") at offset " + std::to_string(i));
     }
     const std::size_t rest = text.size() % 4;
     if (rest == 1)
@@ -102,7 +103,8 @@ Result<std::string> base64UrlDecode(std::string_view text) {
     std::uint32_t buffer = 0;
     int bits = 0;
     for (const char ch : text) {
-        buffer = (buffer << 6) | static_cast<std::uint32_t>(kDecodeTable[static_cast<unsigned char>(ch)]);
+        buffer = (buffer << 6) |
+                 static_cast<std::uint32_t>(kDecodeTable[static_cast<unsigned char>(ch)]);
         bits += 6;
         if (bits >= 8) {
             bits -= 8;

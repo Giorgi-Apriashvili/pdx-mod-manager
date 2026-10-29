@@ -80,8 +80,7 @@ public:
     }
 
     bool parse_error(std::size_t position, const std::string&, const Json::exception& ex) {
-        return fail(makeError(ErrorCode::ParseError,
-                              "The share code content is not valid JSON.",
+        return fail(makeError(ErrorCode::ParseError, "The share code content is not valid JSON.",
                               std::string(ex.what()) + " (byte " + std::to_string(position) + ")"));
     }
 
@@ -127,9 +126,9 @@ private:
             return &slot;
         }
         if (container.size() >= kMaxEntries) {
-            fail(makeError(ErrorCode::LimitExceeded,
-                           pathLabel(m_stack.back().path) + ": more than " +
-                               std::to_string(kMaxEntries) + " entries"));
+            fail(makeError(ErrorCode::LimitExceeded, pathLabel(m_stack.back().path) +
+                                                         ": more than " +
+                                                         std::to_string(kMaxEntries) + " entries"));
             return nullptr;
         }
         container.push_back(std::move(value));
@@ -209,8 +208,9 @@ Status checkWorkshopId(const std::string& path, std::string_view id) {
 Status checkLocalId(const std::string& path, std::string_view id) {
     PMM_TRY(checkText(path, id, 1, kMaxLocalIdBytes));
     if (id == "." || id == ".." || id.find_first_of("/\\:") != std::string_view::npos)
-        return invalid(path, "a local mod id must not contain '/', '\\' or ':' and must not be "
-                             "\".\" or \"..\"",
+        return invalid(path,
+                       "a local mod id must not contain '/', '\\' or ':' and must not be "
+                       "\".\" or \"..\"",
                        "got " + quotedSnippet(id));
     return {};
 }
@@ -252,8 +252,8 @@ Status checkSchemaVersion(std::int64_t version) {
                              "Update the app to import it.");
     return makeError(ErrorCode::UnsupportedVersion,
                      "schemaVersion: playset schema version " + std::to_string(version) +
-                         " is not supported (expected " +
-                         std::to_string(kManifestSchemaVersion) + ").");
+                         " is not supported (expected " + std::to_string(kManifestSchemaVersion) +
+                         ").");
 }
 
 Status checkKnownKeys(const Json& object, const std::string& path,
@@ -271,8 +271,8 @@ Status checkKnownKeys(const Json& object, const std::string& path,
 }
 
 // Reads a string field. Absent optional fields leave `out` untouched.
-Status readString(const Json& object, std::string_view key, const std::string& path,
-                  bool required, std::string& out) {
+Status readString(const Json& object, std::string_view key, const std::string& path, bool required,
+                  std::string& out) {
     const auto it = object.find(std::string(key));
     if (it == object.end()) {
         if (required)
@@ -305,10 +305,10 @@ Result<ManifestEntry> readEntry(const Json& value, std::size_t index) {
     if (!enabled->is_boolean())
         return invalid(childPath(path, "enabled"), "must be true or false");
     entry.enabled = enabled->get<bool>();
-    PMM_TRY(readString(value, "versionHint", childPath(path, "versionHint"), false,
-                       entry.versionHint));
-    PMM_TRY(readString(value, "fingerprint", childPath(path, "fingerprint"), false,
-                       entry.fingerprint));
+    PMM_TRY(
+        readString(value, "versionHint", childPath(path, "versionHint"), false, entry.versionHint));
+    PMM_TRY(
+        readString(value, "fingerprint", childPath(path, "fingerprint"), false, entry.fingerprint));
     return entry;
 }
 
@@ -339,8 +339,8 @@ Result<Manifest> readManifest(const Json& root) {
     PMM_TRY(checkGame(manifest.game));
     PMM_TRY(checkKnownKeys(root, {}, kRootKeys));
     PMM_TRY(readString(root, "playsetName", "playsetName", true, manifest.playsetName));
-    PMM_TRY(readString(root, "gameVersionHint", "gameVersionHint", false,
-                       manifest.gameVersionHint));
+    PMM_TRY(
+        readString(root, "gameVersionHint", "gameVersionHint", false, manifest.gameVersionHint));
 
     const auto mods = root.find("mods");
     if (mods == root.end())
@@ -394,8 +394,7 @@ Result<Manifest> parseManifestJson(std::string_view json) {
                          "The share code content is not valid: it starts with a byte order "
                          "mark.");
     if (const std::size_t bad = findInvalidUtf8(json); bad != std::string_view::npos)
-        return makeError(ErrorCode::ParseError,
-                         "The share code content is not valid UTF-8 text.",
+        return makeError(ErrorCode::ParseError, "The share code content is not valid UTF-8 text.",
                          "ill-formed UTF-8 at byte " + std::to_string(bad));
 
     StrictDomBuilder builder;

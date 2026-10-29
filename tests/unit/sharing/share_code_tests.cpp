@@ -3,10 +3,9 @@
 #include "sharing/share_code.hpp"
 #include "sharing_test_support.hpp"
 
-#include <zlib.h>
-
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <zlib.h>
 
 #include <chrono>
 #include <cstdint>
@@ -247,7 +246,7 @@ TEST_CASE("Surrounding ASCII whitespace is accepted, other text is not", "[shari
     CHECK(decodeShareCode(" \t\r\n" + code + "\r\n \t").ok());
     CHECK(decodeShareCode(code + "\n").ok());
 
-    CHECK(decodeError("\xC2\xA0" + code).code == ErrorCode::ParseError);   // no-break space
+    CHECK(decodeError("\xC2\xA0" + code).code == ErrorCode::ParseError);     // no-break space
     CHECK(decodeError("\xEF\xBB\xBF" + code).code == ErrorCode::ParseError); // byte order mark
     CHECK(decodeError("\v" + code).code == ErrorCode::ParseError);
     CHECK(decodeError("Code: " + code).code == ErrorCode::ParseError);
@@ -293,7 +292,8 @@ TEST_CASE("Envelope structure is strict", "[sharing][code]") {
         CHECK(decodeError("PMM1." + parts.payload).code == ErrorCode::ParseError);
         CHECK(decodeError("PMM1." + parts.payload + "." + parts.digest + ".x").code ==
               ErrorCode::ParseError);
-        CHECK(decodeError("PMM1." + parts.payload + ".." + parts.digest).code == ErrorCode::ParseError);
+        CHECK(decodeError("PMM1." + parts.payload + ".." + parts.digest).code ==
+              ErrorCode::ParseError);
     }
     SECTION("empty payload") {
         CHECK(decodeError("PMM1.." + parts.digest).code == ErrorCode::ParseError);
@@ -310,7 +310,8 @@ TEST_CASE("Envelope structure is strict", "[sharing][code]") {
         for (const char bad : {'+', '/', '!', '~', '*'}) {
             std::string payload = parts.payload;
             payload[payload.size() / 2] = bad;
-            CHECK(decodeError("PMM1." + payload + "." + parts.digest).code == ErrorCode::ParseError);
+            CHECK(decodeError("PMM1." + payload + "." + parts.digest).code ==
+                  ErrorCode::ParseError);
         }
     }
     SECTION("non-canonical final character") {
@@ -336,7 +337,8 @@ TEST_CASE("Truncation and corruption fail the integrity check", "[sharing][code]
 
     SECTION("truncated digest") {
         for (std::size_t keep : {0u, 1u, 32u, 63u}) {
-            const Error e = decodeError("PMM1." + parts.payload + "." + parts.digest.substr(0, keep));
+            const Error e =
+                decodeError("PMM1." + parts.payload + "." + parts.digest.substr(0, keep));
             CHECK(e.code == ErrorCode::IntegrityCheckFailed);
             CHECK_THAT(e.message, ContainsSubstring("truncated or damaged"));
         }
@@ -391,33 +393,41 @@ TEST_CASE("Compressed data must be exactly one zlib stream", "[sharing][code]") 
 TEST_CASE("Decoded JSON is validated strictly", "[sharing][code]") {
     const auto decodeJson = [](const std::string& json) { return decodeError(codeFromJson(json)); };
 
-    CHECK(decodeJson(std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")") + "\xFF" +
-                     R"(","mods":[]})")
+    CHECK(decodeJson(std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")") +
+                     "\xFF" + R"(","mods":[]})")
               .code == ErrorCode::ParseError);
     CHECK(decodeJson(R"({"schemaVersion":1,"game":"stellaris",)").code == ErrorCode::ParseError);
-    CHECK(decodeJson(R"({"schemaVersion":2,"game":"stellaris","playsetName":"P","mods":[]})").code ==
-          ErrorCode::UnsupportedVersion);
-    CHECK_THAT(decodeJson(R"({"schemaVersion":1,"game":"stellaris","playsetName":"P","playsetName":"Q","mods":[]})")
+    CHECK(
+        decodeJson(R"({"schemaVersion":2,"game":"stellaris","playsetName":"P","mods":[]})").code ==
+        ErrorCode::UnsupportedVersion);
+    CHECK_THAT(
+        decodeJson(
+            R"({"schemaVersion":1,"game":"stellaris","playsetName":"P","playsetName":"Q","mods":[]})")
+            .message,
+        ContainsSubstring("duplicate key"));
+    CHECK_THAT(decodeJson(manifestJson("[]", R"("extra":1,)")).message,
+               ContainsSubstring("unknown field"));
+    CHECK_THAT(decodeJson(manifestJson(R"([{"source":"steam-workshop","id":"1","enabled":"yes"}])"))
                    .message,
-               ContainsSubstring("duplicate key"));
-    CHECK_THAT(decodeJson(manifestJson("[]", R"("extra":1,)")).message, ContainsSubstring("unknown field"));
-    CHECK_THAT(decodeJson(manifestJson(R"([{"source":"steam-workshop","id":"1","enabled":"yes"}])")).message,
                StartsWith("mods[0].enabled:"));
-    CHECK_THAT(decodeJson(manifestJson(R"([{"source":"steam-workshop","id":"01","enabled":true}])")).message,
-               StartsWith("mods[0].id:"));
-    CHECK_THAT(decodeJson(manifestJson("[]", R"("gameVersionHint":")" + std::string(65, 'v') + R"(",)"))
+    CHECK_THAT(decodeJson(manifestJson(R"([{"source":"steam-workshop","id":"01","enabled":true}])"))
                    .message,
-               StartsWith("gameVersionHint:"));
+               StartsWith("mods[0].id:"));
+    CHECK_THAT(
+        decodeJson(manifestJson("[]", R"("gameVersionHint":")" + std::string(65, 'v') + R"(",)"))
+            .message,
+        StartsWith("gameVersionHint:"));
 
-    const Error dup = decodeJson(manifestJson(
-        R"([{"source":"steam-workshop","id":"5","enabled":true},)"
-        R"({"source":"local","id":"5","enabled":true},)"
-        R"({"source":"steam-workshop","id":"5","enabled":false}])"));
+    const Error dup =
+        decodeJson(manifestJson(R"([{"source":"steam-workshop","id":"5","enabled":true},)"
+                                R"({"source":"local","id":"5","enabled":true},)"
+                                R"({"source":"steam-workshop","id":"5","enabled":false}])"));
     CHECK(dup.code == ErrorCode::ValidationFailed);
     CHECK_THAT(dup.message, StartsWith("mods[2]:"));
     CHECK_THAT(dup.message, ContainsSubstring("mods[0]"));
 
-    const Error source = decodeJson(manifestJson(R"([{"source":"paradox-mods","id":"5","enabled":true}])"));
+    const Error source =
+        decodeJson(manifestJson(R"([{"source":"paradox-mods","id":"5","enabled":true}])"));
     CHECK(source.code == ErrorCode::ValidationFailed);
     CHECK_THAT(source.message, StartsWith("mods[0].source:"));
 
@@ -425,7 +435,8 @@ TEST_CASE("Decoded JSON is validated strictly", "[sharing][code]") {
         decodeJson(R"({"schemaVersion":1,"game":"skyrim","playsetName":"P","mods":[]})");
     CHECK(unknownGame.code == ErrorCode::ValidationFailed);
 
-    const Error hoi4 = decodeJson(R"({"schemaVersion":1,"game":"hoi4","playsetName":"P","mods":[]})");
+    const Error hoi4 =
+        decodeJson(R"({"schemaVersion":1,"game":"hoi4","playsetName":"P","mods":[]})");
     CHECK(hoi4.code == ErrorCode::UnsupportedGame);
     CHECK_THAT(hoi4.message, ContainsSubstring("Hearts of Iron IV"));
 }
@@ -452,8 +463,10 @@ TEST_CASE("A 10000-entry playset encodes and decodes within limits", "[sharing][
     for (std::size_t i = 0; i < kMaxEntries; ++i) {
         ManifestEntry entry;
         entry.source = i % 10 == 9 ? "local" : "steam-workshop";
-        entry.id = i % 10 == 9 ? "local mod " + std::to_string(i) : std::to_string(2000000000ULL + i * 7919);
-        entry.nameHint = "Synthetic mod number " + std::to_string(i) + " with a realistic display name";
+        entry.id = i % 10 == 9 ? "local mod " + std::to_string(i)
+                               : std::to_string(2000000000ULL + i * 7919);
+        entry.nameHint =
+            "Synthetic mod number " + std::to_string(i) + " with a realistic display name";
         entry.enabled = i % 3 != 0;
         entry.versionHint = i % 2 == 0 ? "4.1.*" : "";
         m.mods.push_back(std::move(entry));
@@ -481,8 +494,8 @@ TEST_CASE("The encoder refuses codes the decoder would reject", "[sharing][code]
     m.game = "eu4";
     m.playsetName = "Too big";
     for (std::size_t i = 0; i < kMaxEntries; ++i)
-        m.mods.push_back({"local", randomText(kMaxLocalIdBytes), randomText(kMaxNameHintBytes), true,
-                          randomText(kMaxVersionHintBytes), ""});
+        m.mods.push_back({"local", randomText(kMaxLocalIdBytes), randomText(kMaxNameHintBytes),
+                          true, randomText(kMaxVersionHintBytes), ""});
     auto code = encodeShareCode(m);
     REQUIRE_FALSE(code.ok());
     CHECK(code.error().code == ErrorCode::LimitExceeded);
@@ -502,7 +515,8 @@ TEST_CASE("Decompressed size is capped at exactly 8 MiB", "[sharing][code][limit
     // JSON allows trailing whitespace, so pad the document to the limit.
     const std::string atLimit = deflateRepeated(json, ' ', kMaxDecompressedBytes - json.size());
     CHECK(decodeShareCode(codeFromCompressed(atLimit)).ok());
-    const std::string overLimit = deflateRepeated(json, ' ', kMaxDecompressedBytes - json.size() + 1);
+    const std::string overLimit =
+        deflateRepeated(json, ' ', kMaxDecompressedBytes - json.size() + 1);
     CHECK(decodeError(codeFromCompressed(overLimit)).code == ErrorCode::LimitExceeded);
 }
 

@@ -33,14 +33,15 @@ struct Scenario {
     Scenario() {
         add(inventory, installed(requested[0].identity, "Installed enabled"));
         add(inventory, installed(requested[4].identity, "Local installed"));
-        add(inventory, installed(requested[5].identity, "Broken disabled", {}, InstallState::Broken));
+        add(inventory,
+            installed(requested[5].identity, "Broken disabled", {}, InstallState::Broken));
         add(inventory, installed({"stellaris", "steam-workshop", "900"}, "Extra installed A"));
         add(inventory, installed({"stellaris", "local", "extra"}, "Extra installed B"));
     }
 
     ImportPlan plan(const std::vector<std::string>& existing = {}) const {
-        return buildImportPlan("stellaris", "Shared setup", requested, inventory, existing, "v4.1.5",
-                               "v4.1.5");
+        return buildImportPlan("stellaris", "Shared setup", requested, inventory, existing,
+                               "v4.1.5", "v4.1.5");
     }
 };
 
@@ -72,7 +73,8 @@ TEST_CASE("Import reconciles installed, missing, disabled, broken and local-only
 
     // Disabled missing Workshop mods are acquired too; installed, broken and
     // local entries never are.
-    CHECK(plan.toAcquire == std::vector<ModIdentity>{s.requested[1].identity, s.requested[2].identity});
+    CHECK(plan.toAcquire ==
+          std::vector<ModIdentity>{s.requested[1].identity, s.requested[2].identity});
 }
 
 TEST_CASE("The imported playset is exactly the requested setup", "[core][import]") {
@@ -99,8 +101,7 @@ TEST_CASE("Proposed names never collide with existing playsets", "[core][import]
     CHECK(s.plan({"Shared setup"}).requestedName == "Shared setup");
 }
 
-TEST_CASE("Import warnings cover versions and always state the content caveat",
-          "[core][import]") {
+TEST_CASE("Import warnings cover versions and always state the content caveat", "[core][import]") {
     Scenario s;
     ImportPlan plan = s.plan();
     REQUIRE_FALSE(plan.warnings.empty());
@@ -162,9 +163,8 @@ TEST_CASE("Unmapped local mods get suggestions but are never mapped automaticall
     const ImportPlan plan = s.plan();
     const ImportPlanEntry& entry = plan.entries[3];
     CHECK(entry.status == ImportEntryStatus::LocalUnmapped);
-    CHECK(entry.localCandidates ==
-          std::vector<ModIdentity>{{"stellaris", "local", "renamed-copy"},
-                                   {"stellaris", "local", "same-name"}});
+    CHECK(entry.localCandidates == std::vector<ModIdentity>{{"stellaris", "local", "renamed-copy"},
+                                                            {"stellaris", "local", "same-name"}});
     CHECK(plan.toPlayset().entries[3].identity.id == "their-local");
 }
 

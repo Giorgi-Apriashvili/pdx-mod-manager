@@ -73,7 +73,9 @@ std::string env(const char* name) {
 }
 
 std::string installPath(std::uint64_t id) {
-    return "/fake/\xC3\x9Cn\xC3\xAF" "c\xC3\xB8" "d\xC3\xA9 library/steamapps/workshop/content/" +
+    return "/fake/\xC3\x9Cn\xC3\xAF"
+           "c\xC3\xB8"
+           "d\xC3\xA9 library/steamapps/workshop/content/" +
            std::to_string(state().appId) + "/" + std::to_string(id);
 }
 
@@ -247,8 +249,8 @@ FAKE_EXPORT bool FAKE_CALL SteamAPI_ISteamUtils_IsAPICallCompleted(void*, std::u
 }
 
 FAKE_EXPORT bool FAKE_CALL SteamAPI_ISteamUtils_GetAPICallResult(void*, std::uint64_t call,
-                                                                 void* out, int size,
-                                                                 int expected, bool* failed) {
+                                                                 void* out, int size, int expected,
+                                                                 bool* failed) {
     State& s = state();
     const auto it = s.calls.find(call);
 #if defined(_WIN32)

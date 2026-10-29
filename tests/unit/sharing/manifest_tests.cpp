@@ -58,9 +58,10 @@ TEST_CASE("Serialization round-trips through the strict parser", "[sharing][mani
 }
 
 TEST_CASE("Parser accepts any formatting, key order and escapes", "[sharing][manifest]") {
-    const std::string json = " {\n \"mods\" : [ { \"enabled\" : true , \"id\" : \"7\" ,"
-                             " \"source\" : \"steam-workshop\", \"nameHint\": \"\\u00dc\\ud83d\\ude80\" } ],"
-                             "\t\"playsetName\":\"X\", \"game\":\"eu4\", \"schemaVersion\":1 }\r\n";
+    const std::string json =
+        " {\n \"mods\" : [ { \"enabled\" : true , \"id\" : \"7\" ,"
+        " \"source\" : \"steam-workshop\", \"nameHint\": \"\\u00dc\\ud83d\\ude80\" } ],"
+        "\t\"playsetName\":\"X\", \"game\":\"eu4\", \"schemaVersion\":1 }\r\n";
     auto parsed = parseManifestJson(json);
     REQUIRE(parsed.ok());
     CHECK(parsed->game == "eu4");
@@ -70,7 +71,8 @@ TEST_CASE("Parser accepts any formatting, key order and escapes", "[sharing][man
 
 TEST_CASE("Empty optional strings are equivalent to omitted fields", "[sharing][manifest]") {
     auto parsed = parseManifestJson(manifestJson(
-        entryJson(R"("source":"local","id":"a","nameHint":"","enabled":true,"versionHint":"","fingerprint":"")"),
+        entryJson(
+            R"("source":"local","id":"a","nameHint":"","enabled":true,"versionHint":"","fingerprint":"")"),
         R"("gameVersionHint":"",)"));
     REQUIRE(parsed.ok());
     CHECK(parsed->gameVersionHint.empty());
@@ -86,16 +88,23 @@ TEST_CASE("Malformed JSON and UTF-8 are parse errors", "[sharing][manifest]") {
              std::string(""),
              std::string("{"),
              std::string(R"({"schemaVersion":1,})"),
-             manifestJson() + "{}",                         // two root values
-             manifestJson().substr(0, 40),                  // truncated
-             std::string(R"({"schemaVersion":1 /*c*/})"),   // comments
+             manifestJson() + "{}",                       // two root values
+             manifestJson().substr(0, 40),                // truncated
+             std::string(R"({"schemaVersion":1 /*c*/})"), // comments
              std::string(R"({'schemaVersion':1})"),
              std::string("\xEF\xBB\xBF") + manifestJson(), // byte order mark
              // Raw bytes (not JSON escapes): invalid, overlong, surrogate.
-             std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")" "\xFF" R"(","mods":[]})"),
-             std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")" "\xC0\xAF" R"(","mods":[]})"),
-             std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")" "\xED\xA0\x80" R"(","mods":[]})"),
-             std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":"\ud800","mods":[]})"),
+             std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")"
+                         "\xFF"
+                         R"(","mods":[]})"),
+             std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")"
+                         "\xC0\xAF"
+                         R"(","mods":[]})"),
+             std::string(R"({"schemaVersion":1,"game":"stellaris","playsetName":")"
+                         "\xED\xA0\x80"
+                         R"(","mods":[]})"),
+             std::string(
+                 R"({"schemaVersion":1,"game":"stellaris","playsetName":"\ud800","mods":[]})"),
          }) {
         INFO(json);
         CHECK(parseError(json).code == ErrorCode::ParseError);
@@ -111,7 +120,8 @@ TEST_CASE("Root must be an object", "[sharing][manifest]") {
 }
 
 TEST_CASE("Duplicate keys are rejected at every level", "[sharing][manifest]") {
-    Error e = parseError(R"({"schemaVersion":1,"game":"stellaris","game":"eu4","playsetName":"P","mods":[]})");
+    Error e = parseError(
+        R"({"schemaVersion":1,"game":"stellaris","game":"eu4","playsetName":"P","mods":[]})");
     CHECK(e.code == ErrorCode::ValidationFailed);
     CHECK_THAT(e.message, ContainsSubstring("duplicate key \"game\""));
 
@@ -126,7 +136,8 @@ TEST_CASE("Unknown keys are rejected at every level", "[sharing][manifest]") {
     CHECK(e.code == ErrorCode::ValidationFailed);
     CHECK_THAT(e.message, ContainsSubstring("unknown field \"author\""));
 
-    e = parseError(manifestJson(entryJson(R"("source":"local","id":"a","enabled":true,"url":"https://x")")));
+    e = parseError(
+        manifestJson(entryJson(R"("source":"local","id":"a","enabled":true,"url":"https://x")")));
     CHECK(e.code == ErrorCode::ValidationFailed);
     CHECK_THAT(e.message, StartsWith("mods[0]: unknown field \"url\""));
 }
@@ -138,13 +149,15 @@ TEST_CASE("schemaVersion is checked first and must be exactly 1", "[sharing][man
     CHECK_THAT(e.message, ContainsSubstring("newer version"));
     CHECK_THAT(e.message, ContainsSubstring("Update the app"));
 
-    CHECK(parseError(R"({"schemaVersion":0,"game":"stellaris"})").code == ErrorCode::UnsupportedVersion);
-    CHECK(parseError(R"({"schemaVersion":-1,"game":"stellaris"})").code == ErrorCode::UnsupportedVersion);
+    CHECK(parseError(R"({"schemaVersion":0,"game":"stellaris"})").code ==
+          ErrorCode::UnsupportedVersion);
+    CHECK(parseError(R"({"schemaVersion":-1,"game":"stellaris"})").code ==
+          ErrorCode::UnsupportedVersion);
     CHECK(parseError(R"({"schemaVersion":18446744073709551615,"game":"stellaris"})").code ==
           ErrorCode::UnsupportedVersion);
-    for (const char* bad : {R"({"schemaVersion":"1"})", R"({"schemaVersion":1.0})",
-                            R"({"schemaVersion":1e0})", R"({"schemaVersion":null})",
-                            R"({"game":"stellaris"})"}) {
+    for (const char* bad :
+         {R"({"schemaVersion":"1"})", R"({"schemaVersion":1.0})", R"({"schemaVersion":1e0})",
+          R"({"schemaVersion":null})", R"({"game":"stellaris"})"}) {
         e = parseError(bad);
         CHECK(e.code == ErrorCode::ValidationFailed);
         CHECK_THAT(e.message, StartsWith("schemaVersion:"));
@@ -166,10 +179,12 @@ TEST_CASE("Wrong field types and missing fields name the JSON path", "[sharing][
         {R"({"schemaVersion":1,"game":"stellaris","playsetName":"P","mods":{}})", "mods:"},
         {R"({"schemaVersion":1,"game":"stellaris","playsetName":"P"})", "mods:"},
         {manifestJson(R"(["x"])"), "mods[0]:"},
-        {manifestJson(entryJson(R"("source":"local","id":"a","enabled":"true")")), "mods[0].enabled:"},
+        {manifestJson(entryJson(R"("source":"local","id":"a","enabled":"true")")),
+         "mods[0].enabled:"},
         {manifestJson(entryJson(R"("source":"local","id":"a","enabled":1)")), "mods[0].enabled:"},
         {manifestJson(entryJson(R"("source":"local","id":"a")")), "mods[0].enabled:"},
-        {manifestJson(entryJson(R"("source":"steam-workshop","id":123,"enabled":true)")), "mods[0].id:"},
+        {manifestJson(entryJson(R"("source":"steam-workshop","id":123,"enabled":true)")),
+         "mods[0].id:"},
         {manifestJson(entryJson(R"("id":"1","enabled":true)")), "mods[0].source:"},
         {manifestJson(entryJson(R"("source":"local","enabled":true)")), "mods[0].id:"},
         {manifestJson(entryJson(R"("source":"local","id":"a","enabled":true,"nameHint":[])")),
@@ -202,7 +217,8 @@ TEST_CASE("Field lengths are bounded in bytes of UTF-8", "[sharing][manifest]") 
         m.playsetName = twoByte + "x";
         CHECK_THAT(validateManifest(m).error().message, StartsWith("playsetName:"));
         m.playsetName.clear();
-        CHECK_THAT(validateManifest(m).error().message, StartsWith("playsetName: must not be empty"));
+        CHECK_THAT(validateManifest(m).error().message,
+                   StartsWith("playsetName: must not be empty"));
     }
     SECTION("gameVersionHint") {
         m.gameVersionHint = std::string(64, 'v');
@@ -232,9 +248,9 @@ TEST_CASE("Field lengths are bounded in bytes of UTF-8", "[sharing][manifest]") 
 
 TEST_CASE("Text fields reject control characters and invalid UTF-8", "[sharing][manifest]") {
     Manifest m = test::sampleManifest();
-    for (const std::string& bad : {std::string("a\nb"), std::string("tab\there"),
-                                  std::string("nul\0x", 5), std::string("del\x7F"),
-                                  std::string("nel\xC2\x85"), std::string("bad\xFF")}) {
+    for (const std::string& bad :
+         {std::string("a\nb"), std::string("tab\there"), std::string("nul\0x", 5),
+          std::string("del\x7F"), std::string("nel\xC2\x85"), std::string("bad\xFF")}) {
         Manifest copy = m;
         copy.playsetName = bad;
         CHECK(validateManifest(copy).error().code == ErrorCode::ValidationFailed);
@@ -246,14 +262,16 @@ TEST_CASE("Text fields reject control characters and invalid UTF-8", "[sharing][
         CHECK_THAT(validateManifest(copy).error().message, StartsWith("mods[2].id:"));
     }
     // JSON escapes cannot smuggle control characters in either.
-    const Error e = parseError(R"({"schemaVersion":1,"game":"stellaris","playsetName":"a\u0000b","mods":[]})");
+    const Error e =
+        parseError(R"({"schemaVersion":1,"game":"stellaris","playsetName":"a\u0000b","mods":[]})");
     CHECK_THAT(e.message, StartsWith("playsetName:"));
 }
 
 TEST_CASE("Steam Workshop ids are 1-20 digits within uint64", "[sharing][manifest]") {
     Manifest m = test::sampleManifest();
     m.mods.resize(1);
-    for (const char* good : {"1", "9", "1234567890", "18446744073709551615", "10000000000000000000"}) {
+    for (const char* good :
+         {"1", "9", "1234567890", "18446744073709551615", "10000000000000000000"}) {
         m.mods[0].id = good;
         INFO(good);
         CHECK(validateManifest(m).ok());
@@ -285,9 +303,10 @@ TEST_CASE("Local ids cannot look like paths", "[sharing][manifest]") {
 
 TEST_CASE("Fingerprints must be sha256 with lowercase hex", "[sharing][manifest]") {
     Manifest m = test::sampleManifest();
-    for (const std::string& bad : {"sha256:" + std::string(63, 'a'), "sha256:" + std::string(65, 'a'),
-                                  "sha256:" + std::string(64, 'A'), "md5:" + std::string(64, 'a'),
-                                  "SHA256:" + std::string(64, 'a'), std::string(64, 'a')}) {
+    for (const std::string& bad :
+         {"sha256:" + std::string(63, 'a'), "sha256:" + std::string(65, 'a'),
+          "sha256:" + std::string(64, 'A'), "md5:" + std::string(64, 'a'),
+          "SHA256:" + std::string(64, 'a'), std::string(64, 'a')}) {
         m.mods[2].fingerprint = bad;
         INFO(bad);
         CHECK_THAT(validateManifest(m).error().message, StartsWith("mods[2].fingerprint:"));

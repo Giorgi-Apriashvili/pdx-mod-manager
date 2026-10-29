@@ -43,8 +43,7 @@ TEST_CASE("moveEntry places the entry at the target index", "[core][playset_ops]
     CHECK(entries == before);
 }
 
-TEST_CASE("moveUp and moveDown swap with neighbours and stop at the edges",
-          "[core][playset_ops]") {
+TEST_CASE("moveUp and moveDown swap with neighbours and stop at the edges", "[core][playset_ops]") {
     auto entries = fiveEntries();
     REQUIRE(moveUp(entries, 2).ok());
     CHECK(order(entries) == "ACBDE");
@@ -160,10 +159,12 @@ TEST_CASE("addEntries appends and refuses duplicate identities", "[core][playset
 
     const auto before = entries;
     // Same id and source as an existing entry, even with a different name.
-    CHECK(addEntries(entries, std::vector<PlaysetEntry>{workshop("8", "Hotel"), workshop("1", "Other")})
+    CHECK(addEntries(entries,
+                     std::vector<PlaysetEntry>{workshop("8", "Hotel"), workshop("1", "Other")})
               .error()
               .code == ErrorCode::AlreadyExists);
-    CHECK(addEntries(entries, std::vector<PlaysetEntry>{workshop("9", "India"), workshop("9", "India")})
+    CHECK(addEntries(entries,
+                     std::vector<PlaysetEntry>{workshop("9", "India"), workshop("9", "India")})
               .error()
               .code == ErrorCode::AlreadyExists);
     CHECK(entries == before);
@@ -172,8 +173,7 @@ TEST_CASE("addEntries appends and refuses duplicate identities", "[core][playset
     CHECK(findEntry(entries, ModIdentity{"stellaris", source::Local, "1"}) == entries.size() - 1);
 }
 
-TEST_CASE("Reordering is only allowed in the unfiltered load-order view",
-          "[core][playset_ops]") {
+TEST_CASE("Reordering is only allowed in the unfiltered load-order view", "[core][playset_ops]") {
     ViewFilter filter;
     CHECK(reorderPolicy(filter).allowed);
     CHECK(reorderPolicy(filter).explanation.empty());

@@ -21,7 +21,9 @@ bool equalsAsciiNoCase(std::string_view a, std::string_view b) noexcept {
     if (a.size() != b.size())
         return false;
     for (std::size_t i = 0; i < a.size(); ++i) {
-        auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
+        auto lower = [](char c) {
+            return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+        };
         if (lower(a[i]) != lower(b[i]))
             return false;
     }
@@ -80,8 +82,7 @@ Result<std::string> fingerprintDirectory(const fs::path& root, const Fingerprint
     std::error_code ec;
     const auto rootStatus = fs::status(base, ec);
     if (ec || !fs::exists(rootStatus)) {
-        return makeError(ErrorCode::NotFound, "The mod folder does not exist.",
-                         utf8(root, false));
+        return makeError(ErrorCode::NotFound, "The mod folder does not exist.", utf8(root, false));
     }
     if (!fs::is_directory(rootStatus)) {
         return makeError(ErrorCode::InvalidArgument, "The mod location is not a folder.",

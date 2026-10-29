@@ -179,17 +179,20 @@ std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> ent
             if (satisfied)
                 continue;
             if (enabledAfter)
-                issues.push_back(makeIssue(i, name, DependencyIssueKind::OrderedAfter, enabledAfter));
+                issues.push_back(
+                    makeIssue(i, name, DependencyIssueKind::OrderedAfter, enabledAfter));
             else
-                issues.push_back(makeIssue(i, name, DependencyIssueKind::Disabled, candidates.front()));
+                issues.push_back(
+                    makeIssue(i, name, DependencyIssueKind::Disabled, candidates.front()));
         }
     }
     return issues;
 }
 
-std::vector<DependencyIssue> dependencyIssuesIntroducedByEnabling(
-    std::span<const PlaysetEntry> entries, const InstalledModMap& inventory,
-    std::span<const std::size_t> indices) {
+std::vector<DependencyIssue>
+dependencyIssuesIntroducedByEnabling(std::span<const PlaysetEntry> entries,
+                                     const InstalledModMap& inventory,
+                                     std::span<const std::size_t> indices) {
     std::vector<PlaysetEntry> after(entries.begin(), entries.end());
     for (const std::size_t i : indices) {
         if (i < after.size())

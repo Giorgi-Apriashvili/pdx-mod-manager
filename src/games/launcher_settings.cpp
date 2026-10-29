@@ -39,8 +39,8 @@ Status readString(const nlohmann::json& object, const char* field, std::string& 
 } // namespace
 
 Result<LauncherSettings> parseLauncherSettings(std::string_view text) {
-    const nlohmann::json json = nlohmann::json::parse(text.data(), text.data() + text.size(),
-                                                      nullptr, false, true);
+    const nlohmann::json json =
+        nlohmann::json::parse(text.data(), text.data() + text.size(), nullptr, false, true);
     if (json.is_discarded())
         return makeError(ErrorCode::ParseError,
                          "The game's launcher-settings.json is not valid JSON. Verify the game "

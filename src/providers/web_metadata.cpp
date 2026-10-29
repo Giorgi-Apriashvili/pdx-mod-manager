@@ -14,8 +14,7 @@ namespace {
 using Json = nlohmann::json;
 
 // Accepts a JSON number or a decimal string; anything else yields fallback.
-template <class T>
-T numberOr(const Json& obj, const char* key, T fallback) {
+template <class T> T numberOr(const Json& obj, const char* key, T fallback) {
     const auto it = obj.find(key);
     if (it == obj.end())
         return fallback;
@@ -87,8 +86,7 @@ Result<std::string> buildPublishedFileDetailsRequest(std::span<const std::string
     return body;
 }
 
-Result<std::vector<WorkshopItemMetadata>> parsePublishedFileDetailsResponse(
-    std::string_view body) {
+Result<std::vector<WorkshopItemMetadata>> parsePublishedFileDetailsResponse(std::string_view body) {
     if (body.size() > kMaxPublishedFileDetailsResponseBytes) {
         return makeError(ErrorCode::LimitExceeded, "The Workshop details reply is too large.",
                          std::to_string(body.size()) + " bytes");

@@ -56,8 +56,7 @@ TEST_CASE("Descriptor parser reads the launcher format", "[games][descriptor]") 
     CHECK(d.extra.empty());
 }
 
-TEST_CASE("Descriptor writer reproduces the launcher format byte for byte",
-          "[games][descriptor]") {
+TEST_CASE("Descriptor writer reproduces the launcher format byte for byte", "[games][descriptor]") {
     auto document = parseDescriptorDocument(kLauncherDescriptor);
     REQUIRE(document.ok());
     CHECK(document->warnings.empty());
@@ -226,8 +225,8 @@ TEST_CASE("Descriptor files are read with a size limit and named in errors",
 }
 
 TEST_CASE("List values in extra survive encode/decode", "[games][descriptor]") {
-    const std::vector<std::string> items{"plain", "with space", "quote\"inside", "back\\slash",
-                                         "trailing\\", ""};
+    const std::vector<std::string> items{"plain",       "with space", "quote\"inside",
+                                         "back\\slash", "trailing\\", ""};
     const std::string encoded = encodeListValue(items);
     CHECK(decodeListValue(encoded) == items);
     CHECK(isListExtraKey("replace_path{}"));

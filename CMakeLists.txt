@@ -53,6 +53,11 @@ if(PMM_BUILD_APP)
   endif()
   find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Network Concurrent)
   qt_standard_project_setup(REQUIRES 6.5)
+  # qt_standard_project_setup turns AUTOMOC/AUTOUIC on for every target; the
+  # Qt-free libraries must not get them. Qt targets enable AUTOMOC themselves
+  # (qt_add_qml_module does; src/app sets CMAKE_AUTOMOC in its own scope).
+  set(CMAKE_AUTOMOC OFF)
+  set(CMAKE_AUTOUIC OFF)
   add_subdirectory(ui)
 endif()
 

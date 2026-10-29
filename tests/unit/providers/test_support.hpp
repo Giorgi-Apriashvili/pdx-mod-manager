@@ -36,9 +36,9 @@ public:
     explicit TempDir(std::string_view tag) {
         std::random_device rd;
         const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        m_path = fs::temp_directory_path() /
-                 u8path("pmm-providers-" + std::string(tag) + "-" + std::to_string(stamp) + "-" +
-                        std::to_string(rd()));
+        m_path =
+            fs::temp_directory_path() / u8path("pmm-providers-" + std::string(tag) + "-" +
+                                               std::to_string(stamp) + "-" + std::to_string(rd()));
         fs::create_directories(m_path);
     }
     ~TempDir() {

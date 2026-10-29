@@ -44,8 +44,7 @@ inline Manifest sampleManifest() {
     m.mods = {
         {"steam-workshop", "1234567890", "First mod", true, "", ""},
         {"steam-workshop", "1234567891", "Disabled mod", false, "2.0", ""},
-        {"local", "my-local-mod", "Local mod", true, "",
-         "sha256:" + std::string(64, 'a')},
+        {"local", "my-local-mod", "Local mod", true, "", "sha256:" + std::string(64, 'a')},
         {"steam-workshop", "18446744073709551615", "Ünïcødé 日本語 🚀", false, "", ""},
     };
     return m;

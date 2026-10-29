@@ -36,8 +36,8 @@ enum class DependencyIssueKind {
 const char* toString(DependencyIssueKind kind) noexcept;
 
 struct DependencyIssue {
-    std::size_t entryIndex = 0;                 // the dependent entry
-    std::string dependencyName;                 // as written in the descriptor (trimmed)
+    std::size_t entryIndex = 0; // the dependent entry
+    std::string dependencyName; // as written in the descriptor (trimmed)
     DependencyIssueKind kind = DependencyIssueKind::NotInstalled;
     std::optional<std::size_t> dependencyIndex; // playset position, when in the playset
     std::string message;                        // user-facing, names the dependency
@@ -53,8 +53,9 @@ std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> ent
 // Feedback for a bulk enable: the issues that would exist after enabling
 // `indices` but do not exist now (same entry, dependency name and kind).
 // Out-of-range indices are ignored. Does not modify `entries`.
-std::vector<DependencyIssue> dependencyIssuesIntroducedByEnabling(
-    std::span<const PlaysetEntry> entries, const InstalledModMap& inventory,
-    std::span<const std::size_t> indices);
+std::vector<DependencyIssue>
+dependencyIssuesIntroducedByEnabling(std::span<const PlaysetEntry> entries,
+                                     const InstalledModMap& inventory,
+                                     std::span<const std::size_t> indices);
 
 } // namespace pmm

@@ -204,9 +204,10 @@ ImportPlan buildImportPlan(const GameKey& game, const std::string& playsetName,
         plan.warnings.push_back(countText(fingerprintMismatches, "mod's", "mods'") +
                                 " installed files differ from the shared setup.");
     if (plan.counts.localUnmapped > 0)
-        plan.warnings.push_back(countText(plan.counts.localUnmapped, "local mod is", "local mods are") +
-                                " not installed here and must be mapped or installed manually; "
-                                "local mods cannot be downloaded.");
+        plan.warnings.push_back(
+            countText(plan.counts.localUnmapped, "local mod is", "local mods are") +
+            " not installed here and must be mapped or installed manually; "
+            "local mods cannot be downloaded.");
     if (plan.counts.broken > 0)
         plan.warnings.push_back(countText(plan.counts.broken, "mod is", "mods are") +
                                 " installed but broken; repair or reinstall before playing.");

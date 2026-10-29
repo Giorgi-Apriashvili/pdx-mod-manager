@@ -45,13 +45,13 @@
 namespace pmm::providers {
 
 struct AcquisitionPolicy {
-    int maxAutomaticAttempts = 3;              // runs per retry cycle, including the first
-    std::int64_t retryBaseDelayMs = 5'000;     // doubled per attempt ...
-    std::int64_t retryMaxDelayMs = 120'000;    // ... up to this cap
-    std::int64_t responseTimeoutMs = 30'000;   // session, state, download request, verification
-    std::int64_t subscribeTimeoutMs = 60'000;  // subscribe needs a server round trip
-    std::int64_t stallTimeoutMs = 300'000;     // download without any progress
-    std::int64_t pollIntervalMs = 1'000;       // QueryState cadence while downloading
+    int maxAutomaticAttempts = 3;             // runs per retry cycle, including the first
+    std::int64_t retryBaseDelayMs = 5'000;    // doubled per attempt ...
+    std::int64_t retryMaxDelayMs = 120'000;   // ... up to this cap
+    std::int64_t responseTimeoutMs = 30'000;  // session, state, download request, verification
+    std::int64_t subscribeTimeoutMs = 60'000; // subscribe needs a server round trip
+    std::int64_t stallTimeoutMs = 300'000;    // download without any progress
+    std::int64_t pollIntervalMs = 1'000;      // QueryState cadence while downloading
     bool highPriorityDownloads = true;
 };
 
@@ -76,7 +76,7 @@ struct AcquisitionContext {
     std::int64_t awaitingSinceMs = 0;  // when `awaiting` was entered
     std::int64_t lastProgressAtMs = 0; // last byte/flag change while downloading
     std::int64_t lastPollAtMs = 0;
-    std::int64_t retryAtMs = 0;        // > 0: automatic retry scheduled
+    std::int64_t retryAtMs = 0; // > 0: automatic retry scheduled
     bool sessionKnown = false;
     bool loggedOn = false;
     bool ownsApp = false;
@@ -88,7 +88,7 @@ struct AcquisitionContext {
 };
 
 enum class ActionKind {
-    None, // not emitted; an empty action list means "nothing to do"
+    None,             // not emitted; an empty action list means "nothing to do"
     QuerySession,     // make sure the helper runs and report ProviderReady/Unavailable
     QueryState,       // helper "state" for itemId
     Subscribe,        // helper "subscribe" for itemId
@@ -101,7 +101,7 @@ const char* toString(ActionKind kind) noexcept;
 struct Action {
     ActionKind kind = ActionKind::None;
     std::string itemId;
-    std::string installPath; // VerifyContent only (UTF-8, as reported by Steam)
+    std::string installPath;  // VerifyContent only (UTF-8, as reported by Steam)
     bool highPriority = true; // RequestDownload only
 
     bool operator==(const Action&) const = default;
@@ -163,9 +163,9 @@ struct ManualFallback {}; // user chose "Open in Steam (manual)"
 } // namespace obs
 
 using Observation =
-    std::variant<obs::ProviderReady, obs::ProviderUnavailable, obs::ItemState,
-                 obs::SubscribeResult, obs::DownloadAccepted, obs::ContentVerified,
-                 obs::ItemRejected, obs::Tick, obs::Cancel, obs::Retry, obs::ManualFallback>;
+    std::variant<obs::ProviderReady, obs::ProviderUnavailable, obs::ItemState, obs::SubscribeResult,
+                 obs::DownloadAccepted, obs::ContentVerified, obs::ItemRejected, obs::Tick,
+                 obs::Cancel, obs::Retry, obs::ManualFallback>;
 
 struct Transition {
     AcquisitionContext context;

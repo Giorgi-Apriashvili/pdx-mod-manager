@@ -15,8 +15,10 @@ using K = ActionKind;
 namespace {
 
 const std::string kId = "1121692237";
-const std::string kPath =
-    "D:/Steam Library/\xC3\x9C" "n\xC3\xAF" "c\xC3\xB8" "d\xC3\xA9/steamapps/workshop/content/281990/1121692237";
+const std::string kPath = "D:/Steam Library/\xC3\x9C"
+                          "n\xC3\xAF"
+                          "c\xC3\xB8"
+                          "d\xC3\xA9/steamapps/workshop/content/281990/1121692237";
 constexpr std::int64_t kT0 = 1'000'000;
 
 constexpr std::uint32_t kSub = item_flag::Subscribed;
@@ -171,16 +173,15 @@ TEST_CASE("State query decides the first provider operation", "[providers][acqui
          AwaitStep::DownloadAccepted},
         {"subscribed, needs update", kSub | kInst | kUpd, true, K::RequestDownload, S::Subscribed,
          AwaitStep::DownloadAccepted},
-        {"installed without install path", kSub | kInst, false, K::RequestDownload,
-         S::Subscribed, AwaitStep::DownloadAccepted},
+        {"installed without install path", kSub | kInst, false, K::RequestDownload, S::Subscribed,
+         AwaitStep::DownloadAccepted},
         {"already installed", kSub | kInst, true, K::VerifyContent, S::Subscribed,
          AwaitStep::Verification},
         {"legacy installed", kSub | kInst | item_flag::LegacyItem, true, K::VerifyContent,
          S::Subscribed, AwaitStep::Verification},
         {"already downloading", kSub | kDl, false, K::None, S::Downloading, AwaitStep::Progress},
         {"queued", kSub | kPend, false, K::None, S::DownloadRequested, AwaitStep::Progress},
-        {"updating", kSub | kInst | kUpd | kDl, true, K::None, S::Downloading,
-         AwaitStep::Progress},
+        {"updating", kSub | kInst | kUpd | kDl, true, K::None, S::Downloading, AwaitStep::Progress},
     };
     for (const Row& row : rows) {
         INFO(row.name);
@@ -228,8 +229,7 @@ TEST_CASE("Unusable installed content fails without automatic retry", "[provider
     CHECK(m.state() == S::Failed);
 }
 
-TEST_CASE("Provider unavailability maps to a concrete recovery state",
-          "[providers][acquisition]") {
+TEST_CASE("Provider unavailability maps to a concrete recovery state", "[providers][acquisition]") {
     using R = obs::UnavailableReason;
     struct Row {
         R reason;
@@ -455,8 +455,8 @@ TEST_CASE("Cancel explains what remains in Steam", "[providers][acquisition]") {
         INFO(row.phase);
         Machine m;
         const Observation path[] = {obs::ProviderReady{true, true}, item(0),
-                                    obs::SubscribeResult{1}, item(kSub),
-                                    obs::DownloadAccepted{true}, item(kSub | kDl, {}, 1, 10)};
+                                    obs::SubscribeResult{1},        item(kSub),
+                                    obs::DownloadAccepted{true},    item(kSub | kDl, {}, 1, 10)};
         for (int i = 0; i < row.steps; ++i)
             m.feed(path[i]);
         m.feed(obs::Cancel{});
@@ -478,8 +478,8 @@ TEST_CASE("Cancel explains what remains in Steam", "[providers][acquisition]") {
 
 TEST_CASE("Restored jobs are reconciled with a state query, never re-subscribed blindly",
           "[providers][acquisition]") {
-    for (S persisted : {S::Pending, S::Subscribing, S::Subscribed, S::DownloadRequested,
-                        S::Downloading}) {
+    for (S persisted :
+         {S::Pending, S::Subscribing, S::Subscribed, S::DownloadRequested, S::Downloading}) {
         INFO(toString(persisted));
         AcquisitionJob job = makeJob(persisted);
         job.attempts = 2;
@@ -499,8 +499,8 @@ TEST_CASE("Restored jobs are reconciled with a state query, never re-subscribed 
 }
 
 TEST_CASE("Restored terminal jobs stay put", "[providers][acquisition]") {
-    for (S persisted : {S::Installed, S::Failed, S::Unavailable, S::NeedsUserAction,
-                        S::Cancelled}) {
+    for (S persisted :
+         {S::Installed, S::Failed, S::Unavailable, S::NeedsUserAction, S::Cancelled}) {
         INFO(toString(persisted));
         Machine m(makeJob(persisted));
         CHECK(m.quiet());
@@ -607,9 +607,9 @@ TEST_CASE("Every transition keeps the machine's invariants", "[providers][acquis
                              S::Downloading};
     const S terminal[] = {S::Installed, S::Failed, S::Unavailable, S::NeedsUserAction,
                           S::Cancelled};
-    const AwaitStep busy[] = {AwaitStep::Session, AwaitStep::State, AwaitStep::SubscribeResult,
-                              AwaitStep::DownloadAccepted, AwaitStep::Progress,
-                              AwaitStep::Verification};
+    const AwaitStep busy[] = {AwaitStep::Session,         AwaitStep::State,
+                              AwaitStep::SubscribeResult, AwaitStep::DownloadAccepted,
+                              AwaitStep::Progress,        AwaitStep::Verification};
     const std::vector<Observation> observations{
         obs::ProviderReady{true, true},
         obs::ProviderReady{false, false},
@@ -775,7 +775,8 @@ TEST_CASE("Actions map to helper commands only where the helper is involved",
 
 TEST_CASE("Workshop content check requires a usable descriptor", "[providers][acquisition]") {
     pmm::test::TempDir dir("verify");
-    const fs::path base = dir.path() / pmm::test::u8path("Ünïcødé dir") / pmm::test::u8path("日本語");
+    const fs::path base =
+        dir.path() / pmm::test::u8path("Ünïcødé dir") / pmm::test::u8path("日本語");
 
     const fs::path good = base / "703156866";
     pmm::test::writeFile(good / "descriptor.mod", "name=\"Cinematic Camera\"\n");

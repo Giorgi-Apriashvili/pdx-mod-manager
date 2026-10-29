@@ -42,8 +42,7 @@ Result<Json> parseObject(std::string_view line, std::string_view what) {
                          e.what());
     }
     if (j.is_discarded() || !j.is_object())
-        return makeError(ErrorCode::ParseError,
-                         std::string(what) + " line is not a JSON object.");
+        return makeError(ErrorCode::ParseError, std::string(what) + " line is not a JSON object.");
     return j;
 }
 
@@ -85,8 +84,7 @@ Result<bool> optionalBool(const Json& obj, const char* key, bool fallback) {
     return f->get<bool>();
 }
 
-template <class T>
-Result<T> optionalUnsigned(const Json& obj, const char* key, T fallback) {
+template <class T> Result<T> optionalUnsigned(const Json& obj, const char* key, T fallback) {
     static_assert(std::is_unsigned_v<T>);
     const Json* f = findField(obj, key);
     if (!f)
@@ -194,11 +192,10 @@ Result<HelperEvent> decodeState(const Json& j) {
     auto total = optionalUnsigned<std::uint64_t>(j, "bytesTotal", 0);
     auto size = optionalUnsigned<std::uint64_t>(j, "sizeOnDisk", 0);
     auto ts = optionalUnsigned<std::uint32_t>(j, "timestamp", 0);
-    for (const Error* err : {f.ok() ? nullptr : &f.error(),
-                             downloaded.ok() ? nullptr : &downloaded.error(),
-                             total.ok() ? nullptr : &total.error(),
-                             size.ok() ? nullptr : &size.error(),
-                             ts.ok() ? nullptr : &ts.error()}) {
+    for (const Error* err :
+         {f.ok() ? nullptr : &f.error(), downloaded.ok() ? nullptr : &downloaded.error(),
+          total.ok() ? nullptr : &total.error(), size.ok() ? nullptr : &size.error(),
+          ts.ok() ? nullptr : &ts.error()}) {
         if (err)
             return *err;
     }
@@ -295,8 +292,7 @@ Result<HelperCommand> decodeCommand(std::string_view line) {
 
     if (const Json* p = findField(j, "protocol")) {
         if (!p->is_number_integer() || p->get<std::int64_t>() != kHelperProtocolVersion) {
-            return makeError(ErrorCode::UnsupportedVersion,
-                             "Unsupported helper protocol version.",
+            return makeError(ErrorCode::UnsupportedVersion, "Unsupported helper protocol version.",
                              "expected " + std::to_string(kHelperProtocolVersion));
         }
     }
@@ -510,8 +506,8 @@ Status validateHelperArguments(std::string_view appId, const std::filesystem::pa
                          utf8(library) + (ec ? ": " + ec.message() : std::string()));
     }
     if (!std::filesystem::is_regular_file(status)) {
-        return makeError(ErrorCode::InvalidArgument,
-                         "--steam-api must point at a regular file.", utf8(library));
+        return makeError(ErrorCode::InvalidArgument, "--steam-api must point at a regular file.",
+                         utf8(library));
     }
     return {};
 }

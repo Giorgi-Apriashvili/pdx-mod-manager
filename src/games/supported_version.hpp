@@ -23,7 +23,7 @@
 namespace pmm::games {
 
 enum class VersionMatch {
-    NotDeclared,        // empty pattern
+    NotDeclared, // empty pattern
     Matches,
     Mismatch,
     Unparsable,         // not a version pattern at all

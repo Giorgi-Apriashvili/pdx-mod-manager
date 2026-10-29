@@ -19,11 +19,11 @@ namespace pmm::providers {
 // EItemState bit flags as returned by ISteamUGC::GetItemState.
 namespace item_flag {
 inline constexpr std::uint32_t None = 0;
-inline constexpr std::uint32_t Subscribed = 1;      // current user is subscribed
-inline constexpr std::uint32_t LegacyItem = 2;      // single-file item from the old Workshop
-inline constexpr std::uint32_t Installed = 4;       // content present locally
-inline constexpr std::uint32_t NeedsUpdate = 8;     // installed but a newer version exists
-inline constexpr std::uint32_t Downloading = 16;    // download in progress
+inline constexpr std::uint32_t Subscribed = 1;       // current user is subscribed
+inline constexpr std::uint32_t LegacyItem = 2;       // single-file item from the old Workshop
+inline constexpr std::uint32_t Installed = 4;        // content present locally
+inline constexpr std::uint32_t NeedsUpdate = 8;      // installed but a newer version exists
+inline constexpr std::uint32_t Downloading = 16;     // download in progress
 inline constexpr std::uint32_t DownloadPending = 32; // queued, not started yet
 } // namespace item_flag
 

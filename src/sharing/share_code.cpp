@@ -35,7 +35,8 @@ Error envelopeError(std::string_view code) {
         while (end < code.size() && isDigit(code[end]))
             ++end;
         const std::string_view digits = code.substr(3, end - 3);
-        const bool canonicalNumber = digits.size() == 1 || (!digits.empty() && digits.front() != '0');
+        const bool canonicalNumber =
+            digits.size() == 1 || (!digits.empty() && digits.front() != '0');
         if (canonicalNumber && end < code.size() && code[end] == '.') {
             const std::string version = displaySnippet(digits, 12);
             return makeError(ErrorCode::UnsupportedVersion,
@@ -146,7 +147,8 @@ Result<Manifest> manifestFromPlayset(const Playset& playset, std::string gameVer
         if (!entry.identity.game.empty() && entry.identity.game != playset.game)
             return makeError(ErrorCode::WrongGame,
                              "Entry #" + std::to_string(i + 1) + " belongs to another game (" +
-                                 displaySnippet(entry.identity.game) + ") and cannot be shared "
+                                 displaySnippet(entry.identity.game) +
+                                 ") and cannot be shared "
                                  "with this playset.",
                              toString(entry.identity));
         ManifestEntry out;

@@ -2,9 +2,8 @@
 #include "sharing/codec.hpp"
 #include "sharing/utf8.hpp"
 
-#include <zlib.h>
-
 #include <catch2/catch_test_macros.hpp>
+#include <zlib.h>
 
 #include <string>
 #include <vector>
@@ -24,8 +23,7 @@ TEST_CASE("Base64URL encodes RFC 4648 vectors without padding", "[sharing][codec
     CHECK(base64UrlEncode(std::string("\xfb\xff", 2)) == "-_8");
 }
 
-TEST_CASE("Base64URL round-trips every byte value at every length remainder",
-          "[sharing][codec]") {
+TEST_CASE("Base64URL round-trips every byte value at every length remainder", "[sharing][codec]") {
     std::string bytes;
     for (int i = 0; i < 256; ++i)
         bytes += static_cast<char>(i);
@@ -50,7 +48,7 @@ TEST_CASE("Base64URL decoding is strict and canonical", "[sharing][codec]") {
     CHECK(rejects("Zm9"));     // non-zero unused bits ('9' = 0b111101)
     CHECK(rejects("Zm9v Yg")); // whitespace
     CHECK(rejects("Zm9v\nYg"));
-    CHECK(rejects("+/8A"));    // standard alphabet
+    CHECK(rejects("+/8A")); // standard alphabet
     CHECK(rejects("Zm9v!"));
     CHECK(rejects("Zm9\xC3\xA9"));
     auto ok = base64UrlDecode("Zm8");
@@ -150,12 +148,12 @@ TEST_CASE("UTF-8 validation follows RFC 3629", "[sharing][utf8]") {
     CHECK(isValidUtf8("\xF4\x8F\xBF\xBF")); // U+10FFFF
     CHECK(isValidUtf8("\xEF\xBF\xBF"));     // U+FFFF
 
-    CHECK(findInvalidUtf8("ab\x80") == 2);         // lone continuation byte
-    CHECK(findInvalidUtf8("\xC0\xAF") == 0);       // overlong '/'
-    CHECK(findInvalidUtf8("\xC1\xBF") == 0);       // overlong
-    CHECK(findInvalidUtf8("\xE0\x80\xAF") == 0);   // overlong 3-byte
+    CHECK(findInvalidUtf8("ab\x80") == 2);           // lone continuation byte
+    CHECK(findInvalidUtf8("\xC0\xAF") == 0);         // overlong '/'
+    CHECK(findInvalidUtf8("\xC1\xBF") == 0);         // overlong
+    CHECK(findInvalidUtf8("\xE0\x80\xAF") == 0);     // overlong 3-byte
     CHECK(findInvalidUtf8("\xF0\x80\x80\xAF") == 0); // overlong 4-byte
-    CHECK(findInvalidUtf8("x\xED\xA0\x80") == 1);  // UTF-16 surrogate U+D800
+    CHECK(findInvalidUtf8("x\xED\xA0\x80") == 1);    // UTF-16 surrogate U+D800
     CHECK(findInvalidUtf8("\xF4\x90\x80\x80") == 0); // above U+10FFFF
     CHECK(findInvalidUtf8("\xF5\x80\x80\x80") == 0);
     CHECK(findInvalidUtf8("\xFF") == 0);
