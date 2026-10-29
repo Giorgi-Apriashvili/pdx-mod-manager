@@ -23,6 +23,7 @@ Row {
     Text {
         anchors.verticalCenter: parent.verticalCenter
         text: root.text
+        textFormat: Text.PlainText
         font.pixelSize: Theme.fontSizeSmall
         font.weight: root.strong ? Font.DemiBold : Font.Normal
         color: root.strong ? Theme.text : Theme.textMuted

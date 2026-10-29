@@ -81,6 +81,7 @@ Rectangle {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: root.titles[cell.index]
+                            textFormat: Text.PlainText
                             font.pixelSize: Theme.fontSizeSmall
                             font.weight: cell.active ? Font.Bold : Font.DemiBold
                             color: cell.active ? Theme.text : Theme.textMuted

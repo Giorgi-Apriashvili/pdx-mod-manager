@@ -28,6 +28,7 @@ ScrollView {
 
     TextArea {
         id: area
+        textFormat: TextEdit.PlainText
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontSize
         wrapMode: TextEdit.WrapAnywhere

@@ -73,6 +73,7 @@ AppDialog {
                         Text {
                             Layout.fillWidth: true
                             text: entry.modelData.reason + " · " + entry.modelData.createdText
+                            textFormat: Text.PlainText
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.textMuted
                             elide: Text.ElideRight

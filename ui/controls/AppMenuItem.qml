@@ -46,6 +46,7 @@ MenuItem {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: control.text
+                textFormat: Text.PlainText
                 font: control.font
                 color: control.highlighted ? Theme.accentText
                      : control.danger ? Theme.danger : Theme.text
@@ -59,6 +60,7 @@ MenuItem {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             text: control.shortcutText
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             color: control.highlighted ? Theme.accentText : Theme.textFaint
             opacity: control.enabled ? 1 : 0.45

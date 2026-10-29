@@ -588,6 +588,7 @@ Rectangle {
                 Text {
                     visible: root.selectedCount > 1
                     text: qsTr("%1 selected").arg(Theme.formatCount(root.selectedCount))
+                    textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.textMuted
                     rightPadding: 6
@@ -865,6 +866,7 @@ Rectangle {
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.dragName
+                    textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSize
                     color: Theme.text
                     elide: Text.ElideRight

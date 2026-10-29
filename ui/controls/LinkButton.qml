@@ -27,6 +27,7 @@ AbstractButton {
     contentItem: Text {
         id: label
         text: control.text
+        textFormat: Text.PlainText
         font.pixelSize: control.font.pixelSize
         font.underline: control.hovered
         color: control.enabled ? control.color : Theme.textFaint

@@ -13,11 +13,13 @@ add_executable(pmm_app_tests
   qml_tests.cpp
   runner_tests.cpp
   runtime_tests.cpp
-  session_host_tests.cpp)
+  session_host_tests.cpp
+  ui_text_tests.cpp)
 target_link_libraries(pmm_app_tests PRIVATE
   Catch2::Catch2 pmm_appgui pmm_uiplugin Qt6::Quick Qt6::QuickControls2 Qt6::Test Qt6::Network)
 target_compile_definitions(pmm_app_tests PRIVATE
-  PMM_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures")
+  PMM_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures"
+  PMM_UI_SOURCE_DIR="${PROJECT_SOURCE_DIR}/ui")
 pmm_configure_target(pmm_app_tests)
 
 if(TARGET pmm-steam-helper AND TARGET pmm_fake_steam_api)

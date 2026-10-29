@@ -117,6 +117,7 @@ AppDialog {
             Text {
                 Layout.fillWidth: true
                 text: dialog.loadedFile.length > 0 ? qsTr("Loaded from %1").arg(dialog.loadedFile) : qsTr("Share code")
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSize
                 font.weight: Font.DemiBold
                 color: Theme.text
@@ -185,6 +186,7 @@ AppDialog {
                 Text {
                     Layout.fillWidth: true
                     text: qsTr("“%1”").arg(dialog.preview.playsetName ?? "")
+                    textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSizeTitle
                     font.weight: Font.DemiBold
                     color: Theme.text

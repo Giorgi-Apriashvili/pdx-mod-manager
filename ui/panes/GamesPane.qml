@@ -118,6 +118,7 @@ Rectangle {
                 visible: Backend.games.currentSupported && !Backend.games.currentInstalled
                 text: qsTr("%1 was not found. Locate the installation folder or rescan your Steam libraries.")
                       .arg(Backend.games.currentName)
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.warning
                 wrapMode: Text.Wrap

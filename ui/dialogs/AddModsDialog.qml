@@ -117,6 +117,7 @@ AppDialog {
                             Layout.fillWidth: modelData.width < 0
                             Layout.preferredWidth: modelData.width < 0 ? -1 : modelData.width
                             text: modelData.title
+                            textFormat: Text.PlainText
                             font.pixelSize: Theme.fontSizeSmall
                             font.weight: Font.DemiBold
                             color: Theme.textMuted
@@ -165,6 +166,7 @@ AppDialog {
                     visible: inventoryList.count === 0
                     text: Backend.inventory.filter.length > 0 ? qsTr("No installed mod matches the filter.")
                                                               : qsTr("No installed mods were found. Try Rescan.")
+                    textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSize
                     color: Theme.textMuted
                 }
@@ -178,6 +180,7 @@ AppDialog {
                 anchors.verticalCenter: parent ? parent.verticalCenter : undefined
                 text: qsTr("%1 installed · %2 selected").arg(Theme.formatCount(Backend.inventory.count))
                                                              .arg(Theme.formatCount(dialog.pickedCount))
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.textMuted
             }

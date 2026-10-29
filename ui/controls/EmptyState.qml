@@ -24,6 +24,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         text: root.title
+        textFormat: Text.PlainText
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: Theme.fontSizeTitle
         font.weight: Font.DemiBold
@@ -36,6 +37,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: root.text.length > 0
         text: root.text
+        textFormat: Text.PlainText
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: Theme.fontSize
         color: Theme.textMuted

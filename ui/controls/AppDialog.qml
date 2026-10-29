@@ -56,6 +56,7 @@ Dialog {
             Text {
                 Layout.fillWidth: true
                 text: control.title
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSizeTitle
                 font.weight: Font.DemiBold
                 color: Theme.text
@@ -67,6 +68,7 @@ Dialog {
                 Layout.fillWidth: true
                 visible: control.subtitle.length > 0
                 text: control.subtitle
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSize
                 color: Theme.textMuted
                 wrapMode: Text.Wrap

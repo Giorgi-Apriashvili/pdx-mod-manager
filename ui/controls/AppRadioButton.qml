@@ -35,6 +35,7 @@ RadioButton {
     contentItem: Text {
         leftPadding: control.indicator.width + control.spacing
         text: control.text
+        textFormat: Text.PlainText
         font: control.font
         color: control.enabled ? Theme.text : Theme.textFaint
         elide: Text.ElideRight

@@ -94,6 +94,7 @@ Rectangle {
             Layout.fillWidth: true
             visible: root.blockerLines.length > root.maxBlockers
             text: qsTr("…and %1 more").arg(root.blockerLines.length - root.maxBlockers)
+            textFormat: Text.PlainText
             leftPadding: 19
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.textMuted
@@ -139,6 +140,7 @@ Rectangle {
             Layout.fillWidth: true
             visible: text.length > 0
             text: root.stateText(root.launcher.state)
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             color: root.launcher.state === "failed" ? Theme.danger : Theme.textMuted
             horizontalAlignment: Text.AlignHCenter
