@@ -63,6 +63,29 @@ std::vector<persistence::LaunchRecord> launches(World& w) {
     return require(history.latest(kGame, 10));
 }
 
+// A playset whose disabled Workshop entry is still downloading in the
+// background (disabled entries never block a launch).
+struct AcquiringRig {
+    World w;
+    FakeSteam steam{w.workshop};
+    GameService games{w.ctx};
+    AcquisitionCoordinator coordinator{w.ctx, games, steam, nullptr};
+    std::int64_t playsetId = 0;
+
+    AcquiringRig() {
+        w.installFixtureMods();
+        w.refresh();
+        steam.items["2000000444"].steps = 4;
+        playsetId = makePlayset(w, {workshopEntry("2000000001", "UI Overhaul"),
+                                    workshopEntry("2000000444", "Downloading", false)});
+        require(coordinator.acquireMissing(playsetId));
+        steam.pump(coordinator);
+        REQUIRE(coordinator.sessionOpen(kGame));
+        REQUIRE(coordinator.hasActiveWork(kGame));
+        REQUIRE(coordinator.liveJobs(kGame).size() == 1);
+    }
+};
+
 } // namespace
 
 TEST_CASE("Launching writes the load order through a transaction and starts the exact process",
@@ -401,33 +424,67 @@ TEST_CASE("A missing installation or executable blocks with an explanation", "[s
 
 TEST_CASE("Launching closes the game's Steam helper session before starting the game",
           "[services][launch]") {
-    World w;
-    w.installFixtureMods();
-    w.refresh();
-    FakeSteam steam(w.workshop);
-    steam.items["2000000444"].steps = 4;
-    GameService games(w.ctx);
-    AcquisitionCoordinator coordinator(w.ctx, games, steam, nullptr);
-    // A disabled entry is still being acquired in the background.
-    const std::int64_t id = makePlayset(w, {workshopEntry("2000000001", "UI Overhaul"),
-                                            workshopEntry("2000000444", "Downloading", false)});
-    require(coordinator.acquireMissing(id));
-    steam.pump(coordinator);
-    REQUIRE(coordinator.sessionOpen(kGame));
-
+    AcquiringRig r;
     bool sessionOpenAtStart = true;
-    const auto starter = w.ctx.startProcess;
-    w.ctx.startProcess = [&](const platform::ProcessSpec& spec) {
-        sessionOpenAtStart = steam.isOpen;
+    const auto starter = r.w.ctx.startProcess;
+    r.w.ctx.startProcess = [&](const platform::ProcessSpec& spec) {
+        sessionOpenAtStart = r.steam.isOpen;
         return starter(spec);
     };
-    LaunchService launcher(w.ctx, &coordinator);
-    CHECK(launcher.check(kGame, id).canLaunch);
-    require(launcher.launch(kGame, id));
+    LaunchService launcher(r.w.ctx, &r.coordinator);
+    CHECK(launcher.check(kGame, r.playsetId).canLaunch);
+    const LaunchOutcome outcome = require(launcher.launch(kGame, r.playsetId));
     CHECK_FALSE(sessionOpenAtStart);
-    CHECK(steam.closes == 1);
-    CHECK_FALSE(coordinator.sessionOpen(kGame));
+    CHECK(r.steam.closes == 1);
+    CHECK_FALSE(r.coordinator.sessionOpen(kGame));
     // The background job is parked, not lost: the next start resumes it.
-    CHECK(coordinator.liveJobs(kGame).empty());
-    CHECK(coordinator.snapshot(kGame).jobs.size() == 1);
+    CHECK(r.coordinator.liveJobs(kGame).empty());
+    CHECK(r.coordinator.snapshot(kGame).jobs.size() == 1);
+    CHECK(outcome.acquisition.changed); // so that the job views refresh
+}
+
+TEST_CASE("A launch whose plan fails leaves Workshop acquisition untouched", "[services][launch]") {
+    AcquiringRig r;
+    LaunchService launcher(r.w.ctx, &r.coordinator);
+    REQUIRE(launcher.check(kGame, r.playsetId).canLaunch);
+    // E.g. a Workshop folder removed since the last scan, or an unreadable dlc_load.json.
+    r.w.adapter.planError = makeError(ErrorCode::ValidationFailed, "Files of 1 mod are missing.");
+
+    const auto failed = launcher.launch(kGame, r.playsetId);
+    REQUIRE_FALSE(failed);
+    CHECK_THAT(failed.error().message, ContainsSubstring("Files of 1 mod are missing"));
+    CHECK(r.w.started.empty());
+    CHECK(r.steam.closes == 0);
+    CHECK(r.steam.isOpen);
+    CHECK(r.coordinator.sessionOpen(kGame));
+    CHECK(r.coordinator.hasActiveWork(kGame));
+    CHECK(r.coordinator.liveJobs(kGame).size() == 1);
+}
+
+TEST_CASE("A launch that fails after closing the helper session resumes acquisition",
+          "[services][launch]") {
+    AcquiringRig r;
+    LaunchService launcher(r.w.ctx, &r.coordinator);
+    SECTION("the game process cannot be started") {
+        r.w.startFailure = makeError(ErrorCode::ProcessStartFailed, "Access is denied.");
+        const auto failed = launcher.launch(kGame, r.playsetId);
+        REQUIRE_FALSE(failed);
+        CHECK(failed.error().code == ErrorCode::ProcessStartFailed);
+        CHECK(r.w.started.size() == 1);
+    }
+    SECTION("the configuration cannot be written") {
+        platform::FileTransactionFaults faults;
+        faults.failWriteAt = std::size_t{0};
+        r.w.transactions.setFaultsForTesting(faults);
+        const auto failed = launcher.launch(kGame, r.playsetId);
+        REQUIRE_FALSE(failed);
+        CHECK(failed.error().code == ErrorCode::IoError);
+        CHECK(r.w.started.empty());
+    }
+    // The session was closed for the launch, then reopened for the parked job.
+    CHECK(r.steam.closes == 1);
+    CHECK(r.steam.opens == 2);
+    CHECK(r.coordinator.sessionOpen(kGame));
+    CHECK(r.coordinator.liveJobs(kGame).size() == 1);
+    CHECK(r.coordinator.hasActiveWork(kGame));
 }

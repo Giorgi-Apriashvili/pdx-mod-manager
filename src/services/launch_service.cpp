@@ -289,10 +289,6 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t pl
                          detail);
     }
 
-    // Steam treats an open helper session as the game running.
-    if (m_coordinator)
-        m_coordinator->closeSessionsForLaunch(game);
-
     const GameInstallation& installation = *check.installation;
     auto plan = prepared.adapter->buildLaunchPlan(installation, prepared.orderedEnabled);
     if (!plan) {
@@ -307,6 +303,17 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t pl
         return valid.error();
     }
 
+    // Steam treats an open helper session as the game running. Closed only
+    // once the plan is valid, so that a refused launch leaves acquisition alone.
+    CoordinatorUpdate parked;
+    if (m_coordinator)
+        parked = m_coordinator->closeSessionsForLaunch(game);
+    // No game was started after all: the parked jobs carry on.
+    const auto resumeAcquisition = [&] {
+        if (m_coordinator)
+            m_coordinator->start(game);
+    };
+
     std::string transactionId;
     if (!plan.value().configWrites.empty()) {
         std::vector<platform::FileWrite> writes;
@@ -318,6 +325,7 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t pl
             recordLaunch(m_ctx, game, playsetId, std::nullopt,
                          std::string(errorCodeName(applied.error().code)), applied.error().message,
                          {});
+            resumeAcquisition();
             // A failed rollback leaves the journal incomplete for recover().
             auto incomplete = m_ctx.transactions.listIncomplete();
             const bool undone = incomplete && incomplete.value().empty();
@@ -368,12 +376,14 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t pl
                      std::string(errorCodeName(ErrorCode::ProcessStartFailed)), detail,
                      transactionId);
         logError(kComponent, "game process start failed", {{"game", game}, {"detail", detail}});
+        resumeAcquisition();
         return makeError(ErrorCode::ProcessStartFailed, std::move(message), std::move(detail));
     }
 
     LaunchOutcome outcome;
     outcome.pid = started.value().pid;
     outcome.transactionId = transactionId;
+    outcome.acquisition = std::move(parked);
     outcome.warnings = check.warnings;
     for (const std::string& warning : plan.value().warnings)
         outcome.warnings.push_back(warning);

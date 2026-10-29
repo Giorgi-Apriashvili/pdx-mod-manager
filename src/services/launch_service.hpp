@@ -9,14 +9,17 @@
 // running instance of the game or conflicting configuration writer (Paradox
 // launcher), and no interrupted configuration transaction awaiting recovery.
 //
-// launch() re-checks, asks the coordinator to close the game's Steam helper
-// session, builds the adapter's LaunchPlan for the enabled mods in playset
-// order, applies plan.configWrites as ONE file transaction (backups, rollback,
-// crash journal; label "launch <game> playset <id> (<name>)"), and starts the
-// executable through the injected process starter with the plan's argv vector,
-// working folder and environment (never a shell). If the process cannot be
-// started, the transaction's backups are restored so the previous
-// configuration is back, and ProcessStartFailed is returned with diagnostics.
+// launch() re-checks, builds the adapter's LaunchPlan for the enabled mods in
+// playset order and validates it. Only then does it ask the coordinator to
+// close the game's Steam helper session and park its acquisition jobs, so a
+// launch refused while preparing leaves acquisition alone. It applies
+// plan.configWrites as ONE file transaction (backups, rollback, crash journal;
+// label "launch <game> playset <id> (<name>)") and starts the executable
+// through the injected process starter with the plan's argv vector, working
+// folder and environment (never a shell). If the process cannot be started,
+// the transaction's backups are restored so the previous configuration is
+// back, and ProcessStartFailed is returned with diagnostics. When no game was
+// started after the session was closed, the parked jobs are resumed.
 // Every attempt is recorded in the launch history.
 //
 // The configuration written for a launch stays in effect until the next
@@ -29,6 +32,7 @@
 #include "core/readiness.hpp"
 #include "core/result.hpp"
 #include "platform/file_transaction.hpp"
+#include "services/acquisition_coordinator.hpp"
 #include "services/service_context.hpp"
 
 #include <cstdint>
@@ -39,8 +43,6 @@
 #include <vector>
 
 namespace pmm::services {
-
-class AcquisitionCoordinator;
 
 struct LaunchCheck {
     bool canLaunch = false;
@@ -58,6 +60,9 @@ struct LaunchOutcome {
     LaunchPlan plan;
     std::vector<std::string> warnings;
     std::int64_t historyId = 0;
+    // What parking the game's acquisition jobs for the launch changed; report
+    // it so that job views refresh.
+    CoordinatorUpdate acquisition;
 };
 
 class LaunchService {
