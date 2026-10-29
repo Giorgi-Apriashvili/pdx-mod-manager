@@ -224,9 +224,13 @@ saved when the window closes and when the application quits.
 
 ## Running from the build tree
 
-On Windows, Qt's DLLs must be found: put `<Qt>/bin` on `PATH`, or run
-`windeployqt` on `build/<preset>/bin/pmm-app.exe`. The tests do this
-themselves (`DL_PATHS` in `tests/app/CMakeLists.txt`).
+On Windows, Qt's DLLs must be found: put `<Qt>/bin` on `PATH`, or install.
+The tests do this themselves (`DL_PATHS` in `tests/app/CMakeLists.txt`).
+`cmake --install build/<preset> --prefix <dir>` installs `bin/pmm-app` next to
+`bin/pmm-steam-helper` and runs Qt's deployment script. Because `Pmm.Ui` is
+a static module, the script's QML import scan is pointed at `ui/controls`,
+`ui/panes` and `ui/dialogs` (`QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS`). On
+2026-10-29 the installed debug tree ran without Qt on `PATH`.
 
 ```sh
 cmake --preset debug && cmake --build --preset debug
