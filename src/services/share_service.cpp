@@ -51,13 +51,8 @@ std::string fitHint(std::string_view text, std::size_t maxBytes) {
         i += length;
     }
     out = detail::trimmed(out);
-    if (out.size() > maxBytes) {
-        std::size_t cut = maxBytes;
-        while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80)
-            --cut;
-        out.resize(cut);
-        out = detail::trimmed(out);
-    }
+    if (out.size() > maxBytes)
+        out = detail::trimmed(detail::utf8Prefix(out, maxBytes));
     return out;
 }
 
@@ -218,10 +213,13 @@ ImportPreview ShareService::previewImport(std::string_view text) {
         preview.gameInstalled = true;
         preview.installedGameVersion = installation.value()->version;
     }
+    const std::vector<std::string> names = detail::names(existing.value());
     ImportPlan plan = buildImportPlan(
         game, manifest.value().playsetName, sharing::playsetEntriesFromManifest(manifest.value()),
-        detail::toMap(mods.value()), detail::names(existing.value()), preview.installedGameVersion,
+        detail::toMap(mods.value()), names, preview.installedGameVersion,
         manifest.value().gameVersionHint);
+    // Core's proposal can exceed the name limit once " (2)" is appended.
+    plan.proposedName = detail::uniquePlaysetName(manifest.value().playsetName, names);
     if (!preview.gameInstalled) {
         plan.warnings.insert(
             plan.warnings.begin(),
@@ -268,11 +266,12 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
     // Rebuilt against the current inventory: a rescan since the preview may
     // have installed something, and installed content is never re-acquired.
     const std::vector<PlaysetEntry> requested = sharing::playsetEntriesFromManifest(manifest);
+    const std::vector<std::string> names = detail::names(existing.value());
     ImportPlan plan =
-        buildImportPlan(game, manifest.playsetName, requested, detail::toMap(mods.value()),
-                        detail::names(existing.value()),
+        buildImportPlan(game, manifest.playsetName, requested, detail::toMap(mods.value()), names,
                         installation.value() ? installation.value()->version : std::string(),
                         manifest.gameVersionHint);
+    plan.proposedName = detail::uniquePlaysetName(manifest.playsetName, names); // as in preview
     const std::vector<PlaysetEntry> entries = plan.toPlayset().entries;
     if (entries != requested)
         return makeError(ErrorCode::Internal,
@@ -283,9 +282,14 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
     std::string newName = detail::trimmed(name);
     Playset target;
     if (mode == ImportMode::New) {
-        applied.playsetName = newName.empty()
-                                  ? plan.proposedName
-                                  : uniquePlaysetName(newName, detail::names(existing.value()));
+        if (newName.empty()) {
+            applied.playsetName = plan.proposedName;
+        } else {
+            // A typed name that is too long is refused, not silently cut.
+            if (Status valid = checkPlaysetName(newName); !valid)
+                return notSaved(valid.error());
+            applied.playsetName = detail::uniquePlaysetName(newName, names);
+        }
         if (Status valid = checkPlaysetName(applied.playsetName); !valid)
             return notSaved(valid.error());
     } else {

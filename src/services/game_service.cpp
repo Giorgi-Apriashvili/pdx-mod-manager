@@ -1,7 +1,6 @@
 #include "services/game_service.hpp"
 
 #include "core/catalog.hpp"
-#include "core/import_plan.hpp"
 #include "core/log.hpp"
 #include "persistence/installation_repository.hpp"
 #include "persistence/inventory_repository.hpp"
@@ -246,6 +245,9 @@ Result<std::int64_t> GameService::importCurrentConfiguration(const GameKey& key,
     if (!adapter)
         return makeError(ErrorCode::UnsupportedGame,
                          gameDisplayName(key) + " is not supported by this version.");
+    auto requested = detail::checkedPlaysetName(name);
+    if (!requested)
+        return std::move(requested).error();
     auto stored = installation(key);
     if (!stored)
         return std::move(stored).error();
@@ -280,11 +282,11 @@ Result<std::int64_t> GameService::importCurrentConfiguration(const GameKey& key,
     auto existing = playsets.listForGame(key);
     if (!existing)
         return std::move(existing).error();
-    const std::string requested = detail::trimmed(name);
     Playset playset;
     playset.game = key;
-    playset.name = uniquePlaysetName(requested.empty() ? kDefaultConfigurationName : requested,
-                                     detail::names(existing.value()));
+    playset.name = detail::uniquePlaysetName(requested.value().empty() ? kDefaultConfigurationName
+                                                                       : requested.value(),
+                                             detail::names(existing.value()));
     playset.entries = std::move(entries);
 
     std::int64_t id = 0;

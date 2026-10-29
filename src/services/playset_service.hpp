@@ -69,8 +69,9 @@ public:
     Status setLastGameKey(const GameKey& game);
 
     // Names are trimmed; at most 256 bytes. create() and duplicate() make the
-    // name unique ("Name (2)"); an empty name gets a default. They do not
-    // change the active playset.
+    // name unique ("Name (2)", shortening the name when the suffix would not
+    // fit); an empty name gets a default. They do not change the active
+    // playset.
     Result<std::int64_t> create(const GameKey& game, const std::string& name);
     Result<std::int64_t> duplicate(std::int64_t playsetId, const std::string& name);
     // AlreadyExists when another playset of the game has that name.

@@ -130,8 +130,11 @@ obscurely.
 ### PlaysetService (`playset_service.hpp`)
 
 - Management: list, create, duplicate, rename (names unique per game, ASCII
-  case-insensitive), soft delete with a snapshot, `restoreLastDeleted()`,
-  `history()` and `restoreHistory()`.
+  case-insensitive, at most 256 bytes so that they fit into share codes),
+  soft delete with a snapshot, `restoreLastDeleted()`, `history()` and
+  `restoreHistory()`. Where a name is made unique (create, duplicate, import,
+  current configuration), a " (2)" suffix that would not fit shortens the
+  name on a character boundary instead.
 - The active playset per game is stored in settings
   (`game.<key>.activePlaysetId`), together with `app.lastGameKey`.
 - Editing (core `playset_ops`): `setEnabled(indices, on)` returns the

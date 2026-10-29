@@ -4,6 +4,7 @@
 #include "services/app_paths.hpp"
 #include "services/game_service.hpp"
 #include "services/playset_service.hpp"
+#include "sharing/manifest.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -15,6 +16,7 @@ using namespace pmm;
 using namespace pmm::services;
 using namespace pmm::services::test;
 using Catch::Matchers::ContainsSubstring;
+using Catch::Matchers::EndsWith;
 
 namespace {
 
@@ -213,4 +215,31 @@ TEST_CASE("The game's current configuration becomes a new active playset", "[ser
 
     const std::int64_t second = require(games.importCurrentConfiguration(kGame));
     CHECK(require(playsets.playset(second)).name == "Current game configuration (2)");
+}
+
+TEST_CASE("Names for the current configuration are validated and stay within the length limit",
+          "[services][games]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    w.adapter.currentConfiguration = {workshopEntry("2000000001", "")};
+    GameService games(w.ctx);
+    PlaysetService playsets(w.ctx);
+    const std::string name(sharing::kMaxPlaysetNameBytes, 'c');
+
+    CHECK(require(playsets.playset(require(games.importCurrentConfiguration(kGame, name)))).name ==
+          name);
+    const std::string again =
+        require(playsets.playset(require(games.importCurrentConfiguration(kGame, name)))).name;
+    CHECK(again.size() <= sharing::kMaxPlaysetNameBytes);
+    CHECK_THAT(again, EndsWith(" (2)"));
+
+    const std::size_t before = require(playsets.listPlaysets(kGame)).size();
+    const auto tooLong = games.importCurrentConfiguration(kGame, name + "c");
+    REQUIRE_FALSE(tooLong);
+    CHECK(tooLong.error().code == ErrorCode::InvalidArgument);
+    const auto control = games.importCurrentConfiguration(kGame, "line\nbreak");
+    REQUIRE_FALSE(control);
+    CHECK(control.error().code == ErrorCode::InvalidArgument);
+    CHECK(require(playsets.listPlaysets(kGame)).size() == before);
 }

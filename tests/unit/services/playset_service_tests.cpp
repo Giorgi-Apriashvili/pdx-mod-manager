@@ -2,6 +2,8 @@
 #include "persistence/settings_repository.hpp"
 #include "services/playset_service.hpp"
 #include "services/playset_view.hpp"
+#include "sharing/manifest.hpp"
+#include "sharing/utf8.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -13,6 +15,7 @@ using namespace pmm;
 using namespace pmm::services;
 using namespace pmm::services::test;
 using Catch::Matchers::ContainsSubstring;
+using Catch::Matchers::EndsWith;
 
 namespace {
 
@@ -97,6 +100,31 @@ TEST_CASE("Playsets are created, duplicated, renamed, deleted and restored",
     CHECK_FALSE(require(service.lastDeleted(kGame)));
     CHECK_FALSE(service.restoreLastDeleted(kGame));
     CHECK_FALSE(require(service.history(kGame)).empty());
+}
+
+TEST_CASE("Unique playset names stay within the share-code length limit", "[services][playsets]") {
+    World w;
+    PlaysetService service(w.ctx);
+    constexpr std::size_t kMax = sharing::kMaxPlaysetNameBytes;
+    // 256 bytes; cutting a plain byte count would split a character.
+    std::string name = "a";
+    while (name.size() + 3 <= kMax)
+        name += "\xE6\x97\xA5"; // U+65E5
+    REQUIRE(name.size() == kMax);
+    const auto stored = [&](std::int64_t id) {
+        const std::string text = require(service.playset(id)).name;
+        CHECK(text.size() <= kMax);
+        CHECK(sharing::isValidUtf8(text));
+        return text;
+    };
+
+    const std::int64_t first = require(service.create(kGame, name));
+    CHECK(stored(first) == name);
+    CHECK_THAT(stored(require(service.create(kGame, name))), EndsWith(" (2)"));
+    CHECK_THAT(stored(require(service.create(kGame, name))), EndsWith(" (3)"));
+    CHECK_THAT(stored(require(service.duplicate(first, ""))), EndsWith(" (copy)"));
+    CHECK_THAT(stored(require(service.duplicate(first, ""))), EndsWith(" (copy) (2)"));
+    CHECK_THAT(stored(require(service.duplicate(first, name))), EndsWith(" (4)"));
 }
 
 TEST_CASE("Edits persist immediately and can be undone and redone", "[services][playsets]") {

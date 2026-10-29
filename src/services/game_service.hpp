@@ -67,9 +67,10 @@ public:
     Result<std::optional<GameInstallation>> installation(const GameKey& key);
 
     // Creates a playset from the game's current mod configuration (for
-    // example dlc_load.json) and makes it the active playset. The name
-    // defaults to "Current game configuration" and is made unique. Returns
-    // the new playset id.
+    // example dlc_load.json) and makes it the active playset. The name is
+    // checked like PlaysetService names (InvalidArgument otherwise), defaults
+    // to "Current game configuration" and is made unique within 256 bytes.
+    // Returns the new playset id.
     Result<std::int64_t> importCurrentConfiguration(const GameKey& key,
                                                     const std::string& name = {});
 

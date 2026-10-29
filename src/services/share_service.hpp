@@ -82,7 +82,8 @@ public:
     // `targetPlaysetId` is required for Replace (a live playset of the
     // manifest's game) and ignored for New. `name` overrides the proposed
     // name (New) or renames the replaced playset (Replace, empty keeps it);
-    // a new playset's name is made unique.
+    // a new playset's name is made unique, shortened when the " (n)" suffix
+    // would not fit into sharing::kMaxPlaysetNameBytes.
     Result<AppliedImport> applyImport(const ImportPreview& preview, ImportMode mode,
                                       std::optional<std::int64_t> targetPlaysetId = std::nullopt,
                                       const std::string& name = {});

@@ -1,12 +1,9 @@
 #include "services/playset_service.hpp"
 
 #include "core/catalog.hpp"
-#include "core/import_plan.hpp"
 #include "persistence/inventory_repository.hpp"
 #include "persistence/settings_repository.hpp"
 #include "services/internal/util.hpp"
-#include "sharing/manifest.hpp"
-#include "sharing/utf8.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -89,16 +86,7 @@ Result<Playset> PlaysetService::load(std::int64_t playsetId) {
 }
 
 Result<std::string> PlaysetService::checkedName(const std::string& name) const {
-    std::string out = detail::trimmed(name);
-    if (!sharing::isValidUtf8(out) || sharing::containsControlCharacters(out))
-        return makeError(ErrorCode::InvalidArgument,
-                         "A playset name must be plain text without control characters.");
-    if (out.size() > sharing::kMaxPlaysetNameBytes)
-        return makeError(ErrorCode::InvalidArgument,
-                         "A playset name can be at most " +
-                             std::to_string(sharing::kMaxPlaysetNameBytes) +
-                             " bytes long (so that it fits into share codes).");
-    return out;
+    return detail::checkedPlaysetName(name);
 }
 
 Result<std::vector<PlaysetSummary>> PlaysetService::listPlaysets(const GameKey& game) {
@@ -175,8 +163,8 @@ Result<std::int64_t> PlaysetService::create(const GameKey& game, const std::stri
         return std::move(existing).error();
     Playset playset;
     playset.game = game;
-    playset.name = uniquePlaysetName(checked.value().empty() ? kDefaultName : checked.value(),
-                                     detail::names(existing.value()));
+    playset.name = detail::uniquePlaysetName(
+        checked.value().empty() ? kDefaultName : checked.value(), detail::names(existing.value()));
     persistence::PlaysetRepository repo(m_ctx.database);
     return repo.create(playset);
 }
@@ -188,14 +176,14 @@ Result<std::int64_t> PlaysetService::duplicate(std::int64_t playsetId, const std
     auto checked = checkedName(name);
     if (!checked)
         return std::move(checked).error();
-    std::string wanted =
-        checked.value().empty() ? source.value().name + " (copy)" : checked.value();
     auto existing = listPlaysets(source.value().game);
     if (!existing)
         return std::move(existing).error();
-    wanted = uniquePlaysetName(wanted, detail::names(existing.value()));
-    if (wanted.size() > sharing::kMaxPlaysetNameBytes)
-        wanted = uniquePlaysetName(source.value().name, detail::names(existing.value()));
+    const std::vector<std::string> taken = detail::names(existing.value());
+    // "<source name> (copy)": a long source name is shortened, never " (copy)".
+    const std::string wanted =
+        checked.value().empty() ? detail::uniquePlaysetName(source.value().name, taken, " (copy)")
+                                : detail::uniquePlaysetName(checked.value(), taken);
     persistence::PlaysetRepository repo(m_ctx.database);
     return repo.duplicate(playsetId, wanted);
 }
