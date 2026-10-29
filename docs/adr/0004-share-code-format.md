@@ -39,9 +39,10 @@ The normative specification is [`docs/share-code-protocol.md`](../share-code-pro
 
 - Codes are self-contained and typically small (a 10,000-entry playset with
   realistic names encodes to about 0.1 MiB).
-- Strictness means any new field or relaxed limit requires `schemaVersion` 2,
-  and any change to compression, digest or text layout requires `PMM2`. This is
-  deliberate: a lenient reader could silently drop information.
+- Strictness means any new field or relaxed limit requires a new version
+  (which one depends on the limit, see the amendment below), and any change to
+  compression, digest or text layout requires `PMM2`. This is deliberate: a
+  lenient reader could silently drop information.
 - A future zlib upgrade may change the bytes of newly encoded codes. Old codes
   still decode; the golden re-encode test flags the change so it is deliberate
   and noted in the changelog.
@@ -61,3 +62,22 @@ The normative specification is [`docs/share-code-protocol.md`](../share-code-pro
   import preview shows exactly what a code contains instead.
 - **Lenient parsing ("ignore unknown fields")**: easier evolution, but two
   decoders could then disagree about what a code means.
+
+## Amendment (2026-10-30): which version can raise which limit
+
+The original consequence said that any relaxed limit requires
+`schemaVersion` 2. That holds only for limits that a version 1 decoder checks
+after it has read `schemaVersion`. The decision is unchanged; the evolution
+rules are, consistent with
+[`share-code-protocol.md`](../share-code-protocol.md) sections 5 and 7.2:
+
+- **Entries (10,000), nesting depth (16), keys per object (64), field lengths
+  and id rules**: `schemaVersion` 2. These checks defer to a root
+  `schemaVersion` other than 1, so an old decoder reports "created by a newer
+  version; update the app".
+- **Decompressed JSON (8 MiB)**: needs `PMM2`. The limit fires during
+  inflation, before any JSON is read, so `schemaVersion` cannot help; an old
+  decoder rejects the `PMM2.` prefix before inflating, with "update the app".
+- **Encoded input (2 MiB)**: can never be raised compatibly. It is the first
+  check, before even the envelope prefix, so an old decoder would call a
+  larger code too large whatever its version.

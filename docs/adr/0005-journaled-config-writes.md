@@ -65,3 +65,16 @@ one launch, and a crash or power loss can happen between any two writes.
   state with an undocumented schema; this application never reads or writes it.
 - **Launching through the Paradox launcher or `steam://run`**: reopens the
   launcher, which the product must bypass.
+
+## Amendment (2026-10-30): single instance enforced, interrupted changes per game
+
+- "Single-instance per journal root" is now enforced: `pmm-app` holds a lock
+  file (`ProfileLock`, `<data folder>/pmm-app.lock`) from before the services
+  start until they have shut down, and the journal root lies in the same data
+  folder. A second start on the same profile reports that the profile is in
+  use; a lock left by a crashed process is taken over ([`app.md`](../app.md),
+  start-up sequence).
+- An interrupted transaction blocks launching only the game it belongs to
+  (its launch label, or a target in that game's user-data folder). Those of
+  other games are shown as warnings, so a transaction that `recover()` cannot
+  undo does not keep every game from launching.

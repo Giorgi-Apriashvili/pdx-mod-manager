@@ -34,7 +34,8 @@ without starting a GUI, and must run on worker threads without blocking the UI.
 - Core logic is unit tested with Catch2 on every OS without a display server;
   the `core-debug` and `core-sanitize` presets build without Qt at all, which
   also keeps sanitizer runs free of Qt noise.
-- A command-line tool (`pmm-cli`) can reuse the same services without Qt.
+- Another front end could reuse the same services without Qt (none is
+  planned, see the amendment).
 - Some functionality exists twice in spirit (native OS paths, process start,
   file I/O instead of `QStandardPaths`, `QProcess`, `QSaveFile`), because the
   lower layers must not link Qt. Those primitives are implemented once in
@@ -58,3 +59,12 @@ without starting a GUI, and must run on worker threads without blocking the UI.
   to start, but it couples every test to Qt, complicates sanitizer builds and
   ties the protocol implementation to Qt's JSON parser, whose duplicate-key and
   number handling would then define the share-code format.
+
+## Amendment (2026-10-30): no command-line tool
+
+The desktop application `pmm-app` is the only front end. The specification
+does not require a command-line tool, and none will be built. Headless and
+scripted checks use `pmm-app`'s hidden verification switches (`--profile`,
+`--read-only`, `--self-test`, `--screenshot`; see [`app.md`](../app.md)),
+which drive the real Backend without user input. The services stay Qt-free
+for the reasons above.
