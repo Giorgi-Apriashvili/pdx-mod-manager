@@ -21,27 +21,17 @@ namespace {
 constexpr const char* kComponent = "services.share";
 constexpr const char* kFallbackPlaysetName = "Shared playset";
 
-std::size_t utf8Length(unsigned char lead) {
-    if (lead < 0x80)
-        return 1;
-    if ((lead >> 5) == 0x6)
-        return 2;
-    if ((lead >> 4) == 0xE)
-        return 3;
-    return 4;
-}
-
 // Display text fitted to the manifest rules: well-formed UTF-8 (otherwise
 // dropped), control characters replaced by spaces, trimmed, and cut on a
 // character boundary to at most `maxBytes`.
 std::string fitHint(std::string_view text, std::size_t maxBytes) {
-    if (!sharing::isValidUtf8(text))
+    if (!isValidUtf8(text))
         return {};
     std::string out;
     out.reserve(text.size());
     for (std::size_t i = 0; i < text.size();) {
         const auto lead = static_cast<unsigned char>(text[i]);
-        const std::size_t length = std::min(utf8Length(lead), text.size() - i);
+        const std::size_t length = utf8SequenceLength(text, i); // 1..4: `text` is well-formed
         const bool c0 = lead < 0x20 || lead == 0x7F;
         const bool c1 =
             length == 2 && lead == 0xC2 && static_cast<unsigned char>(text[i + 1]) < 0xA0;
