@@ -1,6 +1,7 @@
 #include "services/playset_service.hpp"
 
 #include "core/catalog.hpp"
+#include "core/import_plan.hpp"
 #include "persistence/inventory_repository.hpp"
 #include "persistence/settings_repository.hpp"
 #include "services/internal/util.hpp"
@@ -163,8 +164,8 @@ Result<std::int64_t> PlaysetService::create(const GameKey& game, const std::stri
         return std::move(existing).error();
     Playset playset;
     playset.game = game;
-    playset.name = detail::uniquePlaysetName(
-        checked.value().empty() ? kDefaultName : checked.value(), detail::names(existing.value()));
+    playset.name = uniquePlaysetName(checked.value().empty() ? kDefaultName : checked.value(),
+                                     detail::names(existing.value()));
     persistence::PlaysetRepository repo(m_ctx.database);
     return repo.create(playset);
 }
@@ -181,9 +182,9 @@ Result<std::int64_t> PlaysetService::duplicate(std::int64_t playsetId, const std
         return std::move(existing).error();
     const std::vector<std::string> taken = detail::names(existing.value());
     // "<source name> (copy)": a long source name is shortened, never " (copy)".
-    const std::string wanted =
-        checked.value().empty() ? detail::uniquePlaysetName(source.value().name, taken, " (copy)")
-                                : detail::uniquePlaysetName(checked.value(), taken);
+    const std::string wanted = checked.value().empty()
+                                   ? uniquePlaysetName(source.value().name, taken, " (copy)")
+                                   : uniquePlaysetName(checked.value(), taken);
     persistence::PlaysetRepository repo(m_ctx.database);
     return repo.duplicate(playsetId, wanted);
 }

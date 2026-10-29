@@ -1,6 +1,7 @@
 #include "services/game_service.hpp"
 
 #include "core/catalog.hpp"
+#include "core/import_plan.hpp"
 #include "core/log.hpp"
 #include "persistence/installation_repository.hpp"
 #include "persistence/inventory_repository.hpp"
@@ -284,9 +285,9 @@ Result<std::int64_t> GameService::importCurrentConfiguration(const GameKey& key,
         return std::move(existing).error();
     Playset playset;
     playset.game = key;
-    playset.name = detail::uniquePlaysetName(requested.value().empty() ? kDefaultConfigurationName
-                                                                       : requested.value(),
-                                             detail::names(existing.value()));
+    playset.name =
+        uniquePlaysetName(requested.value().empty() ? kDefaultConfigurationName : requested.value(),
+                          detail::names(existing.value()));
     playset.entries = std::move(entries);
 
     std::int64_t id = 0;

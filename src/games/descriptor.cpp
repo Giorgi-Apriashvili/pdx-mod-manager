@@ -1,5 +1,6 @@
 #include "games/descriptor.hpp"
 
+#include "core/utf8.hpp"
 #include "platform/fs.hpp"
 #include "platform/steam.hpp"
 
@@ -12,7 +13,6 @@ namespace {
 using platform::steam::keyEquals;
 
 constexpr std::uint64_t kMaxDescriptorBytes = 1024 * 1024;
-constexpr std::string_view kReplacementCharacter = "\xEF\xBF\xBD";
 
 enum class TokenKind { Text, Equals, Open, Close, End };
 
@@ -195,71 +195,7 @@ std::vector<std::string>* knownList(ModDescriptor& d, std::string_view key) {
     return nullptr;
 }
 
-// Length of the well-formed UTF-8 sequence starting at text[pos], or 0.
-std::size_t utf8SequenceLength(std::string_view text, std::size_t pos) noexcept {
-    const auto byte = [&](std::size_t i) { return static_cast<unsigned char>(text[i]); };
-    const unsigned char lead = byte(pos);
-    if (lead < 0x80)
-        return 1;
-    std::size_t length = 0;
-    unsigned char low = 0x80;
-    unsigned char high = 0xBF;
-    if (lead >= 0xC2 && lead <= 0xDF) {
-        length = 2;
-    } else if (lead >= 0xE0 && lead <= 0xEF) {
-        length = 3;
-        if (lead == 0xE0)
-            low = 0xA0; // no overlong forms
-        if (lead == 0xED)
-            high = 0x9F; // no surrogates
-    } else if (lead >= 0xF0 && lead <= 0xF4) {
-        length = 4;
-        if (lead == 0xF0)
-            low = 0x90;
-        if (lead == 0xF4)
-            high = 0x8F; // <= U+10FFFF
-    } else {
-        return 0;
-    }
-    if (pos + length > text.size())
-        return 0;
-    if (byte(pos + 1) < low || byte(pos + 1) > high)
-        return 0;
-    for (std::size_t i = 2; i < length; ++i) {
-        if (byte(pos + i) < 0x80 || byte(pos + i) > 0xBF)
-            return 0;
-    }
-    return length;
-}
-
 } // namespace
-
-std::string sanitizeUtf8(std::string_view text) {
-    std::string out;
-    out.reserve(text.size());
-    std::size_t pos = 0;
-    while (pos < text.size()) {
-        const std::size_t length = utf8SequenceLength(text, pos);
-        if (length == 0) {
-            out += kReplacementCharacter;
-            ++pos;
-        } else {
-            out.append(text.substr(pos, length));
-            pos += length;
-        }
-    }
-    return out;
-}
-
-bool isValidUtf8(std::string_view text) noexcept {
-    for (std::size_t pos = 0; pos < text.size();) {
-        const std::size_t length = utf8SequenceLength(text, pos);
-        if (length == 0)
-            return false;
-        pos += length;
-    }
-    return true;
-}
 
 Result<DescriptorDocument> parseDescriptorDocument(std::string_view text) {
     Result<std::vector<Token>> tokenized = tokenize(text);

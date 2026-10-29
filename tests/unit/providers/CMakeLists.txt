@@ -4,6 +4,7 @@ pmm_add_test(pmm_providers_tests
     helper_process_tests.cpp
     helper_protocol_tests.cpp
     local_fingerprint_tests.cpp
+    path_text_tests.cpp
     web_metadata_tests.cpp
     workshop_item_tests.cpp
   LIBS pmm_providers)

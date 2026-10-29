@@ -22,8 +22,8 @@
 // {"<key>{}", "<items>"}: the "{}" suffix cannot occur in a real key, and the
 // items are written as quoted, space-separated strings (encodeListValue()).
 //
-// All text is made valid UTF-8 (invalid bytes become U+FFFD) because the
-// inventory is persisted as JSON.
+// All text is made valid UTF-8 (ill-formed sequences become U+FFFD, see
+// pmm::sanitizeUtf8()) because the inventory is persisted as JSON.
 
 #include "core/model.hpp"
 #include "core/result.hpp"
@@ -93,9 +93,5 @@ DescriptorDocument relocateDescriptor(DescriptorDocument document,
 bool isListExtraKey(std::string_view key) noexcept;
 std::string encodeListValue(std::span<const std::string> items);
 std::vector<std::string> decodeListValue(std::string_view encoded);
-
-// Replaces every ill-formed UTF-8 sequence with U+FFFD.
-std::string sanitizeUtf8(std::string_view text);
-bool isValidUtf8(std::string_view text) noexcept;
 
 } // namespace pmm::games

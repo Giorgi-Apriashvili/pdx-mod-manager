@@ -1,5 +1,6 @@
 #include "platform/fs.hpp"
 
+#include "core/utf8.hpp"
 #include "platform/detail/os_util.hpp"
 
 #include <atomic>
@@ -458,9 +459,9 @@ fs::path pathFromUtf8(std::string_view utf8) {
 
 bool isUtf8Representable(const fs::path& path) {
 #if defined(_WIN32)
-    return pathFromUtf8(pathToUtf8(path)).native() == path.native();
+    return isValidUtf16(std::wstring_view(path.native()));
 #else
-    return detail::isWellFormedUtf8(path.native());
+    return isValidUtf8(path.native());
 #endif
 }
 

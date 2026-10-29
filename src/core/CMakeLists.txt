@@ -7,7 +7,8 @@ add_library(pmm_core STATIC
   dependencies.cpp
   import_plan.cpp
   playset_ops.cpp
-  readiness.cpp)
+  readiness.cpp
+  utf8.cpp)
 target_include_directories(pmm_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(pmm_core PUBLIC cxx_std_20)
 pmm_configure_target(pmm_core)

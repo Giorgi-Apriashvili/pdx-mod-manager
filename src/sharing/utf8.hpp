@@ -4,20 +4,18 @@
 // a share code is untrusted: it is validated explicitly instead of relying on
 // whatever the JSON parser happens to accept.
 
+#include "core/utf8.hpp"
+
 #include <cstddef>
 #include <string>
 #include <string_view>
 
 namespace pmm::sharing {
 
-// Byte offset of the first ill-formed sequence, or std::string_view::npos when
-// `text` is well-formed UTF-8 (RFC 3629: no overlong forms, no surrogates, no
-// code points above U+10FFFF, no truncated sequences).
-std::size_t findInvalidUtf8(std::string_view text) noexcept;
-
-inline bool isValidUtf8(std::string_view text) noexcept {
-    return findInvalidUtf8(text) == std::string_view::npos;
-}
+// RFC 3629 validation from core/utf8.hpp: findInvalidUtf8() returns the byte
+// offset of the first ill-formed sequence, or std::string_view::npos.
+using pmm::findInvalidUtf8;
+using pmm::isValidUtf8;
 
 // True if well-formed UTF-8 `text` contains a C0 control (U+0000..U+001F),
 // DEL (U+007F) or a C1 control (U+0080..U+009F).

@@ -74,7 +74,7 @@ void checkWritable(const fs::path& directory, const char* what, std::set<fs::pat
 }
 
 Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
-                 const GameKey& game, std::int64_t playsetId) {
+                 const GameKey& game, std::int64_t playsetId, const LaunchCheckOptions& options) {
     Prepared prepared;
     LaunchCheck& check = prepared.check;
     const std::string gameName = gameDisplayName(game);
@@ -172,7 +172,7 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
         if (install.userDataPath.empty()) {
             check.blockers.push_back("The " + gameName +
                                      " user data folder is unknown. Locate the game again.");
-        } else {
+        } else if (options.probeWriteAccess) {
             checkWritable(install.userDataPath, "user data folder", checked, check);
             checkWritable(install.userDataPath / "mod", "mod folder", checked, check);
         }
@@ -270,13 +270,14 @@ std::string LaunchService::transactionLabel(const GameKey& game, std::int64_t pl
            std::string(playsetName) + ")";
 }
 
-LaunchCheck LaunchService::check(const GameKey& game, std::int64_t playsetId) {
-    return prepare(m_ctx, m_coordinator, game, playsetId).check;
+LaunchCheck LaunchService::check(const GameKey& game, std::int64_t playsetId,
+                                 const LaunchCheckOptions& options) {
+    return prepare(m_ctx, m_coordinator, game, playsetId, options).check;
 }
 
 Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t playsetId) {
     const std::string gameName = gameDisplayName(game);
-    Prepared prepared = prepare(m_ctx, m_coordinator, game, playsetId);
+    Prepared prepared = prepare(m_ctx, m_coordinator, game, playsetId, LaunchCheckOptions{});
     const LaunchCheck& check = prepared.check;
     if (!check.canLaunch) {
         std::string detail;

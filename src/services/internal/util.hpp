@@ -19,23 +19,11 @@ namespace pmm::services::detail {
 // ASCII whitespace trimmed from both ends.
 std::string trimmed(std::string_view text);
 
-// Longest prefix of well-formed UTF-8 `text` that has at most `maxBytes`
-// bytes and does not end inside a character.
-std::string_view utf8Prefix(std::string_view text, std::size_t maxBytes);
-
 // `name` trimmed and checked as a playset name: plain UTF-8 text without
 // control characters, at most sharing::kMaxPlaysetNameBytes long so that it
-// fits into share codes. May be empty.
+// fits into share codes. May be empty. Unique names come from core
+// uniquePlaysetName(), which keeps to the same limit.
 Result<std::string> checkedPlaysetName(std::string_view name);
-
-// Length-aware variant of core uniquePlaysetName(): `name` + `suffix`, then
-// with " (2)", " (3)", ... appended until no existing name matches (ASCII
-// case-insensitive). Only `name` is shortened, on a character boundary and
-// without trailing whitespace, so that the result never exceeds `maxBytes`.
-// An empty name becomes "Imported playset".
-std::string uniquePlaysetName(std::string_view name, std::span<const std::string> existingNames,
-                              std::string_view suffix = {},
-                              std::size_t maxBytes = sharing::kMaxPlaysetNameBytes);
 
 InstalledModMap toMap(std::span<const InstalledMod> inventory);
 

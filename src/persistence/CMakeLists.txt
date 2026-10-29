@@ -4,7 +4,6 @@ add_library(pmm_persistence STATIC
   database.cpp
   installation_repository.cpp
   internal/mapping.cpp
-  internal/utf8.cpp
   inventory_repository.cpp
   launch_history_repository.cpp
   migrations.cpp

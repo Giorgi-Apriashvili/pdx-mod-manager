@@ -181,29 +181,6 @@ void installationBlockers(AppRuntime& runtime, const GameKey& key, LaunchData& d
     }
 }
 
-LaunchData readOnlyLaunchData(AppRuntime& runtime, const QString& game, std::int64_t playsetId) {
-    LaunchData data;
-    const GameKey key = utf8(game);
-    installationBlockers(runtime, key, data);
-    if (playsetId < 0) {
-        data.blockers.push_back(qs(kNoPlaysetBlocker));
-    } else {
-        const services::AcquisitionCoordinator* coordinator = runtime.acquisition();
-        const std::vector<AcquisitionJob> live =
-            coordinator ? coordinator->liveJobs(key) : std::vector<AcquisitionJob>{};
-        if (auto view = services::loadPlaysetView(runtime.context(), playsetId, live)) {
-            for (const LaunchBlocker& blocker : view.value().launch.blockers)
-                data.blockers.push_back(qs(blocker.reason));
-            if (view.value().launch.enabledCount == 0)
-                data.warnings.push_back(
-                    QStringLiteral("No mods are enabled: the game will start without mods."));
-        }
-    }
-    data.blockers.push_back(QStringLiteral(
-        "Read-only verification mode: launching and game configuration writes are disabled."));
-    return data;
-}
-
 } // namespace
 
 GameRowData gameRow(const services::GameState& state) {
@@ -406,8 +383,6 @@ PlaysetStateData playsetState(AppRuntime& runtime, std::int64_t playsetId, QStri
 
 LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t playsetId,
                       const QueryOptions& options) {
-    if (options.readOnly)
-        return readOnlyLaunchData(runtime, game, playsetId);
     const GameKey key = utf8(game);
     LaunchData data;
     if (playsetId < 0) {
@@ -416,11 +391,22 @@ LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t pla
         if (auto interrupted = runtime.launcher().interruptedTransactions())
             data.interrupted = !interrupted.value().empty();
     } else {
-        const services::LaunchCheck check = runtime.launcher().check(key, playsetId);
+        // Read-only mode runs the same check without its write probes in the
+        // game's user-data folder.
+        services::LaunchCheckOptions checkOptions;
+        checkOptions.probeWriteAccess = !options.readOnly;
+        const services::LaunchCheck check = runtime.launcher().check(key, playsetId, checkOptions);
         data.canPlay = check.canLaunch;
         data.blockers = qlist(check.blockers);
         data.warnings = qlist(check.warnings);
         data.interrupted = check.interruptedTransaction;
+    }
+    if (options.readOnly) {
+        // Launching and restoring a backup would write game configuration.
+        data.canPlay = false;
+        data.blockers.push_back(QStringLiteral(
+            "Read-only verification mode: launching and game configuration writes are disabled."));
+        return data;
     }
     if (auto restorable = runtime.launcher().lastRestorableTransaction(key))
         data.canRestoreBackup = restorable.value().has_value();

@@ -162,8 +162,8 @@ struct GameContextData {
 };
 
 struct QueryOptions {
-    // No write probes in game folders (launch checks are reduced) and no
-    // launching: verification runs against real game data.
+    // No write probes in game folders (the launch check runs without them)
+    // and no launching: verification runs against real game data.
     bool readOnly = false;
     bool steamEnabled = true;
 };

@@ -1,5 +1,7 @@
 #include "providers/acquisition.hpp"
 
+#include "providers/internal/path_text.hpp"
+
 #include <algorithm>
 #include <system_error>
 #include <type_traits>
@@ -704,8 +706,7 @@ std::optional<HelperCommand> helperCommandFor(const Action& action) {
 }
 
 Status verifyWorkshopContent(const fs::path& installPath) {
-    const auto u8 = installPath.u8string();
-    const std::string shown(u8.begin(), u8.end());
+    const std::string shown = internal::displayPath(installPath);
     std::error_code ec;
     const auto st = fs::status(installPath, ec);
     if (ec || !fs::exists(st)) {

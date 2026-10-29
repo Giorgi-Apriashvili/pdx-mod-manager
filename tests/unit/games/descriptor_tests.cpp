@@ -1,3 +1,4 @@
+#include "core/utf8.hpp"
 #include "games/descriptor.hpp"
 #include "test_support.hpp"
 
@@ -171,7 +172,8 @@ TEST_CASE("Descriptor text is made valid UTF-8", "[games][descriptor]") {
                                    "odd_\xF0\x9F=\"v\xC0\xAF\"\n");
     CHECK(isValidUtf8(d.name));
     CHECK(d.name == "Bad \xEF\xBF\xBD( \xEF\xBF\xBD name");
-    CHECK(d.tags == std::vector<std::string>{"\xEF\xBF\xBD\xEF\xBF\xBD"});
+    // A truncated sequence is one maximal ill-formed subpart: one U+FFFD.
+    CHECK(d.tags == std::vector<std::string>{"\xEF\xBF\xBD"});
     REQUIRE(d.extra.size() == 1);
     CHECK(isValidUtf8(d.extra[0].first));
     CHECK(isValidUtf8(d.extra[0].second));

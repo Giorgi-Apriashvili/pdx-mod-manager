@@ -1,5 +1,7 @@
 #include "providers/helper_protocol.hpp"
 
+#include "providers/internal/path_text.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <array>
@@ -109,11 +111,6 @@ Result<std::string> requireItemId(const Json& obj, const char* key) {
                          "id=\"" + id->substr(0, 64) + "\"");
     }
     return id;
-}
-
-std::string utf8(const std::filesystem::path& p) {
-    const auto u8 = p.u8string();
-    return std::string(u8.begin(), u8.end());
 }
 
 Json encodeStatus(const ItemStatus& s) {
@@ -489,7 +486,8 @@ Status validateHelperArguments(std::string_view appId, const std::filesystem::pa
                          "--app-id must be a Steam AppId (decimal digits only).",
                          "app-id=\"" + std::string(appId.substr(0, 32)) + "\"");
     }
-    const std::string name = utf8(library.filename());
+    // A name without a UTF-8 form contains U+FFFD here and is refused below.
+    const std::string name = internal::displayPath(library.filename());
     if (!isAcceptedSteamApiLibraryName(name, currentOsPlatform())) {
         return makeError(ErrorCode::InvalidArgument,
                          "--steam-api must point at the game's own Steam API library "
@@ -503,11 +501,12 @@ Status validateHelperArguments(std::string_view appId, const std::filesystem::pa
         return makeError(ErrorCode::NotFound,
                          "The game's Steam API library was not found; verify the game files in "
                          "Steam.",
-                         utf8(library) + (ec ? ": " + ec.message() : std::string()));
+                         internal::displayPath(library) +
+                             (ec ? ": " + ec.message() : std::string()));
     }
     if (!std::filesystem::is_regular_file(status)) {
         return makeError(ErrorCode::InvalidArgument, "--steam-api must point at a regular file.",
-                         utf8(library));
+                         internal::displayPath(library));
     }
     return {};
 }
