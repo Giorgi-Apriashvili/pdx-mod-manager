@@ -374,7 +374,9 @@ ApplicationWindow {
         onActivated: window.focusPane(-1)
     }
     Shortcut {
-        sequences: [StandardKey.HelpContents]
+        // F1 everywhere, plus Ctrl+? on macOS (HelpContents is F1 elsewhere, and
+        // a duplicate sequence would make the shortcut ambiguous).
+        sequences: Qt.platform.os === "osx" ? ["F1", StandardKey.HelpContents] : ["F1"]
         onActivated: window.openShortcuts()
     }
 }
