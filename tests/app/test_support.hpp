@@ -214,7 +214,7 @@ public:
         return {{kExeName}, {"Paradox Launcher.exe"}};
     }
 
-    games::LoadOrderInfo loadOrderInfo() const override { return {"fake", false, {}}; }
+    games::LoadOrderInfo loadOrderInfo() const override { return {"fake", false, {}, {}}; }
 
     std::vector<std::string> compatibilityWarnings(const GameInstallation&,
                                                    const InstalledMod&) const override {

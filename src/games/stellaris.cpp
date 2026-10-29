@@ -36,6 +36,7 @@ constexpr GameTraits kTraits{
     .loadOrderEvidence = "docs/evidence/live-validation-2026-10-30.md (probe mods, Stellaris "
                          "4.5.2, Windows 11)",
     .loadOrderVerifiedInGame = true,
+    .loadOrderUserNote = {}, // the playset order is the order the game applies
     .logComponent = "games.stellaris",
 };
 
