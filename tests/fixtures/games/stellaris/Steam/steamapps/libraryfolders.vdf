@@ -1,0 +1,23 @@
+"libraryfolders"
+{
+	"0"
+	{
+		"path"		"@ROOT@/Steam"
+		"label"		""
+		"contentid"		"1234567890123456789"
+		"apps"
+		{
+			"228980"		"339673557"
+			"281990"		"30972215062"
+		}
+	}
+	"1"
+	{
+		"path"		"@ROOT@/Second Library"
+		"label"		"Second"
+		"contentid"		"9876543210987654321"
+		"apps"
+		{
+		}
+	}
+}

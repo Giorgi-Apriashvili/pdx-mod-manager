@@ -1,0 +1,9 @@
+{
+	"gameId": "eu4",
+	"version": "v1.37.5.0 Inca",
+	"rawVersion": "v1.37.5.0",
+	"distPlatform": "steam",
+	"gameDataPath": "%USER_DOCUMENTS%/Paradox Interactive/Europa Universalis IV",
+	"exePath": "./eu4.exe",
+	"exeArgs": []
+}

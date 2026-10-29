@@ -1,0 +1,16 @@
+"AppState"
+{
+	"appid"		"281990"
+	"Universe"		"1"
+	"name"		"Stellaris"
+	"StateFlags"		"4"
+	"installdir"		"Stellaris"
+	"LastUpdated"		"1791281883"
+	"SizeOnDisk"		"30972215062"
+	"buildid"		"25664273"
+	"LastOwner"		"76561190000000001"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}
