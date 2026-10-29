@@ -17,6 +17,7 @@
 #include <QDesktopServices>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QTimer>
 #include <QtQml/qqml.h>
 
 namespace pmm::app {
@@ -116,8 +117,12 @@ void Backend::openLogsFolder() {
 void Backend::initialize(const RunnerStart& start) {
     m_dataDir = start.dataDir;
     m_logsDir = start.logsDir;
-    for (const StartupNotice& notice : start.notices)
-        m_notifications->post(levelName(notice.level), qs(notice.title), qs(notice.text));
+    // Posted once the event loop runs, so the window's toasts see them.
+    for (const StartupNotice& notice : start.notices) {
+        QTimer::singleShot(0, this, [this, notice] {
+            m_notifications->post(levelName(notice.level), qs(notice.title), qs(notice.text));
+        });
+    }
 
     struct Initial {
         std::map<std::string, std::string> settings;

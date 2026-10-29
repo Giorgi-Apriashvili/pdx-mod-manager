@@ -10,6 +10,13 @@ QtObject {
 
     readonly property string appVersion: "0.1.0-dev (preview backend)"
     readonly property int protocolVersion: 1
+    readonly property bool readOnly: false
+    readonly property string dataDir: "C:/Users/Player/AppData/Roaming/ParadoxModManager"
+    readonly property string logsDir: "C:/Users/Player/AppData/Local/ParadoxModManager/logs"
+
+    function openLogsFolder() {
+        notifications.post("info", "Logs folder", "Would open " + logsDir)
+    }
 
     readonly property var catalog: FakeData.makeCatalog(281990, 2300)
 
