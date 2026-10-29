@@ -1,0 +1,5 @@
+# clangd (VS Code "clangd" extension and other editors): use the compile
+# database CMake writes for the "debug" preset (CMAKE_EXPORT_COMPILE_COMMANDS).
+# Point this at another build directory if you work with a different preset.
+CompileFlags:
+  CompilationDatabase: build/debug
