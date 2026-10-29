@@ -129,10 +129,22 @@ inline Error makeError(ErrorCode code, std::string message, std::string detail =
 
 } // namespace pmm
 
-// Propagate an error from an expression returning Result<...>.
-#define PMM_TRY(expr)                                                                              \
+// Propagate an error from an expression returning Result<...>. Every expansion
+// names its variable uniquely, so a PMM_TRY inside a lambda passed to another
+// PMM_TRY does not shadow the outer one (GCC -Wshadow). Clang >= 22 reports
+// __COUNTER__ as an extension under -Wpedantic and does not warn about this
+// shadowing, so it uses the line number instead.
+#if defined(__clang__)
+#define PMM_DETAIL_TRY_ID __LINE__
+#else
+#define PMM_DETAIL_TRY_ID __COUNTER__
+#endif
+#define PMM_DETAIL_CONCAT_IMPL(a, b) a##b
+#define PMM_DETAIL_CONCAT(a, b) PMM_DETAIL_CONCAT_IMPL(a, b)
+#define PMM_DETAIL_TRY(expr, var)                                                                  \
     do {                                                                                           \
-        auto&& pmm_try_result_ = (expr);                                                           \
-        if (!pmm_try_result_.ok())                                                                 \
-            return std::move(pmm_try_result_).error();                                             \
+        auto&& var = (expr);                                                                       \
+        if (!var.ok())                                                                             \
+            return std::move(var).error();                                                         \
     } while (false)
+#define PMM_TRY(expr) PMM_DETAIL_TRY(expr, PMM_DETAIL_CONCAT(pmm_try_result_, PMM_DETAIL_TRY_ID))

@@ -20,7 +20,9 @@ using Catch::Matchers::EndsWith;
 
 namespace {
 
-const GameState& stateFor(const std::vector<GameState>& states, const std::string& key) {
+// string_view: a std::string parameter would bind string literals to a temporary,
+// which GCC flags as a possibly dangling reference (-Wdangling-reference).
+const GameState& stateFor(const std::vector<GameState>& states, std::string_view key) {
     const auto it = std::find_if(states.begin(), states.end(),
                                  [&](const GameState& s) { return s.key == key; });
     REQUIRE(it != states.end());
