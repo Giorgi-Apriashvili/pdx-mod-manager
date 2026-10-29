@@ -12,7 +12,10 @@
 // change without hint, which makes QML views rebuild and scroll to the top.
 // Only a switch to another playset resets the model.
 //
-// Row arguments are source rows (0-based load-order positions).
+// Row arguments are source rows (0-based load-order positions). The worker
+// gets the edited entries by identity (a move's destination as the entry it
+// lands in front of), so an edit still hits the intended entries when an undo
+// or redo submitted before it changes the stored order first.
 
 #include "app/core/view_data.hpp"
 
@@ -149,6 +152,10 @@ private:
     ViewFilter viewFilter() const;
     std::vector<std::size_t> validRows(const QList<int>& rows) const;
     std::vector<PlaysetEntry> entries() const;
+    std::vector<ModIdentity> identitiesAt(const std::vector<std::size_t>& indices) const;
+    // Identity of ordered[index], nullopt past the end.
+    static std::optional<ModIdentity> anchorAfter(const std::vector<PlaysetEntry>& ordered,
+                                                  std::size_t index);
     // Puts the rows into the order of `ordered` (same identities).
     void applyOrder(const std::vector<PlaysetEntry>& ordered);
     void reconcile(std::vector<ModRowData> target);

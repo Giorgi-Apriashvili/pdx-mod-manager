@@ -408,3 +408,100 @@ TEST_CASE("Backend follows the stored active playset when a reply was superseded
     }
     runner.shutdown();
 }
+
+TEST_CASE("Row edits made while an undo is in flight hit the entries the user saw",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    for (const char* mod : {"1001", "1002", "1003", "1004", "1005", "1006"})
+        world.addWorkshopMod(mod, std::string("Mod ") + mod);
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    backend.playsets()->create(QStringLiteral("Undo race"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    const std::int64_t id = backend.activePlaysetId();
+    ModListModel& mods = *backend.mods();
+    mods.addMods({"steam-workshop:1001", "steam-workshop:1002", "steam-workshop:1003",
+                  "steam-workshop:1004", "steam-workshop:1005"});
+    REQUIRE(waitUntil([&] { return mods.count() == 5 && !mods.busy(); }));
+    const auto settled = [&] { return waitUntil([&] { return !mods.busy(); }); };
+    using Ids = std::vector<std::string>;
+
+    // Each section saves an edit, then undoes it and edits a row by index in
+    // the same tick: the index refers to the row the list showed.
+    SECTION("enable/disable") {
+        mods.removeRows({2}); // 1003
+        REQUIRE(settled());
+        mods.undo();
+        REQUIRE(mods.rows()[2].entry.identity.id == "1004");
+        mods.setEnabled(2, false);
+        REQUIRE(settled());
+        const std::vector<PlaysetEntry> stored = storedEntries(runner, id);
+        CHECK(ids(stored) == Ids{"1001", "1002", "1003", "1004", "1005"});
+        REQUIRE(stored.size() == 5);
+        CHECK(stored[2].enabled);       // the restored entry is untouched
+        CHECK_FALSE(stored[3].enabled); // the row the user disabled
+        CHECK(ids(mods) == ids(stored));
+        CHECK(mods.enabledCount() == 4);
+    }
+    SECTION("keyboard move") {
+        mods.moveRows({1}, 1); // 1002 down
+        REQUIRE(settled());
+        mods.undo();
+        REQUIRE(mods.rows()[2].entry.identity.id == "1002");
+        mods.moveRows({2}, 1);
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1001", "1003", "1002", "1004", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("drag and drop") {
+        mods.removeRows({1}); // 1002
+        REQUIRE(settled());
+        mods.undo();
+        mods.moveRows({0}, 2); // 1001 dropped in front of 1005
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1002", "1003", "1004", "1001", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("single move") {
+        mods.removeRows({2}); // 1003
+        REQUIRE(settled());
+        mods.undo();
+        mods.moveRow(0, 2); // 1001 in front of 1005
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1002", "1003", "1004", "1001", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("removal") {
+        mods.removeRows({1}); // 1002
+        REQUIRE(settled());
+        mods.undo();
+        REQUIRE(mods.rows()[1].entry.identity.id == "1003");
+        mods.removeRows({1});
+        REQUIRE(settled());
+        CHECK(ids(storedEntries(runner, id)) == Ids{"1001", "1002", "1004", "1005"});
+        CHECK(ids(mods) == ids(storedEntries(runner, id)));
+    }
+    SECTION("an entry that the undo takes away is refused") {
+        mods.addMods({"steam-workshop:1006"});
+        REQUIRE(waitUntil([&] { return mods.count() == 6 && !mods.busy(); }));
+        mods.undo();
+        mods.setEnabled(5, false); // 1006, which the undo removes
+        REQUIRE(settled());
+        const std::vector<PlaysetEntry> stored = storedEntries(runner, id);
+        CHECK(ids(stored) == Ids{"1001", "1002", "1003", "1004", "1005"});
+        CHECK(std::all_of(stored.begin(), stored.end(),
+                          [](const PlaysetEntry& entry) { return entry.enabled; }));
+        CHECK(ids(mods) == ids(stored));
+        const QVariantMap latest = backend.notifications()->latest();
+        CHECK(latest.value("level").toString() == "warning");
+        CHECK(latest.value("text").toString().contains("undo or redo"));
+    }
+    backend.shutdown();
+    runner.shutdown();
+}
