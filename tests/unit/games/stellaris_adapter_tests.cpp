@@ -834,8 +834,8 @@ TEST_CASE("Stellaris process names and load-order information", "[games][stellar
     CHECK(names.conflictingWriters == std::vector<std::string>{"Paradox Launcher"});
 
     const LoadOrderInfo info = adapter.loadOrderInfo();
-    CHECK_FALSE(info.verifiedInGame);
+    CHECK(info.verifiedInGame);
     CHECK(info.summary.find("index 0 first") != std::string::npos);
-    CHECK(info.summary.find("docs/load-order.md") != std::string::npos);
-    CHECK(info.evidence.find("docs/load-order.md") != std::string::npos);
+    CHECK(info.summary.find("later in the list wins") != std::string::npos);
+    CHECK(info.evidence.find("live-validation-2026-10-30.md") != std::string::npos);
 }

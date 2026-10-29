@@ -31,10 +31,15 @@ constexpr GameTraits kTraits{
     // No evidence of such a rule for EU4: its error.log files (from before the
     // reinstall) have no "Invalid supported_version" lines.
     .rejectsEarlyWildcards = false,
-    .loadOrderSummary = "dlc_load.json enabled_mods, index 0 first; file override precedence: "
-                        "see docs/load-order.md",
-    .loadOrderEvidence = "docs/load-order.md (EU4: dlc_load.json read and reproduced read-only; "
-                         "in-game precedence pending the probe-mod run)",
+    // Probe mods in EU4 1.37.5 (2026-10-30): swapping two mods in
+    // enabled_mods did not change which one won a shared file; renaming one
+    // did. The playset order is still written (it is what the launcher writes).
+    .loadOrderSummary = "dlc_load.json enabled_mods lists the playset order, but EU4 does not use "
+                        "it for file overrides: when two enabled mods contain the same file, the "
+                        "mod whose name sorts first alphabetically wins",
+    .loadOrderEvidence = "docs/evidence/live-validation-2026-10-30.md (probe mods, EU4 1.37.5, "
+                         "Windows 11)",
+    .loadOrderVerifiedInGame = true,
     .logComponent = "games.eu4",
 };
 

@@ -1095,7 +1095,7 @@ ProcessNames DlcLoadJsonAdapter::processNames(const GameInstallation& installati
 LoadOrderInfo DlcLoadJsonAdapter::loadOrderInfo() const {
     LoadOrderInfo info;
     info.summary = std::string(m_traits.loadOrderSummary);
-    info.verifiedInGame = false; // pending the probe-mod run, see docs/load-order.md
+    info.verifiedInGame = m_traits.loadOrderVerifiedInGame;
     info.evidence = std::string(m_traits.loadOrderEvidence);
     return info;
 }

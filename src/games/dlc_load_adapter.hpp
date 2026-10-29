@@ -65,7 +65,8 @@ struct GameTraits {
     bool rejectsEarlyWildcards = false;
     std::string_view loadOrderSummary;
     std::string_view loadOrderEvidence;
-    std::string_view logComponent; // "games.stellaris"
+    bool loadOrderVerifiedInGame = false; // probe-mod run recorded in the evidence
+    std::string_view logComponent;        // "games.stellaris"
 };
 
 class DlcLoadJsonAdapter : public GameAdapter {

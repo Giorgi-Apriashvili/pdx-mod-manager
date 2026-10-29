@@ -31,10 +31,11 @@ constexpr GameTraits kTraits{
     // error.log of v4.5.2 reports "Invalid supported_version" for "v4.*.*",
     // "v4.*" and "*".
     .rejectsEarlyWildcards = true,
-    .loadOrderSummary = "dlc_load.json enabled_mods, index 0 first; file override precedence: "
-                        "see docs/load-order.md",
-    .loadOrderEvidence = "docs/load-order.md (Stellaris: launcher order observed read-only; "
-                         "in-game precedence pending the probe-mod run)",
+    .loadOrderSummary = "dlc_load.json enabled_mods, index 0 first; when two enabled mods "
+                        "contain the same file, the one later in the list wins",
+    .loadOrderEvidence = "docs/evidence/live-validation-2026-10-30.md (probe mods, Stellaris "
+                         "4.5.2, Windows 11)",
+    .loadOrderVerifiedInGame = true,
     .logComponent = "games.stellaris",
 };
 

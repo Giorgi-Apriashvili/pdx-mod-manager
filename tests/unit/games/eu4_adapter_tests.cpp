@@ -101,7 +101,8 @@ TEST_CASE("EU4 default locations per OS", "[games][eu4]") {
     const ProcessNames names = adapter.processNames(inst);
     CHECK(names.game == std::vector<std::string>{"eu4"});
     CHECK(names.conflictingWriters == std::vector<std::string>{"dowser", "paradox-launcher"});
-    CHECK_FALSE(adapter.loadOrderInfo().verifiedInGame);
+    CHECK(adapter.loadOrderInfo().verifiedInGame);
+    CHECK(adapter.loadOrderInfo().summary.find("name sorts first") != std::string::npos);
 }
 
 TEST_CASE("EU4 scan understands archives and relative paths", "[games][eu4]") {
