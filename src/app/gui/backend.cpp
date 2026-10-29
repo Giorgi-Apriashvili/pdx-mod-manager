@@ -54,6 +54,9 @@ Backend::Backend(ServiceRunner& runner, BackendOptions options, QObject* parent)
     m_launcher = new LaunchController(this, this);
 
     connect(&m_runner, &ServiceRunner::acquisitionChanged, this, &Backend::onAcquisitionChanged);
+    m_trailingLaunchRefresh.setSingleShot(true);
+    m_trailingLaunchRefresh.setInterval(static_cast<int>(kLaunchRefreshThrottleMs));
+    connect(&m_trailingLaunchRefresh, &QTimer::timeout, this, &Backend::refreshLaunch);
     connect(&m_runner, &ServiceRunner::processStarting, m_launcher,
             &LaunchController::processStarting);
     if (auto* app = qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
@@ -619,9 +622,15 @@ void Backend::refreshAcquisition(bool includeLaunch) {
         m_acquisitionPendingLaunch = m_acquisitionPendingLaunch || includeLaunch;
         return;
     }
-    if (!includeLaunch && m_sinceLaunchRefresh.isValid() &&
-        m_sinceLaunchRefresh.elapsed() > kLaunchRefreshThrottleMs)
-        includeLaunch = true;
+    if (!includeLaunch) {
+        if (m_sinceLaunchRefresh.isValid() &&
+            m_sinceLaunchRefresh.elapsed() > kLaunchRefreshThrottleMs)
+            includeLaunch = true;
+        else
+            // Throttled: the launch verdict still follows this update (e.g. a
+            // job that just ended Unavailable) once the interval has passed.
+            m_trailingLaunchRefresh.start();
+    }
     m_acquisitionInFlight = true;
     const QString game = m_game;
     const std::int64_t playsetId = m_playsetId;

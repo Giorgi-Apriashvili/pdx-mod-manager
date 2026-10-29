@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QUrl>
 
 #include <cstdint>
@@ -162,6 +163,7 @@ private:
     bool m_acquisitionPending = false;
     bool m_acquisitionPendingLaunch = false;
     QElapsedTimer m_sinceLaunchRefresh;
+    QTimer m_trailingLaunchRefresh;
 };
 
 } // namespace pmm::app

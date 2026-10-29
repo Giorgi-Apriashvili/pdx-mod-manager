@@ -310,4 +310,61 @@ TEST_CASE("an imported code with a missing Workshop mod becomes playable (fake S
     runner.shutdown();
 }
 
+TEST_CASE("Play's blockers follow a download that ends unavailable (fake Steam, Backend)",
+          "[app][helper][acquisition][backend]") {
+    // Seen live on 2026-10-30: the job's last transition arrived within the
+    // launch-refresh throttle after the import, and the blocker kept saying
+    // "Queued for download" because no further acquisition event came.
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    installFakeLibrary(world.install);
+    world.addWorkshopMod("111111111", "Installed Item");
+    FakeAdapter adapter(world);
+
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = true;
+    options.metadata = false;
+    options.helperExecutable = qs(PMM_STEAM_HELPER_PATH);
+    options.tickInterval = std::chrono::milliseconds(100);
+    options.configureCoordinator = [](services::CoordinatorOptions& coordinator) {
+        coordinator.policy.pollIntervalMs = 100;
+    };
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+
+    // 333333333: the fake's SubscribeItem fails with FileNotFound (deleted item).
+    sharing::Manifest manifest;
+    manifest.game = kGame;
+    manifest.playsetName = "With a deleted item";
+    manifest.mods = {{source::SteamWorkshop, "111111111", "Installed Item", true, {}, {}},
+                     {source::SteamWorkshop, "333333333", "Deleted Item", true, {}, {}}};
+    backend.sharing()->previewImport(qs(require(sharing::encodeShareCode(manifest))));
+    REQUIRE(
+        waitUntil([&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+    REQUIRE(backend.sharing()->confirmImport(
+        "new", -1, backend.sharing()->preview().value("proposedName").toString()));
+    REQUIRE(waitUntil([&] { return backend.mods()->count() == 2; }));
+
+    REQUIRE(waitUntil(
+        [&] {
+            const auto& jobs = backend.acquisition()->jobs()->rows();
+            return jobs.size() == 1 && jobs[0].state == QLatin1String("unavailable");
+        },
+        std::chrono::seconds(30)));
+    // At most one throttle interval (5 s) later, Play explains the real state.
+    const auto blockers = [&] { return backend.launcher()->blockers().join(QLatin1Char('\n')); };
+    REQUIRE(waitUntil([&] { return blockers().contains(QLatin1String("unavailable")); },
+                      std::chrono::seconds(8)));
+    CHECK_FALSE(blockers().contains(QLatin1String("Queued")));
+    CHECK_FALSE(backend.launcher()->canPlay());
+
+    backend.shutdown();
+    runner.shutdown();
+}
+
 #endif
