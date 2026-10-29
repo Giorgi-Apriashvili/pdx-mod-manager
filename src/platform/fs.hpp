@@ -46,4 +46,11 @@ std::int64_t lastWriteUnixSeconds(const fs::path& path) noexcept;
 // absolute and lexically normal; does not follow symlinks).
 bool isWithin(const fs::path& child, const fs::path& parent);
 
+// Deletes a file; succeeds when it does not exist. Refuses directories
+// (IoError). On POSIX the parent directory is synced afterwards.
+Status removeFile(const fs::path& path);
+
+// Creates `directory` and any missing parents; succeeds when it exists.
+Status createDirectories(const fs::path& directory);
+
 } // namespace pmm::platform

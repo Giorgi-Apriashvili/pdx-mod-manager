@@ -48,4 +48,31 @@ Result<std::vector<RunningProcess>> listProcesses();
 // Case-insensitive on Windows/macOS, case-sensitive on Linux.
 bool executableNameMatches(const std::string& runningName, const std::string& wanted);
 
+// Notes on startDetached():
+// - An empty workingDirectory means the executable's folder.
+// - InvalidArgument for a relative executable path, NUL characters in
+//   arguments/environment, or environment names that are empty or contain '=';
+//   ProcessStartFailed for everything else (missing executable or working
+//   folder, OS refusal).
+// - Windows: CreateProcessW with bInheritHandles=FALSE and
+//   DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_DEFAULT_ERROR_MODE,
+//   breaking away from an enclosing job object when the job allows it. The
+//   environment block is the inherited one merged with `environment`, sorted
+//   case-insensitively. System "bad image" dialogs are suppressed for the
+//   call; such failures come back as ProcessStartFailed.
+// - POSIX: posix_spawn in a new session (or process group) with stdio on
+//   /dev/null; the working folder is set with
+//   posix_spawn_file_actions_addchdir_np where available (glibc >= 2.29,
+//   macOS >= 10.15), otherwise with fork/chdir/execve. A background thread
+//   reaps the child so it never lingers as a zombie.
+
+#if defined(_WIN32)
+// Full command line for `executable` + UTF-8 `arguments`, exactly as passed to
+// CreateProcessW. Exposed for tests.
+std::wstring buildWindowsCommandLine(const fs::path& executable,
+                                     const std::vector<std::string>& arguments);
+#endif
+
+std::int64_t currentProcessId() noexcept;
+
 } // namespace pmm::platform
