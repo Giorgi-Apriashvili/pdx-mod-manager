@@ -1,0 +1,8 @@
+# Keeps the pinned major versions of GitHub Actions current. Library
+# dependencies are pinned in cmake/Dependencies.cmake and updated by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
