@@ -6,6 +6,7 @@ add_subdirectory(sharing)
 add_subdirectory(persistence)
 add_subdirectory(games)
 add_subdirectory(providers)
+add_subdirectory(services)
 
 if(PMM_BUILD_APP)
   add_subdirectory(app)
