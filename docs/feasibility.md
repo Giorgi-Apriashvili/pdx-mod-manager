@@ -15,11 +15,26 @@ Investigation environment (2026-10-29): Windows 11 Enterprise 23H2
 | Game | Steam app | State on this machine | Notes |
 |---|---|---|---|
 | Stellaris | 281990 | Installed via Steam, build 25664273, `launcher-settings.json` reports "Cygnus v4.5.2 (9776)" | 27 Workshop items installed, 10 local mods, 2 launcher playsets |
-| Europa Universalis IV | 236850 | **Not installed** (no `appmanifest_236850.acf`; only leftover user data in `Documents/Paradox Interactive/Europa Universalis IV`) | EU4 behaviour cannot be verified on this machine |
+| Europa Universalis IV | 236850 | Installed via Steam later the same day, build 15918133, `launcher-settings.json` reports "EU4 v1.37.5.0 Inca (491d)" | 0 Workshop items on disk (`appworkshop_236850.acf` has `NeedsDownload` = 1), 1 local mod, 13 registered `ugc_*.mod` descriptors left from an earlier installation |
 
-Consequence: every EU4-specific claim in this project is at best
-*implemented, unverified* until someone runs the validation procedure in
-[`docs/validation.md`](validation.md) on a machine with EU4 installed.
+EU4 observations that differ from Stellaris (read-only, 2026-10-29):
+
+- The install folder has **no `steam_appid.txt`**. A directly started
+  `eu4.exe` therefore needs `SteamAppId`/`SteamGameId` in its environment
+  for the Steam API to initialise; whether the game then runs without
+  relaunching through Steam (and the Paradox launcher) must be verified
+  in-game.
+- The install folder contains `userdir.txt` (empty here). EU4 uses a
+  non-empty `userdir.txt` to relocate the user-data directory, so discovery
+  must honour it.
+- `exeArgs` is `["-enabletelemetry", "-gdpr-compliant"]`. The manager does not
+  enable the game's telemetry on the user's behalf: `-enabletelemetry` is
+  dropped from direct launches by default.
+- `dlc_load.json` enables 8 Workshop mods whose content folders do not exist
+  (EU4 was reinstalled), which exercises missing-content detection on real data.
+- Descriptors use four-component versions such as `supported_version="v1.37.*.*"`.
+- `steam_api64.dll` exports the same flat API generation as Stellaris
+  (`SteamAPI_SteamUGC_v016`, `SteamAPI_ManualDispatch_*`).
 
 ## 2. How the Paradox launcher hands mods to the game (Stellaris, observed)
 
