@@ -79,7 +79,11 @@ if(APPLE AND TARGET pmm-steam-helper)
 endif()
 
 # Packaging (docs/packaging.md): cmake/Packaging.cmake installs the helper next
-# to the executable and the MSVC runtime, Qt's script deploys Qt itself.
+# to the executable and the MSVC runtime, Qt's script deploys Qt itself. Pmm.Ui
+# is a static module linked into pmm-app, so the deployment's import scan is
+# pointed at its QML folders (not ui/dev) to find the Qt Quick modules to ship.
+set_target_properties(pmm-app PROPERTIES QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS
+  "${PROJECT_SOURCE_DIR}/ui/controls;${PROJECT_SOURCE_DIR}/ui/panes;${PROJECT_SOURCE_DIR}/ui/dialogs")
 install(TARGETS pmm-app
   BUNDLE DESTINATION .
   RUNTIME DESTINATION bin)
