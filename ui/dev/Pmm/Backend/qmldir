@@ -1,0 +1,13 @@
+module Pmm.Backend
+singleton Backend 1.0 Backend.qml
+FakeAppSettings 1.0 FakeAppSettings.qml
+FakeNotificationCenter 1.0 FakeNotificationCenter.qml
+FakeGamesModel 1.0 FakeGamesModel.qml
+FakePlaysetsModel 1.0 FakePlaysetsModel.qml
+FakeModListModel 1.0 FakeModListModel.qml
+FakeModFilterModel 1.0 FakeModFilterModel.qml
+FakeInventoryModel 1.0 FakeInventoryModel.qml
+FakeModDetails 1.0 FakeModDetails.qml
+FakeShareController 1.0 FakeShareController.qml
+FakeAcquisitionController 1.0 FakeAcquisitionController.qml
+FakeLaunchController 1.0 FakeLaunchController.qml
