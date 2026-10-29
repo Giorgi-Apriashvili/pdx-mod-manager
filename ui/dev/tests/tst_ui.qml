@@ -6,7 +6,9 @@ import Pmm.Backend
 // Smoke tests of the QML layer against the fake backend: virtualization with
 // 2,000 rows, keyboard editing with undo/redo, the reorder rules while
 // searching, delete confirmation, drag-and-drop, column-width persistence,
-// theme switching and the import flow. Run: ui/dev/preview.sh --test
+// theme switching, the import flow, and keyboard accessibility (Tab order, F6,
+// Escape and focus return, Alt+Up/Down, context menu, accessible names).
+// Run: ui/dev/preview.sh --test
 Item {
     width: 120
     height: 80
@@ -20,6 +22,7 @@ Item {
         id: tc
 
         property Main win: null
+        property int firstPlaysetId: -1
 
         function named(name: string): var {
             return findChild(win.contentItem, name)
@@ -54,6 +57,7 @@ Item {
             win = mainComponent.createObject(null) as Main
             verify(win !== null)
             tryCompare(Backend.mods, "count", 2000)
+            firstPlaysetId = Backend.playsets.activeId
         }
 
         function cleanupTestCase() {
@@ -62,6 +66,11 @@ Item {
 
         function init() {
             win.closeDialogs()
+            // test_9 activates the imported playset; later tests use the first one.
+            if (Backend.playsets.activeId !== firstPlaysetId) {
+                Backend.playsets.activate(firstPlaysetId)
+                tryCompare(Backend.mods, "count", 2000)
+            }
             Backend.modView.search = ""
             Backend.modView.statusFilter = "all"
             Backend.modView.sortMode = "order"
@@ -203,6 +212,150 @@ Item {
             tryVerify(() => !dialog.visible)
             compare(Backend.playsets.count, count + 1)
             compare(Backend.playsets.activeName, "Federation campaign (imported)")
+        }
+
+        // --- keyboard and accessibility (docs/accessibility.md) ---------------
+
+        // The column (games, mods, side) that holds the keyboard focus, or "".
+        function focusedPane(): string {
+            for (let item = win.activeFocusItem; item; item = item.parent) {
+                if (["gamesPane", "modsPane", "sidePane"].includes(item.objectName))
+                    return item.objectName
+            }
+            return ""
+        }
+
+        function test_a1_tabVisitsEveryColumnInOrder() {
+            requireFocus()
+            const list = named("modList")
+            verify(list.activeFocus)
+            const visited = []
+            let back = false
+            for (let i = 0; i < 80 && !back; ++i) {
+                press(Qt.Key_Tab)
+                const pane = focusedPane()
+                if (pane.length > 0 && visited[visited.length - 1] !== pane)
+                    visited.push(pane)
+                back = list.activeFocus
+            }
+            verify(back, "Tab never returned to the mod list; visited " + visited.join(" > "))
+            // From the list: actions column, then (wrapping) games, then the mods header.
+            compare(visited.join(" > "), "sidePane > gamesPane > modsPane")
+            press(Qt.Key_Tab, Qt.ShiftModifier)
+            verify(!list.activeFocus)
+            compare(focusedPane(), "modsPane")
+        }
+
+        function test_a2_f6CyclesColumns() {
+            requireFocus()
+            press(Qt.Key_F6)
+            compare(focusedPane(), "sidePane")
+            press(Qt.Key_F6)
+            compare(focusedPane(), "gamesPane")
+            compare(win.activeFocusItem.Accessible.name.indexOf("Stellaris"), 0)
+            press(Qt.Key_F6)
+            verify(named("modList").activeFocus)
+            press(Qt.Key_F6, Qt.ShiftModifier)
+            compare(focusedPane(), "gamesPane")
+        }
+
+        function test_a3_enterOpensDialogAndEscapeReturnsFocus() {
+            requireFocus()
+            const button = named("settingsButton")
+            button.forceActiveFocus(Qt.TabFocusReason)
+            verify(button.visualFocus)
+            press(Qt.Key_Return)
+            const dialog = named("settingsDialog")
+            tryVerify(() => dialog.opened)
+            // Focus starts inside the dialog and Tab stays there.
+            for (let i = 0; i < 12; ++i) {
+                press(Qt.Key_Tab)
+                verify(focusedPane() === "", "Tab left the modal dialog")
+            }
+            press(Qt.Key_Escape)
+            tryVerify(() => !dialog.visible)
+            tryVerify(() => button.activeFocus)
+        }
+
+        function test_a4_deleteDialogEscapeKeepsRows() {
+            requireFocus()
+            const count = Backend.mods.count
+            press(Qt.Key_Delete)
+            const dialog = named("confirmDialog")
+            tryVerify(() => dialog.opened)
+            press(Qt.Key_Escape)
+            tryVerify(() => !dialog.visible)
+            compare(Backend.mods.count, count)
+            tryVerify(() => named("modList").activeFocus)
+        }
+
+        function test_a5_altArrowsMoveInLoadOrder() {
+            requireFocus()
+            win.selectMod(4)
+            const name = Backend.mods.get(4).name
+            press(Qt.Key_Down, Qt.AltModifier)
+            compare(Backend.mods.get(5).name, name)
+            compare(named("modList").currentIndex, 5)
+            press(Qt.Key_Up, Qt.AltModifier)
+            press(Qt.Key_Up, Qt.AltModifier)
+            compare(Backend.mods.get(3).name, name)
+            press(Qt.Key_Z, Qt.ControlModifier)
+            press(Qt.Key_Z, Qt.ControlModifier)
+            press(Qt.Key_Z, Qt.ControlModifier)
+            compare(Backend.mods.get(4).name, name)
+        }
+
+        function test_a6_contextMenuFromKeyboard() {
+            requireFocus()
+            win.selectMod(2)
+            press(Qt.Key_F10, Qt.ShiftModifier)
+            tryVerify(() => win.activeFocusItem && win.activeFocusItem.text === qsTr("Enable"))
+            press(Qt.Key_Down)
+            compare(win.activeFocusItem.text, qsTr("Disable"))
+            press(Qt.Key_Escape)
+            tryVerify(() => named("modList").activeFocus)
+            compare(named("modList").currentIndex, 2)
+        }
+
+        function test_a7_ctrlSpaceTogglesSelection() {
+            requireFocus()
+            const pane = named("modsPane")
+            win.selectMod(0)
+            press(Qt.Key_Down, Qt.ShiftModifier)
+            press(Qt.Key_Down, Qt.ShiftModifier)
+            compare(pane.selectedCount, 3)
+            press(Qt.Key_Space, Qt.ControlModifier)
+            compare(pane.selectedCount, 2)
+            verify(!pane.isSelected(2))
+            press(Qt.Key_Space, Qt.ControlModifier)
+            compare(pane.selectedCount, 3)
+        }
+
+        function test_a8_shortcutsDialog() {
+            requireFocus()
+            press(Qt.Key_F1)
+            const dialog = named("shortcutsDialog")
+            tryVerify(() => dialog.opened)
+            const list = findChild(dialog.contentItem, "shortcutList")
+            tryVerify(() => list.activeFocus)
+            verify(list.count > 15)
+            press(Qt.Key_End)
+            compare(list.currentIndex, list.count - 1)
+            press(Qt.Key_Escape)
+            tryVerify(() => !dialog.visible)
+            tryVerify(() => named("modList").activeFocus)
+        }
+
+        function test_a9_accessibleNames() {
+            requireFocus()
+            win.selectMod(1)
+            const row = named("modList").currentItem
+            const entry = Backend.mods.get(1)
+            verify(row.Accessible.name.startsWith("2. " + entry.name + ", "), row.Accessible.name)
+            verify(row.Accessible.name.endsWith(entry.statusText), row.Accessible.name)
+            compare(row.Accessible.role, Accessible.ListItem)
+            // The current row carries the keyboard focus, so screen readers read it.
+            verify(row.activeFocus)
         }
 
         name: "PmmUi"
