@@ -9,6 +9,7 @@ pmm_add_test(pmm_platform_tests
     fs_tests.cpp
     paths_tests.cpp
     process_tests.cpp
+    steam_tests.cpp
   LIBS pmm_platform nlohmann_json::nlohmann_json)
 add_dependencies(pmm_platform_tests pmm_platform_echo)
 target_compile_definitions(pmm_platform_tests PRIVATE

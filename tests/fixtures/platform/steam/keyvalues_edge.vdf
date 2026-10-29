@@ -1,0 +1,23 @@
+﻿// Leading comment line
+"Root"
+{
+	"Quoted"		"a \"quoted\" word" // trailing comment
+	"Path"		"C:\\Games\\Ünïcødé 日本語"
+	"Escapes"		"line1\nline2\ttab"
+	"Literal"		"keep \q backslash"
+	UnquotedKey	unquoted_value
+	"Platform"		"windows"	[$WIN32]
+	"Nested" [$WINDOWS]
+	{
+		"Deep"
+		{
+			"leaf"		"value"
+		}
+	}
+	"Duplicate"		"first"
+	"duplicate"		"second"
+	"Empty"		""
+	"Multi
+line"		"value"
+	"After"		"multiline"
+}
