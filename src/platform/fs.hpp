@@ -36,6 +36,12 @@ Result<bool> isDirectoryWritable(const fs::path& directory);
 std::string pathToUtf8(const fs::path& path);
 fs::path pathFromUtf8(std::string_view utf8);
 
+// True if `path` can be stored as UTF-8 text and read back unchanged. False
+// for POSIX names that are not well-formed UTF-8 (e.g. Latin-1 bytes; text
+// stores such as JSON would replace them) and for Windows names with unpaired
+// surrogates (pathToUtf8() turns them into U+FFFD).
+bool isUtf8Representable(const fs::path& path);
+
 // Path with forward slashes, as written into Paradox descriptor/config files.
 std::string toGenericUtf8(const fs::path& path);
 

@@ -456,6 +456,14 @@ fs::path pathFromUtf8(std::string_view utf8) {
 #endif
 }
 
+bool isUtf8Representable(const fs::path& path) {
+#if defined(_WIN32)
+    return pathFromUtf8(pathToUtf8(path)).native() == path.native();
+#else
+    return detail::isWellFormedUtf8(path.native());
+#endif
+}
+
 std::string toGenericUtf8(const fs::path& path) {
 #if defined(_WIN32)
     return detail::wideToUtf8(path.generic_wstring());
