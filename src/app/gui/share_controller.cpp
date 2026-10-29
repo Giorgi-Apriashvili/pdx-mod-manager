@@ -5,6 +5,7 @@
 #include "app/gui/backend.hpp"
 #include "app/gui/notification_center.hpp"
 #include "core/import_plan.hpp"
+#include "persistence/acquisition_job_repository.hpp"
 #include "services/share_service.hpp"
 
 #include <QClipboard>
@@ -15,6 +16,7 @@
 #include <QSaveFile>
 #include <QVariantList>
 
+#include <set>
 #include <utility>
 
 namespace pmm::app {
@@ -114,6 +116,50 @@ QVariantMap previewMap(const services::ImportPreview& preview, bool downloads) {
             {QStringLiteral("localUnmapped"), static_cast<int>(counts.localUnmapped)},
             {QStringLiteral("warnings"), warnings},
             {QStringLiteral("entries"), entries}};
+}
+
+// applyImport() queues a job for every missing Workshop entry, and the next
+// session with Steam resumes unfinished jobs on its own. With downloads off,
+// the jobs this import created are withdrawn (Cancelled) in the same
+// transaction, so the entries stay missing until the user asks for them
+// ("Download missing"). Jobs that existed before are left as they are.
+Result<services::AppliedImport> applyImportWithoutDownloads(AppRuntime& runtime,
+                                                            const services::ImportPreview& preview,
+                                                            services::ImportMode mode,
+                                                            std::optional<std::int64_t> target,
+                                                            const std::string& name) {
+    std::optional<Result<services::AppliedImport>> applied;
+    persistence::AcquisitionJobRepository jobs(runtime.database());
+    Status saved = runtime.database().transaction([&]() -> Status {
+        auto unfinished = jobs.listUnfinished();
+        if (!unfinished)
+            return std::move(unfinished).error();
+        std::set<std::int64_t> existing;
+        for (const AcquisitionJob& job : unfinished.value())
+            existing.insert(job.id);
+        applied = runtime.sharing().applyImport(preview, mode, target, name);
+        if (!*applied)
+            return applied->error();
+        std::vector<AcquisitionJob> kept;
+        for (AcquisitionJob& job : applied->value().jobs) {
+            if (existing.count(job.id)) {
+                kept.push_back(std::move(job));
+                continue;
+            }
+            job.state = AcquisitionState::Cancelled;
+            PMM_TRY(jobs.update(job));
+        }
+        applied->value().jobs = std::move(kept);
+        return {};
+    });
+    if (applied && !*applied)
+        return std::move(*applied);
+    if (!saved)
+        return Error(saved.error().code,
+                     "The share code could not be imported; nothing was saved. " +
+                         saved.error().message,
+                     saved.error().detail);
+    return std::move(*applied);
 }
 
 } // namespace
@@ -305,7 +351,7 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
         std::int64_t playsetId = -1;
         QString name;
         int entries = 0;
-        int queued = 0;
+        int missing = 0; // Workshop entries to acquire
     };
     setBusy(true);
     runner->call(
@@ -313,7 +359,9 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
         [preview = m_preview, importMode, target, name = utf8(name.trimmed()), steam,
          runner](AppRuntime& runtime) {
             Outcome outcome;
-            auto applied = runtime.sharing().applyImport(*preview, importMode, target, name);
+            auto applied =
+                steam ? runtime.sharing().applyImport(*preview, importMode, target, name)
+                      : applyImportWithoutDownloads(runtime, *preview, importMode, target, name);
             if (!applied) {
                 outcome.error = applied.error();
                 return outcome;
@@ -321,7 +369,7 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
             outcome.playsetId = applied.value().playsetId;
             outcome.name = qs(applied.value().playsetName);
             outcome.entries = static_cast<int>(applied.value().plan.entries.size());
-            outcome.queued = static_cast<int>(applied.value().jobs.size());
+            outcome.missing = static_cast<int>(applied.value().plan.toAcquire.size());
             if (steam && runtime.acquisition())
                 runner->report(runtime.acquisition()->start(preview->manifest->game));
             return outcome;
@@ -340,13 +388,13 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
                                    : tr("“%1” was created with %2 entries.")
                                          .arg(outcome.name)
                                          .arg(outcome.entries);
-            if (outcome.queued > 0)
+            if (outcome.missing > 0)
                 text += QLatin1Char(' ') +
                         (steam ? tr("%1 queued for download.")
-                                     .arg(countText(outcome.queued, "missing Workshop mod",
+                                     .arg(countText(outcome.missing, "missing Workshop mod",
                                                     "missing Workshop mods"))
                                : tr("%1 listed; downloads are off in this session.")
-                                     .arg(countText(outcome.queued, "missing Workshop mod",
+                                     .arg(countText(outcome.missing, "missing Workshop mod",
                                                     "missing Workshop mods")));
             m_backend->notifications()->info(tr("Import complete"), text);
             // The stored active playset: the import, or an activation since.

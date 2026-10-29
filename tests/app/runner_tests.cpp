@@ -5,8 +5,10 @@
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
+#include "persistence/acquisition_job_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/settings_repository.hpp"
+#include "platform/steam.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -504,4 +506,82 @@ TEST_CASE("Row edits made while an undo is in flight hit the entries the user sa
     }
     backend.shutdown();
     runner.shutdown();
+}
+
+TEST_CASE("Importing with downloads off leaves nothing for a later session to download",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("4001", "Kept");
+    world.addWorkshopMod("4002", "Gone");
+    // Lets a coordinator open a Steam session for the game (never loaded here).
+    writeText(world.install / platform::steam::steamApiLibraryName(), "placeholder");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    {
+        ServiceRunner runner(runnerOptions(profile, adapter)); // --no-steam
+        const RunnerStart start = runner.start();
+        REQUIRE(start.ok);
+        Backend backend(runner, {});
+        backend.initialize(start);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        REQUIRE_FALSE(backend.steamEnabled());
+        backend.playsets()->create(QStringLiteral("Source"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        const std::int64_t source = backend.activePlaysetId();
+        backend.mods()->addMods({"steam-workshop:4001", "steam-workshop:4002"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+        backend.sharing()->exportCode();
+        REQUIRE(waitUntil([&] { return !backend.sharing()->lastExportCode().isEmpty(); }));
+
+        // 4002 is not on this computer any more when the code is imported.
+        fs::remove_all(world.workshop / "4002");
+        const bool rescanned = runner.callBlocking(
+            [](AppRuntime& runtime) { return runtime.games().rescanMods(kGame).ok(); });
+        REQUIRE(rescanned);
+        backend.sharing()->previewImport(backend.sharing()->lastExportCode());
+        REQUIRE(waitUntil(
+            [&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+        REQUIRE(backend.sharing()->preview().value("missing").toInt() == 1);
+        REQUIRE(backend.sharing()->confirmImport("new", -1, QStringLiteral("Imported")));
+        REQUIRE(waitUntil([&] {
+            return backend.activePlaysetId() != source &&
+                   backend.mods()->playsetId() == backend.activePlaysetId() &&
+                   backend.mods()->count() == 2;
+        }));
+
+        const std::size_t unfinished = runner.callBlocking([](AppRuntime& runtime) {
+            auto jobs = persistence::AcquisitionJobRepository(runtime.database()).listUnfinished();
+            return jobs ? jobs.value().size() : std::size_t{99};
+        });
+        CHECK(unfinished == 0);
+        const ModRowData* gone = backend.mods()->row(1);
+        REQUIRE(gone);
+        CHECK(gone->entry.identity.id == "4002");
+        CHECK(gone->status == "missing");
+        CHECK(gone->statusText == "Missing");
+        CHECK(backend.notifications()->latest().value("text").toString().contains(
+            "1 missing Workshop mod listed; downloads are off in this session."));
+        backend.shutdown();
+        runner.shutdown();
+    }
+
+    // A later session with Steam resumes unfinished jobs on its own: none.
+    struct RecordingSessions : services::WorkshopSessionHost {
+        bool open(const GameKey&, const std::string&, const fs::path&) override {
+            ++opened;
+            return true;
+        }
+        void send(const GameKey&, const providers::HelperCommand&) override { ++sent; }
+        void close(const GameKey&) override {}
+        int opened = 0;
+        int sent = 0;
+    } sessions;
+    RuntimeHosts hosts;
+    hosts.sessions = &sessions;
+    auto runtime = require(AppRuntime::create(hermeticOptions(profile, adapter), hosts));
+    REQUIRE(runtime->acquisition());
+    runtime->acquisition()->start(kGame);
+    CHECK(sessions.opened == 0);
+    CHECK(sessions.sent == 0);
 }
