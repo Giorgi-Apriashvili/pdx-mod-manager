@@ -11,7 +11,7 @@ endif()
 project(ParadoxModManager
   VERSION 0.1.0
   DESCRIPTION "Compact cross-platform mod manager for Paradox games"
-  HOMEPAGE_URL "https://example.invalid/pdx-mod-manager"
+  HOMEPAGE_URL "https://github.com/Giorgi-Apriashvili/pdx-mod-manager"
   LANGUAGES C CXX)
 
 # The share-code protocol is versioned independently of the application.
