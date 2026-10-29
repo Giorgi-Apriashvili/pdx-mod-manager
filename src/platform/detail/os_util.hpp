@@ -6,6 +6,7 @@
 // must not include this header.
 
 #include "core/result.hpp"
+#include "core/utf8.hpp"
 
 #include <filesystem>
 #include <string>
@@ -40,13 +41,15 @@ Error fsError(const std::error_code& ec, ErrorCode fallback, std::string message
 // valid UTF-8 (see toValidUtf8()).
 std::string quotedName(const std::filesystem::path& path);
 
-// True if `text` is well-formed UTF-8 (RFC 3629: no overlong forms, no
-// surrogates, no code points above U+10FFFF, no truncated sequences).
-bool isWellFormedUtf8(std::string_view text) noexcept;
+// True if `text` is well-formed UTF-8 (pmm::isValidUtf8()).
+inline bool isWellFormedUtf8(std::string_view text) noexcept {
+    return isValidUtf8(text);
+}
 
-// `text` with every byte that is not part of a well-formed sequence replaced
-// by U+FFFD.
-std::string toValidUtf8(std::string_view text);
+// `text` with every ill-formed sequence replaced by U+FFFD (pmm::sanitizeUtf8()).
+inline std::string toValidUtf8(std::string_view text) {
+    return sanitizeUtf8(text);
+}
 
 // fsync() of a directory so that renames/creations inside it are durable.
 // No-op on Windows (MOVEFILE_WRITE_THROUGH covers it). Best effort.

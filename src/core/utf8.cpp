@@ -1,10 +1,8 @@
-#include "persistence/internal/utf8.hpp"
+#include "core/utf8.hpp"
 
-#include <cstddef>
 #include <cstdint>
 
-namespace pmm::persistence::internal {
-
+namespace pmm {
 namespace {
 
 constexpr char32_t kReplacement = 0xFFFD;
@@ -15,8 +13,9 @@ struct Decoded {
     bool valid = false;
 };
 
-// Decodes the sequence at `pos`. An ill-formed sequence yields U+FFFD and
-// consumes its maximal well-formed prefix.
+// Decodes the sequence at text[pos]. An ill-formed sequence yields U+FFFD and
+// consumes its maximal ill-formed subpart: the lead byte plus every following
+// byte that could still have continued a well-formed sequence.
 Decoded decodeUtf8(std::string_view text, std::size_t pos) noexcept {
     const auto byte = [&](std::size_t i) { return static_cast<std::uint8_t>(text[i]); };
     const std::uint8_t lead = byte(pos);
@@ -86,7 +85,7 @@ constexpr bool isLowSurrogate(char32_t unit) noexcept {
     return unit >= 0xDC00 && unit <= 0xDFFF;
 }
 
-// Code point starting at `i`; advances `i` past a surrogate pair. Unpaired
+// Code point starting at text[i]; advances `i` past a surrogate pair. Unpaired
 // surrogates yield U+FFFD with `valid` cleared.
 template <class Char>
 char32_t nextUtf16(std::basic_string_view<Char> text, std::size_t& i, bool& valid) noexcept {
@@ -140,14 +139,19 @@ template <class String> String decodeToUtf16(std::string_view text) {
 
 } // namespace
 
-bool isValidUtf8(std::string_view text) noexcept {
+std::size_t utf8SequenceLength(std::string_view text, std::size_t pos) noexcept {
+    const Decoded decoded = decodeUtf8(text, pos);
+    return decoded.valid ? decoded.length : 0;
+}
+
+std::size_t findInvalidUtf8(std::string_view text) noexcept {
     for (std::size_t pos = 0; pos < text.size();) {
         const Decoded decoded = decodeUtf8(text, pos);
         if (!decoded.valid)
-            return false;
+            return pos;
         pos += decoded.length;
     }
-    return true;
+    return std::string_view::npos;
 }
 
 std::string sanitizeUtf8(std::string_view text) {
@@ -158,10 +162,19 @@ std::string sanitizeUtf8(std::string_view text) {
         if (decoded.valid)
             out.append(text.substr(pos, decoded.length));
         else
-            appendUtf8(out, kReplacement);
+            out.append(kUtf8ReplacementCharacter);
         pos += decoded.length;
     }
     return out;
+}
+
+std::string_view utf8Prefix(std::string_view text, std::size_t maxBytes) noexcept {
+    if (text.size() <= maxBytes)
+        return text;
+    std::size_t cut = maxBytes;
+    while (cut > 0 && (static_cast<std::uint8_t>(text[cut]) & 0xC0) == 0x80)
+        --cut; // continuation byte: the character starts earlier
+    return text.substr(0, cut);
 }
 
 bool isValidUtf16(std::u16string_view text) noexcept {
@@ -190,4 +203,4 @@ std::wstring utf8ToWide(std::string_view text) {
 }
 #endif
 
-} // namespace pmm::persistence::internal
+} // namespace pmm

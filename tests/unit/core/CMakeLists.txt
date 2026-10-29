@@ -7,4 +7,5 @@ pmm_add_test(pmm_core_tests
     import_plan_tests.cpp
     playset_ops_tests.cpp
     readiness_tests.cpp
+    utf8_tests.cpp
   LIBS pmm_core)

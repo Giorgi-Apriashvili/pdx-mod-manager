@@ -1,6 +1,7 @@
 #include "games/dlc_load_adapter.hpp"
 
 #include "core/log.hpp"
+#include "core/utf8.hpp"
 #include "games/descriptor.hpp"
 #include "games/launcher_settings.hpp"
 #include "games/supported_version.hpp"
