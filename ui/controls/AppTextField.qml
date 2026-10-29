@@ -33,7 +33,7 @@ TextField {
         color: control.enabled ? Theme.input : Theme.pane
         border.width: control.activeFocus ? 2 : 1
         border.color: control.activeFocus ? Theme.focus
-                    : control.hovered ? Theme.borderStrong : Theme.border
+                    : control.hovered ? Theme.textMuted : Theme.controlBorder
 
         Icon {
             x: 7

@@ -23,12 +23,13 @@ RadioButton {
         radius: 7
         color: Theme.input
         border.width: control.checked ? 4 : 1
-        border.color: control.checked ? Theme.accent
-                    : control.hovered ? Theme.textMuted : Theme.borderStrong
+        border.color: control.checked ? Theme.controlChecked
+                    : control.hovered ? Theme.textMuted : Theme.controlBorder
 
         FocusRing {
             visible: control.visualFocus
             baseRadius: 7
+            inset: control.checked ? -3 : -2
         }
     }
 

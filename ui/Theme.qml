@@ -4,6 +4,8 @@ import Pmm.Backend
 
 // Colours, metrics and small presentation helpers shared by every view.
 // Light and dark palettes; `dark` follows the persisted theme setting.
+// Contrast (WCAG AA, docs/accessibility.md): text colours reach 4.5:1 on the
+// surfaces they are used on; focus, controlBorder and status glyphs reach 3:1.
 QtObject {
     readonly property bool dark: Backend.settings.effectiveDark
 
@@ -16,16 +18,20 @@ QtObject {
     readonly property color divider: dark ? "#2e3035" : "#dcdde1"
     readonly property color border: dark ? "#383a40" : "#cfd1d6"
     readonly property color borderStrong: dark ? "#4b4e56" : "#b4b7be"
+    // Outline of unchecked check boxes, radio buttons and text inputs.
+    readonly property color controlBorder: dark ? "#80848c" : "#7d828a"
+    // Fill of checked check boxes and radio buttons (graphics: 3:1, not 4.5:1).
+    readonly property color controlChecked: dark ? "#3d7bf0" : "#2563eb"
 
     // Text
     readonly property color text: dark ? "#e3e5e8" : "#1f2328"
     readonly property color textMuted: dark ? "#a0a4ab" : "#5c6066"
-    readonly property color textFaint: dark ? "#6f737a" : "#959aa1"
+    readonly property color textFaint: dark ? "#8a8e95" : "#6e7278"
 
     // Interaction
-    readonly property color accent: dark ? "#3d7bf0" : "#2563eb"
-    readonly property color accentHover: dark ? "#5089f3" : "#1d4ed8"
-    readonly property color accentPressed: dark ? "#2f68d6" : "#1e40af"
+    readonly property color accent: dark ? "#2f6ce4" : "#2563eb"
+    readonly property color accentHover: dark ? "#2a63d4" : "#1d4ed8"
+    readonly property color accentPressed: dark ? "#2558bf" : "#1e40af"
     readonly property color accentText: "#ffffff"
     readonly property color link: dark ? "#79a8ff" : "#1d58d8"
     readonly property color focus: dark ? "#79a8ff" : "#2563eb"
@@ -42,8 +48,8 @@ QtObject {
 
     // Status (always paired with a glyph and text, never used alone)
     readonly property color success: dark ? "#3fb950" : "#1a7f37"
-    readonly property color warning: dark ? "#d8a23a" : "#9a6700"
-    readonly property color danger: dark ? "#f8716a" : "#c9252d"
+    readonly property color warning: dark ? "#d8a23a" : "#8a5c00"
+    readonly property color danger: dark ? "#fa7d76" : "#bd1f27"
     readonly property color info: dark ? "#79a8ff" : "#1d58d8"
     readonly property color successBg: dark ? "#15291c" : "#e3f6e8"
     readonly property color warningBg: dark ? "#2f2713" : "#fff6d6"
@@ -132,6 +138,45 @@ QtObject {
         if (s.startsWith("file://"))
             return decodeURIComponent(s.substring(7))
         return s
+    }
+
+    // Scrolls every Flickable around `item`, innermost first, so that keyboard
+    // focus never lands on a control outside the visible area. A ListView's
+    // current item is left to the view.
+    function reveal(item: Item) {
+        for (let content = item ? item.parent : null; content; content = content.parent) {
+            const flick = content.parent as Flickable
+            if (!flick || flick.contentItem !== content)
+                continue
+            if ((flick as ListView)?.currentItem === item)
+                continue
+            const top = item.mapToItem(content, 0, 0).y - 4
+            const bottom = top + item.height + 8
+            const maxY = flick.originY + Math.max(0, flick.contentHeight - flick.height)
+            if (top < flick.contentY)
+                flick.contentY = Math.max(flick.originY, top)
+            else if (bottom > flick.contentY + flick.height)
+                flick.contentY = Math.min(maxY, bottom - flick.height)
+        }
+    }
+
+    // Home/End/PageUp/PageDown for ListViews that use the built-in arrow key
+    // navigation. Returns whether the key was handled.
+    function pageList(list: ListView, key: int): bool {
+        if (list.count === 0)
+            return false
+        const page = Math.max(1, Math.floor(list.height / rowHeight) - 1)
+        let row = list.currentIndex
+        switch (key) {
+        case Qt.Key_Home: row = 0; break
+        case Qt.Key_End: row = list.count - 1; break
+        case Qt.Key_PageUp: row = Math.max(0, row - page); break
+        case Qt.Key_PageDown: row = Math.min(list.count - 1, row + page); break
+        default: return false
+        }
+        list.currentIndex = row
+        list.positionViewAtIndex(row, ListView.Contain)
+        return true
     }
 
     function formatCount(n: int): string {
