@@ -489,6 +489,10 @@ bool AcquisitionCoordinator::busy(const Runtime& runtime) const noexcept {
     return runtime.context.awaiting != AwaitStep::Nothing;
 }
 
+bool AcquisitionCoordinator::inProgress(const Runtime& runtime) const noexcept {
+    return !isTerminal(runtime.context.job.state) || runtime.context.retryAtMs > 0;
+}
+
 void AcquisitionCoordinator::closeIdleSessions() {
     std::vector<GameKey> idle;
     for (const auto& [game, session] : m_sessionState) {
@@ -823,11 +827,7 @@ CancelOutcome AcquisitionCoordinator::cancelAll(const GameKey& game) {
             }
         }
         for (const auto& [id, runtime] : m_jobs) {
-            if (runtime.game != game)
-                continue;
-            const AcquisitionState state = runtime.context.job.state;
-            if (!isTerminal(state) ||
-                (state == AcquisitionState::Failed && runtime.context.retryAtMs > 0)) {
+            if (runtime.game == game && inProgress(runtime)) {
                 enqueue(id, obs::Cancel{});
                 ++outcome.cancelled;
             }
@@ -869,6 +869,22 @@ Result<FallbackOutcome> AcquisitionCoordinator::openFallback(std::int64_t jobId)
     return outcome;
 }
 
+// listUnfinished() skips Failed jobs, so a Failed job whose automatic retry is
+// due is saved as the Pending run that the retry would have started (as the
+// reducer does when the retry fires); start(game) then resumes it.
+void AcquisitionCoordinator::park(Runtime& runtime) {
+    providers::AcquisitionContext& context = runtime.context;
+    if (context.job.state == AcquisitionState::Failed && context.retryAtMs > 0) {
+        context.retryAtMs = 0;
+        ++context.job.attempts;
+        context.job.state = AcquisitionState::Pending;
+        context.job.errorCode.clear();
+        context.job.errorMessage.clear();
+        context.job.updatedAt = std::max(context.clockMs, m_ctx.now());
+    }
+    persist(runtime, true);
+}
+
 CoordinatorUpdate AcquisitionCoordinator::closeSessionsForLaunch(const GameKey& game) {
     return run([&] {
         closeSession(game);
@@ -878,25 +894,30 @@ CoordinatorUpdate AcquisitionCoordinator::closeSessionsForLaunch(const GameKey& 
                 ++it;
                 continue;
             }
-            const bool parked =
-                !isTerminal(runtime.context.job.state) || runtime.context.retryAtMs > 0;
-            if (runtime.dirty || parked)
-                persist(runtime, true);
-            if (parked) {
-                it = m_jobs.erase(it);
-                m_changed = true;
-            } else {
+            if (!inProgress(runtime)) {
+                if (runtime.dirty)
+                    persist(runtime, true);
                 ++it;
+                continue;
             }
+            park(runtime);
+            it = m_jobs.erase(it);
+            m_changed = true;
         }
     });
 }
 
 void AcquisitionCoordinator::shutdown() {
     run([&] {
-        for (auto& [id, runtime] : m_jobs) {
-            if (runtime.dirty)
-                persist(runtime, true);
+        for (auto it = m_jobs.begin(); it != m_jobs.end();) {
+            if (it->second.context.retryAtMs > 0) {
+                park(it->second);
+                it = m_jobs.erase(it);
+                continue;
+            }
+            if (it->second.dirty)
+                persist(it->second, true);
+            ++it;
         }
         std::vector<GameKey> open;
         for (const auto& [game, session] : m_sessionState) {

@@ -174,9 +174,13 @@ public:
 
     // Before launching `game`: persists progress, closes its helper session
     // (Steam would otherwise consider the game already running) and parks its
-    // unfinished jobs; the next start(game) reconciles them with Steam.
+    // unfinished jobs; the next start(game) reconciles them with Steam. A
+    // failed job whose automatic retry is due is parked as the queued run the
+    // retry would have started.
     CoordinatorUpdate closeSessionsForLaunch(const GameKey& game);
-    // On application exit: persists progress and closes every session.
+    // On application exit: persists progress, saves failed jobs whose
+    // automatic retry is due as queued (start(game) resumes them after the
+    // restart) and closes every session.
     void shutdown();
 
     AcquisitionSnapshot snapshot(const GameKey& game) const;
@@ -228,6 +232,7 @@ private:
     void closeIdleSessions();
     void flushOutbox();
     void persist(Runtime& runtime, bool force);
+    void park(Runtime& runtime);
     void setProvider(const GameKey& game, ProviderStatus status, std::string message);
     Runtime* adopt(const AcquisitionJob& job, bool resume);
     void requestMetadata(const GameKey& game, const std::vector<std::string>& ids);
@@ -236,6 +241,8 @@ private:
     std::string appIdFor(const GameKey& game) const;
     std::string nameFor(const AcquisitionJob& job) const;
     bool busy(const Runtime& runtime) const noexcept;
+    // Unfinished, or Failed with an automatic retry due.
+    bool inProgress(const Runtime& runtime) const noexcept;
 
     const ServiceContext& m_ctx;
     GameService& m_games;

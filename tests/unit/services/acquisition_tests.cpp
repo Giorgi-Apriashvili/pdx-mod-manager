@@ -506,3 +506,37 @@ TEST_CASE("Launch preparation parks jobs and closes the helper session",
     r.settle();
     CHECK(r.job(kItem).state == AcquisitionState::Installed);
 }
+
+TEST_CASE("A failed job waiting for its automatic retry resumes after a launch or a restart",
+          "[services][acquisition]") {
+    Rig r;
+    r.steam.items[kItem].subscribeResult = 3; // NoConnection: retried automatically
+    r.acquire({workshopEntry(kItem, "Retry Example")});
+    r.steam.pump(r.c());
+    REQUIRE(r.job(kItem).state == AcquisitionState::Failed);
+    REQUIRE(r.c().hasActiveWork(kGame));
+    const int attempts = r.job(kItem).attempts;
+
+    SECTION("across a game launch") {
+        r.c().closeSessionsForLaunch(kGame);
+        CHECK(r.c().liveJobs(kGame).empty());
+    }
+    SECTION("across an application restart") {
+        r.c().shutdown();
+        r.restart();
+    }
+    // Saved as the queued run the retry would have started, so start(game)
+    // resumes it; the text no longer promises a retry that nothing schedules.
+    const AcquisitionJob parked = r.job(kItem);
+    CHECK(parked.state == AcquisitionState::Pending);
+    CHECK(parked.attempts == attempts + 1);
+    CHECK_THAT(parked.errorMessage, !ContainsSubstring("Retrying automatically"));
+    CHECK(r.snapshotJob(r.c().snapshot(kGame), kItem).stateText == "Waiting to resume");
+
+    r.steam.items[kItem].subscribeResult = 1;
+    r.c().start(kGame);
+    r.settle();
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    CHECK(r.job(kItem).id == parked.id);
+    CHECK(r.steam.sentIds<providers::SubscribeCommand>().size() == 2);
+}

@@ -296,7 +296,11 @@ are left out, because usable installed content wins over job state.
 While a helper session is open, Steam treats the game as running. Before a
 launch, `closeSessionsForLaunch(game)` therefore saves progress, closes the
 session and parks the game's unfinished jobs. The next `start(game)` reconciles
-them with Steam. `shutdown()` does the same for every game on exit.
+them with Steam. `start()` resumes only unfinished jobs, so a failed job whose
+automatic retry is due is parked as the queued run that the retry would have
+started (attempt counted, retry text cleared) instead of staying "failed" with
+a promise nothing keeps. `shutdown()` saves progress and parks those retries for
+every game on exit.
 
 ## Data flow: launch
 
