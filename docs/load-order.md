@@ -19,12 +19,15 @@ Code: `src/games/dlc_load_adapter.cpp` (`buildLaunchPlan`,
 | Playset order -> file | enabled entries in playset order, index 0 = array element 0 | same |
 | Disabled entries | not written (the launcher writes only enabled ones) | same |
 | Array order == launcher playset order | **Verified** read-only, 2026-10-29 (alphabetical playset, see below) | **Verified** read-only, 2026-10-29 (hand-made `custom` order, see below) |
-| Game reads every descriptor, enables the listed ones | **Verified** read-only (error.log) | Unverified |
-| File override precedence (which mod wins) | **Unverified**: Result: pending in-game verification | **Unverified** |
-| `LoadOrderInfo::verifiedInGame` | `false` | `false` |
+| Game reads every descriptor, enables the listed ones | **Verified** in-game, 2026-10-30: listed probes loaded, the unlisted one not | **Verified** in-game, 2026-10-30 (same) |
+| File override precedence (which mod wins) | **Verified** in-game, 2026-10-30 (4.5.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-10-30 (1.37.5): **the order of `enabled_mods` is ignored; the mod whose `name` sorts first wins** |
+| `LoadOrderInfo::verifiedInGame` | `true` | `true` |
 
-`LoadOrderInfo::summary` for both games: "dlc_load.json enabled_mods, index 0
-first; file override precedence: see docs/load-order.md".
+`LoadOrderInfo::summary`, Stellaris: "dlc_load.json enabled_mods, index 0
+first; when two enabled mods contain the same file, the one later in the list
+wins". EU4: "dlc_load.json enabled_mods lists the playset order, but EU4 does
+not use it for file overrides: when two enabled mods contain the same file,
+the mod whose name sorts first alphabetically wins". Evidence: [live validation](evidence/live-validation-2026-10-30.md).
 
 ## Mapping (both games)
 
@@ -124,10 +127,12 @@ assumed.
 Only run this with the user's explicit approval: it writes probe mods into
 the real user mod folder and starts the game.
 [`tools/probe-mods/probe_mods.py`](../tools/probe-mods/probe_mods.py) creates
-mods whose effect shows up in `logs/error.log`: every probe has a unique
-scripted-trigger file that proves it loaded, and a file at the same relative
-path in every probe (`common/scripted_triggers/pmm_probe_shared.txt`) whose
-error names the copy that won.
+mods whose effect shows up in `logs/error.log`: every probe has a unique file
+that proves it loaded, and a file at the same relative path in every probe
+(`events/pmm_probe_shared.txt`, and the same under
+`common/scripted_triggers`) whose error names the copy that won. Both games
+reported only the event files: unused scripted triggers are not checked at
+start-up (observed 2026-10-30).
 
 Stellaris (EU4 the same, with its own folder and a `supported_version` such
 as `v1.37.*`):
@@ -143,23 +148,49 @@ as `v1.37.*`):
 5. `python tools/probe-mods/probe_mods.py analyze "<Documents>/Paradox Interactive/Stellaris/logs/error.log" --enabled c a --disabled b`
    checks that c and a loaded, b did not, and which probe won the shared file
    (`last-enabled-wins` or `first-enabled-wins`).
-6. Repeat with the order **a, c**. The winner must swap, which also rules out
-   name-based sorting.
+6. Repeat with the order **a, c**. If the winner swaps, the list order
+   decides; if it does not (EU4), rename one probe (`name=` in both of its
+   descriptors) so the names sort the other way round and repeat, to tell
+   name order from file or path order.
 7. Restore the previous configuration (transaction restore), then
    `probe_mods.py remove ...`.
 8. Record the game version, OS, store and the JSON output here. Then set
    `verifiedInGame = true` and the observed rule in the game's traits
    (`loadOrderSummary`, `loadOrderEvidence`).
 
-Scope: the probe measures full-file override in `common/scripted_triggers`.
+The app's `--live-test` switch runs steps 3, 5 and 7 through the real
+Backend (`select`, `move`, `play`, `restore`; [app.md](app.md)).
+
+Scope: the probe measures full-file override of an event file.
 Other folders may merge per object; the community claims say exactly that,
 so do not generalise without probing those too.
 
 ### Stellaris
 
-Result: pending in-game verification.
+Result, 2026-10-30, Stellaris 4.5.2, Windows 11, Steam ([live validation](evidence/live-validation-2026-10-30.md)):
+
+| Run | Probe order in `enabled_mods` | Loaded | Shared file won by |
+| --- | --- | --- | --- |
+| 1 | c, a (b disabled) | a, c | a (`last-enabled-wins`) |
+| 2 | a, c (b disabled) | a, c | c (`last-enabled-wins`) |
+
+The playset order is the effective order: for the same file the later mod in
+`enabled_mods` wins.
 
 ### Europa Universalis IV
 
-Result: pending in-game verification. EU4 1.37.5.0 is installed on the
-development machine; the run needs the user's approval.
+Result, 2026-10-30, EU4 1.37.5.0, Windows 11, Steam ([live validation](evidence/live-validation-2026-10-30.md)):
+
+| Run | Probe order in `enabled_mods` | Probe names | Loaded | Shared file won by |
+| --- | --- | --- | --- | --- |
+| 1 | c, a (b disabled) | C, A | a, c | a |
+| 2 | a, c (b disabled) | A, C | a, c | a |
+| 3 | a, c (b disabled) | **Z**, C (probe a renamed) | a, c | c |
+
+EU4 honours which mods are enabled, but not their order: the mod whose `name`
+sorts first wins a shared file, whatever its position in `enabled_mods`. The
+official launcher writes the same file, so reordering a playset there has the
+same (lack of) effect. This application still writes the playset order (it
+is what the launcher writes, and share codes carry it) and states the rule in
+EU4's `LoadOrderInfo`. Untested: mods with `dependencies`, names that differ
+only in case or start with non-ASCII characters.

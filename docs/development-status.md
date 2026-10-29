@@ -1,18 +1,21 @@
 # Development status (handoff, 2026-10-30)
 
 Paradox Mod Manager 0.1.0 is feature-complete for the first release on
-Windows as far as it can be checked without touching real game data: every
-layer of [`spec.md`](../spec.md) section 8 exists, the desktop application
-runs against the real Stellaris and EU4 installations in read-only mode, and
-the Windows package works. What is missing is the **live** part of the
-acceptance procedure (Workshop download, launching, in-game order), which
-needs the user's explicit approval, and builds of the application on Linux
-and macOS.
+Windows: every layer of [`spec.md`](../spec.md) section 8 exists, the Windows
+package works, and on 2026-10-30 the live acceptance steps were run with the
+user's approval ([live validation](evidence/live-validation-2026-10-30.md)):
+direct launches of both games with probe mods, a real EU4 Workshop download,
+restart persistence and the failure cases, all passing. The run found one
+defect (a stale Play blocker, fixed) and one game fact the product must
+respect: **EU4 ignores the `enabled_mods` order for file overrides** (the mod
+whose name sorts first wins). What is missing: builds of the application on
+Linux and macOS, a Workshop acquisition for Stellaris, and the open items
+below.
 
 There is no command-line tool, and none is planned: the spec does not ask for
 one. Headless checks use the hidden verification switches of `pmm-app`
-(`--profile`, `--read-only`, `--self-test`, `--screenshot`; see
-[`app.md`](app.md#command-line)).
+(`--profile`, `--read-only`, `--self-test`, `--screenshot`, and
+`--live-test` for recorded live runs; see [`app.md`](app.md#command-line)).
 
 ## Done
 
@@ -34,12 +37,12 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
 
-## Test status (2026-10-30, branch `agent/integrate`)
+## Test status (2026-10-30, `main`)
 
 - Windows 11, MSVC 19.51, Qt 6.10.3, `debug` preset, fresh configure and clean
-  build: **0 warnings** at `/W4`, **424/424 tests pass** (`ctest --preset
+  build: **0 warnings** at `/W4`, **425/425 tests pass** (`ctest --preset
   debug`): core 50, sharing 54, persistence 69, platform 54, providers 61,
-  games 53, services 54, application 34.
+  games 53, services 54, application 35.
 - `scripts/check-format.sh` with clang-format 22.1.8: 225 files OK.
 - Hidden real-data tests, read-only: `pmm_games_tests "[.real]" -s` passes
   (187 assertions, both games).
@@ -55,19 +58,24 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 ## What remains
 
-### 1. Live validation (each step needs the user's explicit approval)
+### 1. Live validation: remaining pieces
 
-Steps of [`spec.md`](../spec.md) section 10 ("Manual end-to-end acceptance")
-not yet run, with the procedure in [`validation.md`](validation.md). Steps 1,
-2, 3 and 5 were run read-only on one machine with isolated profiles.
+Done on 2026-10-30 ([results](validation.md#6-results)): EU4 steps 1-6, 8,
+9; Stellaris steps 1-3, 5-7. Still open, each needing the user's approval:
 
-| Step | What | Touches |
-| --- | --- | --- |
-| 4 | Resolve an initially missing Workshop mod through the acquisition flow | Steam (download; a subscription only if no subscribed item can be used) |
-| 6 | Launch without the Paradox launcher and verify the enabled mods and their order in the game, with the probe mods | probe mods in `<user data>/mod`, `dlc_load.json` through the journaled transaction, starts the game |
-| 7 | Missing enabled content blocks Play; an unavailable disabled entry stays visible and does not change the configuration | as step 6 |
-| 8 | Restart with a pending download; playsets and job state persist | Steam |
-| 9 | Failed download, offline use, bad share code, configuration permission failure, process-start failure | Steam, file attributes, game executable permissions (reverted afterwards) |
+| What | Why open |
+| --- | --- |
+| Stellaris step 4 (a Workshop acquisition) | only one new subscription (EU4) was approved |
+| EU4 step 7 | run for Stellaris; same code path |
+| Steam's own offline mode | the Web API was made unreachable instead |
+| EU4 mods with `dependencies` and override precedence | not covered by the probes |
+
+**Product decision needed (EU4 order):** the app lets users reorder EU4
+playsets, but EU4 does not use that order for file overrides. The adapter's
+`LoadOrderInfo` now says so (`verifiedInGame = true`), but nothing in the UI
+shows it yet. Options: show the rule as a note above the mod list for games
+whose order is not effective; and/or warn when two enabled EU4 mods contain
+the same file. Not decided.
 
 ### 2. Other platforms
 
@@ -141,20 +149,17 @@ Packaging ([`packaging.md`](packaging.md)):
 
 ## Next steps (in order)
 
-1. Review and merge `agent/integrate` into `main`.
+1. Decide how the UI presents EU4's override rule (see above) and implement
+   it with tests.
 2. With the user's permission, push so CI runs once on Windows, Linux and
    macOS (first run of the application tests on Linux and macOS); fix what it
    finds.
 3. Implement the services and application items above (import options,
    helper exit wait, launch refresh), then the discard flow for unrecoverable
    transactions, each with tests.
-4. Ask the user for approval of the live steps, one at a time, in this order:
-   step 4 with an EU4 item the account is already subscribed to (a download
-   without a subscription change), step 6 with the probe mods for Stellaris,
-   then EU4, then steps 7, 8 and 9. Record every result in
-   [`validation.md`](validation.md) (results table, evidence under
-   `docs/evidence/`), then update [`support-matrix.md`](support-matrix.md) and
-   the README status table.
+4. With the user's approval, the remaining live pieces (table above). Record
+   results in [`validation.md`](validation.md) and
+   [`support-matrix.md`](support-matrix.md).
 5. Linux and macOS builds and validation as far as machines allow.
 6. Release checklist in [`../CHANGELOG.md`](../CHANGELOG.md) ("0.1.0 -
    planned").
@@ -167,7 +172,8 @@ Packaging ([`packaging.md`](packaging.md)):
   send subscribe or download requests, never change Steam subscriptions, never
   touch `launcher-v2.sqlite`.
 - Run `pmm-app` only with `--profile <scratch folder>` and `--read-only` or a
-  verification switch, which imply read-only and no Steam helper.
+  verification switch, which imply read-only and no Steam helper;
+  `--live-test` only for an approved live run.
 - Fixtures and evidence are sanitized (placeholder user names and paths).
 
 ## Facts established on the development machine

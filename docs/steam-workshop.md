@@ -14,7 +14,7 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Start a Steam API session in the game's app context from our own process (Windows, Stellaris) | **Experimentally verified** 2026-10-29 |
 | Read item state, install path, size and timestamp (`GetItemState`, `GetItemInstallInfo`) | **Experimentally verified** 2026-10-29 |
 | Read session facts (`BLoggedOn`, `BIsSubscribedApp`, subscribed count) | **Experimentally verified** 2026-10-29 |
-| Subscribe (`SubscribeItem` + call result 1313) and download (`DownloadItem`) | Implemented; tested only against the fake library; **unverified on a live account** |
+| Subscribe (`SubscribeItem` + call result 1313) and download (`DownloadItem`) | **Verified live** 2026-10-30 on Windows 11 for EU4 1.37.5: an item not subscribed before went subscribing → download requested → downloading → installed in about 3 s through the application; a job pending at quit resumed after a restart without a duplicate; an item of another game was rejected by the identity gate without contacting Steam ([evidence](evidence/live-validation-2026-10-30.md)). Stellaris unverified |
 | Acquisition state machine (retry, cancel, restart reconciliation, stall detection) | Implemented, unit tested (pure logic) |
 | Manual fallback (open Workshop page, then rescan) | Implemented. **Limited**: does not satisfy automatic download |
 | Web API metadata (names, sizes, wrong-game check) | Request builder and parser in `providers`; the app layer's `QtWorkshopMetadataHost` makes the call (tested against a local stub) |

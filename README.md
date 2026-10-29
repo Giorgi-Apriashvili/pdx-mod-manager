@@ -11,12 +11,15 @@ Linux and macOS. It needs no server, account or telemetry.
 
 > **Status: pre-release (0.1.0 in development).** The desktop application
 > (`pmm-app`), the EU4 and Stellaris adapters and every layer below them are
-> implemented and covered by 424 automated tests. Detection, mod inventory,
-> configuration generation and the share-code round trip were verified
-> read-only against real installations on Windows 11. Starting a game from
-> the application, the in-game load order and live Workshop downloads have
-> **not** been verified yet; see the [support matrix](docs/support-matrix.md)
-> and the [development status](docs/development-status.md).
+> implemented and covered by 425 automated tests. On Windows 11 with Steam,
+> both games were started directly by the application with the selected mods
+> (checked in the games' own logs), a missing EU4 Workshop mod was subscribed
+> and downloaded live, and the failure cases behaved as specified
+> ([live validation](docs/evidence/live-validation-2026-10-30.md)). **EU4
+> ignores the mod order for file overrides** (the mod whose name sorts first
+> wins); Stellaris follows it. Linux and macOS are unverified; see the
+> [support matrix](docs/support-matrix.md) and the
+> [development status](docs/development-status.md).
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -39,10 +42,10 @@ reason documented.
 | Application database: migrations, upgrade backups, playset undo history | Implemented | [Persistence](docs/persistence.md) |
 | Journaled game-config writes with backups, rollback and crash recovery | Implemented | [ADR 0005](docs/adr/0005-journaled-config-writes.md) |
 | Workshop helper: Steam session and item state in the game's app context | **Verified** read-only, 2026-10-29, Stellaris 4.5.2, Windows 11 | [Probe evidence](docs/evidence/steam-helper-probe.md) |
-| Workshop subscribe and download | Implemented, unverified | Tested only against a fake Steam API library |
+| Workshop subscribe and download | **Verified** 2026-10-30, EU4 1.37.5, Windows 11 (one item, live); Stellaris unverified | [Live validation](docs/evidence/live-validation-2026-10-30.md): pending job survives a restart; nothing is subscribed until the Web API confirms the item's game |
 | Manual Workshop fallback (open the item in Steam, then rescan) | Implemented, unverified | Limited: does not satisfy automatic download |
-| Direct launch bypassing the Paradox launcher | Implemented, **not yet verified** | No game has been started by the application yet |
-| In-game verification of loaded mods and order | Not yet performed | Procedure: [validation](docs/validation.md) |
+| Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, Windows 11 | No launcher process; EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration |
+| In-game verification of loaded mods and order | **Verified** 2026-10-30 with probe mods, both games | Stellaris: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
 | Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md); NSIS installer not built |
 | Linux | Core libraries, helper and unit tests build and pass (GCC 16, WSL); the application was not built | No Qt in that environment; CI builds everything |
 | macOS | Unverified | Not built yet; CI builds everything |

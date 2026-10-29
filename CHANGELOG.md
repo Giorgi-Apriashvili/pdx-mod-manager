@@ -13,6 +13,14 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Added
 
+- Live acceptance run on Windows 11 / Steam with the user's approval
+  ([evidence](docs/evidence/live-validation-2026-10-30.md)): direct launches
+  of Stellaris 4.5.2 and EU4 1.37.5 with probe mods, a real EU4 Workshop
+  subscription and download, restart persistence, and the failure cases.
+- `pmm-app --live-test <steps>` (hidden, requires `--profile`): the
+  self-test steps plus `play`, `play-fails`, `wait-ready`, `restore`,
+  `select`, `locate`, `blockers`, `jobs`, with timestamped job, launch and
+  notification transitions, for recorded acceptance runs.
 - Build system: target-based CMake with configure, build and test presets
   (`core-debug`, `core-sanitize`, `debug`, `release`, `ci`); dependencies
   pinned by URL and SHA-256 (nlohmann/json 3.12.0, zlib 1.3.1, SQLite 3.50.4,
@@ -86,6 +94,12 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Changed
 
+- EU4's `LoadOrderInfo` states the observed rule: the order of
+  `enabled_mods` does not decide file overrides, the mod whose name sorts
+  first wins. Stellaris: the later mod in the list wins. Both are now
+  `verifiedInGame`.
+- `tools/probe-mods` also writes event files: neither game reports unknown
+  triggers in scripted triggers that nothing uses.
 - Direct launches never pass `-enabletelemetry`, even when the game's launcher
   settings ask for it.
 - Workshop items that are registered with a game but have no content are
@@ -113,6 +127,10 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Fixed
 
+- Play's blockers could keep showing an acquisition job as queued after it
+  had ended (for example Unavailable) when the last update fell inside the
+  5 s launch-refresh throttle; a trailing refresh now follows every
+  throttled update.
 - Mod list edits made while an undo or redo was in flight could apply to the
   wrong rows; edits now carry the identities of their entries.
 - Replies superseded by later requests could leave the window on a stale

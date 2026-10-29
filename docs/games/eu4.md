@@ -8,8 +8,10 @@ Load order: [`../load-order.md`](../load-order.md).
 
 Status labels as in [`../feasibility.md`](../feasibility.md). The development
 machine runs Windows 11 with "EU4 v1.37.5.0 Inca (491d)" from Steam (build
-15918133). It was only read; the game was never started by this work.
-Evidence: [`../evidence/real-scan-2026-10-29.md`](../evidence/real-scan-2026-10-29.md).
+15918133). It was first only read
+([`../evidence/real-scan-2026-10-29.md`](../evidence/real-scan-2026-10-29.md));
+on 2026-10-30 it was launched by the application with probe mods, with the
+user's approval ([live validation](../evidence/live-validation-2026-10-30.md)).
 
 | Capability | Windows / Steam | Linux, macOS, other stores |
 | --- | --- | --- |
@@ -21,8 +23,9 @@ Evidence: [`../evidence/real-scan-2026-10-29.md`](../evidence/real-scan-2026-10-
 | Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** byte-identical to the launcher's output (computed, not written): 0 writes, 12 of 12 descriptors identical | Implemented, unverified |
 | Legacy zipped mods (`archive=`) | Implemented, fixture-tested; none on the machine | Implemented, unverified |
 | `supported_version` warnings (no wildcard rule) | **Verified** against the installed descriptors | Same code |
-| Direct launch (bypassing the launcher) | Implemented; not executed | Unverified |
-| Effective order / precedence in game | Pending probe run | Unverified |
+| Direct launch (bypassing the launcher) | **Verified** 2026-10-30: started directly with `-gdpr-compliant`, no launcher process, no restart through Steam | Unverified |
+| Workshop subscribe and download (helper in EU4's app context) | **Verified** 2026-10-30: one item subscribed, downloaded and verified through the app | Unverified |
+| Effective order / precedence in game | **Verified** 2026-10-30: enabled mods load, disabled do not; **the order of `enabled_mods` does not decide file overrides: the mod whose `name` sorts first wins** ([load order](../load-order.md#europa-universalis-iv)) | Unverified |
 
 Not supported: EU4 versions that predate the Paradox launcher v2 and listed
 mods in `settings.txt` (`last_mods`) instead of `dlc_load.json`. They are not
@@ -39,8 +42,11 @@ and the load-order evidence. Observed differences on v1.37.5.0:
 
 - **No `steam_appid.txt`** in the install folder (Stellaris has one). The
   launch plan's `SteamAppId`/`SteamGameId` environment is therefore required
-  for the Steam API; whether a direct start then runs without a relaunch
-  through Steam and the launcher is unverified.
+  for the Steam API. Observed 2026-10-30: a direct start kept running (same
+  process 20 s later) without restarting through Steam or the launcher.
+- **Playset order does not decide overrides** (observed 2026-10-30): EU4
+  picks the winner of a shared file by mod name; Stellaris uses the order of
+  `enabled_mods`.
 - **An empty `userdir.txt`** ships in the install folder (see User data).
 - **`exeArgs` asks for `-enabletelemetry`** (see Launch).
 - **Four-component versions**: `rawVersion` `v1.37.5.0`, descriptors with

@@ -21,8 +21,8 @@ was only read; the game was never started by this work. Latest read-only run:
 | Registered Workshop items whose content is missing | **Verified** with a replay of the real descriptors: not installed, read as missing | Same code | Same code | n/a |
 | Read current `dlc_load.json` | **Verified**: 17 of 17 resolved | Implemented, unverified | Implemented, unverified | Unverified |
 | Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** byte-identical to the launcher's output (computed, not written) | Implemented, unverified | Implemented, unverified | Unverified |
-| Direct launch (bypassing the launcher) | Implemented; not executed in this work | Implemented, unverified | Implemented, unverified | Unverified, no Steam environment |
-| Effective order / precedence in game | Pending probe run | Unverified | Unverified | Unverified |
+| Direct launch (bypassing the launcher) | **Verified** 2026-10-30: started directly with `-gdpr-compliant`, no launcher process ([live validation](../evidence/live-validation-2026-10-30.md)) | Implemented, unverified | Implemented, unverified | Unverified, no Steam environment |
+| Effective order / precedence in game | **Verified** 2026-10-30: enabled mods load, disabled do not; the later mod in `enabled_mods` wins a shared file ([load order](../load-order.md#stellaris)) | Unverified | Unverified | Unverified |
 | `supported_version` warnings incl. the Stellaris wildcard rule | **Verified** against `logs/error.log` | Same code | Same code | Same code |
 
 ## Installation discovery

@@ -55,6 +55,13 @@ Steam helper from starting while Steam downloads should stay untouched.
 - Python 3 for `tools/probe-mods/probe_mods.py` (observable probe mods,
   [ADR 0006](adr/0006-probe-mod-verification.md)) and
   `scripts/share-code.py` (independent share-code decoder).
+- Optional: `pmm-app --profile <dir> --live-test "<steps>"` drives the same
+  Backend calls as the buttons (`import`, `select`, `move`, `wait-ready`,
+  `play`, `play-fails`, `restore`, ...) and prints timestamped job, launch
+  and notification transitions, which makes a run reproducible and its log
+  usable as evidence ([app.md](app.md#hidden-verification-switches); the
+  2026-10-30 run used it, see
+  [live validation](evidence/live-validation-2026-10-30.md)).
 
 ### Choose test content
 
@@ -310,3 +317,5 @@ One row per game, OS and distribution combination (repeat rows for reruns).
 | Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (branch `agent/app`) | 2026-10-29 | 2, 3, 5 read-only, scripted variant (one machine, isolated profiles, playset from the game's configuration) | partial: 4, 6-9 not run | [app.md](app.md#hidden-verification-switches) |
 | Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (`66d91d4`) | 2026-10-30 | 1 read-only, without the probe mods ([real scan](evidence/real-scan-2026-10-29.md)); 2, 3, 5 read-only, scripted variant | partial: 4, 6-9 not run | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Europa Universalis IV | v1.37.5.0 (15918133) | Windows 11 23H2 | Steam | 0.1.0-dev (`66d91d4`) | 2026-10-30 | 1 read-only, without the probe mods ([real scan](evidence/real-scan-2026-10-29.md)); 2, 3, 5 read-only, scripted variant | partial: 4, 6-9 not run | [round trip](evidence/app-round-trip-2026-10-30.md) |
+| Europa Universalis IV | v1.37.5.0 (15918133) | Windows 11 23H2 | Steam | 0.1.0-dev (`91b973e`; failure cases `19e4705`) | 2026-10-30 | 1-6, 8, 9 live with probe mods (one machine, isolated profiles A and B; `--live-test`) | pass; step 6 shows that EU4 ignores the `enabled_mods` order for file overrides (name order decides); step 7 run for Stellaris only | [live validation](evidence/live-validation-2026-10-30.md) |
+| Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (`19e4705`) | 2026-10-30 | 1-3, 5-7 live with probe mods (`--live-test`) | partial: 4 not run (no Stellaris subscription approved), 8-9 run for EU4 only; step 7 found a stale Play blocker, fixed in `19e4705` and rerun | [live validation](evidence/live-validation-2026-10-30.md) |
