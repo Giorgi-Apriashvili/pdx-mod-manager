@@ -42,8 +42,42 @@ std::string pathLabel(const std::string& path) {
     return path.empty() ? std::string("manifest") : path;
 }
 
+Status checkSchemaVersion(std::int64_t version) {
+    if (version == kManifestSchemaVersion)
+        return {};
+    if (version > kManifestSchemaVersion)
+        return makeError(ErrorCode::UnsupportedVersion,
+                         "schemaVersion: this share code uses playset schema version " +
+                             std::to_string(version) +
+                             ", which was created by a newer version of Paradox Mod Manager. "
+                             "Update the app to import it.");
+    return makeError(ErrorCode::UnsupportedVersion,
+                     "schemaVersion: playset schema version " + std::to_string(version) +
+                         " is not supported (expected " + std::to_string(kManifestSchemaVersion) +
+                         ").");
+}
+
+// An integer schemaVersion value; unsigned values beyond int64 are clamped
+// (they are newer than any schema either way).
+std::optional<std::int64_t> schemaVersionValue(const Json& value) {
+    if (!value.is_number_integer())
+        return std::nullopt;
+    if (value.is_number_unsigned()) {
+        const auto v = value.get<std::uint64_t>();
+        constexpr auto kMax = std::numeric_limits<std::int64_t>::max();
+        return v > static_cast<std::uint64_t>(kMax) ? kMax : static_cast<std::int64_t>(v);
+    }
+    return value.get<std::int64_t>();
+}
+
 // SAX consumer that builds an ordered DOM while rejecting what nlohmann's own
 // DOM parser would silently accept: duplicate keys (last one wins there).
+//
+// The structural limits (entries, depth, keys) fire before readManifest()
+// sees schemaVersion, yet a newer schema may relax them (protocol section
+// 7.2). So the root schemaVersion takes precedence over a limit error: if it
+// was already parsed it decides at once; otherwise the rest of the (at most
+// 8 MiB) text is scanned for it without building anything.
 class StrictDomBuilder {
 public:
     using number_integer_t = Json::number_integer_t;
@@ -52,14 +86,12 @@ public:
     using string_t = Json::string_t;
     using binary_t = Json::binary_t;
 
-    bool null() { return insert(Json(nullptr)) != nullptr; }
-    bool boolean(bool value) { return insert(Json(value)) != nullptr; }
-    bool number_integer(number_integer_t value) { return insert(Json(value)) != nullptr; }
-    bool number_unsigned(number_unsigned_t value) { return insert(Json(value)) != nullptr; }
-    bool number_float(number_float_t value, const string_t&) {
-        return insert(Json(value)) != nullptr;
-    }
-    bool string(string_t& value) { return insert(Json(std::move(value))) != nullptr; }
+    bool null() { return scalar(Json(nullptr)); }
+    bool boolean(bool value) { return scalar(Json(value)); }
+    bool number_integer(number_integer_t value) { return scalar(Json(value)); }
+    bool number_unsigned(number_unsigned_t value) { return scalar(Json(value)); }
+    bool number_float(number_float_t value, const string_t&) { return scalar(Json(value)); }
+    bool string(string_t& value) { return scalar(Json(std::move(value))); }
     bool binary(binary_t&) {
         return fail(makeError(ErrorCode::ParseError, "The share code content is not JSON."));
     }
@@ -70,11 +102,16 @@ public:
     bool end_array() { return pop(); }
 
     bool key(string_t& name) {
+        if (m_scanning) {
+            m_versionPending = m_scanDepth == 1 && name == "schemaVersion";
+            return true;
+        }
         Frame& frame = m_stack.back();
         if (frame.value->contains(name))
             return fail(invalid(pathLabel(frame.path), "duplicate key " + quotedSnippet(name)));
+        m_versionPending = m_stack.size() == 1 && name == "schemaVersion";
         if (frame.value->size() >= kMaxKeysPerObject)
-            return fail(invalid(pathLabel(frame.path), "too many keys"));
+            return exceeded(invalid(pathLabel(frame.path), "too many keys"), m_stack.size());
         frame.pendingKey = std::move(name);
         return true;
     }
@@ -101,6 +138,39 @@ private:
         return false;
     }
 
+    // A structural limit was hit; `depth` counts the containers open after the
+    // offending event. Returns whether the parser should continue (scanning).
+    bool exceeded(Error error, std::size_t depth) {
+        fail(std::move(error));
+        if (m_versionSeen)
+            return decide();
+        m_scanning = true;
+        m_scanDepth = depth;
+        return true;
+    }
+
+    // Ends the parse after a limit error: a root schemaVersion other than this
+    // one is the actionable error, as it would be in readManifest().
+    bool decide() {
+        if (m_schemaVersion && *m_schemaVersion != kManifestSchemaVersion) {
+            Error unsupported = checkSchemaVersion(*m_schemaVersion).error();
+            unsupported.detail = "also exceeds this version's limits: " + m_error->message;
+            m_error = std::move(unsupported);
+        }
+        return false;
+    }
+
+    // Called with every value; only the one following a root "schemaVersion"
+    // key is recorded. The first occurrence counts: a duplicate is rejected
+    // anyway, or comes after the decision has been made.
+    void noteValue(const Json& value) {
+        if (!m_versionPending)
+            return;
+        m_versionPending = false;
+        m_versionSeen = true;
+        m_schemaVersion = schemaVersionValue(value);
+    }
+
     std::string childPath() const {
         if (m_stack.empty())
             return {};
@@ -112,8 +182,21 @@ private:
         return frame.path + "[" + std::to_string(frame.value->size()) + "]";
     }
 
+    // Arrays hold at most kMaxEntries elements; objects are capped in key().
+    bool hasRoom() const {
+        if (m_stack.empty())
+            return true;
+        const Json& container = *m_stack.back().value;
+        return container.is_object() || container.size() < kMaxEntries;
+    }
+
+    Error tooManyEntries() const {
+        return makeError(ErrorCode::LimitExceeded, pathLabel(m_stack.back().path) + ": more than " +
+                                                       std::to_string(kMaxEntries) + " entries");
+    }
+
     // Pointers into parent containers stay valid: only the innermost open
-    // container is ever modified.
+    // container is ever modified. Callers check hasRoom() first.
     Json* insert(Json&& value) {
         if (m_stack.empty()) {
             m_root = std::move(value);
@@ -125,35 +208,57 @@ private:
             slot = std::move(value);
             return &slot;
         }
-        if (container.size() >= kMaxEntries) {
-            fail(makeError(ErrorCode::LimitExceeded, pathLabel(m_stack.back().path) +
-                                                         ": more than " +
-                                                         std::to_string(kMaxEntries) + " entries"));
-            return nullptr;
-        }
         container.push_back(std::move(value));
         return &container.back();
     }
 
+    bool scalar(Json&& value) {
+        noteValue(value);
+        if (m_scanning)
+            return m_versionSeen ? decide() : true;
+        if (!hasRoom())
+            return exceeded(tooManyEntries(), m_stack.size());
+        insert(std::move(value));
+        return true;
+    }
+
     bool push(Json&& container) {
+        noteValue(container);
+        if (m_scanning) {
+            if (m_versionSeen)
+                return decide();
+            ++m_scanDepth;
+            return true;
+        }
         if (m_stack.size() >= kMaxDepth)
-            return fail(invalid(pathLabel(childPath()), "nesting is too deep"));
+            return exceeded(invalid(pathLabel(childPath()), "nesting is too deep"),
+                            m_stack.size() + 1);
+        if (!hasRoom())
+            return exceeded(tooManyEntries(), m_stack.size() + 1);
         std::string path = childPath();
         Json* inserted = insert(std::move(container));
-        if (!inserted)
-            return false;
         m_stack.push_back(Frame{inserted, std::move(path), {}});
         return true;
     }
 
     bool pop() {
-        m_stack.pop_back();
+        if (m_scanning)
+            --m_scanDepth;
+        else
+            m_stack.pop_back();
         return true;
     }
 
     Json m_root;
     std::vector<Frame> m_stack;
     std::optional<Error> m_error;
+
+    // Root schemaVersion tracking, see the class comment.
+    bool m_versionPending = false; // the next value belongs to a root "schemaVersion"
+    bool m_versionSeen = false;
+    std::optional<std::int64_t> m_schemaVersion; // empty if seen but not an integer
+    bool m_scanning = false;                     // limit hit, nothing is built any more
+    std::size_t m_scanDepth = 0;
 };
 
 bool isLowerHex(std::string_view text) noexcept {
@@ -241,21 +346,6 @@ Status checkEntry(const GameKey& game, std::size_t index, const ManifestEntry& e
     return {};
 }
 
-Status checkSchemaVersion(std::int64_t version) {
-    if (version == kManifestSchemaVersion)
-        return {};
-    if (version > kManifestSchemaVersion)
-        return makeError(ErrorCode::UnsupportedVersion,
-                         "schemaVersion: this share code uses playset schema version " +
-                             std::to_string(version) +
-                             ", which was created by a newer version of Paradox Mod Manager. "
-                             "Update the app to import it.");
-    return makeError(ErrorCode::UnsupportedVersion,
-                     "schemaVersion: playset schema version " + std::to_string(version) +
-                         " is not supported (expected " + std::to_string(kManifestSchemaVersion) +
-                         ").");
-}
-
 Status checkKnownKeys(const Json& object, const std::string& path,
                       std::span<const std::string_view> allowed) {
     for (auto it = object.begin(); it != object.end(); ++it) {
@@ -322,17 +412,10 @@ Result<Manifest> readManifest(const Json& root) {
     const auto version = root.find("schemaVersion");
     if (version == root.end())
         return invalid("schemaVersion", "required field is missing");
-    if (!version->is_number_integer())
+    const auto versionValue = schemaVersionValue(*version);
+    if (!versionValue)
         return invalid("schemaVersion", "must be an integer");
-    if (version->is_number_unsigned()) {
-        const auto v = version->get<std::uint64_t>();
-        PMM_TRY(checkSchemaVersion(
-            v > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
-                ? std::numeric_limits<std::int64_t>::max()
-                : static_cast<std::int64_t>(v)));
-    } else {
-        PMM_TRY(checkSchemaVersion(version->get<std::int64_t>()));
-    }
+    PMM_TRY(checkSchemaVersion(*versionValue));
     manifest.schemaVersion = kManifestSchemaVersion;
 
     PMM_TRY(readString(root, "game", "game", true, manifest.game));
