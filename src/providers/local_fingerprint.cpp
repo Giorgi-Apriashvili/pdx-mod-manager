@@ -1,9 +1,11 @@
 #include "providers/local_fingerprint.hpp"
 
 #include "core/sha256.hpp"
+#include "providers/internal/path_text.hpp"
 
 #include <algorithm>
 #include <fstream>
+#include <optional>
 #include <system_error>
 #include <vector>
 
@@ -11,11 +13,7 @@ namespace pmm::providers {
 namespace {
 
 namespace fs = std::filesystem;
-
-std::string utf8(const fs::path& p, bool generic) {
-    const auto u8 = generic ? p.generic_u8string() : p.u8string();
-    return std::string(u8.begin(), u8.end());
-}
+using internal::displayPath;
 
 bool equalsAsciiNoCase(std::string_view a, std::string_view b) noexcept {
     if (a.size() != b.size())
@@ -50,7 +48,7 @@ Error cancelledError() {
 Error fsError(const std::error_code& ec, std::string_view what, const fs::path& path) {
     const ErrorCode code =
         ec == std::errc::permission_denied ? ErrorCode::PermissionDenied : ErrorCode::IoError;
-    return makeError(code, std::string(what), utf8(path, false) + ": " + ec.message());
+    return makeError(code, std::string(what), displayPath(path) + ": " + ec.message());
 }
 
 struct FileEntry {
@@ -82,11 +80,11 @@ Result<std::string> fingerprintDirectory(const fs::path& root, const Fingerprint
     std::error_code ec;
     const auto rootStatus = fs::status(base, ec);
     if (ec || !fs::exists(rootStatus)) {
-        return makeError(ErrorCode::NotFound, "The mod folder does not exist.", utf8(root, false));
+        return makeError(ErrorCode::NotFound, "The mod folder does not exist.", displayPath(root));
     }
     if (!fs::is_directory(rootStatus)) {
         return makeError(ErrorCode::InvalidArgument, "The mod location is not a folder.",
-                         utf8(root, false));
+                         displayPath(root));
     }
 
     std::vector<FileEntry> files;
@@ -103,14 +101,23 @@ Result<std::string> fingerprintDirectory(const fs::path& root, const Fingerprint
         std::error_code typeEc;
         if (entry.is_directory(typeEc)) {
             // Symlinked directories report true here but are never recursed into.
-            if (isJunkDirectoryName(utf8(entry.path().filename(), true)))
+            if (isJunkDirectoryName(displayPath(entry.path().filename())))
                 it.disable_recursion_pending();
             continue;
         }
         if (!entry.is_regular_file(typeEc))
             continue; // sockets, broken symlinks, ...
-        std::string key = utf8(entry.path().lexically_relative(base), true);
-        if (isFingerprintJunk(key))
+        std::optional<std::string> key =
+            internal::pathToUtf8(entry.path().lexically_relative(base), true);
+        if (!key) {
+            // Keys are UTF-8 by definition; a Windows name with an unpaired
+            // surrogate has no such form.
+            return makeError(ErrorCode::InvalidArgument,
+                             "A file in the mod folder has a name that is not valid Unicode, so "
+                             "the mod cannot be fingerprinted. Rename the file, then rescan.",
+                             displayPath(entry.path()));
+        }
+        if (isFingerprintJunk(*key))
             continue;
         const std::uintmax_t size = entry.file_size(typeEc);
         if (typeEc)
@@ -126,7 +133,7 @@ Result<std::string> fingerprintDirectory(const fs::path& root, const Fingerprint
                              "The mod folder contains too many files to fingerprint.",
                              "limit " + std::to_string(options.maxFiles) + " files");
         }
-        files.push_back(FileEntry{std::move(key), entry.path()});
+        files.push_back(FileEntry{std::move(*key), entry.path()});
     }
     if (ec)
         return fsError(ec, "Cannot list the mod folder.", base);
@@ -142,7 +149,7 @@ Result<std::string> fingerprintDirectory(const fs::path& root, const Fingerprint
         std::ifstream in(file.path, std::ios::binary);
         if (!in) {
             return makeError(ErrorCode::IoError, "Cannot open a file in the mod folder.",
-                             utf8(file.path, false));
+                             displayPath(file.path));
         }
         Sha256 inner;
         std::uint64_t size = 0;
@@ -158,7 +165,7 @@ Result<std::string> fingerprintDirectory(const fs::path& root, const Fingerprint
         }
         if (in.bad()) {
             return makeError(ErrorCode::IoError, "Cannot read a file in the mod folder.",
-                             utf8(file.path, false));
+                             displayPath(file.path));
         }
         outer.update(file.key);
         outer.update(std::string_view("\0", 1));

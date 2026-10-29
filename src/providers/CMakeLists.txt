@@ -4,6 +4,7 @@ add_library(pmm_providers STATIC
   acquisition.cpp
   fallback.cpp
   helper_protocol.cpp
+  internal/path_text.cpp
   local_fingerprint.cpp
   web_metadata.cpp
   workshop_item.cpp)
