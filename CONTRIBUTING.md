@@ -16,10 +16,14 @@ prerequisites and commands are in the [README](README.md); the structure is in
    scripts/check-format.sh
    ```
 
-   and, if you touched `src/app` or `ui/`, the `debug` preset with Qt.
+   and, if you touched `src/app` or `ui/`, the `debug` preset with Qt
+   (`ctest --preset debug` includes the application tests, among them the
+   check that QML shows data as plain text) and, after colour changes,
+   `python3 ui/dev/check_contrast.py`.
 4. Open a pull request against `main`. CI must pass: build and tests on
    Windows (MSVC), Linux (GCC) and macOS (AppleClang) with warnings as
-   errors, ASan + UBSan on the Qt-free libraries, and the format check.
+   errors, including the application tests, ASan + UBSan on the Qt-free
+   libraries, the format check and the contrast check.
 5. Update documentation in the same pull request: the changelog entry under
    *Unreleased*, an ADR for a material trade-off, the support matrix only with
    evidence.
