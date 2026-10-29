@@ -10,9 +10,10 @@
 // GameState::scanError, never as a failure of the whole refresh.
 //
 // The inventory cache lets the application show the last known state at
-// start-up (cachedStates()) before the first rescan finishes. Local-mod
-// fingerprints are carried over from the cache when a mod's content path and
-// modification time are unchanged, so they are only computed once.
+// start-up (cachedStates()) before the first rescan finishes. A rescan drops
+// cached local-mod fingerprints: editing a file inside a mod folder does not
+// change the folder's modification time, so nothing cheap proves that a cached
+// fingerprint still matches. ShareService::exportCode() recomputes them.
 
 #include "core/model.hpp"
 #include "core/result.hpp"

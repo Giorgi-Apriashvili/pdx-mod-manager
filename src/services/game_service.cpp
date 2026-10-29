@@ -10,7 +10,6 @@
 #include "platform/fs.hpp"
 #include "services/internal/util.hpp"
 
-#include <map>
 #include <set>
 #include <utility>
 
@@ -42,25 +41,6 @@ std::vector<InstalledMod> normalizeInventory(const GameKey& game, std::vector<In
     }
     detail::sortInventory(out);
     return out;
-}
-
-// Keeps fingerprints computed earlier when the content looks unchanged.
-void carryOverFingerprints(std::vector<InstalledMod>& fresh,
-                           const std::vector<InstalledMod>& cached) {
-    std::map<ModIdentity, const InstalledMod*> byIdentity;
-    for (const InstalledMod& mod : cached)
-        byIdentity.emplace(mod.identity, &mod);
-    for (InstalledMod& mod : fresh) {
-        if (!mod.fingerprint.empty())
-            continue;
-        const auto it = byIdentity.find(mod.identity);
-        if (it == byIdentity.end())
-            continue;
-        const InstalledMod& old = *it->second;
-        if (!old.fingerprint.empty() && old.contentPath == mod.contentPath &&
-            old.contentUpdatedAt != 0 && old.contentUpdatedAt == mod.contentUpdatedAt)
-            mod.fingerprint = old.fingerprint;
-    }
 }
 
 Error withContext(const Error& error, const std::string& prefix) {
@@ -162,8 +142,9 @@ Result<GameState> GameService::scanInto(GameState state, const games::GameAdapte
                    {{"game", state.key}, {"error", scanned.error().message}});
         return state;
     }
+    // Cached local-mod fingerprints are not carried over: editing a file
+    // inside a mod folder leaves the folder's modification time unchanged.
     std::vector<InstalledMod> mods = normalizeInventory(state.key, std::move(scanned).value());
-    carryOverFingerprints(mods, cached.value());
     PMM_TRY(inventory.replaceForGame(state.key, mods));
     state.inventory = std::move(mods);
     logInfo(kComponent, "mods scanned",

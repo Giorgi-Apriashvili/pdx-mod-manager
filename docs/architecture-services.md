@@ -115,8 +115,11 @@ obscurely.
   inventory, and a manual folder that became invalid is reported rather than
   silently replaced.
 - `rescanMods(key)` rescans the stored installation without rediscovery (used
-  after a Workshop item is installed). Local-mod fingerprints carry over while
-  a mod's content path and modification time stay the same.
+  after a Workshop item is installed). A rescan drops cached local-mod
+  fingerprints: editing a file inside a mod folder, or anywhere in its
+  subfolders, leaves the folder's own modification time unchanged on NTFS,
+  ext4 and APFS, so nothing cheap proves that a cached fingerprint still
+  matches.
 - `setManualLocation` / `clearManualLocation`. Nothing is stored when the
   adapter rejects the folders.
 - `cachedStates()` / `cachedInventory()`: the last known state, read from the
@@ -159,10 +162,13 @@ database rows.
 ### ShareService (`share_service.hpp`)
 
 - `exportCode(playsetId)`: every entry, disabled ones included, in exact order.
-  Installed entries carry their descriptor name and version as hints, and local
-  mods carry a content fingerprint. The fingerprint is computed once with the
-  injected function and cached in the inventory. `gameVersionHint` is the
-  installed game version. Hints are trimmed to what the manifest accepts.
+  Installed entries carry their descriptor name and version as hints, and
+  installed local mods carry a content fingerprint. The fingerprint is
+  recomputed with the injected function on every export (exports are rare and
+  `fingerprintDirectory()` enforces size and file-count limits) and cached in
+  the inventory for readiness comparisons until the next rescan. When it cannot
+  be computed, the entry carries none. `gameVersionHint` is the installed game
+  version. Hints are trimmed to what the manifest accepts.
   Identities, order and enabled flags are copied verbatim.
 - `previewImport(text)`: decodes, validates and builds the `ImportPlan` against
   the cached inventory of the manifest's game. It is read-only: no database

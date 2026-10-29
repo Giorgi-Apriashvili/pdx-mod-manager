@@ -4,11 +4,13 @@
 //
 // Export: every entry of the playset, disabled ones included, in exact order.
 // Installed entries carry their installed descriptor name and version as
-// hints, local mods a content fingerprint (computed once with the injected
-// fingerprint function and cached in the inventory), and the code carries the
-// installed game version as gameVersionHint. Hints are display text only and
-// are sanitised to what the manifest accepts; identities, order and enabled
-// flags are copied verbatim.
+// hints, installed local mods a content fingerprint (recomputed with the
+// injected fingerprint function on every export, because a folder's
+// modification time does not reveal edits inside it, and cached in the
+// inventory for readiness comparisons until the next rescan), and the code
+// carries the installed game version as gameVersionHint. Hints are display
+// text only and are sanitised to what the manifest accepts; identities, order
+// and enabled flags are copied verbatim.
 //
 // Import is two steps:
 //   previewImport()  decodes and validates the complete code and reconciles it

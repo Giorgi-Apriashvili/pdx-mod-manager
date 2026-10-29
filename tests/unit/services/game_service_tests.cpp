@@ -158,7 +158,7 @@ TEST_CASE("Manual locations are validated, stored, re-inspected and clearable",
     CHECK(cleared.inventory.size() == 4);
 }
 
-TEST_CASE("Local fingerprints are carried over by rescans while content is unchanged",
+TEST_CASE("Rescans drop cached local fingerprints that the folder's time cannot vouch for",
           "[services][games]") {
     World w;
     w.installFixtureMods();
@@ -171,12 +171,16 @@ TEST_CASE("Local fingerprints are carried over by rescans while content is uncha
     persistence::InventoryRepository inventory(*w.db);
     requireOk(inventory.replaceForGame(kGame, mods));
 
-    const GameState again = require(games.refreshGame(kGame));
+    // The folder looks unchanged, but a file inside it may have been edited.
+    const GameState again = require(games.rescanMods(kGame));
     const auto local =
         std::find_if(again.inventory.begin(), again.inventory.end(),
                      [](const InstalledMod& m) { return m.identity.source == source::Local; });
     REQUIRE(local != again.inventory.end());
-    CHECK(local->fingerprint == "sha256:" + std::string(64, 'b'));
+    CHECK(local->fingerprint.empty());
+    const auto stored = require(inventory.find(local->identity));
+    REQUIRE(stored);
+    CHECK(stored->fingerprint.empty());
 }
 
 TEST_CASE("The game's current configuration becomes a new active playset", "[services][games]") {

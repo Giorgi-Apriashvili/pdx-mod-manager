@@ -120,7 +120,7 @@ Result<std::string> ShareService::exportCode(std::int64_t playsetId) {
     for (std::size_t i = 0; i < mods.size(); ++i)
         byIdentity.emplace(mods[i].identity, i);
 
-    bool fingerprintsAdded = false;
+    bool fingerprintsChanged = false;
     for (PlaysetEntry& entry : exported.entries) {
         entry.identity.game = game;
         const auto found = byIdentity.find(entry.identity);
@@ -133,21 +133,26 @@ Result<std::string> ShareService::exportCode(std::int64_t playsetId) {
                     fitHint(mod.descriptor.version, sharing::kMaxVersionHintBytes);
                 !version.empty())
                 entry.versionHint = std::move(version);
-            if (entry.identity.source == source::Local) {
-                if (mod.fingerprint.empty() && m_ctx.fingerprint && !mod.contentPath.empty()) {
-                    auto fingerprint = m_ctx.fingerprint(mod.contentPath);
-                    if (fingerprint && isFingerprint(fingerprint.value())) {
-                        mod.fingerprint = std::move(fingerprint).value();
-                        fingerprintsAdded = true;
-                    } else {
-                        const std::string why = fingerprint ? std::string("malformed fingerprint")
-                                                            : fingerprint.error().message;
-                        logWarning(kComponent, "local mod fingerprint unavailable",
-                                   {{"mod", toString(mod.identity)}, {"error", why}});
-                    }
+            if (entry.identity.source == source::Local && m_ctx.fingerprint &&
+                !mod.contentPath.empty()) {
+                // Always recomputed: a cached value cannot be trusted, because
+                // editing a file inside the mod folder leaves the folder's
+                // modification time unchanged.
+                std::string current;
+                auto fingerprint = m_ctx.fingerprint(mod.contentPath);
+                if (fingerprint && isFingerprint(fingerprint.value())) {
+                    current = std::move(fingerprint).value();
+                } else {
+                    const std::string why = fingerprint ? std::string("malformed fingerprint")
+                                                        : fingerprint.error().message;
+                    logWarning(kComponent, "local mod fingerprint unavailable",
+                               {{"mod", toString(mod.identity)}, {"error", why}});
                 }
-                if (!mod.fingerprint.empty())
-                    entry.fingerprint = mod.fingerprint;
+                if (current != mod.fingerprint) {
+                    mod.fingerprint = current;
+                    fingerprintsChanged = true;
+                }
+                entry.fingerprint = std::move(current);
             }
         }
         entry.nameHint = fitHint(entry.nameHint, sharing::kMaxNameHintBytes);
@@ -155,8 +160,8 @@ Result<std::string> ShareService::exportCode(std::int64_t playsetId) {
         if (!isFingerprint(entry.fingerprint))
             entry.fingerprint.clear();
     }
-    if (fingerprintsAdded) {
-        // Cache for the next export and for readiness comparisons; failing to
+    if (fingerprintsChanged) {
+        // Cached for readiness comparisons until the next rescan; failing to
         // cache does not affect the code.
         if (Status cached = inventory.replaceForGame(game, mods); !cached)
             logWarning(kComponent, "caching fingerprints failed",
