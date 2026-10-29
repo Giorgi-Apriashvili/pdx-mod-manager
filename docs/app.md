@@ -14,9 +14,10 @@ user interface in `ui/` ([`ui-contract.md`](ui-contract.md)).
 | `pmm_appgui` | `src/app/gui` | Gui, Qml | `Backend` and the models and controllers of the UI contract |
 | `pmm-app` | `src/app/gui/main.cpp` | Quick, QuickControls2 | start-up, command line, fatal error window, verification switches (`verification.cpp`) |
 
-`pmm_appcore` has no GUI dependency, so a command-line front end can reuse
-`AppRuntime` and `ServiceRunner` as they are. `pmm-app` is written to
-`<build>/bin`, next to `pmm-steam-helper`, as in the packages.
+`pmm_appcore` has no GUI dependency; tests use `AppRuntime` and
+`ServiceRunner` without a window. `pmm-app` is the only front end (there is no
+command-line tool; the verification switches below cover headless use). It is
+written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
 
 ## Processes and threads
 
@@ -197,11 +198,23 @@ cmp a.json b.json   # identical identities, order and enabled flags
 ```
 
 On 2026-10-29 this produced identical dumps: 17 entries, 1 disabled, Workshop
-and local mods, non-default order.
+and local mods, non-default order. On 2026-10-30 the same round trip
+(`config,disable:1,move:0:3,...`) gave identical dumps for Stellaris (17
+entries) and EU4 (9 entries)
+([evidence](evidence/app-round-trip-2026-10-30.md)).
 
 The screenshots in `docs/screenshots/app-*.png` were taken with
 `--screenshot` against Stellaris 4.5.2 and EU4 1.37.5 on Windows 11, with
-temporary profiles. The Play area therefore shows the read-only blocker.
+temporary profiles; they were refreshed on 2026-10-30 after the accessibility
+changes. The Play area therefore shows the read-only blocker. The Stellaris
+profile was prepared with `--self-test
+"config,disable:2,move:0:5,move:16:1,export:code.txt"`; the main and dark
+captures use `--select-row 2` (a Workshop mod, so the details show no
+personal path), the filtered one `--filter disabled --select-row 0`, the
+import preview a new profile with `--open import:code.txt`, and the EU4 one a
+new profile with `--self-test config --select-row 0`. The list only shows its
+focus ring when the window is the active window during the capture; repeat a
+capture that shows the grey inactive selection.
 
 | File | State |
 | --- | --- |
@@ -265,6 +278,10 @@ platform:
 - the real QML module against the real Backend, without QML warnings, with a
   playset and a mod named like rich text with a remote image: nothing tries
   to load it;
+- the keyboard paths of [`accessibility.md`](accessibility.md) with real key
+  events against the real Backend: Tab order across the columns, F6,
+  Alt/Ctrl+Up/Down with undo, Esc on dialogs and the context menu with focus
+  return;
 - a source check of `ui/` (`ui_text_tests.cpp`): every text element whose
   text is not a fixed literal uses `textFormat: Text.PlainText`;
 - the QML engine's network access refusing everything but local resources;

@@ -5,10 +5,10 @@ the application start with an actionable explanation; technical details (OS
 error text, file paths, Steam result codes) are kept separately and appear in
 the diagnostics.
 
-Some features referenced here belong to the desktop application, which is in
-progress (see the [support matrix](support-matrix.md)); their behaviour follows
-the design in [`ui-contract.md`](ui-contract.md) and
-[`steam-workshop.md`](steam-workshop.md).
+Behaviour that has not yet been observed with a real game (launching, live
+Workshop downloads) follows the design in [`ui-contract.md`](ui-contract.md),
+[`app.md`](app.md) and [`steam-workshop.md`](steam-workshop.md); the
+[support matrix](support-matrix.md) says what has been verified.
 
 ## Logs and diagnostics
 
@@ -17,10 +17,13 @@ the design in [`ui-contract.md`](ui-contract.md) and
 | Log files | `%LOCALAPPDATA%\ParadoxModManager\logs\` | `~/.local/state/ParadoxModManager/logs/` (or `$XDG_STATE_HOME/...`) | `~/Library/Logs/ParadoxModManager/` |
 | Database | `%APPDATA%\ParadoxModManager\state.sqlite` | `~/.local/share/ParadoxModManager/state.sqlite` (or `$XDG_DATA_HOME/...`) | `~/Library/Application Support/ParadoxModManager/state.sqlite` |
 | Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` | `~/.cache/ParadoxModManager/` | `~/Library/Caches/ParadoxModManager/` |
+| Configuration journals and backups | `%APPDATA%\ParadoxModManager\transactions\` | `~/.local/share/ParadoxModManager/transactions/` | `~/Library/Application Support/ParadoxModManager/transactions/` |
 | Game files the manager writes on Play | `Documents\Paradox Interactive\<Game>\dlc_load.json`, `...\mod\*.mod` | `~/.local/share/Paradox Interactive/<Game>/...` | `~/Documents/Paradox Interactive/<Game>/...` |
 
-When started with an isolated profile directory (planned `--profile <dir>`
-option), all application files live inside that directory instead.
+When started with an isolated profile (`pmm-app --profile <dir>`), all
+application files live inside `<dir>` instead. **Settings → About** shows the
+folders of the running profile and opens the logs folder. `--verbose` adds
+debug-level records to the log.
 
 **Copy diagnostics** in the application produces a report for bug reports. It is
 passed through the redaction rules: your home folder becomes `~`, your user
@@ -116,14 +119,33 @@ started. Common causes:
 ## Interrupted launch: recovering configuration changes
 
 If the manager or the computer stopped while game configuration was being
-written, the next start detects the interrupted transaction and offers
-**Recover**. Recovery restores the files saved before the change (verified
-against their recorded SHA-256) and deletes files that the interrupted launch
-had created. Recover before launching that game again.
+written, the next start shows a notice and offers **Recover** next to Play.
+Recovery restores the files saved before the change (verified against their
+recorded SHA-256) and deletes files that the interrupted launch had created.
+An interrupted change blocks launching only the game it belongs to; for other
+games it is listed as a warning next to Play. Recover before launching that
+game again.
 
-Transactions are journaled in the application data folder; each contains
-`journal.json` and backup copies of the original files. Do not edit or delete
-them by hand while an interrupted transaction is pending.
+Transactions are journaled in the application data folder (`transactions/`,
+see the table above); each `<id>` folder contains `journal.json` and backup
+copies of the original files. Do not edit them by hand.
+
+### Recover reports a missing or damaged backup
+
+"The backup of ... is missing or unreadable" or "... is damaged, so nothing
+was restored" means the change cannot be undone automatically: nothing was
+changed by the attempt, and the transaction keeps blocking launches of that
+game. The application has no action yet to discard such a record (planned).
+Until then:
+
+1. Close the manager.
+2. Check the files named in the message in the game's user-data folder, for
+   example `dlc_load.json`. If in doubt, let the Paradox launcher write the
+   game's configuration again by starting the game once through it, then
+   close the game and the launcher.
+3. Move the transaction's `<id>` folder out of `transactions/` (keep it until
+   you are sure you do not need its backups; do not delete files inside it).
+4. Start the manager: the game is no longer blocked.
 
 ## Restoring the pre-launch configuration and using the official launcher
 
@@ -183,6 +205,25 @@ pre-launch configuration** if you do not want to keep it.
 Play is blocked while the game or a conflicting configuration writer (such as
 the Paradox launcher) runs, so neither overwrites the other. Close it (check
 the task manager / `ps`) and press Play again.
+
+## "Already running for this profile"
+
+Only one copy of the manager can use a profile at a time, because the
+configuration journal, the download jobs and the Steam helper sessions belong
+to that one process. A second start waits up to 2 seconds for the profile and
+then shows this message. Switch to the window that is already open (it may be
+minimised or on another desktop), or close it first. A lock left behind by a
+crashed manager is detected and taken over automatically. To run two copies
+side by side, give the second one its own profile (`--profile <dir>`).
+
+## "Automatic downloads are unavailable" or Play is disabled in read-only mode
+
+`--no-steam` turns Workshop downloads off for the session: missing mods stay
+listed as missing, nothing is subscribed or downloaded, and an import queues
+no downloads. `--read-only` does the same and also never writes game files
+or launches a game; Play then shows "Read-only verification mode". Start the
+manager without these options to download or play; imported entries that are
+still missing can then be fetched with **Download missing**.
 
 ## The database was created by a newer version
 

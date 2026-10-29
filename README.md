@@ -9,36 +9,43 @@ without the Paradox launcher.
 The first release targets **Stellaris** and **Europa Universalis IV** on Windows,
 Linux and macOS. It needs no server, account or telemetry.
 
-> **Status: pre-release (0.1.0 in development).** The core libraries below are
-> implemented and covered by automated tests. The Qt desktop application
-> (`pmm-app`), the command-line tool (`pmm-cli`), the EU4 and Stellaris game
-> adapters and the application services are being implemented. No end-to-end
-> validation has been recorded yet; see the [support matrix](docs/support-matrix.md).
+> **Status: pre-release (0.1.0 in development).** The desktop application
+> (`pmm-app`), the EU4 and Stellaris adapters and every layer below them are
+> implemented and covered by 424 automated tests. Detection, mod inventory,
+> configuration generation and the share-code round trip were verified
+> read-only against real installations on Windows 11. Starting a game from
+> the application, the in-game load order and live Workshop downloads have
+> **not** been verified yet; see the [support matrix](docs/support-matrix.md)
+> and the [development status](docs/development-status.md).
+
+![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
 ## Feature status
 
 Status labels follow [`docs/feasibility.md`](docs/feasibility.md): **verified**
 means observed on a real installation with recorded evidence; **implemented**
 means code and automated tests exist but the behaviour has not been observed
-against the real game or store; **in progress** means not available yet;
-**unsupported** means not available, with the reason documented.
+against the real game or store; **unsupported** means not available, with the
+reason documented.
 
 | Capability | Status | Notes |
 | --- | --- | --- |
+| Desktop application (Qt Quick): games, playsets, search and filters, drag-and-drop and keyboard reordering, undo, import and export, downloads, Play with its blockers | Implemented; run read-only against the real games on Windows 11 | [Application](docs/app.md), [UI contract](docs/ui-contract.md) |
+| Accessibility: keyboard navigation, visible focus, accessible names, WCAG AA contrast, high-DPI | Implemented; checked with UI Automation and at scale factors 1.5 and 2 | [Accessibility](docs/accessibility.md); no screen-reader listening test yet |
+| Stellaris and EU4: installation and user-data detection, mod inventory, current configuration, launch plan (executable, arguments, environment, configuration writes) | **Verified** read-only, 2026-10-29, Stellaris 4.5.2 and EU4 1.37.5, Steam, Windows 11 | [Real-data evidence](docs/evidence/real-scan-2026-10-29.md); registered Workshop items without content show as Missing |
 | Share codes: `PMM1` encoding, strict validation, size limits, frozen regression fixtures | Implemented | [Protocol](docs/share-code-protocol.md), versioned independently (protocol 1, schema 1) |
-| Playset editing, filtering rules, launch readiness, dependency checks, import planning | Implemented | `src/core` |
+| Share-code round trip between two clean profiles (identities, order, enabled flags) | **Verified** read-only, 2026-10-29 and 2026-10-30, both games, Windows 11 | [Round-trip evidence](docs/evidence/app-round-trip-2026-10-30.md) |
+| Playset editing, filtering rules, launch readiness, dependency checks, import planning | Implemented | `src/core`, `src/services` |
 | Application database: migrations, upgrade backups, playset undo history | Implemented | [Persistence](docs/persistence.md) |
-| Steam root, library, app manifest and Workshop manifest discovery | Implemented | Parsers tested against sanitized copies of real Steam files |
-| Journaled game-config writes with backups, rollback and crash recovery | Implemented | `src/platform/file_transaction.hpp` |
+| Journaled game-config writes with backups, rollback and crash recovery | Implemented | [ADR 0005](docs/adr/0005-journaled-config-writes.md) |
 | Workshop helper: Steam session and item state in the game's app context | **Verified** read-only, 2026-10-29, Stellaris 4.5.2, Windows 11 | [Probe evidence](docs/evidence/steam-helper-probe.md) |
 | Workshop subscribe and download | Implemented, unverified | Tested only against a fake Steam API library |
 | Manual Workshop fallback (open the item in Steam, then rescan) | Implemented, unverified | Limited: does not satisfy automatic download |
-| Stellaris adapter: detection, mod inventory, launch configuration | In progress | Game files and `dlc_load.json` format observed read-only on Windows |
-| Europa Universalis IV adapter | In progress, entirely unverified | Installation (1.37.5.0) inspected read-only; no EU4 capability has been exercised yet |
-| Desktop application (Qt Quick) and `pmm-cli` | In progress | [UI contract](docs/ui-contract.md) |
-| Direct launch bypassing the Paradox launcher | In progress, unverified | |
+| Direct launch bypassing the Paradox launcher | Implemented, **not yet verified** | No game has been started by the application yet |
 | In-game verification of loaded mods and order | Not yet performed | Procedure: [validation](docs/validation.md) |
-| Linux and macOS | Unverified | Code paths written; not yet built or run on those systems |
+| Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md); NSIS installer not built |
+| Linux | Core libraries, helper and unit tests build and pass (GCC 16, WSL); the application was not built | No Qt in that environment; CI builds everything |
+| macOS | Unverified | Not built yet; CI builds everything |
 | Hearts of Iron IV, Crusader Kings III, Victoria 3 | Unsupported | Known to the catalog only; their share codes are rejected as "not supported by this version" |
 
 ## Prerequisites
@@ -55,7 +62,7 @@ All platforms:
   Quick Controls 2, Network, Concurrent (all part of the default Qt desktop
   installation). The `core-debug` and `core-sanitize` presets need no Qt.
 - Python 3 only for [`tools/probe-mods`](tools/probe-mods/probe_mods.py) and
-  the helper scripts in `scripts/`.
+  the helper scripts in `scripts/` and `ui/dev/`.
 
 Install Qt with the [online installer](https://www.qt.io/download-qt-installer-oss)
 or with [aqtinstall](https://github.com/miurahr/aqtinstall):
@@ -84,8 +91,8 @@ stops with "cl ... was not found in the PATH".
 
 | OS | Compiler | Tested | Additional packages |
 | --- | --- | --- | --- |
-| Windows 10/11 x64 | MSVC with the "Desktop development with C++" workload | MSVC 19.51 (Visual Studio 2026) | Ninja (bundled with Visual Studio's CMake component, or `winget install Ninja-build.Ninja`) |
-| Linux | GCC 13 or newer | Not yet (CI) | Ubuntu 24.04: `sudo apt install build-essential cmake ninja-build libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libfontconfig1` |
+| Windows 10/11 x64 | MSVC with the "Desktop development with C++" workload | MSVC 19.51 (Visual Studio 2026), all presets | Ninja (bundled with Visual Studio's CMake component, or `winget install Ninja-build.Ninja`) |
+| Linux | GCC 13 or newer | GCC 16.2 (Arch Linux in WSL), `core-debug` and `core-sanitize` only; CI uses GCC 13 | Ubuntu 24.04: `sudo apt install build-essential cmake ninja-build libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libfontconfig1` |
 | macOS | AppleClang 15 or newer (Xcode command line tools) | Not yet (CI) | `brew install cmake ninja` |
 
 ## Build and test
@@ -97,7 +104,7 @@ Configure, build and test presets share the same names
 | --- | --- | --- |
 | `core-debug` | Libraries, Steam helper and unit tests, Debug | No |
 | `core-sanitize` | Same with AddressSanitizer + UBSan and warnings as errors (Linux/macOS) | No |
-| `debug` | Everything including the desktop application, Debug | Yes |
+| `debug` | Everything including the desktop application and its tests, Debug | Yes |
 | `release` | Everything, RelWithDebInfo | Yes |
 | `ci` | Everything, RelWithDebInfo, warnings as errors | Yes |
 
@@ -116,8 +123,12 @@ With the application (Qt):
 export QT_ROOT_DIR=~/Qt/6.10.3/gcc_64             # PowerShell: $env:QT_ROOT_DIR = "C:/Qt/6.10.3/msvc2022_64"
 cmake --preset debug
 cmake --build --preset debug
-ctest --preset debug
+ctest --preset debug                              # 424 tests on Windows, 34 of them pmm_app_tests
 ```
+
+The application tests (`-L pmm_app_tests`) run on Qt's offscreen platform;
+the test properties set `QT_QPA_PLATFORM=offscreen` and, on Windows, put Qt's
+`bin` folder on `PATH`.
 
 On Windows the compiler must be on `PATH`. Either open a *Developer PowerShell
 for VS* / *x64 Native Tools Command Prompt*, or, in Git Bash, import the
@@ -131,16 +142,38 @@ Formatting and static analysis: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Running
 
-The desktop application target `pmm-app` and the command-line tool `pmm-cli`
-are in progress. Once they land, build them with
-`cmake --build --preset debug --target pmm-app` (or `pmm-cli`) and start them
-from the build tree. `pmm-steam-helper` is started by the application on
-demand; it is not meant to be run by hand except for diagnostics
-([Troubleshooting](docs/troubleshooting.md)).
+From the build tree: `pmm-app` is written to `build/<preset>/bin/`, next to
+`pmm-steam-helper`. On Windows, Qt's DLLs must be on `PATH`:
+
+```sh
+export PATH="/c/Qt/6.10.3/msvc2022_64/bin:$PATH"   # PowerShell: $env:PATH = "C:\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
+build/debug/bin/pmm-app.exe                         # normal profile
+build/debug/bin/pmm-app.exe --profile "<empty folder>" --read-only
+```
+
+From a package: extract the Windows ZIP and run `bin\pmm-app.exe` (keep the
+path of the folder that contains `bin\` below about 170 characters); on Linux
+extract the `.tar.gz` and run `bin/pmm-app`; on macOS open the `.dmg` and
+start `pmm-app.app`. Only the Windows package has been verified
+([packaging](docs/packaging.md)).
+
+Options: `--profile <dir>` keeps every application file (database, journal,
+logs, cache) in `<dir>`; `--game <key>` selects `stellaris` or `eu4`;
+`--no-steam` never starts the Steam helper; `--read-only` never writes game
+files or launches a game; `--verbose` writes debug logs. One instance runs per
+profile. Hidden verification switches (`--self-test`, `--screenshot`) drive
+the real application without input for headless checks and imply
+`--read-only` ([application](docs/app.md#command-line)).
+
+`pmm-steam-helper` is started by the application on demand; it is not meant
+to be run by hand except for diagnostics
+([troubleshooting](docs/troubleshooting.md)).
 
 Real game data is only read during scans. Configuration is written only when
 you press **Play**, through a journaled transaction with backups
-([ADR 0005](docs/adr/0005-journaled-config-writes.md)).
+([ADR 0005](docs/adr/0005-journaled-config-writes.md)). Keyboard use, the
+shortcut list (F1) and the accessibility checks are described in
+[`docs/accessibility.md`](docs/accessibility.md).
 
 ## Packaging
 
@@ -152,48 +185,57 @@ cpack --config build/release/CPackConfig.cmake -B dist
 
 This produces `ParadoxModManager-<version>-<os>-<arch>` packages: ZIP (plus an
 NSIS installer when `makensis` is available) on Windows, a `.dmg` on macOS and
-a `.tar.gz` on Linux. Qt deployment, code signing and LGPL compliance are
-described in [`docs/packaging.md`](docs/packaging.md).
+a `.tar.gz` on Linux. On Windows run it from an x64 Visual Studio developer
+environment. Qt deployment, package contents, code signing and LGPL
+compliance are described in [`docs/packaging.md`](docs/packaging.md); the
+Windows ZIP was verified on 2026-10-29
+([evidence](docs/evidence/packaging-2026-10-29.md)).
 
 ## Project layout
 
 ```text
 CMakeLists.txt, CMakePresets.json   build entry points
 cmake/            warnings, pinned dependencies, packaging
-src/core/         domain model, playset logic, readiness, import planning, logging
+src/core/         domain model, playset logic, readiness, import planning, UTF-8, logging
 src/platform/     OS paths, filesystem, processes, Steam discovery, file transactions
 src/sharing/      share-code protocol (manifest, codec, envelope)
 src/persistence/  SQLite database, migrations, repositories
 src/providers/    Workshop helper protocol, acquisition state machine, metadata, fingerprints
-src/games/        game adapter interface (EU4 and Stellaris adapters in progress)
-src/app/          Qt application layer (in progress)
-ui/               QML module (in progress)
+src/games/        game adapters: Stellaris and EU4
+src/services/     Qt-free use cases: games, playsets, sharing, acquisition, launch
+src/app/          Qt application (pmm-app): runtime, services worker, Backend and models
+ui/               QML module Pmm.Ui (presentation only) and its preview tools
 tools/steam-helper/  pmm-steam-helper (loads the game's own Steam API library)
 tools/probe-mods/    observable probe mods for in-game load-order checks
-tests/            Catch2 unit tests and fixtures
-docs/             architecture, decisions, protocol, support matrix, validation
-packaging/        license texts, macOS entitlements, Linux desktop entry
+tests/            unit tests and fixtures (tests/unit), application tests (tests/app)
+docs/             architecture, decisions, protocol, support matrix, validation, evidence
+packaging/        license texts, macOS entitlements, Linux desktop entry,
+                  Windows version resource and Qt deployment prune script
 scripts/          developer scripts (formatting, MSVC environment, share-code tool)
 ```
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) and [decision records](docs/adr/README.md)
+- [Development status and next steps](docs/development-status.md)
+- [Architecture](docs/architecture.md), [application services](docs/architecture-services.md) and [decision records](docs/adr/README.md)
+- [Desktop application](docs/app.md), [UI contract](docs/ui-contract.md) and [accessibility](docs/accessibility.md)
 - [Support matrix](docs/support-matrix.md) and [feasibility record](docs/feasibility.md)
+- Game adapters: [Stellaris](docs/games/stellaris.md), [Europa Universalis IV](docs/games/eu4.md), [load order](docs/load-order.md)
 - [Share-code protocol](docs/share-code-protocol.md)
-- [Steam Workshop acquisition](docs/steam-workshop.md) and [probe evidence](docs/evidence/steam-helper-probe.md)
+- [Steam Workshop acquisition](docs/steam-workshop.md)
 - [Persistence](docs/persistence.md)
-- [UI contract](docs/ui-contract.md)
 - [Manual validation procedure](docs/validation.md)
 - [Packaging](docs/packaging.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- Evidence: [Steam helper probe](docs/evidence/steam-helper-probe.md), [real EU4 and Stellaris data](docs/evidence/real-scan-2026-10-29.md), [Windows package](docs/evidence/packaging-2026-10-29.md), [application round trip](docs/evidence/app-round-trip-2026-10-30.md)
 - [Changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md), [third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Troubleshooting
 
 Common problems (Steam not running, private or deleted Workshop items,
-configuration permission errors, interrupted launches, a database from a newer
-version) and the locations of logs and diagnostics are covered in
+configuration permission errors, interrupted launches, a profile that is
+already in use, a database from a newer version) and the locations of logs
+and diagnostics are covered in
 [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ## License

@@ -39,6 +39,40 @@ change what codes look like or which codes are accepted say so explicitly.
 - `pmm-steam-helper`, which loads the game's own Steam API library at run time
   (no Steamworks SDK files); read-only probe verified with Stellaris 4.5.2 on
   Windows 11.
+- Europa Universalis IV and Stellaris adapters on a shared `dlc_load.json`
+  implementation: installation and user-data discovery (including
+  `userdir.txt`), descriptors, `supported_version` warnings, the current
+  configuration, generated `dlc_load.json` and Workshop descriptors, and launch
+  plans. Verified read-only against Stellaris 4.5.2 and EU4 1.37.5 on
+  Windows 11 (`docs/evidence/real-scan-2026-10-29.md`); hidden real-data tests
+  `pmm_games_tests "[.real]"`.
+- Qt-free application services (`src/services`): game discovery and scans,
+  playset editing with undo, export and import with exact reconciliation, the
+  acquisition coordinator (one helper session per game, Workshop identity gate
+  through the Web API, at most one job per mod, retries parked across launches
+  and restarts), the launch check, direct launch through one journaled
+  configuration transaction, recovery and restore, redacted diagnostics.
+- Desktop application `pmm-app` (`src/app`, QML module `Pmm.Ui` in `ui/`): the
+  three-column window of the UI contract, one services worker thread, Steam
+  helper host (`QProcess`), Web API host, settings and window state, start-up
+  notices and a fatal error window. Options `--profile`, `--game`,
+  `--no-steam`, `--read-only`, `--verbose`; hidden verification switches
+  `--self-test` and `--screenshot` for headless checks. One instance per
+  profile (lock file in the data folder).
+- Accessibility: complete keyboard operation (Tab order across the columns,
+  F6, shortcuts, an F1 shortcut list, keyboard context menu, Alt/Ctrl+Up/Down
+  reordering), 2 px focus rings, accessible names, descriptions and
+  announcements, WCAG 2.x AA contrast in both themes (`ui/dev/check_contrast.py`),
+  checks at scale factors 1.5 and 2; see `docs/accessibility.md`.
+- Application tests (`tests/app`): models, the services worker, Backend flows
+  in a temporary profile, a 2,000-entry performance budget, the real QML module
+  against the real Backend, keyboard paths with real key events, a source
+  check that data is shown as plain text, the Steam helper host with the fake
+  Steam API library and the Web API host against a local stub.
+- Windows packaging: only the Qt files the application loads, the C++
+  runtime app-local, version resources and release link options for both
+  executables (`packaging/windows/`); the ZIP was verified from an extracted
+  copy (`docs/evidence/packaging-2026-10-29.md`).
 - Observable probe mods (`tools/probe-mods`) for in-game load-order checks.
 - Feasibility record: how the Paradox launcher hands mods to Stellaris,
   Workshop acquisition constraints and alternatives, and read-only
@@ -46,19 +80,77 @@ change what codes look like or which codes are accepted say so explicitly.
 - Repository infrastructure: README, contributing guide, architecture
   description, decision records, support matrix, manual validation procedure,
   troubleshooting guide, third-party notices, CI for Windows, Linux and macOS
-  with sanitizers and a format check, CPack packaging, and an independent
-  share-code tool (`scripts/share-code.py`).
+  (with the application tests), sanitizers, a clang-format 22 check and a
+  contrast check, CPack packaging, and an independent share-code tool
+  (`scripts/share-code.py`).
+
+### Changed
+
+- Direct launches never pass `-enabletelemetry`, even when the game's launcher
+  settings ask for it.
+- Workshop items that are registered with a game but have no content are
+  treated as not installed: playset entries show them as Missing and can
+  acquire them (before: Broken, not acquired).
+- Mods whose content or descriptor path has no UTF-8 form stay in the
+  inventory as Broken, with the name to rename, instead of failing the scan.
+- UTF-8 handling is one implementation in `core/utf8`. Invalid text is
+  repaired with one U+FFFD per ill-formed sequence (before: one per byte), so
+  descriptor text and configuration-change labels with broken UTF-8 can read
+  slightly differently. Share codes are not affected.
+- Proposed playset names (imports, copies, de-duplication) stay within the
+  256-byte limit, cut on a character boundary before the suffix.
+- An interrupted configuration change blocks launching only its own game;
+  those of other games are warnings.
+- A launch closes the game's Steam helper session only once the launch plan
+  is valid, and resumes the parked downloads when no game was started.
+- Imports with Workshop downloads off (`--no-steam`, `--read-only`) queue no
+  downloads; missing entries wait for **Download missing**.
+- Read-only sessions run the full launch check except the folder write
+  probes, so they report the same blockers as a normal session.
+- Share codes: a code from a newer schema version is reported as "created by
+  a newer version" even when it also exceeds a version 1 structural limit.
+  Which codes are accepted is unchanged.
+
+### Fixed
+
+- Mod list edits made while an undo or redo was in flight could apply to the
+  wrong rows; edits now carry the identities of their entries.
+- Replies superseded by later requests could leave the window on a stale
+  playset; reloads follow the stored active playset.
+- Undo and the launch verdict now stay current while edits are being saved;
+  the outcome of a launch is shown even after switching games.
+- Workshop subscriptions are held until the Web API confirms the item, and a
+  mod never has two acquisition jobs at once.
+- Local-mod fingerprints are recomputed on every export.
+- Path conversions in persistence and providers no longer throw on Windows
+  names with unpaired surrogates; transaction targets without an exact UTF-8
+  path are refused; playset provider ids that are not valid UTF-8 are
+  rejected.
+- Launch plans never overwrite another mod's descriptor, require descriptors
+  directly in `mod/`, do not rewrite a `dlc_load.json` that only differs in
+  layout, and match `mod/` prefixes case-insensitively.
+- Nested `PMM_TRY` expansions no longer shadow each other (GCC `-Wshadow`).
+
+### Security
+
+- The user interface shows every piece of data (playset and mod names, tags,
+  paths, messages) as plain text, so a crafted share code or descriptor can no
+  longer make the window load a remote image. The QML engine's network access
+  refuses every URL except local resources.
 
 ## [0.1.0] - planned
 
 First release. It will be tagged only when the following are done; until then
 the entries above stay under Unreleased.
 
-- Qt Quick desktop application (`pmm-app`) and command-line tool (`pmm-cli`).
-- Europa Universalis IV and Stellaris adapters: discovery, mod inventory,
-  load-order translation, direct launch without the Paradox launcher.
-- Import workflow with Workshop acquisition and visible recovery states.
-- Packages for Windows, Linux and macOS.
-- The manual acceptance procedure in [`docs/validation.md`](docs/validation.md)
-  executed and recorded, with the support matrix updated from the evidence.
-  Combinations that could not be tested stay marked as unverified.
+- The live steps of the manual acceptance procedure in
+  [`docs/validation.md`](docs/validation.md) (Workshop download, direct launch
+  without the Paradox launcher, in-game order, blocking and failure cases)
+  executed and recorded for EU4 and Stellaris, with the support matrix updated
+  from the evidence. Combinations that could not be tested stay marked as
+  unverified.
+- CI passing on Windows, Linux and macOS.
+- Packages for Windows, Linux and macOS built by CI and checked against
+  [`docs/packaging.md`](docs/packaging.md).
+- The open launch-related items in
+  [`docs/development-status.md`](docs/development-status.md) resolved.

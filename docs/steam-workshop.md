@@ -19,8 +19,9 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Manual fallback (open Workshop page, then rescan) | Implemented. **Limited**: does not satisfy automatic download |
 | Web API metadata (names, sizes, wrong-game check) | Request builder and parser in `providers`; the app layer's `QtWorkshopMetadataHost` makes the call (tested against a local stub) |
 | Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
-| Linux / macOS helper | Written for both, **not compiled or run** (no machines available) |
-| Europa Universalis IV | Same mechanism expected (the game ships `steam_api64.dll`); **unverified** because EU4 is not installed here |
+| Linux helper | Compiled with GCC 16.2 (Arch Linux in WSL, 2026-10-30); the end-to-end tests against the fake library pass, also under ASan + UBSan. **Not run against a real Steam client** |
+| macOS helper | Written, **not compiled or run** (no Mac available) |
+| Europa Universalis IV | Same mechanism expected (the game ships `steam_api64.dll`). EU4 1.37.5 is installed on the development machine, but the helper has **not been run** for it yet |
 
 ## 1. Architecture
 
@@ -412,8 +413,9 @@ Not legal advice. These points need review before release.
   `com.apple.security.cs.disable-library-validation` entitlement to load a library signed by
   another team. Callback structs use 4-byte packing (12-byte subscribe result) on both Linux and
   macOS.
-- POSIX branches (`dlopen`, `dup2`, `posix_spawn` in tests) compile only on those systems. They
-  were reviewed but not built here. CI on Linux and macOS must build `pmm-steam-helper` and run
+- POSIX branches (`dlopen`, `dup2`, `posix_spawn` in tests) compile only on those systems. On
+  Linux they were built and tested with GCC 16.2 in WSL (no real Steam client there); macOS has
+  not been built. CI on Linux and macOS builds `pmm-steam-helper` and runs
   `pmm_providers_tests`, which include the end-to-end helper tests against the fake library.
 
 ## 11. Not verified yet, and how to verify it
@@ -429,6 +431,7 @@ Not legal advice. These points need review before release.
    does.
 2. Behaviour with the game running at the same time, in Steam offline mode, and with Steam not
    running (the `ready` failure path against the real client).
-3. EU4 (app 236850) on a machine where it is installed.
-4. Linux and macOS: compile, run the unit and end-to-end tests, then repeat the read-only probe
-   with the native library.
+3. EU4 (app 236850): repeat the read-only probe (`ping`, `state`) on the development machine,
+   where it is installed, with the user's approval.
+4. Linux and macOS: compile and run the unit and end-to-end tests on macOS (Linux done in WSL),
+   then repeat the read-only probe with the native library on machines with the games.

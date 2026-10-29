@@ -3,9 +3,10 @@
 `src/services/` (library `pmm_services`, namespace `pmm::services`) is the
 Qt-free layer that turns the lower modules into the application's use cases:
 discover games, edit playsets, export and import share codes, acquire missing
-Workshop mods and launch a game. The Qt application (`src/app`) and a future
-CLI call these services. The application turns their results into the QML
-objects described in [`ui-contract.md`](ui-contract.md).
+Workshop mods and launch a game. The Qt application (`src/app`,
+[`app.md`](app.md)) calls these services from one worker thread and turns
+their results into the QML objects described in
+[`ui-contract.md`](ui-contract.md).
 
 ```text
   src/app (Qt: models, controllers, QProcess, QNetworkAccessManager)
@@ -24,7 +25,7 @@ value or a `pmm::Result` error with an actionable message.
 ## Dependency injection
 
 Every service receives a `ServiceContext` (`service_context.hpp`), built by the
-composition root (the Qt application, the CLI, or a test):
+composition root (the Qt application or a test):
 
 | Field | Production value | Purpose |
 | --- | --- | --- |
@@ -230,7 +231,11 @@ It never unsubscribes or deletes anything.
     app's read-only verification mode does so that it reports every other
     blocker without writing into game folders);
   - no game instance and no Paradox launcher is running;
-  - no interrupted configuration transaction is waiting for recovery.
+  - no interrupted configuration transaction of this game is waiting for
+    recovery (one with its launch label or a target in its user-data folder).
+    Interrupted transactions of other games are warnings that name their
+    game; `LaunchCheck::interruptedTransaction` still offers Recover, and
+    `interruptedBlocks` says whether one of them blocks.
 - `launch()`: see the launch flow below.
 - Recovery functions: `interruptedTransactions()`, `recoverInterrupted(txid)`,
   `lastRestorableTransaction(game)` and `restoreTransaction(txid)` (the user's
@@ -341,17 +346,19 @@ every game on exit.
  launch(game, playset)
    check() again                       -> blockers: Error (ConflictingProcess,
                                           Interrupted or ValidationFailed); nothing written
-   coordinator.closeSessionsForLaunch(game)
    adapter.buildLaunchPlan(installation, enabled InstalledMods in playset order)
    validate plan (absolute existing executable, absolute config targets)
+       failure -> Error recorded; helper sessions and jobs untouched
+   coordinator.closeSessionsForLaunch(game)   (parked update returned in LaunchOutcome)
    FileTransactionManager::apply("launch <game> playset <id> (<name>)", configWrites)
        journal, durable backups, atomic replace, rollback on failure
-       failure -> Error, game not started, previous configuration unchanged
-                  (or, if even the rollback failed, recovery offered)
+       failure -> Error, game not started, parked jobs resumed, previous configuration
+                  unchanged (or, if even the rollback failed, recovery offered)
    startProcess(ProcessSpec{plan.executable, plan.workingDirectory,
                             plan.arguments (argv vector), plan.environment})
        failure -> FileTransactionManager::restore(txid): previous configuration back,
-                  ProcessStartFailed with diagnostics (executable, folder, argv, env, OS error)
+                  parked jobs resumed, ProcessStartFailed with diagnostics
+                  (executable, folder, argv, env, OS error)
    LaunchHistoryRepository::record(outcome, pid, transaction id)
    prune old finished transactions (keep 20)
 ```
@@ -359,9 +366,16 @@ every game on exit.
 The configuration written for a launch stays in effect until the next launch or
 until the user restores it with `restoreTransaction()`. The official launcher
 overwrites it the next time it is used. After a crash, a transaction left
-"prepared" or "applying" blocks launching until `recoverInterrupted()` puts the
-backed-up files back. The application should offer this on start-up when
-`interruptedTransactions()` is not empty.
+"prepared" or "applying" blocks launching its game until
+`recoverInterrupted()` puts the backed-up files back. The application shows a
+notice on start-up and offers Recover next to Play when
+`interruptedTransactions()` is not empty. A transaction whose backups are
+missing or damaged cannot be recovered and keeps blocking its game; a discard
+action is planned ([development status](development-status.md)).
+
+The helper is closed, but its exit is not awaited before the game starts
+(`WorkshopSessionHost` has no wait yet); whether a still-exiting helper
+matters to the games is unverified.
 
 ## Errors and logging
 

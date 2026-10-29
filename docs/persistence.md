@@ -53,8 +53,11 @@ Tests use `Database::openInMemory()` or a unique temporary directory.
 * One `Database` object owns one SQLite connection, configured on open with
   `PRAGMA foreign_keys = ON`, `PRAGMA journal_mode = WAL` (file databases),
   the build default `synchronous = NORMAL` for WAL, and a 5 s busy timeout so
-  a second application instance waits instead of failing immediately.
-* The GUI thread and worker threads share that object. Access is serialised by
+  another connection to the same file waits instead of failing immediately.
+  (`pmm-app` itself keeps a second instance off a profile with a lock file,
+  see [`app.md`](app.md).)
+* Any thread may use that object; in `pmm-app` only the services worker
+  thread does. Access is serialised by
   an internal **recursive mutex**: every public call that touches the
   connection, on `Database` and on each repository (`SettingsRepository`, `InstallationRepository`,
   `InventoryRepository`, `PlaysetRepository`, `AcquisitionJobRepository`,
