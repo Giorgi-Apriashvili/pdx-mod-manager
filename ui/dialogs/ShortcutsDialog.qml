@@ -95,6 +95,7 @@ AppDialog {
                     anchors.leftMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
                     text: header.section
+                    textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSize
                     font.weight: Font.DemiBold
                     color: Theme.text
@@ -133,6 +134,7 @@ AppDialog {
                         width: 200
                         anchors.verticalCenter: parent.verticalCenter
                         text: row.keys
+                        textFormat: Text.PlainText
                         font.pixelSize: Theme.fontSize
                         font.family: Theme.monoFamily
                         color: Theme.text
@@ -144,6 +146,7 @@ AppDialog {
                         width: parent.width - x
                         anchors.verticalCenter: parent.verticalCenter
                         text: row.action
+                        textFormat: Text.PlainText
                         font.pixelSize: Theme.fontSize
                         color: Theme.textMuted
                         wrapMode: Text.Wrap
