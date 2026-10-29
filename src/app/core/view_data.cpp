@@ -142,9 +142,9 @@ ModRowData modRow(const services::PlaysetRow& row,
     return data;
 }
 
-LaunchData readOnlyLaunchData(AppRuntime& runtime, const QString& game, std::int64_t playsetId) {
-    LaunchData data;
-    const GameKey key = utf8(game);
+// Blockers that do not depend on a playset: installation and executable
+// missing, the game or the Paradox launcher running. Reads only.
+void installationBlockers(AppRuntime& runtime, const GameKey& key, LaunchData& data) {
     const std::string gameName = services::gameDisplayName(key);
     auto installation = runtime.games().installation(key);
     if (!installation || !installation.value()) {
@@ -179,6 +179,12 @@ LaunchData readOnlyLaunchData(AppRuntime& runtime, const QString& game, std::int
             }
         }
     }
+}
+
+LaunchData readOnlyLaunchData(AppRuntime& runtime, const QString& game, std::int64_t playsetId) {
+    LaunchData data;
+    const GameKey key = utf8(game);
+    installationBlockers(runtime, key, data);
     if (playsetId < 0) {
         data.blockers.push_back(qs(kNoPlaysetBlocker));
     } else {
@@ -405,10 +411,7 @@ LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t pla
     const GameKey key = utf8(game);
     LaunchData data;
     if (playsetId < 0) {
-        auto installation = runtime.games().installation(key);
-        if (!installation || !installation.value())
-            data.blockers.push_back(qs(services::gameDisplayName(key) +
-                                       " has not been found. Rescan, or locate the game folder."));
+        installationBlockers(runtime, key, data);
         data.blockers.push_back(qs(kNoPlaysetBlocker));
         if (auto interrupted = runtime.launcher().interruptedTransactions())
             data.interrupted = !interrupted.value().empty();

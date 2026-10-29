@@ -259,6 +259,43 @@ TEST_CASE("Backend edits are persisted, undoable and reflected in the models", "
     runner.shutdown();
 }
 
+TEST_CASE("Launch blockers explain a running game and a missing playset", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("3001", "Only");
+    FakeAdapter adapter(world);
+    RunnerOptions options = runnerOptions(temp.path() / "profile", adapter);
+    const auto hermetic = options.runtime.configureContext;
+    options.runtime.configureContext = [hermetic](services::ServiceContext& context) {
+        hermetic(context);
+        context.listProcesses = [] {
+            platform::RunningProcess game;
+            game.pid = 4242;
+            game.executableName = kExeName;
+            return Result<std::vector<platform::RunningProcess>>(
+                std::vector<platform::RunningProcess>{game});
+        };
+    };
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    const QString blockers = backend.launcher()->blockers().join('\n');
+    CHECK(blockers.contains("already running"));
+    CHECK(blockers.contains("No active playset"));
+    CHECK_FALSE(backend.launcher()->canPlay());
+
+    backend.playsets()->create(QStringLiteral("Running"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    REQUIRE(waitUntil(
+        [&] { return !backend.launcher()->blockers().join('\n').contains("No active"); }));
+    CHECK(backend.launcher()->blockers().join('\n').contains("already running"));
+    CHECK_FALSE(backend.launcher()->canPlay());
+    runner.shutdown();
+}
+
 TEST_CASE("Backend restores settings and creates playsets from the game configuration",
           "[app][backend]") {
     TempDir temp;
