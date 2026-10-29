@@ -1,10 +1,16 @@
 #include "app/gui/verification.hpp"
 
 #include "app/core/qt_util.hpp"
+#include "app/gui/acquisition_controller.hpp"
 #include "app/gui/app_settings.hpp"
 #include "app/gui/backend.hpp"
+#include "app/gui/games_model.hpp"
+#include "app/gui/jobs_model.hpp"
+#include "app/gui/launch_controller.hpp"
 #include "app/gui/mod_filter_model.hpp"
 #include "app/gui/mod_list_model.hpp"
+#include "app/gui/notification_center.hpp"
+#include "app/gui/playsets_model.hpp"
 #include "app/gui/share_controller.hpp"
 #include "core/log.hpp"
 
@@ -17,7 +23,9 @@
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QSaveFile>
+#include <QTime>
 #include <QTimer>
+#include <QUrl>
 
 #include <cstdio>
 #include <map>
@@ -26,8 +34,12 @@
 namespace pmm::app {
 namespace {
 
+bool g_timestamps = false; // live runs: every line carries the wall-clock time
+
 void say(const QString& text) {
-    std::fprintf(stdout, "[verify] %s\n", text.toUtf8().constData());
+    const QString line =
+        g_timestamps ? QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz ")) + text : text;
+    std::fprintf(stdout, "[verify] %s\n", line.toUtf8().constData());
     std::fflush(stdout);
     logInfo("app.verify", utf8(text));
 }
@@ -50,6 +62,10 @@ Verification::Verification(QQmlApplicationEngine& engine, Backend& backend,
     : QObject(parent), m_engine(engine), m_backend(backend), m_options(std::move(options)) {}
 
 void Verification::start() {
+    if (m_options.live) {
+        g_timestamps = true;
+        watchLiveState();
+    }
     m_steps = m_options.selfTest.isEmpty() ? screenshotSteps() : selfTestSteps();
     if (!m_options.selfTest.isEmpty() && !m_options.screenshot.isEmpty()) {
         std::vector<Step> shots = screenshotSteps();
@@ -119,25 +135,126 @@ void Verification::callWindow(const char* method, int argument) {
     }
 }
 
-void Verification::waitFor(std::function<bool()> condition, std::function<void()> then,
-                           int timeoutMs, const QString& what) {
+void Verification::poll(std::function<bool()> condition, int timeoutMs,
+                        std::function<void(bool satisfied)> done) {
     auto* timer = new QTimer(this);
     auto elapsed = std::make_shared<int>(0);
     timer->setInterval(50);
-    connect(timer, &QTimer::timeout, this,
-            [this, timer, elapsed, condition, then, timeoutMs, what] {
-                *elapsed += timer->interval();
-                if (condition()) {
-                    timer->stop();
-                    timer->deleteLater();
-                    then();
-                } else if (*elapsed >= timeoutMs) {
-                    timer->stop();
-                    timer->deleteLater();
-                    fail(QStringLiteral("timed out waiting for %1").arg(what));
-                }
-            });
+    connect(timer, &QTimer::timeout, this, [timer, elapsed, condition, done, timeoutMs] {
+        *elapsed += timer->interval();
+        const bool satisfied = condition();
+        if (satisfied || *elapsed >= timeoutMs) {
+            timer->stop();
+            timer->deleteLater();
+            done(satisfied);
+        }
+    });
     timer->start();
+}
+
+void Verification::waitFor(std::function<bool()> condition, std::function<void()> then,
+                           int timeoutMs, const QString& what) {
+    poll(std::move(condition), timeoutMs, [this, then, what](bool satisfied) {
+        if (satisfied)
+            then();
+        else
+            fail(QStringLiteral("timed out waiting for %1").arg(what));
+    });
+}
+
+void Verification::watchLiveState() {
+    connect(m_backend.notifications(), &NotificationCenter::posted, this,
+            [](const QString& level, const QString& title, const QString& text) {
+                say(QStringLiteral("notification %1: %2 - %3")
+                        .arg(level, title, QString(text).replace(QLatin1Char('\n'), " | ")));
+            });
+    LaunchController* launcher = m_backend.launcher();
+    connect(launcher, &LaunchController::stateChanged, this,
+            [launcher] { say(QStringLiteral("launch state: %1").arg(launcher->state())); });
+    AcquisitionController* acquisition = m_backend.acquisition();
+    auto provider = std::make_shared<QString>();
+    connect(acquisition, &AcquisitionController::changed, this, [this, acquisition, provider] {
+        const QString status =
+            acquisition->providerStatus() + QStringLiteral(" - ") + acquisition->providerMessage();
+        if (status != *provider) {
+            *provider = status;
+            say(QStringLiteral("provider: %1").arg(status));
+        }
+        for (const JobRowData& job : acquisition->jobs()->rows()) {
+            // State changes, and download progress in steps of 10%.
+            QString state = job.state;
+            if (job.progress >= 0)
+                state += QStringLiteral(" %1%").arg(static_cast<int>(job.progress * 10) * 10);
+            if (m_jobStates.value(job.jobId) == state)
+                continue;
+            m_jobStates.insert(job.jobId, state);
+            say(QStringLiteral("job %1 %2 \"%3\": %4 - %5%6")
+                    .arg(job.jobId)
+                    .arg(job.providerId, job.name, state, job.stateText,
+                         job.errorMessage.isEmpty()
+                             ? QString()
+                             : QStringLiteral(" [%1]").arg(job.errorMessage)));
+        }
+    });
+}
+
+void Verification::playStep(int timeoutMs, bool expectFailure, std::function<void()> next) {
+    LaunchController* launcher = m_backend.launcher();
+    poll([launcher] { return launcher->canPlay(); }, timeoutMs,
+         [this, launcher, expectFailure, next](bool canPlay) {
+             const QString blockers = launcher->blockers().join(QStringLiteral(" | "));
+             if (!canPlay) {
+                 if (expectFailure) {
+                     say(QStringLiteral("Play is blocked, as expected: %1").arg(blockers));
+                     next();
+                 } else {
+                     fail(QStringLiteral("Play stayed blocked: %1").arg(blockers));
+                 }
+                 return;
+             }
+             auto connections = std::make_shared<std::vector<QMetaObject::Connection>>();
+             auto settled = std::make_shared<bool>(false);
+             const auto settle = [connections, settled] {
+                 *settled = true;
+                 for (const QMetaObject::Connection& c : *connections)
+                     disconnect(c);
+             };
+             connections->push_back(
+                 connect(launcher, &LaunchController::launched, this,
+                         [this, settle, expectFailure, next](int pid) {
+                             settle();
+                             if (expectFailure) {
+                                 fail(QStringLiteral("the game started (pid %1) although a failure "
+                                                     "was expected")
+                                          .arg(pid));
+                                 return;
+                             }
+                             say(QStringLiteral("game started, pid %1").arg(pid));
+                             next();
+                         }));
+             connections->push_back(
+                 connect(launcher, &LaunchController::launchFailed, this,
+                         [this, launcher, settle, expectFailure, next](const QString& message) {
+                             settle();
+                             say(QStringLiteral("launch failed: %1 [detail: %2]")
+                                     .arg(QString(message).replace(QLatin1Char('\n'), " | "),
+                                          launcher->lastErrorDetail()));
+                             if (expectFailure)
+                                 next();
+                             else
+                                 fail(QStringLiteral("the launch failed"));
+                         }));
+             const QString warnings = launcher->warnings().join(QStringLiteral(" | "));
+             say(QStringLiteral("pressing Play for playset %1%2")
+                     .arg(m_backend.activePlaysetId())
+                     .arg(warnings.isEmpty() ? QString()
+                                             : QStringLiteral(" (warnings: %1)").arg(warnings)));
+             launcher->play();
+             QTimer::singleShot(180000, this, [this, settled] {
+                 if (!*settled)
+                     fail(QStringLiteral("no launch outcome within 180 s"));
+             });
+         });
 }
 
 std::vector<Verification::Step> Verification::selfTestSteps() {
@@ -290,6 +407,9 @@ std::vector<Verification::Step> Verification::selfTestSteps() {
                 say(QStringLiteral("wrote %1 entries to %2").arg(entries.size()).arg(argument));
                 next();
             });
+        } else if (std::optional<Step> live =
+                       m_options.live ? liveStep(name, argument) : std::nullopt) {
+            steps.push_back(std::move(*live));
         } else {
             steps.push_back([this, token](std::function<void()>) {
                 fail(QStringLiteral("unknown self-test step \"%1\"").arg(token));
@@ -297,6 +417,160 @@ std::vector<Verification::Step> Verification::selfTestSteps() {
         }
     }
     return steps;
+}
+
+std::optional<Verification::Step> Verification::liveStep(const QString& name,
+                                                         const QString& argument) {
+    bool numeric = false;
+    const int number = argument.toInt(&numeric);
+    const auto seconds = [numeric, number](int fallback) {
+        return (numeric && number > 0 ? number : fallback) * 1000;
+    };
+    GamesModel* games = m_backend.games();
+    LaunchController* launcher = m_backend.launcher();
+    // Scans start asynchronously: give one a moment to begin, then wait for it.
+    const auto afterScan = [this, games](std::function<void()> then) {
+        QTimer::singleShot(500, this, [this, games, then] {
+            waitFor([games] { return !games->scanning(); }, then, 120000,
+                    QStringLiteral("the scan"));
+        });
+    };
+
+    if (name == QLatin1String("game")) {
+        return [this, argument, afterScan](std::function<void()> next) {
+            if (m_backend.currentGame() != argument)
+                m_backend.selectGame(argument);
+            afterScan([this, argument, next] {
+                waitFor([this, argument] { return m_backend.currentGame() == argument; },
+                        [argument, next] {
+                            say(QStringLiteral("game %1 selected").arg(argument));
+                            next();
+                        },
+                        30000, QStringLiteral("game %1").arg(argument));
+            });
+        };
+    }
+    if (name == QLatin1String("select")) {
+        return [this, argument](std::function<void()> next) {
+            PlaysetsModel* playsets = m_backend.playsets();
+            qint64 id = -1;
+            for (int row = 0; row < playsets->rowCount(); ++row) {
+                const QModelIndex index = playsets->index(row);
+                if (playsets->data(index, PlaysetsModel::NameRole).toString() == argument)
+                    id = playsets->data(index, PlaysetsModel::PlaysetIdRole).toLongLong();
+            }
+            if (id < 0) {
+                fail(QStringLiteral("no playset named \"%1\"").arg(argument));
+                return;
+            }
+            playsets->activate(static_cast<int>(id));
+            waitFor(
+                [this, id] {
+                    return m_backend.activePlaysetId() == id && m_backend.mods()->playsetId() == id;
+                },
+                [this, argument, next] {
+                    say(QStringLiteral("playset \"%1\" active with %2 entries (%3 enabled)")
+                            .arg(argument)
+                            .arg(m_backend.mods()->count())
+                            .arg(m_backend.mods()->enabledCount()));
+                    next();
+                },
+                30000, QStringLiteral("playset \"%1\"").arg(argument));
+        };
+    }
+    if (name == QLatin1String("rescan")) {
+        return [this, afterScan](std::function<void()> next) {
+            m_backend.rescan(true);
+            afterScan([next] {
+                say(QStringLiteral("rescan finished"));
+                next();
+            });
+        };
+    }
+    if (name == QLatin1String("locate")) {
+        // "locate:<install dir>|<user-data dir>" for the current game.
+        return [this, argument, games, afterScan](std::function<void()> next) {
+            const QStringList parts = argument.split(QLatin1Char('|'));
+            const QUrl install = QUrl::fromLocalFile(parts.value(0));
+            const QUrl userData = parts.size() > 1 ? QUrl::fromLocalFile(parts.value(1)) : QUrl();
+            if (!games->locate(m_backend.currentGame(), install, userData)) {
+                fail(QStringLiteral("locate was refused for %1").arg(argument));
+                return;
+            }
+            afterScan([games, argument, next] {
+                say(QStringLiteral("located %1: installed=%2")
+                        .arg(argument)
+                        .arg(games->currentInstalled() ? "yes" : "no"));
+                next();
+            });
+        };
+    }
+    if (name == QLatin1String("blockers")) {
+        return [launcher](std::function<void()> next) {
+            say(QStringLiteral("canPlay=%1 blockers=[%2] warnings=[%3]")
+                    .arg(launcher->canPlay() ? "true" : "false",
+                         launcher->blockers().join(QStringLiteral(" | ")),
+                         launcher->warnings().join(QStringLiteral(" | "))));
+            next();
+        };
+    }
+    if (name == QLatin1String("jobs")) {
+        return [this](std::function<void()> next) {
+            const std::vector<JobRowData>& jobs = m_backend.acquisition()->jobs()->rows();
+            say(QStringLiteral("%1 acquisition job(s)").arg(jobs.size()));
+            for (const JobRowData& job : jobs)
+                say(QStringLiteral("  job %1 %2 \"%3\": %4 - %5")
+                        .arg(job.jobId)
+                        .arg(job.providerId, job.name, job.state, job.stateText));
+            next();
+        };
+    }
+    if (name == QLatin1String("wait-ready")) {
+        return [this, launcher, timeout = seconds(600)](std::function<void()> next) {
+            poll([launcher] { return launcher->canPlay(); }, timeout,
+                 [this, launcher, next](bool ready) {
+                     if (!ready) {
+                         fail(QStringLiteral("Play did not become available: %1")
+                                  .arg(launcher->blockers().join(QStringLiteral(" | "))));
+                         return;
+                     }
+                     say(QStringLiteral("every enabled entry is ready; Play is available"));
+                     next();
+                 });
+        };
+    }
+    if (name == QLatin1String("play") || name == QLatin1String("play-fails")) {
+        const bool expectFailure = name == QLatin1String("play-fails");
+        return [this, expectFailure, timeout = seconds(expectFailure ? 10 : 120)](
+                   std::function<void()> next) { playStep(timeout, expectFailure, next); };
+    }
+    if (name == QLatin1String("restore")) {
+        return [this, launcher](std::function<void()> next) {
+            auto connection = std::make_shared<QMetaObject::Connection>();
+            *connection =
+                connect(m_backend.notifications(), &NotificationCenter::posted, this,
+                        [this, connection, next](const QString& level, const QString& title,
+                                                 const QString&) {
+                            if (!title.contains(QLatin1String("restore"), Qt::CaseInsensitive))
+                                return;
+                            disconnect(*connection);
+                            if (level == QLatin1String("error"))
+                                fail(QStringLiteral("restoring failed: %1").arg(title));
+                            else
+                                next();
+                        });
+            if (!launcher->restoreLastBackup()) {
+                disconnect(*connection);
+                fail(QStringLiteral("there is no configuration to restore"));
+            }
+        };
+    }
+    if (name == QLatin1String("wait")) {
+        return [this, timeout = seconds(1)](std::function<void()> next) {
+            QTimer::singleShot(timeout, this, [next] { next(); });
+        };
+    }
+    return std::nullopt;
 }
 
 std::vector<Verification::Step> Verification::screenshotSteps() {

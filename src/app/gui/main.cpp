@@ -87,11 +87,12 @@ CommandLine parseCommandLine(const QGuiApplication& app) {
     QCommandLineOption filter(QStringLiteral("filter"), QString(), QStringLiteral("status"));
     QCommandLineOption search(QStringLiteral("search"), QString(), QStringLiteral("text"));
     QCommandLineOption selfTest(QStringLiteral("self-test"), QString(), QStringLiteral("steps"));
+    QCommandLineOption liveTest(QStringLiteral("live-test"), QString(), QStringLiteral("steps"));
     for (QCommandLineOption* hidden :
-         {&screenshot, &delay, &theme, &open, &selectRow, &filter, &search, &selfTest})
+         {&screenshot, &delay, &theme, &open, &selectRow, &filter, &search, &selfTest, &liveTest})
         hidden->setFlags(QCommandLineOption::HiddenFromHelp);
     parser.addOptions({profile, verbose, noSteam, readOnly, game, screenshot, delay, theme, open,
-                       selectRow, filter, search, selfTest});
+                       selectRow, filter, search, selfTest, liveTest});
     parser.process(app);
 
     CommandLine line;
@@ -113,7 +114,11 @@ CommandLine parseCommandLine(const QGuiApplication& app) {
     v.statusFilter = parser.value(filter);
     v.search = parser.value(search);
     v.selfTest = parser.value(selfTest);
-    if (v.active())
+    if (parser.isSet(liveTest) && !parser.isSet(selfTest)) {
+        v.selfTest = parser.value(liveTest);
+        v.live = true;
+    }
+    if (v.active() && !v.live)
         line.readOnly = true; // verification never touches game folders or Steam
     if (line.readOnly)
         line.noSteam = true;
@@ -189,6 +194,12 @@ int main(int argc, char* argv[]) {
     OfflineNetworkAccessManagerFactory networkFactory;
 
     const CommandLine line = parseCommandLine(app);
+    if (line.verification.live && !line.profile) {
+        // Live runs write game configuration and start games: never against
+        // the user's everyday profile.
+        std::fprintf(stderr, "pmm-app: --live-test requires --profile <dir>\n");
+        return 2;
+    }
 
     // One instance per profile: the journal, the acquisition jobs and the
     // helper sessions assume it. Held until the runner has shut down.

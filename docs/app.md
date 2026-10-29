@@ -187,6 +187,28 @@ success.
 | `--select-row <n>`, `--filter <status>`, `--search <text>` | Select a row, or set the mod list filter or search. |
 | `--self-test <steps>` | Run comma-separated steps through the Backend, like the UI does: `config` (playset from the game's current configuration), `disable:<row>`, `move:<from>:<to>`, `export:<file>`, `import:<file>` (preview, then import as a new playset), `dump:<file>` (the active playset's identities, order and enabled flags as JSON). |
 
+`--live-test <steps>` runs the same steps **without** the read-only
+restriction, for the recorded acceptance runs in
+[validation.md](validation.md): imports queue Workshop downloads (unless
+`--no-steam`), and `play` writes the game configuration and starts the game
+exactly like the Play button. It refuses to run without `--profile`. Each
+`[verify]` line carries the time, and every notification, launch state change,
+provider status change and acquisition job transition is printed. Additional
+steps:
+
+| Step | Effect |
+| --- | --- |
+| `game:<key>` | Select a game and wait for its scan. |
+| `select:<playset name>` | Activate a playset of the current game. |
+| `rescan` | Rescan installations and mods. |
+| `locate:<install dir>\|<user-data dir>` | Locate the current game manually (user-data part optional). |
+| `blockers`, `jobs` | Print whether Play is available with its blockers and warnings, or the acquisition jobs. |
+| `wait-ready[:<s>]` | Wait until Play is available (default 600 s), printing the job transitions. |
+| `play[:<s>]` | Wait until Play is available (default 120 s), press it, and wait for the start or failure; a failure fails the run. |
+| `play-fails[:<s>]` | Expect the launch to be refused: Play stays blocked for `<s>` seconds (default 10), or pressing it reports a failure. |
+| `restore` | Restore the configuration from before the last launch. |
+| `wait:<s>` | Pause. |
+
 The share-code round trip between two clean profiles, run against this
 machine's real Stellaris installation (read-only):
 
