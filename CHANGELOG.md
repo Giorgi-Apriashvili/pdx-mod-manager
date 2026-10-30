@@ -13,6 +13,11 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Added
 
+- Application icon: a blue hexagon holding an ordered list, on `pmm-app.exe` (so the
+  title bar, taskbar, Explorer and shortcuts show it) and on the setup, whose wizard
+  also shows it. Regenerate it with `tools/icon-gen`, see
+  [`docs/packaging.md`](docs/packaging.md#application-icon). Building the installer
+  now needs Inno Setup 6.5.2 or newer.
 - The installer's license page is now a readable page that reflows to the window: the
   MIT License, what the installation ships and under which terms, and the
   non-affiliation statement. Building the installer fails if its MIT text no longer

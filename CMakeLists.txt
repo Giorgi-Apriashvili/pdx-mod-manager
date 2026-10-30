@@ -28,6 +28,7 @@ set(PMM_SHARE_PROTOCOL_VERSION 1)
 option(PMM_BUILD_APP "Build the Qt Quick desktop application (requires Qt 6)" ON)
 option(PMM_BUILD_TESTS "Build the test suites" ON)
 option(PMM_BUILD_STEAM_HELPER "Build the Steam Workshop helper executable" ON)
+option(PMM_BUILD_ICON_TOOL "Add tools/icon-gen, which regenerates the application icon (requires Qt Svg)" OFF)
 option(PMM_ENABLE_SANITIZERS "Enable AddressSanitizer (MSVC)" OFF)
 option(PMM_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer (clang-cl)" OFF)
 option(PMM_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
@@ -73,6 +74,10 @@ add_subdirectory(src)
 
 if(PMM_BUILD_STEAM_HELPER)
   add_subdirectory(tools/steam-helper)
+endif()
+
+if(PMM_BUILD_ICON_TOOL)
+  add_subdirectory(tools/icon-gen)
 endif()
 
 if(PMM_BUILD_TESTS)

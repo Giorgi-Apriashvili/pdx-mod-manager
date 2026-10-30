@@ -84,8 +84,9 @@ Rules implemented by `cmake/Packaging.cmake`:
   product, file description, version, copyright). MSVC links them with
   `/PDBALTPATH:%_PDB%`, so they contain the PDB's file name instead of an
   absolute build-tree path, and the `RelWithDebInfo` build is linked with
-  `/INCREMENTAL:NO /OPT:REF /OPT:ICF` (about half the size). There is no
-  application icon yet; it comes with the UI assets.
+  `/INCREMENTAL:NO /OPT:REF /OPT:ICF` (about half the size). `pmm-app.exe` also
+  carries the [application icon](#application-icon); the helper, a console
+  program, does not.
 - Install rules for targets are guarded with `if(TARGET ...)`, so the
   configuration works whether or not the application target exists.
 - Never packaged: Steam binaries or Steamworks SDK files, game files, test
@@ -173,6 +174,8 @@ folders. The compiler command it runs is
 ISCC /Q /DAppVersion=<x.y.z> /DStageDir=<stage> /DLicensePath=<license-page.rtf> /O<output> packaging\windows\installer.iss
 ```
 
+Inno Setup 6.5.2 is the oldest version that can compile it (PNG wizard images).
+
 - **Per-user, no administrator rights**: `PrivilegesRequired=lowest`, never a UAC
   prompt, default folder `%LOCALAPPDATA%\Programs\ParadoxModManager`, uninstall
   entry in `HKCU`. Start Menu shortcut, optional desktop shortcut (a task, off by
@@ -234,6 +237,35 @@ statement. Change the third-party part together with
 skips) does not match `LICENSE` word for word, ignoring RTF markup and how the
 lines are wrapped.
 
+### Application icon
+
+The sources are in [`packaging/icons`](../packaging/icons): `app.svg`, plus
+hand-hinted `app-16.svg`, `app-20.svg`, `app-24.svg` and `app-40.svg` for the sizes
+where `app.svg` would not land on whole pixels. `tools/icon-gen` renders them and
+writes three generated, committed outputs: `packaging/windows/app.ico` (16, 20, 24,
+32, 40, 48, 64 and 256 px, uncompressed 32-bit entries with 256 as PNG),
+`packaging/windows/wizard-small/` (the installer's header image at each display
+scale) and `packaging/icons/app-128.png` (the README). To regenerate them from an
+x64 Visual Studio developer environment:
+
+```sh
+cmake --preset debug -DPMM_BUILD_ICON_TOOL=ON && cmake --build --preset debug --target icons
+```
+
+To change the icon, replace `app.svg`, replace or delete the `app-<size>.svg` files
+(an existing one wins over `app.svg` at its size) and run that command.
+
+The tool is off by default, never built in CI and never installed. It is the only
+thing that links Qt Svg directly; the `Qt6Svg.dll` in packages is there for Qt's own
+SVG plugins, as before.
+
+`cmake/Packaging.cmake` puts the icon into `pmm-app.exe` in every build type, as the
+resource `IDI_ICON1`. Qt's documentation only describes that step for the file's icon
+in the shell and points to `QWindow::setIcon` for windows, but Qt's Windows platform
+plugin also loads a resource with exactly that name as the icon of its window
+class. The running window was checked to show it, so the application does not call
+`setWindowIcon`, and packages need nothing new to load an icon.
+
 ## Qt LGPLv3 compliance in packages
 
 Checklist for every release package that contains Qt:
@@ -276,3 +308,14 @@ and uninstall, with a stand-in program for every relaunch:
 [evidence/installer-2026-10-30.md](evidence/installer-2026-10-30.md). The `Release`
 workflow's dry run has passed on GitHub, including the smoke test on a runner; its
 publish step has not run, and no update between two published releases has happened.
+
+**Icon and license page, 2026-10-30** (same tools): the ZIP still holds the same 80
+file names, at 22.1 MB, with the setup at 16.6 MB. The icon resources of `pmm-app.exe`
+and the setup, read from the files, are byte for byte the entries of `app.ico`, and
+the helper has none. A running `pmm-app`, debug and packaged, has that icon as its
+window class icon (32 and 16 px; `WM_GETICON` returns nothing, as nothing sets one
+explicitly). The license page was rendered with a hidden RichEdit at the width of the
+wizard's box, and the MIT check failed the build on a changed word, a changed year, a
+line break joining two words, a changed `LICENSE` and a lost marker. No setup was run
+for this, so the wizard's license page and header image have not been seen in the
+wizard itself.

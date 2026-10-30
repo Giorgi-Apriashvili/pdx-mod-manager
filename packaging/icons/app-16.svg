@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Hand-hinted for 16 px: marker plus bar on each row so it reads as a list, not a menu icon. -->
+  <path d="M8,0 L15,4 V12 L8,16 L1,12 V4 Z" fill="#2563eb"/>
+  <path d="M3,4 H5 V6 H3 Z M6,4 H13 V6 H6 Z M3,7 H5 V9 H3 Z M6,7 H13 V9 H6 Z M3,10 H5 V12 H3 Z M6,10 H13 V12 H6 Z" fill="#ffffff"/>
+</svg>

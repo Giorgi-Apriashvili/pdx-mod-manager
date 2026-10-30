@@ -1,6 +1,9 @@
-// Windows version resource of the shipped executables (Explorer > Properties >
-// Details). Configured per executable by cmake/Packaging.cmake.
+// Windows resources of the shipped executables, configured per executable by
+// cmake/Packaging.cmake: the version resource (Explorer > Properties > Details) and,
+// for the application only, its icon.
 #include <winver.h>
+
+@PMM_RC_ICON@
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION @PMM_RC_VERSION_NUMBERS@

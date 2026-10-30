@@ -11,8 +11,8 @@
 ;   - it starts this installer with /SILENT /SP- /NORESTART /PMMUPDATE=1 and quits;
 ;   - an installed copy is recognised by ..\unins000.exe next to bin\.
 
-#if Ver < EncodeVer(6, 3, 0)
-  #error Inno Setup 6.3 or newer is required (x64compatible)
+#if Ver < EncodeVer(6, 5, 2)
+  #error Inno Setup 6.5.2 or newer is required (x64compatible, PNG wizard images)
 #endif
 #ifndef AppVersion
   #error Define AppVersion: ISCC /DAppVersion=x.y.z
@@ -23,6 +23,10 @@
 #ifndef LicensePath
   #define LicensePath SourcePath + "license-page.rtf"
 #endif
+
+; Generated from packaging/icons, see docs/packaging.md ("Application icon").
+#define SetupIconPath SourcePath + "app.ico"
+#define WizardSmallImages SourcePath + "wizard-small\app-*.png"
 
 #define AppDisplayName "Paradox Mod Manager"
 #define AppExe "bin\pmm-app.exe"
@@ -68,6 +72,10 @@ OutputBaseFilename=ParadoxModManager-{#AppVersion}-windows-x86_64-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile={#SetupIconPath}
+; One image per display scale; Setup picks the closest. Transparent, on the white
+; header of the light-only modern style.
+WizardSmallImageFile={#WizardSmallImages}
 ; A log in %TEMP% for every run: a failed update has no other trace.
 SetupLogging=yes
 

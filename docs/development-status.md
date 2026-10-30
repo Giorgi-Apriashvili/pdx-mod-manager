@@ -147,11 +147,12 @@ Packaging ([`packaging.md`](packaging.md)):
 - The `Release` workflow's publish step has not run, and no update between two
   published releases has happened; the update button in a real
   installed copy and the real application's relaunch have not been run. The
-  installer's wizard has not been clicked through.
+  installer's wizard has not been clicked through, so its license page and header
+  image have only been checked outside it.
 - `ilammy/msvc-dev-cmd` and `jurplel/install-qt-action` are pinned to mutable tags in
   the job that builds the shipped, unsigned installer; pinning them to commit SHAs
   would narrow a supply-chain path to every user who updates.
-- No code signing; no application icon; no `longPathAware` manifest (the package folder path must
+- No code signing; no `longPathAware` manifest (the package folder path must
   stay below about 170 characters); not tried on a machine without the VC++
   Redistributable.
 - The Qt style prune list assumes the Basic style chosen in `main()`.

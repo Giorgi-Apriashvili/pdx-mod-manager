@@ -1,3 +1,5 @@
+<img src="packaging/icons/app-128.png" alt="" width="64" height="64">
+
 # Paradox Mod Manager
 
 A compact desktop mod manager for Paradox games, for Windows only. It keeps named
@@ -227,6 +229,7 @@ src/app/          Qt application (pmm-app): runtime, services worker, Backend an
 ui/               QML module Pmm.Ui (presentation only) and its preview tools
 tools/steam-helper/  pmm-steam-helper (loads the game's own Steam API library)
 tools/probe-mods/    observable probe mods for in-game load-order checks
+tools/icon-gen/      regenerates the application icon (optional, docs/packaging.md)
 tests/            unit tests and fixtures (tests/unit), application tests (tests/app)
 docs/             architecture, decisions, protocol, support matrix, validation, evidence
 packaging/        license texts, Windows version resource, Qt deployment prune

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Application icon: a hex map tile holding an ordered list, first entry ticked.
+       The rows sit on a 16-unit grid so 32, 48, 64 and 128 px stay crisp.
+       Sizes that would not land on whole pixels have their own app-<size>.svg. -->
+  <defs>
+    <linearGradient id="hex" gradientUnits="userSpaceOnUse" x1="128" y1="8" x2="128" y2="248">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <path d="M128,16 L225,72 L225,184 L128,240 L31,184 L31,72 Z" fill="url(#hex)" stroke="url(#hex)" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M56,80 L72,96 L104,64" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="120" y="64" width="80" height="32" rx="8" ry="8" fill="#ffffff"/>
+  <rect x="64" y="112" width="32" height="32" rx="8" ry="8" fill="#ffffff"/>
+  <rect x="120" y="112" width="80" height="32" rx="8" ry="8" fill="#ffffff"/>
+  <rect x="64" y="160" width="32" height="32" rx="8" ry="8" fill="#ffffff"/>
+  <rect x="120" y="160" width="80" height="32" rx="8" ry="8" fill="#ffffff"/>
+</svg>

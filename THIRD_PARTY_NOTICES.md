@@ -13,11 +13,14 @@ toolchain prerequisite whose tested version is pinned in CI.
 | [Catch2](https://github.com/catchorg/Catch2) | 3.8.1 | BSL-1.0 | Unit tests | No (test-only) |
 | [Qt](https://www.qt.io/) | 6.10.3 tested, 6.5 minimum | LGPL-3.0-only (open-source option) | Desktop application (`pmm-app`) | Yes, as shared libraries next to the application |
 | Microsoft Visual C++ runtime | matches the compiler | Visual Studio redistribution terms | C++ runtime of the binaries | Yes, as the redistributable DLLs |
-| [Inno Setup](https://jrsoftware.org/isinfo.php) | 6.7 (6.3 minimum) | Inno Setup License | Builds the Windows installer | Runtime inside the setup and `unins000.exe`, notices unchanged. Copyright (C) 1997-2026 Jordan Russell, portions Copyright (C) 2000-2026 Martijn Laan |
+| [Inno Setup](https://jrsoftware.org/isinfo.php) | 6.7 (6.5.2 minimum) | Inno Setup License | Builds the Windows installer | Runtime inside the setup and `unins000.exe`, notices unchanged. Copyright (C) 1997-2026 Jordan Russell, portions Copyright (C) 2000-2026 Martijn Laan |
 
 No other code is vendored. `tools/probe-mods/probe_mods.py` and the scripts in
 `scripts/` use only the Python standard library. The GitHub Actions used in CI
 are not distributed.
+
+The application icon (`packaging/icons`) is original work of this project, under
+the project's MIT License.
 
 ## Steam and game files
 

@@ -65,6 +65,10 @@ endif()
 # absolute build-tree path (/PDBALTPATH; PDBs are not packaged), and the
 # RelWithDebInfo build of the release preset is linked without incremental
 # linking and with unreferenced code removed, which halves the executables.
+#
+# The application also gets its icon. The name IDI_ICON1 matters: Qt's Windows
+# platform plugin loads that resource as the icon of its window class, so the title
+# bar and the taskbar show it without QWindow::setIcon.
 set(PMM_RC_VERSION_NUMBERS
   "${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0")
 set(PMM_RC_VENDOR "${PMM_PACKAGE_VENDOR}")
@@ -73,12 +77,17 @@ foreach(_pmm_exe IN ITEMS ${PMM_APP_TARGET} ${PMM_HELPER_TARGET})
     continue()
   endif()
   set(PMM_RC_NAME "${_pmm_exe}")
+  set(_pmm_rc "${PROJECT_BINARY_DIR}/packaging/${_pmm_exe}.rc")
   if(_pmm_exe STREQUAL PMM_APP_TARGET)
     set(PMM_RC_DESCRIPTION "Paradox Mod Manager")
+    set(_pmm_icon "${PROJECT_SOURCE_DIR}/packaging/windows/app.ico")
+    set(PMM_RC_ICON "IDI_ICON1 ICON \"${_pmm_icon}\"")
+    set_property(SOURCE "${_pmm_rc}" TARGET_DIRECTORY ${_pmm_exe}
+      PROPERTY OBJECT_DEPENDS "${_pmm_icon}")
   else()
     set(PMM_RC_DESCRIPTION "Paradox Mod Manager Steam Workshop helper")
+    set(PMM_RC_ICON "")
   endif()
-  set(_pmm_rc "${PROJECT_BINARY_DIR}/packaging/${_pmm_exe}.rc")
   configure_file("${PROJECT_SOURCE_DIR}/packaging/windows/version.rc.in" "${_pmm_rc}" @ONLY)
   target_sources(${_pmm_exe} PRIVATE "${_pmm_rc}")
   if(MSVC)
