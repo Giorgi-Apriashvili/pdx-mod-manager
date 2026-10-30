@@ -53,7 +53,7 @@ Not observed yet: Linux and macOS, other stores, Steam's own offline mode.
 
 | Platform | Compiler | Core libraries + unit tests | Desktop application + tests | Packages |
 | --- | --- | --- | --- | --- |
-| Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 390 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 35 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; NSIS not built |
+| Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 390 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 35 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
 | Linux x86_64 (Arch Linux in WSL) | GCC 16.2.1, no Qt | **Verified** 2026-10-30: 384 tests pass with warnings as errors, also with ASan + UBSan | Not built (no Qt in that environment) | TGZ of the core build only (2026-10-29) |
 | Windows (CI, `windows-2025`) | MSVC from the runner image | Unverified until the first CI run | Unverified until the first CI run | Unverified |
 | Linux (CI, `ubuntu-24.04`) | GCC 13 | Unverified until the first CI run | Unverified until the first CI run | Unverified |
