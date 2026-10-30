@@ -170,13 +170,13 @@ comes from the `ISCC` environment variable, `PATH` or Inno Setup's standard
 folders. The compiler command it runs is
 
 ```text
-ISCC /Q /DAppVersion=<x.y.z> /DStageDir=<stage> /DLicensePath=<license with CRLF> /O<output> packaging\windows\installer.iss
+ISCC /Q /DAppVersion=<x.y.z> /DStageDir=<stage> /DLicensePath=<license-page.rtf> /O<output> packaging\windows\installer.iss
 ```
 
 - **Per-user, no administrator rights**: `PrivilegesRequired=lowest`, never a UAC
   prompt, default folder `%LOCALAPPDATA%\Programs\ParadoxModManager`, uninstall
   entry in `HKCU`. Start Menu shortcut, optional desktop shortcut (a task, off by
-  default), license page, the usual "launch" checkbox on the last page.
+  default), [license page](#license-page), the usual "launch" checkbox on the last page.
 - **Upgrades** install over the existing folder. `AppId` is fixed and must never
   change; it is what links a new version to the installed one. The folder page is
   skipped and earlier choices (folder, tasks) are kept. `bin\`, `plugins\` and
@@ -220,6 +220,19 @@ replaced folders), a working upgrade and the uninstall. It never starts the
 application, so the update run itself is not part of it. It refuses to run if the
 application is installed, because the test would take over the installation's
 uninstall registration.
+
+### License page
+
+[`license-page.rtf`](../packaging/windows/license-page.rtf) is written by hand, in
+ASCII, with one paragraph per line so that the wizard reflows it to the box: the MIT
+License, the third-party software the installer ships, and the non-affiliation
+statement. Change the third-party part together with
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+
+`build-installer.cmake` fails the build when the text between the page's
+`{\*\pmmmitlicensebegin}` and `{\*\pmmmitlicenseend}` markers (which an RTF reader
+skips) does not match `LICENSE` word for word, ignoring RTF markup and how the
+lines are wrapped.
 
 ## Qt LGPLv3 compliance in packages
 

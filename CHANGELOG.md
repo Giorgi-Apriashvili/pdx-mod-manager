@@ -13,6 +13,10 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Added
 
+- The installer's license page is now a readable page that reflows to the window: the
+  MIT License, what the installation ships and under which terms, and the
+  non-affiliation statement. Building the installer fails if its MIT text no longer
+  matches `LICENSE`.
 - Windows installer (Inno Setup): per-user, no administrator rights, default folder
   `%LOCALAPPDATA%\Programs\ParadoxModManager`. It replaces the earlier NSIS
   configuration, which was never shipped. A failed or cancelled upgrade leaves the

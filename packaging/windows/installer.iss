@@ -21,7 +21,7 @@
   #error Define StageDir: ISCC /DStageDir=<cmake --install prefix>
 #endif
 #ifndef LicensePath
-  #define LicensePath StageDir + "\LICENSE"
+  #define LicensePath SourcePath + "license-page.rtf"
 #endif
 
 #define AppDisplayName "Paradox Mod Manager"
