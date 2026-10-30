@@ -161,8 +161,7 @@ Result<sqlite3*> openHandle(const std::string& utf8Name, std::string_view what) 
 } // namespace
 
 Result<Connection> Connection::open(const std::filesystem::path& file) {
-    // SQLite takes the name as UTF-8 (native bytes on POSIX); a lossy form
-    // would open a different file.
+    // SQLite takes the name as UTF-8; a lossy form would open a different file.
     PMM_TRY(internal::checkStorablePath(file, "The database file"));
     const std::string utf8 = internal::pathToText(file);
     if (utf8.empty())

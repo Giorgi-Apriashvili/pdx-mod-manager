@@ -66,7 +66,6 @@ TEST_CASE("Valid paths are stored as exact UTF-8 and read back unchanged",
     CHECK(checkStorablePath(path, "The file").ok());
 }
 
-#if defined(_WIN32)
 TEST_CASE("Windows path conversion never throws on ill-formed text", "[persistence][encoding]") {
     // An unpaired surrogate has no UTF-8 form; it is written as U+FFFD.
     std::string text;
@@ -78,7 +77,7 @@ TEST_CASE("Windows path conversion never throws on ill-formed text", "[persisten
     CHECK(pathToText(fs::path(lowFirst)) == "a\xEF\xBF\xBD\xEF\xBF\xBD");
     CHECK(pathToText(fs::path(L"pair \U0001F600")) == "pair \xF0\x9F\x98\x80");
 
-    // Stored text that is not UTF-8 (damaged, or written on another OS).
+    // Stored text that is not UTF-8 (damaged).
     fs::path path;
     REQUIRE_NOTHROW(path = pathFromText("\xFF\xFE"));
     CHECK(path.native() == L"\uFFFD\uFFFD");
@@ -93,11 +92,3 @@ TEST_CASE("Windows path conversion never throws on ill-formed text", "[persisten
     CHECK(status.error().message.rfind("The file ", 0) == 0);
     CHECK(status.error().detail.find("C:/x/bad" + kFffd + ".mod") != std::string::npos);
 }
-#else
-TEST_CASE("POSIX paths are stored as their native bytes", "[persistence][encoding]") {
-    const std::string bytes = "/home/example/mod/caf\xE9\xFF.mod";
-    CHECK(pathToText(fs::path(bytes)) == bytes);
-    CHECK(pathFromText(bytes).native() == bytes);
-    CHECK(isStorablePath(fs::path(bytes)));
-}
-#endif

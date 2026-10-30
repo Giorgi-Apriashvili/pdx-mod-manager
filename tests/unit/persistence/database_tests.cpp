@@ -81,7 +81,6 @@ TEST_CASE("Opening creates the database and parent folders in a Unicode path",
     CHECK(queryInt(*db, "PRAGMA busy_timeout") == Database::kBusyTimeoutMs);
 }
 
-#if defined(_WIN32)
 TEST_CASE("A database file name that is not valid UTF-16 is refused instead of throwing",
           "[persistence][database]") {
     // A lossy conversion would make SQLite open (and create) a different file.
@@ -99,7 +98,6 @@ TEST_CASE("A database file name that is not valid UTF-16 is refused instead of t
     REQUIRE_FALSE(connection.ok());
     CHECK(connection.error().code == ErrorCode::InvalidArgument);
 }
-#endif
 
 TEST_CASE("A new database is migrated from empty to the latest schema", "[persistence][database]") {
     auto db = openMemory();

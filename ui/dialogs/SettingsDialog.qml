@@ -286,8 +286,7 @@ AppDialog {
                     DetailLabel { id: platformKey; text: qsTr("Platform") }
                     DetailValue {
                         labelText: platformKey.text
-                        text: Qt.platform.os === "windows" ? "Windows" : Qt.platform.os === "osx" ? "macOS"
-                            : Qt.platform.os === "linux" ? "Linux" : Qt.platform.os
+                        text: "Windows"
                     }
                     DetailLabel { id: dataKey; text: qsTr("Data folder") }
                     DetailValue {

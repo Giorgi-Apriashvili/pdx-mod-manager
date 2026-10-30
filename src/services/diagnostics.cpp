@@ -60,8 +60,7 @@ void writeGame(std::ostringstream& out, const ServiceContext& ctx, const GameCat
         out << "Installation: not found\n";
     } else {
         const GameInstallation& install = *installation.value();
-        out << "Installation: " << toString(install.distribution) << ", "
-            << toString(install.platform) << ", version "
+        out << "Installation: " << toString(install.distribution) << ", windows, version "
             << (install.versionLabel.empty() ? install.version : install.versionLabel)
             << (install.manuallyConfigured ? " (manually located)" : "") << "\n";
         out << "  Install path: " << pathState(install.installPath) << "\n";
@@ -167,7 +166,7 @@ std::string diagnosticsText(const ServiceContext& context, const DiagnosticsOpti
     out << "Generated: " << isoTime(context.now()) << "\n";
     out << "App version: " << (options.appVersion.empty() ? "unknown" : options.appVersion) << "\n";
     out << "Share-code protocol: " << options.protocolVersion << "\n";
-    out << "OS: " << toString(currentOsPlatform()) << "\n";
+    out << "OS: windows\n";
     out << "Database: schema " << context.database.schemaVersion() << ", "
         << (context.database.isInMemory() ? std::string("in memory")
                                           : platform::pathToUtf8(context.database.file()))

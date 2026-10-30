@@ -14,8 +14,6 @@ using pmm::sanitizeUtf8;
 using pmm::isValidUtf16;
 using pmm::utf16ToUtf8;
 using pmm::utf8ToUtf16;
-#if defined(_WIN32)
 using pmm::utf8ToWide;
-#endif
 
 } // namespace pmm::persistence::internal

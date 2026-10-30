@@ -377,10 +377,7 @@ ApplicationWindow {
         onActivated: window.focusPane(-1)
     }
     Shortcut {
-        // F1 everywhere, plus Cmd+? (the macOS help key) on macOS. Spelled out
-        // rather than StandardKey.HelpContents: that resolves to F1 on Qt's
-        // offscreen platform, and two bindings on one key fire neither.
-        sequences: Qt.platform.os === "osx" ? ["F1", "Ctrl+?"] : ["F1"]
+        sequences: ["F1"]
         onActivated: window.openShortcuts()
     }
 }

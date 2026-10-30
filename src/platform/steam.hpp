@@ -8,7 +8,6 @@
 // Paths read from Steam files are decoded as UTF-8. App ids are validated as
 // decimal strings before they are used to build file names.
 
-#include "core/model.hpp"
 #include "core/result.hpp"
 #include "platform/process.hpp"
 
@@ -56,12 +55,10 @@ Result<KeyValue> readKeyValuesFile(const fs::path& path);
 
 // ---- Steam client and libraries ---------------------------------------------
 
-// OS-specific places to look for the Steam client, most authoritative first.
-// Windows: HKCU\Software\Valve\Steam\SteamPath, then
+// Places to look for the Steam client, most authoritative first:
+// HKCU\Software\Valve\Steam\SteamPath, then
 // HKLM\SOFTWARE\WOW6432Node\Valve\Steam\InstallPath, then
-// C:\Program Files (x86)\Steam. Linux: ~/.steam/steam, $XDG_DATA_HOME/Steam
-// (~/.local/share/Steam), the Flatpak and Snap locations. macOS:
-// ~/Library/Application Support/Steam.
+// C:\Program Files (x86)\Steam.
 std::vector<fs::path> defaultSteamRootCandidates();
 
 // True if `directory` contains a steamapps folder.
@@ -164,21 +161,16 @@ Result<AppWorkshopManifest> readAppWorkshopManifest(const fs::path& acfPath);
 
 // ---- Steam client process and runtime ---------------------------------------
 
-// Best effort. Windows: a steam.exe process, or the pid recorded in
+// Best effort: a steam.exe process, or the pid recorded in
 // HKCU\Software\Valve\Steam\ActiveProcess when that process still exists.
-// Linux: a process named "steam"; macOS: "steam_osx".
 bool isSteamRunning();
-bool isSteamRunning(const std::vector<RunningProcess>& processes, OsPlatform os,
-                    std::int64_t registeredPid = 0);
+bool isSteamRunning(const std::vector<RunningProcess>& processes, std::int64_t registeredPid = 0);
 
-// "steam_api64.dll", "libsteam_api.so" or "libsteam_api.dylib".
-const char* steamApiLibraryName(OsPlatform os = currentOsPlatform()) noexcept;
+// "steam_api64.dll".
+const char* steamApiLibraryName() noexcept;
 
 // Looks for the Steamworks runtime in a game installation: the root and the
-// usual subfolders (Windows: bin, binaries, win64; Linux: linux64, lib,
-// lib64, bin; macOS: *.app/Contents/Frameworks and *.app/Contents/MacOS, also
-// when `gameInstallDir` itself is the .app bundle).
-std::optional<fs::path> findSteamApiLibrary(const fs::path& gameInstallDir,
-                                            OsPlatform os = currentOsPlatform());
+// usual subfolders (bin, binaries, win64).
+std::optional<fs::path> findSteamApiLibrary(const fs::path& gameInstallDir);
 
 } // namespace pmm::platform::steam

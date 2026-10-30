@@ -25,7 +25,6 @@ LogSink& sinkRef() {
 std::atomic<int> g_minLevel{static_cast<int>(LogLevel::Info)};
 
 std::string envOrEmpty(const char* name) {
-#if defined(_WIN32)
     char* value = nullptr;
     std::size_t len = 0;
     if (_dupenv_s(&value, &len, name) != 0 || value == nullptr)
@@ -33,10 +32,6 @@ std::string envOrEmpty(const char* name) {
     std::string out(value);
     std::free(value);
     return out;
-#else
-    const char* value = std::getenv(name);
-    return value ? std::string(value) : std::string();
-#endif
 }
 
 std::string asciiLower(std::string s) {
@@ -112,11 +107,7 @@ void log(LogLevel level, std::string_view component, std::string_view message,
 std::string formatLogRecord(const LogRecord& record) {
     const auto seconds = static_cast<std::time_t>(record.timestampMs / 1000);
     std::tm utc{};
-#if defined(_WIN32)
     gmtime_s(&utc, &seconds);
-#else
-    gmtime_r(&seconds, &utc);
-#endif
     char stamp[32];
     std::strftime(stamp, sizeof stamp, "%Y-%m-%dT%H:%M:%S", &utc);
     std::string line = stamp;
@@ -151,13 +142,8 @@ std::string formatLogRecord(const LogRecord& record) {
 
 RedactionContext currentRedactionContext() {
     RedactionContext ctx;
-#if defined(_WIN32)
     ctx.homeDirectory = envOrEmpty("USERPROFILE");
     ctx.userName = envOrEmpty("USERNAME");
-#else
-    ctx.homeDirectory = envOrEmpty("HOME");
-    ctx.userName = envOrEmpty("USER");
-#endif
     return ctx;
 }
 
@@ -170,11 +156,7 @@ std::string redact(std::string_view text, const RedactionContext& context) {
     out = std::regex_replace(out, kSecret, "$1$2<redacted>");
 
     if (!context.homeDirectory.empty()) {
-#if defined(_WIN32)
         constexpr bool caseInsensitive = true;
-#else
-        constexpr bool caseInsensitive = false;
-#endif
         std::string home = context.homeDirectory;
         replaceAll(out, home, "~", caseInsensitive);
         std::replace(home.begin(), home.end(), '\\', '/');

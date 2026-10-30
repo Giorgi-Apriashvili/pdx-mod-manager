@@ -94,11 +94,9 @@ TEST_CASE("UTF-16 conversion replaces unpaired surrogates", "[core][utf8]") {
     CHECK(utf8ToUtf16("\xED\xA0\x80") == u"\xFFFD\xFFFD\xFFFD");
     CHECK(utf8ToUtf16("").empty());
 
-#if defined(_WIN32)
     const std::wstring wide = L"caf\xD800";
     CHECK_FALSE(isValidUtf16(std::wstring_view(wide)));
     CHECK(utf16ToUtf8(std::wstring_view(wide)) == "caf" + kFffd);
     CHECK(utf8ToWide("caf\xC3\xA9 \xF0\x9F\x98\x80") == L"caf\xE9 \U0001F600");
     CHECK(isValidUtf16(std::wstring_view(L"caf\xE9")));
-#endif
 }

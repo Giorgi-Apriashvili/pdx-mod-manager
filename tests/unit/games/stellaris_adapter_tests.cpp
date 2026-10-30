@@ -91,14 +91,13 @@ TEST_CASE("Stellaris is discovered through the injected Steam environment", "[ga
     CHECK(samePath(inst.steamLibraryPath, f.path("Steam")));
     CHECK(inst.version == "v4.5.2");
     CHECK(inst.versionLabel == "Cygnus v4.5.2 (9776)");
-    CHECK(inst.platform == f.env.platform);
     CHECK_FALSE(inst.manuallyConfigured);
 
     Capabilities caps = f.adapter.capabilities(inst);
     CHECK(caps.directLaunch);
     CHECK(caps.localMods);
     CHECK_FALSE(caps.workshopAcquisition); // no Steam API library in the fixture
-    test::writeText(f.install() / u8path(platform::steam::steamApiLibraryName(inst.platform)),
+    test::writeText(f.install() / u8path(platform::steam::steamApiLibraryName()),
                     "placeholder, never loaded");
     CHECK(f.adapter.capabilities(inst).workshopAcquisition);
 }
@@ -129,46 +128,21 @@ TEST_CASE("Stellaris discovery falls back without launcher-settings.json", "[gam
     fs::remove(f.install() / "launcher-settings.json");
 
     SECTION("Windows default executable") {
-        f.env.platform = OsPlatform::Windows;
         const GameInstallation inst = f.discovered();
         CHECK(samePath(inst.executablePath, f.install() / "stellaris.exe"));
         CHECK(inst.defaultArguments.empty());
         CHECK(inst.version.empty());
         CHECK(samePath(inst.userDataPath, f.userData()));
-    }
-    SECTION("Linux uses XDG data and the native executable name") {
-        f.env.platform = OsPlatform::Linux;
-        f.env.xdgDataHome = f.path("xdg data");
-        const GameInstallation inst = f.discovered();
-        CHECK(samePath(inst.executablePath, f.install() / "stellaris"));
-        CHECK(samePath(inst.userDataPath, f.path("xdg data/Paradox Interactive/Stellaris")));
+        fs::remove(f.install() / "stellaris.exe");
         CHECK_FALSE(f.adapter.capabilities(inst).directLaunch); // placeholder missing
         CHECK(f.adapter.buildLaunchPlan(inst, {}).error().code == ErrorCode::NotFound);
-        test::writeText(f.install() / "stellaris", "placeholder");
+        test::writeText(f.install() / "stellaris.exe", "placeholder");
         CHECK(f.adapter.capabilities(inst).directLaunch);
     }
-    SECTION("macOS app bundle") {
-        f.env.platform = OsPlatform::MacOS;
-        const GameInstallation inst = f.discovered();
-        CHECK(samePath(inst.executablePath,
-                       f.install() / "stellaris.app" / "Contents" / "MacOS" / "stellaris"));
-    }
-}
-
-TEST_CASE("gameDataPath maps onto XDG data on Linux", "[games][stellaris]") {
-    StellarisFixture f;
-    f.env.platform = OsPlatform::Linux;
-    f.env.xdgDataHome = f.path("xdg data");
-    const GameInstallation inst = f.discovered();
-    CHECK(samePath(inst.userDataPath, f.path("xdg data/Paradox Interactive/Stellaris")));
-    // exePath "./stellaris.exe" is a regular file inside the folder; Linux has
-    // no extension rule.
-    CHECK(samePath(inst.executablePath, f.install() / "stellaris.exe"));
 }
 
 TEST_CASE("Unsafe launcher-settings executables are ignored", "[games][stellaris]") {
     StellarisFixture f;
-    f.env.platform = OsPlatform::Windows;
     const fs::path settings = f.install() / "launcher-settings.json";
     const std::string original = test::readText(settings);
 
@@ -417,17 +391,10 @@ TEST_CASE("Stellaris scan handles unusual registrations", "[games][stellaris]") 
 TEST_CASE("Stellaris scan keeps mods with unstorable paths as broken", "[games][stellaris]") {
     StellarisFixture f;
     const GameInstallation inst = f.discovered();
-    // Names without a UTF-8 form: unpaired surrogates on Windows, Latin-1
-    // bytes elsewhere.
-#if defined(_WIN32)
+    // Names without a UTF-8 form: unpaired surrogates.
     const fs::path descriptorName(L"bad\xD800.mod");
     const fs::path archiveName(L"legacy\xDC00.zip");
     const std::string localId = "bad\xEF\xBF\xBD";
-#else
-    const fs::path descriptorName(std::string("bad\xE9.mod"));
-    const fs::path archiveName(std::string("legacy\xE9.zip"));
-    const std::string localId = "bad\xE9";
-#endif
     const fs::path badDescriptor = f.userData() / "mod" / descriptorName;
     const fs::path badArchive = f.content("1000000099") / archiveName;
     fs::create_directories(badArchive.parent_path());
@@ -814,24 +781,17 @@ TEST_CASE("Stellaris compatibility warnings follow supported_version", "[games][
 TEST_CASE("Stellaris process names and load-order information", "[games][stellaris]") {
     StellarisAdapter adapter;
     GameInstallation inst;
-    inst.platform = OsPlatform::Windows;
     inst.executablePath = u8path("C:/Games/Stellaris/stellaris.exe");
     ProcessNames names = adapter.processNames(inst);
     CHECK(names.game == std::vector<std::string>{"stellaris.exe"});
     CHECK(names.conflictingWriters ==
           std::vector<std::string>{"Paradox Launcher.exe", "dowser.exe"});
 
-    inst.platform = OsPlatform::Linux;
-    inst.executablePath = u8path("/games/Stellaris/stellaris");
-    names = adapter.processNames(inst);
-    CHECK(names.game == std::vector<std::string>{"stellaris"});
-    CHECK(names.conflictingWriters == std::vector<std::string>{"dowser", "paradox-launcher"});
-
-    inst.platform = OsPlatform::MacOS;
     inst.executablePath.clear();
     names = adapter.processNames(inst);
-    CHECK(names.game == std::vector<std::string>{"stellaris"});
-    CHECK(names.conflictingWriters == std::vector<std::string>{"Paradox Launcher"});
+    CHECK(names.game == std::vector<std::string>{"stellaris.exe"});
+    CHECK(names.conflictingWriters ==
+          std::vector<std::string>{"Paradox Launcher.exe", "dowser.exe"});
 
     const LoadOrderInfo info = adapter.loadOrderInfo();
     CHECK(info.verifiedInGame);

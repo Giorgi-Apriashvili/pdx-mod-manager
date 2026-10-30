@@ -29,13 +29,11 @@ inline constexpr const char* kUnfinishedJobStatesSql =
     "('pending', 'subscribing', 'subscribed', 'download_requested', 'downloading')";
 
 std::optional<DistributionSource> distributionFromText(std::string_view text) noexcept;
-std::optional<OsPlatform> platformFromText(std::string_view text) noexcept;
 std::optional<InstallState> installStateFromText(std::string_view text) noexcept;
 
-// Paths are stored as text in native format: the native bytes on POSIX, UTF-8
-// on Windows. The conversions never throw. A Windows path that is not valid
-// UTF-16 (an unpaired surrogate, which NTFS allows) has no UTF-8 form and is
-// written with U+FFFD; ill-formed stored UTF-8 is read the same way. Only
+// Paths are stored as UTF-8 text. The conversions never throw. A path that is
+// not valid UTF-16 (an unpaired surrogate, which NTFS allows) has no UTF-8 form
+// and is written with U+FFFD; ill-formed stored UTF-8 is read the same way. Only
 // storable paths round-trip, so repositories reject the others on write.
 std::string pathToText(const std::filesystem::path& path);
 std::filesystem::path pathFromText(std::string_view text);

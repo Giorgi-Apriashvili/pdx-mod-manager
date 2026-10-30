@@ -13,6 +13,8 @@
 #include "app/gui/verification.hpp"
 #include "core/log.hpp"
 
+#include <windows.h>
+
 #include <QCommandLineParser>
 #include <QDir>
 #include <QGuiApplication>
@@ -25,10 +27,6 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
-
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 
 Q_IMPORT_QML_PLUGIN(Pmm_UiPlugin)
 
@@ -176,10 +174,8 @@ ApplicationWindow {
 } // namespace
 
 int main(int argc, char* argv[]) {
-#if defined(_WIN32)
     // No modal system error boxes for this process or the processes it starts.
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-#endif
     // An update run waits for this (docs/updates.md); held until the process ends.
     const RunningInstanceSignal runningInstance;
     if (argumentGiven(argc, argv, "--screenshot")) {
@@ -190,7 +186,6 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setOrganizationName(QStringLiteral("ParadoxModManager"));
     QGuiApplication::setApplicationName(QStringLiteral("Paradox Mod Manager"));
     QGuiApplication::setApplicationVersion(QStringLiteral(PMM_APP_VERSION));
-    QGuiApplication::setDesktopFileName(QStringLiteral("paradox-mod-manager"));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QGuiApplication app(argc, argv);
     // Every QML engine of the process: no network access (outlives them).

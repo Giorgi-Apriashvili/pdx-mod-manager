@@ -243,10 +243,10 @@ void markBroken(InstalledMod& mod, std::string problem) {
     mod.problems.push_back(std::move(problem));
 }
 
-// The inventory is stored as UTF-8 text, so a path without a UTF-8 form
-// (Windows names with unpaired surrogates, POSIX names that are not UTF-8)
-// cannot be saved. Such a mod stays in the inventory as Broken, without that
-// path, instead of making the whole inventory fail to save.
+// The inventory is stored as UTF-8 text, so a path without a UTF-8 form (names
+// with unpaired surrogates) cannot be saved. Such a mod stays in the inventory
+// as Broken, without that path, instead of making the whole inventory fail to
+// save.
 void dropUnstorablePaths(InstalledMod& mod) {
     const auto drop = [&](fs::path& path, std::string_view what) {
         if (path.empty() || platform::isUtf8Representable(path))
@@ -534,30 +534,20 @@ const GameCatalogEntry& DlcLoadJsonAdapter::catalog() const {
 Capabilities DlcLoadJsonAdapter::capabilities(const GameInstallation& installation) const {
     Capabilities caps;
     caps.directLaunch = isRegularFile(installation.executablePath);
-    caps.workshopAcquisition =
-        installation.distribution == DistributionSource::Steam &&
-        steam::findSteamApiLibrary(installation.installPath, installation.platform).has_value();
+    caps.workshopAcquisition = installation.distribution == DistributionSource::Steam &&
+                               steam::findSteamApiLibrary(installation.installPath).has_value();
     caps.localMods = true;
     return caps;
 }
 
 fs::path DlcLoadJsonAdapter::defaultUserDataPath(const DiscoveryEnvironment& env) const {
-    const fs::path& base = env.platform == OsPlatform::Linux ? env.xdgDataHome : env.documentsDir;
-    if (base.empty())
+    if (env.documentsDir.empty())
         return {};
-    return base / "Paradox Interactive" / pathFromUtf8(m_traits.userDataFolder);
+    return env.documentsDir / "Paradox Interactive" / pathFromUtf8(m_traits.userDataFolder);
 }
 
-fs::path DlcLoadJsonAdapter::defaultExecutable(OsPlatform os) const {
-    switch (os) {
-    case OsPlatform::Windows:
-        return pathFromUtf8(m_traits.windowsExecutable);
-    case OsPlatform::MacOS:
-        return pathFromUtf8(m_traits.macExecutable);
-    case OsPlatform::Linux:
-        break;
-    }
-    return pathFromUtf8(m_traits.linuxExecutable);
+fs::path DlcLoadJsonAdapter::defaultExecutable() const {
+    return pathFromUtf8(m_traits.executable);
 }
 
 std::vector<std::string>
@@ -585,7 +575,6 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
 
     GameInstallation inst;
     inst.game = std::string(m_traits.key);
-    inst.platform = env.platform;
     std::error_code ec;
     const fs::path absolute = fs::absolute(installPath, ec);
     inst.installPath = (ec ? installPath : absolute).lexically_normal();
@@ -614,7 +603,7 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
                            [&](const std::string& n) { return keyEquals(n, file); });
     };
     if (settings) {
-        Result<fs::path> exe = resolveLauncherExecutable(*settings, inst.installPath, env.platform);
+        Result<fs::path> exe = resolveLauncherExecutable(*settings, inst.installPath);
         if (exe && !launcherProcess(*exe)) {
             inst.executablePath = *exe;
             inst.defaultArguments = launchArguments(settings->exeArgs);
@@ -641,13 +630,12 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
                    {{"install", pathToUtf8(inst.installPath)}});
     }
     if (inst.executablePath.empty()) {
-        inst.executablePath = inst.installPath / defaultExecutable(env.platform);
+        inst.executablePath = inst.installPath / defaultExecutable();
         if (!isRegularFile(inst.executablePath)) {
             if (mode == Mode::Manual)
                 return makeError(ErrorCode::NotFound,
                                  "The selected folder does not contain the " + gameName +
-                                     " executable (" +
-                                     toGenericUtf8(defaultExecutable(env.platform)) + ").",
+                                     " executable (" + toGenericUtf8(defaultExecutable()) + ").",
                                  pathToUtf8(inst.executablePath));
             logWarning(m_traits.logComponent, "The game executable was not found",
                        {{"path", pathToUtf8(inst.executablePath)}});
@@ -675,11 +663,9 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
                         {{"path", pathToUtf8(*fromUserDir)}});
             }
         }
-        const fs::path& base =
-            env.platform == OsPlatform::Linux ? env.xdgDataHome : env.documentsDir;
         std::optional<fs::path> fromSettings;
         if (!fromUserDir && settings && !settings->gameDataPath.empty()) {
-            fromSettings = resolveGameDataPath(settings->gameDataPath, base);
+            fromSettings = resolveGameDataPath(settings->gameDataPath, env.documentsDir);
             if (!fromSettings)
                 logWarning(m_traits.logComponent, "Ignoring an unsupported gameDataPath",
                            {{"gameDataPath", settings->gameDataPath}});
@@ -1081,13 +1067,8 @@ ProcessNames DlcLoadJsonAdapter::processNames(const GameInstallation& installati
         names.game.push_back(file);
     };
     addGame(installation.executablePath);
-    addGame(defaultExecutable(installation.platform));
-    std::span<const std::string_view> launchers = m_traits.linuxLauncherProcesses;
-    if (installation.platform == OsPlatform::Windows)
-        launchers = m_traits.windowsLauncherProcesses;
-    else if (installation.platform == OsPlatform::MacOS)
-        launchers = m_traits.macLauncherProcesses;
-    for (const std::string_view name : launchers)
+    addGame(defaultExecutable());
+    for (const std::string_view name : m_traits.launcherProcesses)
         names.conflictingWriters.emplace_back(name);
     return names;
 }

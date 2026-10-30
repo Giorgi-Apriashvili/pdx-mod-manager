@@ -16,6 +16,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <nlohmann/json.hpp>
+#include <windows.h>
 
 #include <QDir>
 #include <QFile>
@@ -26,10 +27,6 @@
 #include <filesystem>
 #include <string>
 #include <vector>
-
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 
 using namespace pmm;
 using namespace pmm::app;
@@ -487,9 +484,6 @@ TEST_CASE("Starting launches the program with the exact arguments, then quits", 
         CHECK(f.quits == 0);
         platform::ProcessSpec withReport = spec;
         withReport.environment.emplace_back("PMM_ECHO_OUTPUT", platform::pathToUtf8(report));
-#if !defined(_WIN32)
-        fs::permissions(withReport.executable, fs::perms::owner_exec, fs::perm_options::add);
-#endif
         return platform::startDetached(withReport);
     };
     f.reachAvailable();
@@ -687,11 +681,7 @@ TEST_CASE("The mode follows the contract's layout", "[app][update]") {
     }
     SECTION("with the uninstaller") {
         writeText(appDir.parent_path() / "unins000.exe", "x");
-#if defined(_WIN32)
         CHECK(f.make().mode() == "installer");
-#else
-        CHECK(f.make().mode() == "releasePage");
-#endif
     }
 }
 
@@ -809,7 +799,6 @@ TEST_CASE("The Backend wires updates to the session", "[app][update]") {
 TEST_CASE("The running-instance signal lives as long as its object", "[app][update]") {
     CHECK(QString::fromLatin1(kRunningInstanceMutexName) ==
           QStringLiteral("Local\\ParadoxModManagerRunning"));
-#if defined(_WIN32)
     // A name of its own: a real pmm-app may be running while the tests do.
     const std::wstring name =
         L"Local\\ParadoxModManagerTest" + std::to_wstring(GetCurrentProcessId());
@@ -830,10 +819,6 @@ TEST_CASE("The running-instance signal lives as long as its object", "[app][upda
         CHECK(second.held());
     }
     CHECK_FALSE(exists());
-#else
-    const RunningInstanceSignal marker;
-    CHECK_FALSE(marker.held());
-#endif
 }
 
 // Hidden: run by hand ("pmm_app_tests [.live-update]"). One unauthenticated GET

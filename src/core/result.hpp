@@ -131,9 +131,9 @@ inline Error makeError(ErrorCode code, std::string message, std::string detail =
 
 // Propagate an error from an expression returning Result<...>. Every expansion
 // names its variable uniquely, so a PMM_TRY inside a lambda passed to another
-// PMM_TRY does not shadow the outer one (GCC -Wshadow). Clang >= 22 reports
-// __COUNTER__ as an extension under -Wpedantic and does not warn about this
-// shadowing, so it uses the line number instead.
+// PMM_TRY does not shadow the outer one. Clang >= 22 reports __COUNTER__ as an
+// extension under -Wpedantic and does not warn about this shadowing, so it uses
+// the line number instead.
 #if defined(__clang__)
 #define PMM_DETAIL_TRY_ID __LINE__
 #else

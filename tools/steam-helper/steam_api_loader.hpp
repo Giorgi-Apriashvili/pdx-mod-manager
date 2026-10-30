@@ -1,12 +1,12 @@
 #pragma once
 
-// Late-bound access to a game's own Steam API library (steam_api64.dll,
-// libsteam_api.so, libsteam_api.dylib) through its exported "flat" C API.
+// Late-bound access to a game's own Steam API library (steam_api64.dll) through
+// its exported "flat" C API.
 //
 // No Steamworks SDK header is used: the handful of declarations below are
 // written from the public ISteamUGC / steam_api_flat documentation. Flat
 // functions take the interface pointer as first argument and use the C
-// calling convention (S_CALLTYPE is __cdecl on Windows).
+// calling convention (S_CALLTYPE is __cdecl).
 //
 // Interface pointers MUST match the vtable layout the library's flat functions
 // were compiled for. They are therefore obtained, in order of preference, from
@@ -35,24 +35,16 @@ inline constexpr SteamApiCall kInvalidApiCall = 0;
 // RemoteStorageSubscribePublishedFileResult_t = k_iClientRemoteStorageCallbacks (1300) + 13.
 inline constexpr int kSubscribeResultCallbackId = 1313;
 
-// Steam callback structs use 8-byte packing on Windows and 4-byte packing on
-// Linux/macOS (VALVE_CALLBACK_PACK_LARGE / _SMALL). GetAPICallResult rejects
-// a buffer whose size differs from the struct the client expects.
-#if defined(_WIN32)
+// Steam callback structs use 8-byte packing (VALVE_CALLBACK_PACK_LARGE).
+// GetAPICallResult rejects a buffer whose size differs from the struct the
+// client expects.
 #pragma pack(push, 8)
-#else
-#pragma pack(push, 4)
-#endif
 struct SubscribeResultPayload {
     std::int32_t result; // EResult
     PublishedFileId publishedFileId;
 };
 #pragma pack(pop)
-#if defined(_WIN32)
 static_assert(sizeof(SubscribeResultPayload) == 16);
-#else
-static_assert(sizeof(SubscribeResultPayload) == 12);
-#endif
 
 struct Failure {
     providers::HelperFailure kind = providers::HelperFailure::InitFailed;

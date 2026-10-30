@@ -16,8 +16,8 @@ using pmm::test::u8path;
 using pmm::test::writeFile;
 namespace fs = std::filesystem;
 
-// Paths with no UTF-8 form (unpaired UTF-16 surrogates on Windows) must be
-// reported, never thrown: path::u8string() throws for them.
+// Paths with no UTF-8 form (unpaired UTF-16 surrogates) must be reported, never
+// thrown: path::u8string() throws for them.
 
 TEST_CASE("Path text conversion never throws", "[providers][paths]") {
     const fs::path valid = fs::path("mods") / u8path("caf\xC3\xA9") / "a.txt";
@@ -25,21 +25,12 @@ TEST_CASE("Path text conversion never throws", "[providers][paths]") {
     CHECK(*internal::pathToUtf8(valid, true) == "mods/caf\xC3\xA9/a.txt");
     CHECK(internal::displayPath(u8path("caf\xC3\xA9")) == "caf\xC3\xA9");
 
-#if defined(_WIN32)
     const fs::path lone(L"mods\\caf\xD800");
     CHECK_FALSE(internal::pathToUtf8(lone));
     CHECK_FALSE(internal::pathToUtf8(lone, true));
     CHECK(internal::displayPath(lone) == "mods\\caf\xEF\xBF\xBD");
-#else
-    // POSIX names are bytes: kept as they are, repaired only for display.
-    const fs::path latin1(std::string("caf\xE9"));
-    REQUIRE(internal::pathToUtf8(latin1));
-    CHECK(*internal::pathToUtf8(latin1) == "caf\xE9");
-    CHECK(internal::displayPath(latin1) == "caf\xEF\xBF\xBD");
-#endif
 }
 
-#if defined(_WIN32)
 TEST_CASE("A file name with an unpaired surrogate fails fingerprinting cleanly",
           "[providers][paths][fingerprint]") {
     TempDir dir("fp-surrogate");
@@ -87,4 +78,3 @@ TEST_CASE("Content checks and helper arguments report paths with unpaired surrog
     CHECK(missing.error().code == ErrorCode::NotFound);
     CHECK(isValidUtf8(missing.error().detail));
 }
-#endif

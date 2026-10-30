@@ -76,31 +76,21 @@ TEST_CASE("EU4 is discovered through the injected Steam environment", "[games][e
           ErrorCode::WrongGame);
 }
 
-TEST_CASE("EU4 default locations per OS", "[games][eu4]") {
+TEST_CASE("EU4 default locations", "[games][eu4]") {
     Eu4Adapter adapter;
     DiscoveryEnvironment env;
     env.documentsDir = u8path("/docs");
-    env.xdgDataHome = u8path("/xdg");
-    env.platform = OsPlatform::Windows;
     CHECK(adapter.defaultUserDataPath(env) ==
           u8path("/docs/Paradox Interactive/Europa Universalis IV"));
-    CHECK(adapter.defaultExecutable(OsPlatform::Windows) == u8path("eu4.exe"));
-    env.platform = OsPlatform::MacOS;
-    CHECK(adapter.defaultUserDataPath(env) ==
-          u8path("/docs/Paradox Interactive/Europa Universalis IV"));
-    CHECK(adapter.defaultExecutable(OsPlatform::MacOS) == u8path("eu4.app/Contents/MacOS/eu4"));
-    env.platform = OsPlatform::Linux;
-    CHECK(adapter.defaultUserDataPath(env) ==
-          u8path("/xdg/Paradox Interactive/Europa Universalis IV"));
-    CHECK(adapter.defaultExecutable(OsPlatform::Linux) == u8path("eu4"));
-    env.xdgDataHome.clear();
+    CHECK(adapter.defaultExecutable() == u8path("eu4.exe"));
+    env.documentsDir.clear();
     CHECK(adapter.defaultUserDataPath(env).empty());
 
     GameInstallation inst;
-    inst.platform = OsPlatform::Linux;
     const ProcessNames names = adapter.processNames(inst);
-    CHECK(names.game == std::vector<std::string>{"eu4"});
-    CHECK(names.conflictingWriters == std::vector<std::string>{"dowser", "paradox-launcher"});
+    CHECK(names.game == std::vector<std::string>{"eu4.exe"});
+    CHECK(names.conflictingWriters ==
+          std::vector<std::string>{"Paradox Launcher.exe", "dowser.exe"});
     CHECK(adapter.loadOrderInfo().verifiedInGame);
     CHECK(adapter.loadOrderInfo().summary.find("name sorts first") != std::string::npos);
     // Users are told that reordering does not change which mod wins.

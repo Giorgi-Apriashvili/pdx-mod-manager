@@ -41,7 +41,7 @@ Status validateName(std::string_view name) {
 }
 
 // History snapshots are JSON, so identities must be valid UTF-8 to survive a
-// snapshot byte for byte (on Linux a local mod id is the raw file stem).
+// snapshot byte for byte.
 bool hasStorableIdentity(const PlaysetEntry& entry) noexcept {
     return isValidUtf8(entry.identity.source) && isValidUtf8(entry.identity.id);
 }

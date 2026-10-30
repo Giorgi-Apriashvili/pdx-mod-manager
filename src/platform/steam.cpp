@@ -2,18 +2,15 @@
 
 #include "platform/detail/os_util.hpp"
 #include "platform/fs.hpp"
-#include "platform/paths.hpp"
+
+#include <windows.h>
+#include <winreg.h>
 
 #include <algorithm>
 #include <charconv>
 #include <system_error>
 #include <unordered_map>
 #include <utility>
-
-#if defined(_WIN32)
-#include <windows.h>
-#include <winreg.h>
-#endif
 
 namespace pmm::platform::steam {
 namespace {
@@ -149,7 +146,6 @@ private:
     int m_line = 1;
 };
 
-#if defined(_WIN32)
 std::optional<std::wstring> readRegistryString(HKEY root, const wchar_t* subKey,
                                                const wchar_t* valueName) {
     DWORD size = 0;
@@ -179,7 +175,6 @@ std::optional<std::uint32_t> readRegistryDword(HKEY root, const wchar_t* subKey,
         return std::nullopt;
     return static_cast<std::uint32_t>(value);
 }
-#endif
 
 // Comparison key for library paths: resolved where possible, no trailing
 // separator, case-folded on Windows.
@@ -191,16 +186,8 @@ std::string libraryKey(const fs::path& path) {
     std::string key = toGenericUtf8(resolved);
     while (key.size() > 1 && key.back() == '/')
         key.pop_back();
-#if defined(_WIN32)
     std::transform(key.begin(), key.end(), key.begin(), asciiLower);
-#endif
     return key;
-}
-
-bool nameMatchesFor(std::string_view running, std::string_view wanted, OsPlatform os) noexcept {
-    if (os == OsPlatform::Linux)
-        return running == wanted;
-    return keyEquals(running, wanted);
 }
 
 } // namespace
@@ -328,27 +315,12 @@ Result<KeyValue> readKeyValuesFile(const fs::path& path) {
 
 std::vector<fs::path> defaultSteamRootCandidates() {
     std::vector<fs::path> candidates;
-#if defined(_WIN32)
     if (auto path = readRegistryString(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", L"SteamPath"))
         candidates.push_back(fs::path(*path).make_preferred());
     if (auto path = readRegistryString(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Valve\\Steam",
                                        L"InstallPath"))
         candidates.push_back(fs::path(*path).make_preferred());
     candidates.emplace_back(L"C:\\Program Files (x86)\\Steam");
-#elif defined(__APPLE__)
-    const StandardDirectories dirs = standardDirectories();
-    candidates.push_back(dirs.home / "Library" / "Application Support" / "Steam");
-#else
-    const StandardDirectories dirs = standardDirectories();
-    candidates.push_back(dirs.home / ".steam" / "steam");
-    candidates.push_back(dirs.xdgDataHome / "Steam");
-    const fs::path defaultDataHome = dirs.home / ".local" / "share" / "Steam";
-    if (candidates.back() != defaultDataHome)
-        candidates.push_back(defaultDataHome);
-    candidates.push_back(dirs.home / ".var" / "app" / "com.valvesoftware.Steam" / ".local" /
-                         "share" / "Steam");
-    candidates.push_back(dirs.home / "snap" / "steam" / "common" / ".local" / "share" / "Steam");
-#endif
     return candidates;
 }
 
@@ -622,13 +594,9 @@ Result<AppWorkshopManifest> readAppWorkshopManifest(const fs::path& acfPath) {
 
 // ---- Steam client process and runtime ---------------------------------------
 
-bool isSteamRunning(const std::vector<RunningProcess>& processes, OsPlatform os,
-                    std::int64_t registeredPid) {
-    const char* wanted = os == OsPlatform::Windows ? "steam.exe"
-                         : os == OsPlatform::MacOS ? "steam_osx"
-                                                   : "steam";
+bool isSteamRunning(const std::vector<RunningProcess>& processes, std::int64_t registeredPid) {
     for (const RunningProcess& process : processes) {
-        if (nameMatchesFor(process.executableName, wanted, os))
+        if (keyEquals(process.executableName, "steam.exe"))
             return true;
         // A stale registry pid may have been reused by an unrelated program, so
         // it only counts when the name is unknown.
@@ -640,71 +608,27 @@ bool isSteamRunning(const std::vector<RunningProcess>& processes, OsPlatform os,
 
 bool isSteamRunning() {
     std::int64_t registeredPid = 0;
-#if defined(_WIN32)
     if (auto pid =
             readRegistryDword(HKEY_CURRENT_USER, L"Software\\Valve\\Steam\\ActiveProcess", L"pid"))
         registeredPid = static_cast<std::int64_t>(*pid);
-#endif
     Result<std::vector<RunningProcess>> processes = listProcesses();
     if (!processes)
         return registeredPid != 0;
-    return isSteamRunning(*processes, currentOsPlatform(), registeredPid);
+    return isSteamRunning(*processes, registeredPid);
 }
 
-const char* steamApiLibraryName(OsPlatform os) noexcept {
-    switch (os) {
-    case OsPlatform::Windows:
-        return "steam_api64.dll";
-    case OsPlatform::MacOS:
-        return "libsteam_api.dylib";
-    case OsPlatform::Linux:
-        break;
-    }
-    return "libsteam_api.so";
+const char* steamApiLibraryName() noexcept {
+    return "steam_api64.dll";
 }
 
-std::optional<fs::path> findSteamApiLibrary(const fs::path& gameInstallDir, OsPlatform os) {
+std::optional<fs::path> findSteamApiLibrary(const fs::path& gameInstallDir) {
     if (gameInstallDir.empty())
         return std::nullopt;
-    std::vector<fs::path> directories;
-    const auto addBundle = [&](const fs::path& bundle) {
-        directories.push_back(bundle / "Contents" / "Frameworks");
-        directories.push_back(bundle / "Contents" / "MacOS");
-    };
-    const auto isBundle = [](const fs::path& path) {
-        return keyEquals(pathToUtf8(path.extension()), ".app");
-    };
-    switch (os) {
-    case OsPlatform::Windows:
-        directories = {gameInstallDir, gameInstallDir / "bin", gameInstallDir / "binaries",
-                       gameInstallDir / "win64"};
-        break;
-    case OsPlatform::Linux:
-        directories = {gameInstallDir, gameInstallDir / "linux64", gameInstallDir / "lib",
-                       gameInstallDir / "lib64", gameInstallDir / "bin"};
-        break;
-    case OsPlatform::MacOS: {
-        if (isBundle(gameInstallDir)) {
-            addBundle(gameInstallDir);
-        } else {
-            std::vector<fs::path> bundles;
-            std::error_code ec;
-            for (fs::directory_iterator it(gameInstallDir, ec), end; !ec && it != end;
-                 it.increment(ec)) {
-                std::error_code typeError;
-                if (it->is_directory(typeError) && isBundle(it->path()))
-                    bundles.push_back(it->path());
-            }
-            std::sort(bundles.begin(), bundles.end());
-            for (const fs::path& bundle : bundles)
-                addBundle(bundle);
-        }
-        directories.push_back(gameInstallDir);
-        break;
-    }
-    }
+    const std::vector<fs::path> directories = {gameInstallDir, gameInstallDir / "bin",
+                                               gameInstallDir / "binaries",
+                                               gameInstallDir / "win64"};
 
-    const std::string name = steamApiLibraryName(os);
+    const std::string name = steamApiLibraryName();
     for (const fs::path& directory : directories) {
         fs::path candidate = directory / name;
         std::error_code ec;

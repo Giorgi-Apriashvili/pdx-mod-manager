@@ -1,9 +1,8 @@
 #pragma once
 
-// The signal an update run waits for (docs/updates.md): on Windows the process
-// holds a named mutex for its whole lifetime, and the installer waits until
-// nobody holds it any more. The operating system releases it if the process
-// dies. Other platforms have no installer that needs it: nothing is held.
+// The signal an update run waits for (docs/updates.md): the process holds a
+// named mutex for its whole lifetime, and the installer waits until nobody holds
+// it any more. The operating system releases it if the process dies.
 
 #include <QString>
 

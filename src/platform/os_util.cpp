@@ -2,27 +2,15 @@
 
 #include "platform/fs.hpp"
 
-#if defined(_WIN32)
 #include <windows.h>
-#else
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <cerrno>
-#endif
 
 namespace pmm::platform::detail {
 
 int lastOsError() noexcept {
-#if defined(_WIN32)
     return static_cast<int>(GetLastError());
-#else
-    return errno;
-#endif
 }
 
 std::string osErrorText(int error) {
-#if defined(_WIN32)
     wchar_t* buffer = nullptr;
     const DWORD length = FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -37,13 +25,9 @@ std::string osErrorText(int error) {
     if (text.empty())
         text = "Unknown error";
     return text + " (Windows error " + std::to_string(error) + ")";
-#else
-    return std::generic_category().message(error) + " (errno " + std::to_string(error) + ")";
-#endif
 }
 
 ErrorCode classifyOsError(int error, ErrorCode fallback) noexcept {
-#if defined(_WIN32)
     switch (static_cast<DWORD>(error)) {
     case ERROR_ACCESS_DENIED:
     case ERROR_WRITE_PROTECT:
@@ -61,30 +45,11 @@ ErrorCode classifyOsError(int error, ErrorCode fallback) noexcept {
     default:
         return fallback;
     }
-#else
-    switch (error) {
-    case EACCES:
-    case EPERM:
-    case EROFS:
-        return ErrorCode::PermissionDenied;
-    case ENOENT:
-    case ENOTDIR:
-        return ErrorCode::NotFound;
-    case EEXIST:
-        return ErrorCode::AlreadyExists;
-    default:
-        return fallback;
-    }
-#endif
 }
 
 bool isFileInUseError(int error) noexcept {
-#if defined(_WIN32)
     return error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION ||
            error == ERROR_USER_MAPPED_FILE;
-#else
-    return error == EBUSY || error == ETXTBSY;
-#endif
 }
 
 Error osError(int error, ErrorCode fallback, std::string message,
@@ -103,14 +68,9 @@ Error osError(int error, ErrorCode fallback, std::string message,
 
 Error fsError(const std::error_code& ec, ErrorCode fallback, std::string message,
               const std::filesystem::path& path) {
-#if defined(_WIN32)
     // MSVC's std::filesystem reports Win32 error numbers in system_category.
     if (ec.category() == std::system_category())
         return osError(ec.value(), fallback, std::move(message), path);
-#else
-    if (ec.category() == std::system_category() || ec.category() == std::generic_category())
-        return osError(ec.value(), fallback, std::move(message), path);
-#endif
     ErrorCode code = fallback;
     if (ec == std::errc::permission_denied || ec == std::errc::operation_not_permitted ||
         ec == std::errc::read_only_file_system)
@@ -128,26 +88,6 @@ std::string quotedName(const std::filesystem::path& path) {
     return "\"" + toValidUtf8(pathToUtf8(name)) + "\"";
 }
 
-void syncDirectoryBestEffort(const std::filesystem::path& directory) noexcept {
-#if defined(_WIN32)
-    (void)directory;
-#else
-    const std::string native = directory.empty() ? std::string(".") : directory.native();
-    int flags = O_RDONLY | O_CLOEXEC;
-#if defined(O_DIRECTORY)
-    flags |= O_DIRECTORY;
-#endif
-    const int fd = ::open(native.c_str(), flags);
-    if (fd < 0)
-        return;
-    // Some filesystems reject fsync on directories (EINVAL); durability is then
-    // whatever the filesystem provides.
-    (void)::fsync(fd);
-    (void)::close(fd);
-#endif
-}
-
-#if defined(_WIN32)
 std::wstring utf8ToWide(std::string_view utf8) {
     if (utf8.empty())
         return {};
@@ -172,6 +112,5 @@ std::string wideToUtf8(std::wstring_view wide) {
                             needed, nullptr, nullptr);
     return out;
 }
-#endif
 
 } // namespace pmm::platform::detail

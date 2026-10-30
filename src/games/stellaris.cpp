@@ -7,9 +7,7 @@ namespace {
 
 // Paradox launcher v2: "Paradox Launcher.exe" plus its "dowser" helper, which
 // also ships in the Stellaris install folder.
-constexpr std::array<std::string_view, 2> kWindowsLauncher{"Paradox Launcher.exe", "dowser.exe"};
-constexpr std::array<std::string_view, 2> kLinuxLauncher{"dowser", "paradox-launcher"};
-constexpr std::array<std::string_view, 1> kMacLauncher{"Paradox Launcher"};
+constexpr std::array<std::string_view, 2> kLauncher{"Paradox Launcher.exe", "dowser.exe"};
 // Not requested by v4.5.2's launcher-settings.json; dropped all the same.
 constexpr std::array<std::string_view, 1> kDroppedArguments{"-enabletelemetry"};
 
@@ -18,12 +16,8 @@ constexpr GameTraits kTraits{
     .steamAppId = "281990",
     .userDataFolder = "Stellaris",
     .launcherGameId = "stellaris",
-    .windowsExecutable = "stellaris.exe",
-    .linuxExecutable = "stellaris",
-    .macExecutable = "stellaris.app/Contents/MacOS/stellaris",
-    .windowsLauncherProcesses = kWindowsLauncher,
-    .linuxLauncherProcesses = kLinuxLauncher,
-    .macLauncherProcesses = kMacLauncher,
+    .executable = "stellaris.exe",
+    .launcherProcesses = kLauncher,
     // stellaris.exe v4.5.2 references userdir.txt as eu4.exe does (no such
     // file ships with the game).
     .userDirFile = "userdir.txt",

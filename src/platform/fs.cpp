@@ -3,6 +3,8 @@
 #include "core/utf8.hpp"
 #include "platform/detail/os_util.hpp"
 
+#include <windows.h>
+
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -10,17 +12,6 @@
 #include <system_error>
 #include <utility>
 #include <vector>
-
-#if defined(_WIN32)
-#include <windows.h>
-#else
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <cerrno>
-#endif
 
 namespace pmm::platform {
 namespace {
@@ -34,19 +25,11 @@ constexpr std::size_t kMaxIoPerCall = std::size_t{1} << 30;
 // Last OS error, never 0 (some failing calls leave the error unset).
 int failureCode() noexcept {
     const int error = detail::lastOsError();
-#if defined(_WIN32)
     return error != 0 ? error : static_cast<int>(ERROR_GEN_FAILURE);
-#else
-    return error != 0 ? error : EIO;
-#endif
 }
 
 std::uint64_t processId() noexcept {
-#if defined(_WIN32)
     return GetCurrentProcessId();
-#else
-    return static_cast<std::uint64_t>(::getpid());
-#endif
 }
 
 // splitmix64 over a process-wide counter: distinct per call, seeded per process.
@@ -74,13 +57,8 @@ fs::path temporaryName(const char* tag) {
 // OS error number, so callers can phrase the user-facing message.
 class File {
 public:
-#if defined(_WIN32)
     using Handle = HANDLE;
     static Handle invalidHandle() noexcept { return INVALID_HANDLE_VALUE; }
-#else
-    using Handle = int;
-    static Handle invalidHandle() noexcept { return -1; }
-#endif
 
     File() = default;
     File(const File&) = delete;
@@ -89,130 +67,58 @@ public:
 
     int openForReading(const fs::path& path) noexcept {
         (void)close();
-#if defined(_WIN32)
         m_handle = CreateFileW(
             path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
         return m_handle == invalidHandle() ? failureCode() : 0;
-#else
-        do {
-            m_handle = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
-        } while (m_handle < 0 && errno == EINTR);
-        return m_handle < 0 ? failureCode() : 0;
-#endif
     }
 
-    // Creates a new file and fails if it exists. On POSIX the permission bits
-    // are copied from `modeSource` when that is an existing regular file.
-    int createNew(const fs::path& path, const fs::path& modeSource) noexcept {
+    // Creates a new file and fails if it exists.
+    int createNew(const fs::path& path) noexcept {
         (void)close();
-#if defined(_WIN32)
-        (void)modeSource;
         m_handle = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
                                FILE_ATTRIBUTE_NORMAL, nullptr);
         return m_handle == invalidHandle() ? failureCode() : 0;
-#else
-        struct stat existing{};
-        mode_t mode = 0666;
-        bool copyMode = false;
-        if (!modeSource.empty() && ::stat(modeSource.c_str(), &existing) == 0 &&
-            S_ISREG(existing.st_mode)) {
-            mode = existing.st_mode & 07777;
-            copyMode = true;
-        }
-        do {
-            m_handle = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, mode);
-        } while (m_handle < 0 && errno == EINTR);
-        if (m_handle < 0)
-            return failureCode();
-        if (copyMode)
-            (void)::fchmod(m_handle, mode); // open() applied the umask
-        return 0;
-#endif
     }
 
     int size(std::uint64_t& out) const noexcept {
-#if defined(_WIN32)
         LARGE_INTEGER value{};
         if (!GetFileSizeEx(m_handle, &value))
             return failureCode();
         out = static_cast<std::uint64_t>(value.QuadPart);
-#else
-        struct stat st{};
-        if (::fstat(m_handle, &st) != 0)
-            return failureCode();
-        out = static_cast<std::uint64_t>(st.st_size);
-#endif
         return 0;
     }
 
     // Reads up to `capacity` bytes; `got` == 0 means end of file.
     int read(char* buffer, std::size_t capacity, std::size_t& got) noexcept {
         const std::size_t request = capacity < kMaxIoPerCall ? capacity : kMaxIoPerCall;
-#if defined(_WIN32)
         DWORD transferred = 0;
         if (!ReadFile(m_handle, buffer, static_cast<DWORD>(request), &transferred, nullptr))
             return failureCode();
         got = transferred;
-#else
-        ssize_t transferred = 0;
-        do {
-            transferred = ::read(m_handle, buffer, request);
-        } while (transferred < 0 && errno == EINTR);
-        if (transferred < 0)
-            return failureCode();
-        got = static_cast<std::size_t>(transferred);
-#endif
         return 0;
     }
 
     int writeAll(std::string_view data) noexcept {
         while (!data.empty()) {
             const std::size_t request = data.size() < kMaxIoPerCall ? data.size() : kMaxIoPerCall;
-#if defined(_WIN32)
             DWORD written = 0;
             if (!WriteFile(m_handle, data.data(), static_cast<DWORD>(request), &written, nullptr))
                 return failureCode();
             if (written == 0)
                 return static_cast<int>(ERROR_WRITE_FAULT);
-#else
-            ssize_t written = 0;
-            do {
-                written = ::write(m_handle, data.data(), request);
-            } while (written < 0 && errno == EINTR);
-            if (written < 0)
-                return failureCode();
-            if (written == 0)
-                return EIO;
-#endif
             data.remove_prefix(static_cast<std::size_t>(written));
         }
         return 0;
     }
 
     // Flushes file data and metadata to stable storage.
-    int sync() noexcept {
-#if defined(_WIN32)
-        return FlushFileBuffers(m_handle) ? 0 : failureCode();
-#else
-#if defined(__APPLE__)
-        // fsync() on macOS only reaches the drive cache; F_FULLFSYNC flushes it.
-        if (::fcntl(m_handle, F_FULLFSYNC) == 0)
-            return 0;
-#endif
-        return ::fsync(m_handle) == 0 ? 0 : failureCode();
-#endif
-    }
+    int sync() noexcept { return FlushFileBuffers(m_handle) ? 0 : failureCode(); }
 
     int close() noexcept {
         if (m_handle == invalidHandle())
             return 0;
-#if defined(_WIN32)
         const bool ok = CloseHandle(m_handle) != 0;
-#else
-        // Never retry close() on EINTR: the descriptor is already released on Linux.
-        const bool ok = ::close(m_handle) == 0 || errno == EINTR;
-#endif
         const int error = ok ? 0 : failureCode();
         m_handle = invalidHandle();
         return error;
@@ -223,23 +129,16 @@ private:
 };
 
 void removeQuietly(const fs::path& path) noexcept {
-#if defined(_WIN32)
     (void)DeleteFileW(path.c_str());
-#else
-    (void)::unlink(path.c_str());
-#endif
 }
 
-#if defined(_WIN32)
 bool hasReadOnlyAttribute(const fs::path& path) noexcept {
     const DWORD attributes = GetFileAttributesW(path.c_str());
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0;
 }
-#endif
 
 // Renames `from` over `to`, replacing it atomically.
 int replaceFile(const fs::path& from, const fs::path& to) noexcept {
-#if defined(_WIN32)
     // Virus scanners and indexers briefly hold files open; retry a few times
     // unless the failure is clearly permanent (read-only target).
     for (int attempt = 0;; ++attempt) {
@@ -253,9 +152,6 @@ int replaceFile(const fs::path& from, const fs::path& to) noexcept {
             return error;
         Sleep(DWORD{20} << attempt);
     }
-#else
-    return ::rename(from.c_str(), to.c_str()) == 0 ? 0 : failureCode();
-#endif
 }
 
 // Shared implementation of writeFileAtomic and copyFileDurable: `produce`
@@ -278,7 +174,7 @@ Status writeAtomically(const fs::path& path, const std::function<Status(File&)>&
     fs::path temp;
     for (int attempt = 0;; ++attempt) {
         temp = parent / temporaryName("write");
-        const int error = file.createNew(temp, path);
+        const int error = file.createNew(temp);
         if (error == 0)
             break;
         if (detail::classifyOsError(error, ErrorCode::IoError) != ErrorCode::AlreadyExists ||
@@ -301,22 +197,15 @@ Status writeAtomically(const fs::path& path, const std::function<Status(File&)>&
         removeQuietly(temp);
         return osError(error, ErrorCode::IoError, "Could not replace " + name + ".", path);
     }
-    detail::syncDirectoryBestEffort(parent);
     return {};
 }
 
-#if defined(_WIN32)
 bool componentsEqual(const fs::path& a, const fs::path& b) noexcept {
     const auto& x = a.native();
     const auto& y = b.native();
     return CompareStringOrdinal(x.c_str(), static_cast<int>(x.size()), y.c_str(),
                                 static_cast<int>(y.size()), TRUE) == CSTR_EQUAL;
 }
-#else
-bool componentsEqual(const fs::path& a, const fs::path& b) noexcept {
-    return a.native() == b.native();
-}
-#endif
 
 } // namespace
 
@@ -413,7 +302,6 @@ Result<bool> isDirectoryWritable(const fs::path& directory) {
 
     for (int attempt = 0; attempt < 16; ++attempt) {
         const fs::path probe = directory / temporaryName("probe");
-#if defined(_WIN32)
         const HANDLE handle = CreateFileW(
             probe.c_str(), GENERIC_WRITE | DELETE, 0, nullptr, CREATE_NEW,
             FILE_ATTRIBUTE_TEMPORARY | FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
@@ -421,14 +309,6 @@ Result<bool> isDirectoryWritable(const fs::path& directory) {
             CloseHandle(handle);
             return true;
         }
-#else
-        const int fd = ::open(probe.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-        if (fd >= 0) {
-            (void)::close(fd);
-            (void)::unlink(probe.c_str());
-            return true;
-        }
-#endif
         const int error = failureCode();
         const ErrorCode code = detail::classifyOsError(error, ErrorCode::IoError);
         if (code == ErrorCode::PermissionDenied)
@@ -442,39 +322,22 @@ Result<bool> isDirectoryWritable(const fs::path& directory) {
 }
 
 std::string pathToUtf8(const fs::path& path) {
-#if defined(_WIN32)
     return detail::wideToUtf8(path.native());
-#else
-    return path.native();
-#endif
 }
 
 fs::path pathFromUtf8(std::string_view utf8) {
-#if defined(_WIN32)
     return fs::path(detail::utf8ToWide(utf8));
-#else
-    return fs::path(std::string(utf8));
-#endif
 }
 
 bool isUtf8Representable(const fs::path& path) {
-#if defined(_WIN32)
     return isValidUtf16(std::wstring_view(path.native()));
-#else
-    return isValidUtf8(path.native());
-#endif
 }
 
 std::string toGenericUtf8(const fs::path& path) {
-#if defined(_WIN32)
     return detail::wideToUtf8(path.generic_wstring());
-#else
-    return path.generic_string();
-#endif
 }
 
 std::int64_t lastWriteUnixSeconds(const fs::path& path) noexcept {
-#if defined(_WIN32)
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data))
         return 0;
@@ -485,12 +348,6 @@ std::int64_t lastWriteUnixSeconds(const fs::path& path) noexcept {
     constexpr std::int64_t kUnixEpochTicks = 116444736000000000LL;
     const std::int64_t sinceEpoch = static_cast<std::int64_t>(ticks.QuadPart) - kUnixEpochTicks;
     return sinceEpoch >= 0 ? sinceEpoch / 10000000 : -((-sinceEpoch + 9999999) / 10000000);
-#else
-    struct stat st{};
-    if (::stat(path.c_str(), &st) != 0)
-        return 0;
-    return static_cast<std::int64_t>(st.st_mtime);
-#endif
 }
 
 // A path is within itself. Comparison is case-insensitive on Windows.
@@ -531,7 +388,6 @@ Status removeFile(const fs::path& path) {
         return makeError(ErrorCode::IoError,
                          "Cannot delete " + quotedName(path) + " because it is a folder.",
                          pathToUtf8(path));
-#if defined(_WIN32)
     if (!DeleteFileW(path.c_str())) {
         const int error = failureCode();
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
@@ -539,16 +395,6 @@ Status removeFile(const fs::path& path) {
         return osError(error, ErrorCode::IoError, "Could not delete " + quotedName(path) + ".",
                        path);
     }
-#else
-    if (::unlink(path.c_str()) != 0) {
-        const int error = failureCode();
-        if (error == ENOENT)
-            return {};
-        return osError(error, ErrorCode::IoError, "Could not delete " + quotedName(path) + ".",
-                       path);
-    }
-    detail::syncDirectoryBestEffort(path.parent_path());
-#endif
     return {};
 }
 
