@@ -12,7 +12,7 @@ using namespace pmm;
 using namespace pmm::sharing;
 
 TEST_CASE("Base64URL encodes RFC 4648 vectors without padding", "[sharing][codec]") {
-    CHECK(base64UrlEncode("") == "");
+    CHECK(base64UrlEncode("").empty());
     CHECK(base64UrlEncode("f") == "Zg");
     CHECK(base64UrlEncode("fo") == "Zm8");
     CHECK(base64UrlEncode("foo") == "Zm9v");

@@ -706,7 +706,7 @@ std::optional<fs::path> findSteamApiLibrary(const fs::path& gameInstallDir, OsPl
 
     const std::string name = steamApiLibraryName(os);
     for (const fs::path& directory : directories) {
-        const fs::path candidate = directory / name;
+        fs::path candidate = directory / name;
         std::error_code ec;
         if (fs::is_regular_file(candidate, ec))
             return candidate;

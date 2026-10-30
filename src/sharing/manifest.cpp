@@ -152,7 +152,7 @@ private:
     // Ends the parse after a limit error: a root schemaVersion other than this
     // one is the actionable error, as it would be in readManifest().
     bool decide() {
-        if (m_schemaVersion && *m_schemaVersion != kManifestSchemaVersion) {
+        if (m_schemaVersion && *m_schemaVersion != kManifestSchemaVersion && m_error) {
             Error unsupported = checkSchemaVersion(*m_schemaVersion).error();
             unsupported.detail = "also exceeds this version's limits: " + m_error->message;
             m_error = std::move(unsupported);

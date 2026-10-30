@@ -3,3 +3,15 @@
 # Point this at another build directory if you work with a different preset.
 CompileFlags:
   CompilationDatabase: build/debug
+Diagnostics:
+  # clang-tidy runs with .clang-tidy. The include cleaner is off: the code
+  # relies on headers that include what they need, so "not used directly"
+  # hints would appear on nearly every file without pointing at a defect.
+  UnusedIncludes: None
+  MissingIncludes: None
+---
+# Temporary agent worktrees have no compile commands: no diagnostics there.
+If:
+  PathMatch: \.claude/.*
+Diagnostics:
+  Suppress: "*"

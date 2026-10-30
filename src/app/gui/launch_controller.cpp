@@ -159,7 +159,7 @@ bool LaunchController::recoverInterrupted() {
             }
             return outcome;
         },
-        [this](Outcome outcome) {
+        [this](const Outcome& outcome) {
             if (!outcome.errors.isEmpty())
                 m_backend->notifications()->error(tr("Recovery incomplete"),
                                                   outcome.errors.join(QLatin1Char('\n')));

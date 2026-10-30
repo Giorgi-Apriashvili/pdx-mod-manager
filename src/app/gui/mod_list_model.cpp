@@ -475,6 +475,7 @@ void ModListModel::runEdit(const QString& failureTitle, EditOp op, bool affectsL
                 outcome.launch = queries::launchData(runtime, game, playsetId, options);
             return outcome;
         },
+        // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks): Qt owns the queued functor
         [this, playsetId, failureTitle](Outcome outcome) {
             finishEdit(playsetId, failureTitle, std::move(outcome.edit), std::move(outcome.state),
                        std::move(outcome.launch));

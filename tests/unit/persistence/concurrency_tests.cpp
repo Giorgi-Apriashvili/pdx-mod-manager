@@ -49,7 +49,7 @@ TEST_CASE("One database shared by two writer threads stays consistent",
     CHECK(failures.load() == 0);
     CHECK(queryInt(*db, "SELECT count(*) FROM settings") == 200);
     CHECK(queryInt(*db, "SELECT count(*) FROM playsets") == 40);
-    CHECK(queryInt(*db, "SELECT count(*) FROM playset_entries") == 40 * 5);
+    CHECK(queryInt(*db, "SELECT count(*) FROM playset_entries") == std::int64_t{40} * 5);
     CHECK(queryInt(*db, "SELECT count(*) FROM acquisition_jobs") == 40);
     CHECK(queryText(*db, "PRAGMA integrity_check") == "ok");
 }

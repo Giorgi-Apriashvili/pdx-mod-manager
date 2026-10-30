@@ -16,7 +16,9 @@ namespace {
 
 // SQLITE_TRANSIENT without the C-style cast in the macro.
 sqlite3_destructor_type transientDestructor() noexcept {
-    return reinterpret_cast<sqlite3_destructor_type>(static_cast<std::intptr_t>(-1));
+    // SQLITE_TRANSIENT: SQLite's documented sentinel, not a real address.
+    return reinterpret_cast<sqlite3_destructor_type>( // NOLINT(performance-no-int-to-ptr)
+        static_cast<std::intptr_t>(-1));
 }
 
 std::string abbreviate(std::string_view sql) {

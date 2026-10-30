@@ -1,0 +1,9 @@
+---
+# Tests: the optional-access analysis does not know that Catch2's REQUIRE(x)
+# stops the test when x is empty, and fixed random seeds are intended
+# (reproducible fuzz-style tests).
+InheritParentConfig: true
+Checks: >
+  -bugprone-unchecked-optional-access,
+  -bugprone-random-generator-seed
+...

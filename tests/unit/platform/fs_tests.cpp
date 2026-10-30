@@ -44,7 +44,8 @@ void makeWritable(const fs::path& file) {
 TEST_CASE("writeFileAtomic round-trips binary contents through readFile", "[platform][fs]") {
     TempDir temp;
     const fs::path file = temp.path() / test::unicodeSubdir() / "data file.bin";
-    const std::string contents("line1\r\nline2\n\0binary\xff\xfe end", 27);
+    constexpr char kContents[] = "line1\r\nline2\n\0binary\xff\xfe end";
+    const std::string contents(kContents, sizeof kContents - 1); // keeps the embedded NUL
 
     REQUIRE(writeFileAtomic(file, contents).ok()); // creates the missing parents
     const auto read = readFile(file);

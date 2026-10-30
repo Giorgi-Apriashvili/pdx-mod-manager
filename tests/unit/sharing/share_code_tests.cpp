@@ -61,8 +61,8 @@ std::string deflateRepeated(std::string_view prefix, char filler, std::size_t co
     z_stream s{};
     REQUIRE(deflateInit(&s, 1) == Z_OK);
     std::string out;
-    std::vector<char> buffer(64 * 1024);
-    const std::string chunk(1024 * 1024, filler);
+    std::vector<char> buffer(std::size_t{64} * 1024);
+    const std::string chunk(std::size_t{1024} * 1024, filler);
     const auto pump = [&](const char* data, std::size_t size, int flush) {
         s.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(data));
         s.avail_in = static_cast<uInt>(size);

@@ -14,10 +14,12 @@
 #include <vector>
 
 // Declares `var` from a Result-returning expression; returns its error on failure.
+// NOLINTBEGIN(bugprone-macro-parentheses): `var` names the declared variable.
 #define PMM_DB_TRY_VALUE(var, expr)                                                                \
     auto var = (expr);                                                                             \
     if (!var.ok())                                                                                 \
     return std::move(var).error()
+// NOLINTEND(bugprone-macro-parentheses)
 
 namespace pmm::persistence::internal {
 

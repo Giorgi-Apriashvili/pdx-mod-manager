@@ -50,7 +50,7 @@ TEST_CASE("utf8SequenceLength measures one well-formed sequence", "[core][utf8]"
 }
 
 TEST_CASE("sanitizeUtf8 replaces each maximal ill-formed subpart once", "[core][utf8]") {
-    CHECK(sanitizeUtf8("") == "");
+    CHECK(sanitizeUtf8("").empty());
     CHECK(sanitizeUtf8("caf\xC3\xA9") == "caf\xC3\xA9");
     CHECK(sanitizeUtf8("caf\xE9") == "caf" + kFffd);
     CHECK(sanitizeUtf8("\xE2\x82x") == kFffd + "x");              // truncated 3-byte sequence

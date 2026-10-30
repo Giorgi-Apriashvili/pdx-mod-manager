@@ -54,7 +54,7 @@ public:
     Q_INVOKABLE void clearPreview();
 
     // Largest share-code file read (the protocol accepts 2 MiB of code).
-    static constexpr qint64 kMaxCodeFileBytes = 4 * 1024 * 1024;
+    static constexpr qint64 kMaxCodeFileBytes = qint64{4} * 1024 * 1024;
 
 signals:
     void lastExportCodeChanged();

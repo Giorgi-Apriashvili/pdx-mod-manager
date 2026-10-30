@@ -141,10 +141,12 @@ inline Error makeError(ErrorCode code, std::string message, std::string detail =
 #endif
 #define PMM_DETAIL_CONCAT_IMPL(a, b) a##b
 #define PMM_DETAIL_CONCAT(a, b) PMM_DETAIL_CONCAT_IMPL(a, b)
+// NOLINTBEGIN(bugprone-macro-parentheses): `var` names the declared variable.
 #define PMM_DETAIL_TRY(expr, var)                                                                  \
     do {                                                                                           \
         auto&& var = (expr);                                                                       \
         if (!var.ok())                                                                             \
             return std::move(var).error();                                                         \
     } while (false)
+// NOLINTEND(bugprone-macro-parentheses)
 #define PMM_TRY(expr) PMM_DETAIL_TRY(expr, PMM_DETAIL_CONCAT(pmm_try_result_, PMM_DETAIL_TRY_ID))

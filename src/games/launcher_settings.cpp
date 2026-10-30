@@ -14,7 +14,7 @@ namespace {
 using platform::pathToUtf8;
 using platform::steam::keyEquals;
 
-constexpr std::uint64_t kMaxSettingsBytes = 1024 * 1024;
+constexpr std::uint64_t kMaxSettingsBytes = std::uint64_t{1024} * 1024;
 constexpr std::string_view kUserDocuments = "%USER_DOCUMENTS%";
 
 Error invalidField(std::string_view field, std::string_view problem) {

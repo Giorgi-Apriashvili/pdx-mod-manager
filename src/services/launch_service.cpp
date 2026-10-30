@@ -366,7 +366,8 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t pl
         for (const ConfigWrite& write : plan.value().configWrites)
             writes.push_back(platform::FileWrite{write.target, write.contents});
         auto applied = m_ctx.transactions.apply(
-            transactionLabel(game, playsetId, prepared.playset->name), std::move(writes));
+            transactionLabel(game, playsetId, prepared.playset ? prepared.playset->name : ""),
+            std::move(writes));
         if (!applied) {
             recordLaunch(m_ctx, game, playsetId, std::nullopt,
                          std::string(errorCodeName(applied.error().code)), applied.error().message,

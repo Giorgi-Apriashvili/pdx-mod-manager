@@ -28,10 +28,9 @@ std::string displaySnippet(std::string_view text, std::size_t maxBytes) {
         if (length == 0) {
             piece = kUtf8ReplacementCharacter; // one per ill-formed byte
             length = 1;
-        } else if (length == 1 &&
-                   (static_cast<std::uint8_t>(text[pos]) < 0x20 || text[pos] == 0x7F)) {
-            piece = "?";
-        } else if (length == 2 && containsControlCharacters(text.substr(pos, 2))) {
+        } else if ((length == 1 &&
+                    (static_cast<std::uint8_t>(text[pos]) < 0x20 || text[pos] == 0x7F)) ||
+                   (length == 2 && containsControlCharacters(text.substr(pos, 2)))) {
             piece = "?";
         } else {
             piece = text.substr(pos, length);

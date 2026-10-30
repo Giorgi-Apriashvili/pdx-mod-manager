@@ -1,12 +1,21 @@
 ---
+# Checks are chosen for real defects, not style. Left out on purpose:
+# bugprone-throwing-static-initialization (and its alias cert-err58-cpp): static
+# test data and tables whose constructors could only fail on out-of-memory;
+# cert-err33-c: ignored printf/fprintf results; and
+# clang-analyzer-optin.core.EnumCastOutOfRange, which reports bit-flag enums
+# (Catch2, the MSVC standard library) as out of range; push_back/string
+# concatenation micro-optimizations; and readability-make-member-function-const,
+# which would mark methods that write files or start processes const.
+# Callbacks (std::function) are taken by value on purpose: they are stored.
 Checks: >
   -*,
   bugprone-*,
   -bugprone-easily-swappable-parameters,
   -bugprone-exception-escape,
-  cert-err33-c,
-  cert-err58-cpp,
+  -bugprone-throwing-static-initialization,
   clang-analyzer-*,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
   concurrency-*,
   cppcoreguidelines-pro-type-member-init,
   cppcoreguidelines-slicing,
@@ -16,10 +25,15 @@ Checks: >
   modernize-use-override,
   performance-*,
   -performance-enum-size,
+  -performance-inefficient-string-concatenation,
+  -performance-inefficient-vector-operation,
   readability-container-size-empty,
-  readability-make-member-function-const,
   readability-redundant-string-cstr
+CheckOptions:
+  performance-unnecessary-value-param.AllowedTypes: 'std::function'
 WarningsAsErrors: ''
-HeaderFilterRegex: 'src/.*'
+# Project headers only; fetched dependencies live under build/*/_deps.
+HeaderFilterRegex: '(src|tests|tools)[/\\].*'
+ExcludeHeaderFilterRegex: '.*[/\\]_deps[/\\].*'
 FormatStyle: file
 ...

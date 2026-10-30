@@ -54,6 +54,8 @@ using FnAppsBIsSubscribedApp = bool(PMM_STEAM_CALL*)(void*, AppId);
 template <class Fn> Fn as(void* p) {
     static_assert(sizeof(Fn) == sizeof(void*));
     Fn f;
+    // Exported functions arrive as data pointers; copy the bits (same size).
+    // NOLINTNEXTLINE(bugprone-multi-level-implicit-pointer-conversion,bugprone-bitwise-pointer-cast)
     std::memcpy(&f, &p, sizeof f);
     return f;
 }
@@ -103,7 +105,7 @@ std::string readImage(const fs::path& path) {
         return {};
     std::string data;
     char buf[64 * 1024];
-    while (in && data.size() < 64u * 1024 * 1024) {
+    while (in && data.size() < std::size_t{64} * 1024 * 1024) {
         in.read(buf, sizeof buf);
         data.append(buf, static_cast<std::size_t>(in.gcount()));
     }
@@ -147,6 +149,7 @@ void* SteamApi::symbol(const char* name) const {
     const FARPROC p = GetProcAddress(static_cast<HMODULE>(m_library), name);
     void* v = nullptr;
     static_assert(sizeof(p) == sizeof(v));
+    // NOLINTNEXTLINE(bugprone-multi-level-implicit-pointer-conversion,bugprone-bitwise-pointer-cast)
     std::memcpy(&v, &p, sizeof v);
     return v;
 #else

@@ -39,7 +39,7 @@ QtWorkshopSessionHost::~QtWorkshopSessionHost() {
 }
 
 QString QtWorkshopSessionHost::defaultHelperPath() {
-    const QString overridePath = qEnvironmentVariable("PMM_STEAM_HELPER");
+    QString overridePath = qEnvironmentVariable("PMM_STEAM_HELPER");
     if (!overridePath.isEmpty())
         return overridePath;
 #if defined(Q_OS_WIN)
@@ -84,7 +84,7 @@ bool QtWorkshopSessionHost::open(const GameKey& gameKey, const std::string& appI
 #endif
 
     const std::uint64_t serial = session->serial;
-    const GameKey game = gameKey;
+    const GameKey& game = gameKey; // captured by copy below
     connect(
         process, &QProcess::readyReadStandardOutput, process,
         [this, game, serial] { readOutput(game, serial); }, Qt::QueuedConnection);
@@ -145,7 +145,7 @@ bool QtWorkshopSessionHost::isOpen(const GameKey& gameKey) const {
 
 void QtWorkshopSessionHost::closeAll() {
     while (!m_sessions.empty())
-        close(m_sessions.begin()->first);
+        QtWorkshopSessionHost::close(m_sessions.begin()->first); // also from the destructor
     waitForRetired();
 }
 

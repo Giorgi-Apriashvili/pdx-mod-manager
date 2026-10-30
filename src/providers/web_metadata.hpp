@@ -28,7 +28,7 @@ inline constexpr std::string_view kPublishedFileDetailsUrl =
 inline constexpr std::string_view kPublishedFileDetailsContentType =
     "application/x-www-form-urlencoded";
 inline constexpr std::size_t kMaxPublishedFileDetailsItems = 100;
-inline constexpr std::size_t kMaxPublishedFileDetailsResponseBytes = 16 * 1024 * 1024;
+inline constexpr std::size_t kMaxPublishedFileDetailsResponseBytes = std::size_t{16} * 1024 * 1024;
 
 // "itemcount=N&publishedfileids%5B0%5D=…" (brackets percent-encoded). Fails on
 // an empty list, more than kMaxPublishedFileDetailsItems ids, or any id that

@@ -36,7 +36,7 @@ void Sha256::reset() noexcept {
 
 void Sha256::compress(const std::uint8_t* block) noexcept {
     std::array<std::uint32_t, 64> w{};
-    for (int i = 0; i < 16; ++i) {
+    for (std::size_t i = 0; i < 16; ++i) {
         w[i] = (std::uint32_t{block[i * 4]} << 24) | (std::uint32_t{block[i * 4 + 1]} << 16) |
                (std::uint32_t{block[i * 4 + 2]} << 8) | std::uint32_t{block[i * 4 + 3]};
     }
@@ -114,7 +114,7 @@ Sha256::Digest Sha256::finish() noexcept {
     compress(m_buffer.data());
 
     Digest out{};
-    for (int i = 0; i < 8; ++i) {
+    for (std::size_t i = 0; i < 8; ++i) {
         out[i * 4] = static_cast<std::uint8_t>(m_state[i] >> 24);
         out[i * 4 + 1] = static_cast<std::uint8_t>(m_state[i] >> 16);
         out[i * 4 + 2] = static_cast<std::uint8_t>(m_state[i] >> 8);

@@ -66,8 +66,11 @@ QString entryStatusText(const ImportPlanEntry& entry, bool downloads) {
 }
 
 QVariantMap previewMap(const services::ImportPreview& preview, bool downloads) {
-    if (!preview.ok())
+    if (preview.error)
         return errorPreview(errorTitle(preview.error->code), qs(preview.error->message));
+    if (!preview.manifest || !preview.plan) // both set whenever there is no error
+        return errorPreview(errorTitle(ErrorCode::Internal),
+                            QStringLiteral("The code could not be previewed."));
     const sharing::Manifest& manifest = *preview.manifest;
     const ImportPlan& plan = *preview.plan;
     QVariantList warnings;
@@ -330,7 +333,7 @@ bool ShareController::importFromFile(const QUrl& fileUrl) {
 }
 
 bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, const QString& name) {
-    if (!m_preview || busy())
+    if (!m_preview || !m_preview->manifest || busy())
         return false;
     const bool replace = mode == QLatin1String("replace");
     const QString game = qs(m_preview->manifest->game);

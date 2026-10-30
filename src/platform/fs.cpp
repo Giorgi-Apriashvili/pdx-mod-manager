@@ -251,7 +251,7 @@ int replaceFile(const fs::path& from, const fs::path& to) noexcept {
                                (error == ERROR_ACCESS_DENIED && !hasReadOnlyAttribute(to));
         if (!transient || attempt >= 4)
             return error;
-        Sleep(static_cast<DWORD>(20u << attempt));
+        Sleep(DWORD{20} << attempt);
     }
 #else
     return ::rename(from.c_str(), to.c_str()) == 0 ? 0 : failureCode();

@@ -23,7 +23,7 @@ constexpr std::array<std::int8_t, 256> makeDecodeTable() {
 }
 constexpr auto kDecodeTable = makeDecodeTable();
 
-constexpr std::size_t kInflateChunk = 64 * 1024;
+constexpr std::size_t kInflateChunk = std::size_t{64} * 1024;
 
 std::string zlibDetail(const z_stream& stream, int ret) {
     std::string detail = "zlib error " + std::to_string(ret);
@@ -171,7 +171,7 @@ Result<std::string> zlibInflate(std::string_view compressed, std::size_t maxOutp
         if (produced > maxOutputBytes)
             return makeError(ErrorCode::LimitExceeded,
                              "The share code expands to more data than allowed (limit " +
-                                 std::to_string(maxOutputBytes / (1024 * 1024)) +
+                                 std::to_string(maxOutputBytes / (std::size_t{1024} * 1024)) +
                                  " MiB). It was rejected to protect this computer.",
                              "decompressed output exceeded " + std::to_string(maxOutputBytes) +
                                  " bytes");

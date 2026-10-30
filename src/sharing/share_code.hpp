@@ -25,8 +25,9 @@ namespace pmm::sharing {
 
 inline constexpr int kProtocolVersion = 1;
 inline constexpr std::string_view kEnvelopePrefix = "PMM1";
-inline constexpr std::size_t kMaxEncodedBytes = 2 * 1024 * 1024;      // raw input, untrimmed
-inline constexpr std::size_t kMaxDecompressedBytes = 8 * 1024 * 1024; // manifest JSON
+inline constexpr std::size_t kMaxEncodedBytes =
+    std::size_t{2} * 1024 * 1024; // raw input, untrimmed
+inline constexpr std::size_t kMaxDecompressedBytes = std::size_t{8} * 1024 * 1024; // manifest JSON
 // kMaxEntries (10000) is defined in sharing/manifest.hpp.
 
 // Validates the manifest and encodes it canonically: the same manifest always

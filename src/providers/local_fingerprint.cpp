@@ -142,7 +142,7 @@ Result<std::string> fingerprintDirectory(const fs::path& root, const Fingerprint
               [](const FileEntry& a, const FileEntry& b) { return a.key < b.key; });
 
     Sha256 outer;
-    std::vector<char> buffer(256 * 1024);
+    std::vector<char> buffer(std::size_t{256} * 1024);
     for (const FileEntry& file : files) {
         if (isCancelled(options))
             return cancelledError();

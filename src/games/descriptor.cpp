@@ -12,7 +12,7 @@ namespace {
 
 using platform::steam::keyEquals;
 
-constexpr std::uint64_t kMaxDescriptorBytes = 1024 * 1024;
+constexpr std::uint64_t kMaxDescriptorBytes = std::uint64_t{1024} * 1024;
 
 enum class TokenKind { Text, Equals, Open, Close, End };
 

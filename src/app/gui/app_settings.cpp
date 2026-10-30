@@ -100,9 +100,9 @@ bool AppSettings::effectiveDark() const {
 
 #define PMM_SETTER(name, member, signal)                                                           \
     void AppSettings::name(int value) {                                                            \
-        if (member == value)                                                                       \
+        if ((member) == value)                                                                     \
             return;                                                                                \
-        member = value;                                                                            \
+        (member) = value;                                                                          \
         emit signal();                                                                             \
     }
 

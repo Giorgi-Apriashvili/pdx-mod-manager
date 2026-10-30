@@ -100,7 +100,7 @@ std::string objectTypeBefore(const std::string& code, std::size_t open) {
     std::size_t begin = end;
     while (begin > 0 && isIdentifierChar(code[begin - 1]))
         --begin;
-    const std::string name = code.substr(begin, end - begin);
+    std::string name = code.substr(begin, end - begin);
     const std::size_t dot = name.rfind('.');
     const std::string last = dot == std::string::npos ? name : name.substr(dot + 1);
     if (last.empty() || !std::isupper(static_cast<unsigned char>(last[0])))
@@ -211,7 +211,8 @@ std::vector<Element> textElements(const std::string& source) {
                 Element element;
                 element.type = type;
                 element.line =
-                    1 + static_cast<std::size_t>(std::count(code.begin(), code.begin() + i, '\n'));
+                    1 + static_cast<std::size_t>(std::count(
+                            code.begin(), code.begin() + static_cast<std::ptrdiff_t>(i), '\n'));
                 element.bindings = directBindings(code.substr(i + 1, close - i - 1));
                 out.push_back(std::move(element));
             }

@@ -27,7 +27,7 @@
 namespace pmm::providers {
 
 inline constexpr int kHelperProtocolVersion = 1;
-inline constexpr std::size_t kMaxHelperLineBytes = 256 * 1024;
+inline constexpr std::size_t kMaxHelperLineBytes = std::size_t{256} * 1024;
 inline constexpr std::size_t kMaxIdsPerStateCommand = 1000;
 
 // --- Commands (application -> helper) ----------------------------------------

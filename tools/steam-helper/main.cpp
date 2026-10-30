@@ -154,7 +154,7 @@ struct InputQueue {
     bool eof = false;
 };
 
-void readInput(std::shared_ptr<InputQueue> queue) {
+void readInput(const std::shared_ptr<InputQueue>& queue) {
     // Raw OS reads: no C runtime stream lock is held while blocked, so process
     // exit never waits for this thread.
     LineSplitter splitter;

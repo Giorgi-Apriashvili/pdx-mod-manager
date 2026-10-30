@@ -55,7 +55,7 @@ struct Machine {
     AcquisitionContext ctx;
     Transition last;
 
-    explicit Machine(AcquisitionJob job = makeJob(), AcquisitionPolicy p = {}) : policy(p) {
+    explicit Machine(const AcquisitionJob& job = makeJob(), AcquisitionPolicy p = {}) : policy(p) {
         last = startAcquisition(job, kT0, policy);
         ctx = last.context;
     }

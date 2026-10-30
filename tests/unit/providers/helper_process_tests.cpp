@@ -97,7 +97,7 @@ public:
     HelperProcess(const std::string& appId, const fs::path& library) {
         start({"--app-id", appId, "--steam-api"}, library);
     }
-    explicit HelperProcess(std::vector<std::string> args) { start(std::move(args), {}); }
+    explicit HelperProcess(const std::vector<std::string>& args) { start(args, {}); }
 
     ~HelperProcess() {
         closeStdin();
@@ -191,7 +191,7 @@ public:
     std::vector<std::string> stderrLines() { return m_err.drain(5s); }
 
 private:
-    void start(std::vector<std::string> args, const fs::path& library) {
+    void start(const std::vector<std::string>& args, const fs::path& library) {
         const fs::path exe = u8path(PMM_STEAM_HELPER_PATH);
 #if defined(_WIN32)
         SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};

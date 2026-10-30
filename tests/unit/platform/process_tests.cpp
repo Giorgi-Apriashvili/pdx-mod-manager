@@ -72,7 +72,7 @@ std::vector<std::wstring> splitWithCommandLineToArgvW(const std::wstring& comman
     LPWSTR* argv = CommandLineToArgvW(commandLine.c_str(), &argc);
     REQUIRE(argv != nullptr);
     std::vector<std::wstring> result(argv, argv + argc);
-    LocalFree(argv);
+    LocalFree(static_cast<HLOCAL>(argv));
     return result;
 }
 #endif

@@ -117,7 +117,15 @@ Backend*& currentBackend() {
     return backend;
 }
 
-void registerBackend(Backend& backend) {
+// Clears the singleton's backend before the test's Backend goes away.
+struct BackendRegistration {
+    BackendRegistration() = default;
+    BackendRegistration(const BackendRegistration&) = delete;
+    BackendRegistration& operator=(const BackendRegistration&) = delete;
+    ~BackendRegistration() { currentBackend() = nullptr; }
+};
+
+[[nodiscard]] std::unique_ptr<BackendRegistration> registerBackend(Backend& backend) {
     static const bool registered = [] {
         Backend::registerQmlTypes();
         qmlRegisterSingletonType<Backend>(
@@ -130,6 +138,7 @@ void registerBackend(Backend& backend) {
     }();
     (void)registered;
     currentBackend() = &backend;
+    return std::make_unique<BackendRegistration>();
 }
 
 // The column ("gamesPane", "modsPane", "sidePane") holding the keyboard focus.
@@ -175,7 +184,7 @@ TEST_CASE("Pmm.Ui loads against the real backend without QML warnings", "[app][q
     {
         Backend backend(runner, {});
         backend.initialize(start);
-        registerBackend(backend);
+        const auto registration = registerBackend(backend);
         OfflineNetworkAccessManagerFactory networkFactory; // as in main()
         QQmlApplicationEngine engine;
         engine.setNetworkAccessManagerFactory(&networkFactory);
@@ -326,7 +335,7 @@ TEST_CASE("Pmm.Ui keyboard paths work against the real backend", "[app][qml][a11
     {
         Backend backend(runner, {});
         backend.initialize(start);
-        registerBackend(backend);
+        const auto registration = registerBackend(backend);
         QQmlApplicationEngine engine;
         engine.loadFromModule("Pmm.Ui", "Main");
         REQUIRE(engine.rootObjects().size() == 1);
