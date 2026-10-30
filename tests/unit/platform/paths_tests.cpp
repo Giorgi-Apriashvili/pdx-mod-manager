@@ -18,7 +18,7 @@ void setVariable(const std::string& name, const std::string* value) {
 
 } // namespace
 
-TEST_CASE("standardDirectories returns per-user locations for this OS", "[platform][paths]") {
+TEST_CASE("standardDirectories returns per-user locations", "[platform][paths]") {
     const StandardDirectories dirs = standardDirectories();
     CHECK(fs::is_directory(dirs.home));
     CHECK_FALSE(dirs.documents.empty());

@@ -263,7 +263,7 @@ TEST_CASE("listProcesses includes the current process", "[platform][process]") {
         CHECK(it->executablePath.filename() == pathFromUtf8(it->executableName));
 }
 
-TEST_CASE("executableNameMatches follows the OS case rules", "[platform][process]") {
+TEST_CASE("executableNameMatches ignores case", "[platform][process]") {
     CHECK(executableNameMatches("stellaris.exe", "stellaris.exe"));
     CHECK_FALSE(executableNameMatches("stellaris.exe", "stellaris"));
     CHECK_FALSE(executableNameMatches("eu4", ""));
