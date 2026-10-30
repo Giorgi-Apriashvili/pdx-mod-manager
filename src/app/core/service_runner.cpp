@@ -68,6 +68,7 @@ public:
         start.notices = m_runtime->notices();
         start.dataDir = qpath(m_runtime->paths().dataDir);
         start.logsDir = qpath(m_runtime->paths().logsDir);
+        start.cacheDir = qpath(m_runtime->paths().cacheDir);
         return start;
     }
 
@@ -107,7 +108,7 @@ ServiceRunner::~ServiceRunner() {
 
 RunnerStart ServiceRunner::start() {
     if (m_thread.isRunning())
-        return {false, QStringLiteral("The services worker is already running."), {}, {}, {}};
+        return {false, QStringLiteral("The services worker is already running."), {}, {}, {}, {}};
     m_worker = new RunnerWorker(*this);
     m_worker->moveToThread(&m_thread);
     connect(&m_thread, &QThread::finished, m_worker, &QObject::deleteLater);

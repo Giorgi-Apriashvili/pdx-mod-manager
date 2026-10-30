@@ -16,10 +16,14 @@ add_library(pmm_appcore STATIC
   core/profile_lock.hpp
   core/qt_util.cpp
   core/qt_util.hpp
+  core/running_instance.cpp
+  core/running_instance.hpp
   core/service_runner.cpp
   core/service_runner.hpp
   core/session_host.cpp
   core/session_host.hpp
+  core/update_client.cpp
+  core/update_client.hpp
   core/view_data.cpp
   core/view_data.hpp)
 target_link_libraries(pmm_appcore PUBLIC pmm_services Qt6::Core Qt6::Network)
@@ -53,7 +57,9 @@ add_library(pmm_appgui STATIC
   gui/playsets_model.cpp
   gui/playsets_model.hpp
   gui/share_controller.cpp
-  gui/share_controller.hpp)
+  gui/share_controller.hpp
+  gui/update_controller.cpp
+  gui/update_controller.hpp)
 target_link_libraries(pmm_appgui PUBLIC pmm_appcore Qt6::Gui Qt6::Qml)
 target_compile_definitions(pmm_appgui PUBLIC
   PMM_APP_VERSION="${PROJECT_VERSION}"

@@ -11,3 +11,4 @@ FakeModDetails 1.0 FakeModDetails.qml
 FakeShareController 1.0 FakeShareController.qml
 FakeAcquisitionController 1.0 FakeAcquisitionController.qml
 FakeLaunchController 1.0 FakeLaunchController.qml
+FakeUpdateController 1.0 FakeUpdateController.qml

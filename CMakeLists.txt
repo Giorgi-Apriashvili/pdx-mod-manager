@@ -14,6 +14,10 @@ project(ParadoxModManager
   HOMEPAGE_URL "https://github.com/Giorgi-Apriashvili/pdx-mod-manager"
   LANGUAGES C CXX)
 
+# The repository the application checks for releases (docs/updates.md); the
+# one place its slug is defined is HOMEPAGE_URL above.
+string(REPLACE "https://github.com/" "" PMM_GITHUB_REPOSITORY "${PROJECT_HOMEPAGE_URL}")
+
 # The share-code protocol is versioned independently of the application.
 set(PMM_SHARE_PROTOCOL_VERSION 1)
 

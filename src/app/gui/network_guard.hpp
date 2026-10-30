@@ -5,8 +5,8 @@
 // imported or Workshop strings must never become a request (no telemetry, no
 // leaking that a code was previewed). The managers this factory creates
 // refuse every URL except qrc: and data:, and file: without a host (a host
-// would make Windows open a UNC path). QtWorkshopMetadataHost uses its own
-// QNetworkAccessManager and is not affected.
+// would make Windows open a UNC path). QtWorkshopMetadataHost and UpdateClient
+// use their own QNetworkAccessManager and are not affected.
 
 #include <QQmlNetworkAccessManagerFactory>
 #include <QUrl>

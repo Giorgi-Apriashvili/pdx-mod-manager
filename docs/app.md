@@ -102,6 +102,15 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
 - It only runs for acquisition jobs, to show names and reject items of the
   wrong game.
 
+### Updates
+
+`UpdateClient` and `UpdateController` run on the GUI thread, with their own
+`QNetworkAccessManager`: nothing in them blocks. They only touch the network
+after a click in Settings. `main()` holds the named mutex
+`Local\ParadoxModManagerRunning` for the whole process on Windows
+(`RunningInstanceSignal`), which is what an update run's installer waits for.
+What is contacted, verified and protected against is in [`updates.md`](updates.md).
+
 ## Start-up sequence
 
 1. `main()` sets the Windows error mode (`SEM_FAILCRITICALERRORS |
@@ -169,7 +178,7 @@ and joins the thread.
 | `--verbose` | Write debug-level log records (including redacted helper stderr). |
 | `--game <key>` | Select this game at start-up (`stellaris`, `eu4`). |
 | `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing, so a later session with Steam downloads them only after **Download missing**. |
-| `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. |
+| `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. "Check for updates" is off too, and says so. |
 
 ### Hidden verification switches
 
@@ -255,6 +264,7 @@ capture that shows the grey inactive selection.
 | Configuration journal and backups | `%APPDATA%\ParadoxModManager\transactions\` | `<dir>\transactions\` |
 | Logs | `%LOCALAPPDATA%\ParadoxModManager\logs\` | `<dir>\logs\` |
 | Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` | `<dir>\cache\` |
+| Downloaded installer | `%LOCALAPPDATA%\ParadoxModManager\cache\updates\` | `<dir>\cache\updates\` |
 
 The Linux and macOS locations are listed in
 [`architecture.md`](architecture.md) (section "State and file locations").
@@ -311,6 +321,8 @@ platform:
   API library, including subscribe, download and install through the
   coordinator;
 - `QtWorkshopMetadataHost` against a local HTTP stub;
+- `UpdateClient` and `UpdateController` against a local stub, and the Settings
+  section with the keyboard ([`updates.md`](updates.md));
 - `AppRuntime` start-up failures, retention and interrupted transactions;
   the profile lock.
 

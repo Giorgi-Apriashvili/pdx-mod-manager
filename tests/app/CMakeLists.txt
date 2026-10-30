@@ -14,12 +14,17 @@ add_executable(pmm_app_tests
   runner_tests.cpp
   runtime_tests.cpp
   session_host_tests.cpp
-  ui_text_tests.cpp)
+  ui_text_tests.cpp
+  update_stub.hpp
+  update_tests.cpp)
 target_link_libraries(pmm_app_tests PRIVATE
-  Catch2::Catch2 pmm_appgui pmm_uiplugin Qt6::Quick Qt6::QuickControls2 Qt6::Test Qt6::Network)
+  Catch2::Catch2 pmm_appgui pmm_uiplugin Qt6::Quick Qt6::QuickControls2 Qt6::Test Qt6::Network
+  nlohmann_json::nlohmann_json)
 target_compile_definitions(pmm_app_tests PRIVATE
   PMM_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures"
-  PMM_UI_SOURCE_DIR="${PROJECT_SOURCE_DIR}/ui")
+  PMM_UI_SOURCE_DIR="${PROJECT_SOURCE_DIR}/ui"
+  PMM_ECHO_EXE="$<TARGET_FILE:pmm_platform_echo>")
+add_dependencies(pmm_app_tests pmm_platform_echo)
 pmm_configure_target(pmm_app_tests)
 
 if(TARGET pmm-steam-helper AND TARGET pmm_fake_steam_api)
