@@ -202,15 +202,18 @@ QString Backend::pickInitialGame() const {
 // A launch writes game configuration and Workshop jobs write mods, and the
 // installer replaces the program under both. The downloads of the other games
 // are not in the current game's AcquisitionController, so the worker is asked.
+// The worker may be busy for a while, so the GUI's own answer is read again when
+// it replies: Play could have been pressed in between.
 void Backend::askUpdateBlocker(const std::function<void(const QString&)>& answer) {
     const QString downloads = tr("Workshop downloads are in progress. Update when they have "
                                  "finished, or cancel them.");
-    if (m_launcher->busy()) {
-        answer(tr("A game is being launched. Update when it has started."));
-        return;
-    }
-    if (m_acquisition->active()) {
-        answer(downloads);
+    const auto guiBlocker = [this, downloads] {
+        if (m_launcher->busy())
+            return tr("A game is being launched. Update when it has started.");
+        return m_acquisition->active() ? downloads : QString();
+    };
+    if (const QString reason = guiBlocker(); !reason.isEmpty()) {
+        answer(reason);
         return;
     }
     m_runner.call(
@@ -225,7 +228,9 @@ void Backend::askUpdateBlocker(const std::function<void(const QString&)>& answer
             }
             return false;
         },
-        [answer, downloads](bool active) { answer(active ? downloads : QString()); });
+        [answer, downloads, guiBlocker](bool active) {
+            answer(active ? downloads : guiBlocker());
+        });
 }
 
 void Backend::finishInitialRefresh() {

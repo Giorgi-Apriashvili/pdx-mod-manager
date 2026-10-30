@@ -770,6 +770,39 @@ TEST_CASE("The Backend wires updates to the session", "[app][update]") {
         CHECK(fs::exists(temp.path() / "profile" / "cache" / "updates" /
                          u8(ReleaseStub::installerName(kNew))));
     }
+    SECTION("work that starts while the worker is being asked holds it back too") {
+        Backend backend(runner, options);
+        backend.initialize(start);
+        UpdateController* updates = backend.updates();
+        settle();
+        updates->check();
+        REQUIRE(waitUntil([&] { return updates->state() == "available"; }));
+
+        // The question is in the worker's queue; its answer has not arrived.
+        updates->startUpdate();
+        SECTION("a launch") {
+            LaunchData ready;
+            ready.canPlay = true;
+            backend.launcher()->apply(ready);
+            backend.launcher()->play(); // no active playset: the worker refuses it, no game
+            REQUIRE(backend.launcher()->busy());
+            REQUIRE(waitUntil([&] { return !updates->errorMessage().isEmpty(); }));
+            CHECK_THAT(updates->errorMessage().toStdString(),
+                       Catch::Matchers::ContainsSubstring("being launched"));
+        }
+        SECTION("Workshop downloads") {
+            AcquisitionData active;
+            active.active = true;
+            backend.acquisition()->apply(active);
+            REQUIRE(waitUntil([&] { return !updates->errorMessage().isEmpty(); }));
+            CHECK_THAT(updates->errorMessage().toStdString(),
+                       Catch::Matchers::ContainsSubstring("Workshop downloads"));
+        }
+        settle();
+        CHECK(updates->state() == "available");
+        CHECK(starts == 0);
+        CHECK(quits == 0);
+    }
     runner.shutdown();
 }
 
