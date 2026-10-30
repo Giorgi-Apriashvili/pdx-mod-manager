@@ -280,24 +280,18 @@ TEST_CASE("Line splitter handles partial, CRLF, empty and oversized lines",
 }
 
 TEST_CASE("Helper argument validation", "[providers][protocol]") {
-    using pmm::OsPlatform;
-    CHECK(isAcceptedSteamApiLibraryName("steam_api64.dll", OsPlatform::Windows));
-    CHECK(isAcceptedSteamApiLibraryName("steam_api.dll", OsPlatform::Windows));
-    CHECK(isAcceptedSteamApiLibraryName("libsteam_api.so", OsPlatform::Linux));
-    CHECK(isAcceptedSteamApiLibraryName("libsteam_api.dylib", OsPlatform::MacOS));
-    CHECK_FALSE(isAcceptedSteamApiLibraryName("libsteam_api.so", OsPlatform::Windows));
-    CHECK_FALSE(isAcceptedSteamApiLibraryName("steam_api64.dll", OsPlatform::Linux));
-    CHECK_FALSE(isAcceptedSteamApiLibraryName("Steam_API64.dll", OsPlatform::Windows));
-    CHECK_FALSE(isAcceptedSteamApiLibraryName("steam_api64.dll.bak", OsPlatform::Windows));
-    CHECK_FALSE(isAcceptedSteamApiLibraryName("evil.dll", OsPlatform::Windows));
+    CHECK(isAcceptedSteamApiLibraryName("steam_api64.dll"));
+    CHECK(isAcceptedSteamApiLibraryName("steam_api.dll"));
+    CHECK_FALSE(isAcceptedSteamApiLibraryName("libsteam_api.so"));
+    CHECK_FALSE(isAcceptedSteamApiLibraryName("Steam_API64.dll"));
+    CHECK_FALSE(isAcceptedSteamApiLibraryName("steam_api64.dll.bak"));
+    CHECK_FALSE(isAcceptedSteamApiLibraryName("evil.dll"));
 
     pmm::test::TempDir dir("args");
     const fs::path folder =
         dir.path() / pmm::test::u8path("Ünïcødé dir") / pmm::test::u8path("日本語");
     fs::create_directories(folder);
-    const char* name = currentOsPlatform() == OsPlatform::Windows ? "steam_api64.dll"
-                       : currentOsPlatform() == OsPlatform::MacOS ? "libsteam_api.dylib"
-                                                                  : "libsteam_api.so";
+    const char* name = "steam_api64.dll";
     const fs::path library = folder / name;
     {
         std::ofstream(library, std::ios::binary) << "not really a library";

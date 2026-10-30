@@ -10,7 +10,6 @@
 // documented types, arguments are strings only, and the executable must
 // resolve to a regular file inside the installation folder.
 
-#include "core/model.hpp"
 #include "core/result.hpp"
 
 #include <filesystem>
@@ -48,12 +47,11 @@ std::optional<fs::path> findLauncherSettings(const fs::path& installDir);
 Result<LauncherSettings> readLauncherSettings(const fs::path& installDir);
 
 // Resolves exePath against the settings file's folder, then the installation
-// folder. The result must stay inside installDir (lexically) and be a regular
-// file; on Windows it must also have the .exe extension. An app bundle
-// ("x.app") resolves to x.app/Contents/MacOS/x. ValidationFailed when the path
-// leaves the installation, NotFound when nothing exists there.
+// folder. The result must stay inside installDir (lexically), be a regular
+// file and have the .exe extension. ValidationFailed when the path leaves the
+// installation, NotFound when nothing exists there.
 Result<fs::path> resolveLauncherExecutable(const LauncherSettings& settings,
-                                           const fs::path& installDir, OsPlatform os);
+                                           const fs::path& installDir);
 
 // Maps "%USER_DOCUMENTS%/<relative>" onto `documentsDir`. nullopt for any
 // other form, empty base folders, or relative parts containing "..".

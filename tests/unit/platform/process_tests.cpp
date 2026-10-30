@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <nlohmann/json.hpp>
+#include <windows.h>
 
 #include <algorithm>
 #include <chrono>
@@ -12,12 +13,8 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#if defined(_WIN32)
-#include <windows.h>
 // Needs <windows.h> first.
 #include <shellapi.h>
-#endif
 
 using namespace pmm;
 using namespace pmm::platform;
@@ -66,7 +63,6 @@ const std::vector<std::string>& trickyArguments() {
     return arguments;
 }
 
-#if defined(_WIN32)
 std::vector<std::wstring> splitWithCommandLineToArgvW(const std::wstring& commandLine) {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(commandLine.c_str(), &argc);
@@ -75,7 +71,6 @@ std::vector<std::wstring> splitWithCommandLineToArgvW(const std::wstring& comman
     LocalFree(static_cast<HLOCAL>(argv));
     return result;
 }
-#endif
 
 } // namespace
 
@@ -104,7 +99,6 @@ TEST_CASE("quoteWindowsArgument follows CommandLineToArgvW rules", "[platform][p
     }
 }
 
-#if defined(_WIN32)
 TEST_CASE("Windows command lines round-trip through CommandLineToArgvW", "[platform][process]") {
     const fs::path exe = L"C:\\Program Files\\Example Game\\game.exe";
     const auto& arguments = trickyArguments();
@@ -136,7 +130,6 @@ TEST_CASE("Random arguments round-trip through CommandLineToArgvW", "[platform][
             REQUIRE(parsed[i + 1] == arguments[i]);
     }
 }
-#endif
 
 TEST_CASE("startDetached passes arguments, working directory and environment",
           "[platform][process]") {
@@ -274,9 +267,5 @@ TEST_CASE("executableNameMatches follows the OS case rules", "[platform][process
     CHECK(executableNameMatches("stellaris.exe", "stellaris.exe"));
     CHECK_FALSE(executableNameMatches("stellaris.exe", "stellaris"));
     CHECK_FALSE(executableNameMatches("eu4", ""));
-#if defined(_WIN32) || defined(__APPLE__)
     CHECK(executableNameMatches("Stellaris.EXE", "stellaris.exe"));
-#else
-    CHECK_FALSE(executableNameMatches("Stellaris", "stellaris"));
-#endif
 }

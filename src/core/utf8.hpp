@@ -41,11 +41,9 @@ bool isValidUtf16(std::u16string_view text) noexcept;
 std::string utf16ToUtf8(std::u16string_view text);
 std::u16string utf8ToUtf16(std::string_view text);
 
-#if defined(_WIN32)
 // The same for wchar_t, which is UTF-16 on Windows (native path strings).
 bool isValidUtf16(std::wstring_view text) noexcept;
 std::string utf16ToUtf8(std::wstring_view text);
 std::wstring utf8ToWide(std::string_view text);
-#endif
 
 } // namespace pmm

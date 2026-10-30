@@ -8,13 +8,7 @@ add_library(pmm_platform STATIC
 target_link_libraries(pmm_platform
   PUBLIC pmm_core
   PRIVATE nlohmann_json::nlohmann_json)
-if(WIN32)
-  # shell32/ole32/uuid: Known Folders; advapi32: registry (Steam discovery).
-  target_link_libraries(pmm_platform PRIVATE shell32 ole32 uuid advapi32)
-else()
-  # A detached thread reaps spawned children.
-  find_package(Threads REQUIRED)
-  target_link_libraries(pmm_platform PRIVATE Threads::Threads)
-endif()
+# shell32/ole32/uuid: Known Folders; advapi32: registry (Steam discovery).
+target_link_libraries(pmm_platform PRIVATE shell32 ole32 uuid advapi32)
 pmm_configure_target(pmm_platform)
 add_library(PMM::platform ALIAS pmm_platform)

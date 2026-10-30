@@ -363,8 +363,8 @@ TEST_CASE("Restoring a purged playset recreates it under a new id", "[persistenc
 
 namespace {
 
-// Two Linux local mods whose descriptor stems are Latin-1 bytes: not valid
-// UTF-8, and identical once each bad byte is replaced with U+FFFD.
+// Two local mods whose descriptor stems are Latin-1 bytes: not valid UTF-8, and
+// identical once each bad byte is replaced with U+FFFD.
 std::vector<PlaysetEntry> nonUtf8Entries() {
     auto e9 = entry(source::Local, "caf\xE9", true, "Cafe 1");
     auto e8 = entry(source::Local, "caf\xE8", true, "Cafe 2");

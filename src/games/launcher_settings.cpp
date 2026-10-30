@@ -105,7 +105,7 @@ Result<LauncherSettings> readLauncherSettings(const fs::path& installDir) {
 }
 
 Result<fs::path> resolveLauncherExecutable(const LauncherSettings& settings,
-                                           const fs::path& installDir, OsPlatform os) {
+                                           const fs::path& installDir) {
     if (settings.exePath.empty())
         return invalidField("exePath", "is missing");
     const fs::path relative = platform::pathFromUtf8(settings.exePath);
@@ -122,11 +122,9 @@ Result<fs::path> resolveLauncherExecutable(const LauncherSettings& settings,
             continue;
         }
         std::error_code ec;
-        if (fs::is_directory(candidate, ec) && keyEquals(pathToUtf8(candidate.extension()), ".app"))
-            candidate = candidate / "Contents" / "MacOS" / candidate.stem();
         if (!fs::is_regular_file(candidate, ec))
             continue;
-        if (os == OsPlatform::Windows && !keyEquals(pathToUtf8(candidate.extension()), ".exe"))
+        if (!keyEquals(pathToUtf8(candidate.extension()), ".exe"))
             return invalidField("exePath", "does not name a .exe file");
         return candidate;
     }

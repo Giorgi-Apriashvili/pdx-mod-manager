@@ -75,7 +75,7 @@ TEST_CASE("Diagnostics summarise installations, jobs and launches with personal 
     CHECK_THAT(text, ContainsSubstring("Paradox Mod Manager diagnostics"));
     CHECK_THAT(text, ContainsSubstring("App version: 1.2.3"));
     CHECK_THAT(text, ContainsSubstring("Share-code protocol: 1"));
-    CHECK_THAT(text, ContainsSubstring(std::string("OS: ") + toString(currentOsPlatform())));
+    CHECK_THAT(text, ContainsSubstring("OS: windows"));
     CHECK_THAT(text, ContainsSubstring("Interrupted configuration transactions: 1"));
     CHECK_THAT(text, ContainsSubstring("== Stellaris (stellaris) =="));
     CHECK_THAT(text, ContainsSubstring("Installation: steam, "));

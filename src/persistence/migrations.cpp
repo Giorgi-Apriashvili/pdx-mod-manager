@@ -130,11 +130,16 @@ CREATE TABLE launch_history (
 CREATE INDEX launch_history_by_game ON launch_history (game_key, started_at);
 )sql";
 
+constexpr const char* kSchemaV2 = R"sql(
+ALTER TABLE game_installations DROP COLUMN platform;
+)sql";
+
 } // namespace
 
 const std::vector<Migration>& builtinMigrations() {
     static const std::vector<Migration> migrations{
         {1, "initial schema", kSchemaV1, false},
+        {2, "drop game_installations.platform", kSchemaV2, false},
     };
     return migrations;
 }

@@ -47,13 +47,9 @@ struct GameTraits {
     std::string_view launcherGameId; // "gameId" in launcher-settings.json
     // Executable relative to the installation folder when launcher-settings
     // is missing or unusable.
-    std::string_view windowsExecutable;
-    std::string_view linuxExecutable;
-    std::string_view macExecutable;
+    std::string_view executable;
     // Processes that rewrite the configuration (the Paradox launcher).
-    std::span<const std::string_view> windowsLauncherProcesses;
-    std::span<const std::string_view> linuxLauncherProcesses;
-    std::span<const std::string_view> macLauncherProcesses;
+    std::span<const std::string_view> launcherProcesses;
     // File in the installation folder that relocates the user-data folder
     // ("userdir.txt"); empty when the game has no such file.
     std::string_view userDirFile;
@@ -94,12 +90,11 @@ public:
     std::vector<std::string> compatibilityWarnings(const GameInstallation& installation,
                                                    const InstalledMod& mod) const override;
 
-    // <documents>/Paradox Interactive/<folder> (Windows, macOS) or
-    // <xdgDataHome>/Paradox Interactive/<folder> (Linux). Empty when the base
-    // folder is unknown.
+    // <documents>/Paradox Interactive/<folder>. Empty when the base folder is
+    // unknown.
     fs::path defaultUserDataPath(const DiscoveryEnvironment& env) const;
     // Fallback executable relative to the installation folder.
-    fs::path defaultExecutable(OsPlatform os) const;
+    fs::path defaultExecutable() const;
     // `arguments` without the droppedArguments, order kept.
     std::vector<std::string> launchArguments(const std::vector<std::string>& arguments) const;
 

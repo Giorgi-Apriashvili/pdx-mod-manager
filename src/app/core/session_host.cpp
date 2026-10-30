@@ -3,6 +3,8 @@
 #include "app/core/qt_util.hpp"
 #include "core/log.hpp"
 
+#include <windows.h>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -12,10 +14,6 @@
 #include <algorithm>
 #include <regex>
 #include <string_view>
-
-#if defined(Q_OS_WIN)
-#include <windows.h>
-#endif
 
 namespace pmm::app {
 namespace {
@@ -42,11 +40,7 @@ QString QtWorkshopSessionHost::defaultHelperPath() {
     QString overridePath = qEnvironmentVariable("PMM_STEAM_HELPER");
     if (!overridePath.isEmpty())
         return overridePath;
-#if defined(Q_OS_WIN)
     const QString name = QStringLiteral("pmm-steam-helper.exe");
-#else
-    const QString name = QStringLiteral("pmm-steam-helper");
-#endif
     return QDir(QCoreApplication::applicationDirPath()).filePath(name);
 }
 
@@ -77,11 +71,9 @@ bool QtWorkshopSessionHost::open(const GameKey& gameKey, const std::string& appI
                            qpath(steamApiLibrary)});
     process->setWorkingDirectory(helper.absolutePath());
     process->setProcessChannelMode(QProcess::SeparateChannels);
-#if defined(Q_OS_WIN)
     // A console program started from a GUI process would get its own window.
     process->setCreateProcessArgumentsModifier(
         [](QProcess::CreateProcessArguments* arguments) { arguments->flags |= CREATE_NO_WINDOW; });
-#endif
 
     const std::uint64_t serial = session->serial;
     const GameKey& game = gameKey; // captured by copy below

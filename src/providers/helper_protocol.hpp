@@ -12,7 +12,6 @@
 // ids; the protocol deliberately has no way to pass paths, URLs, or to
 // unsubscribe/delete items. See docs/steam-workshop.md for the full contract.
 
-#include "core/model.hpp"
 #include "core/result.hpp"
 #include "providers/workshop_item.hpp"
 
@@ -160,13 +159,12 @@ enum class HelperExitCode : int {
 };
 HelperExitCode exitCodeFor(HelperFailure failure) noexcept;
 
-// Steam API library file names the helper accepts on `platform`:
-// Windows steam_api64.dll / steam_api.dll, Linux libsteam_api.so,
-// macOS libsteam_api.dylib. The comparison is exact (case-sensitive).
-bool isAcceptedSteamApiLibraryName(std::string_view fileName, OsPlatform platform) noexcept;
+// Steam API library file names the helper accepts: steam_api64.dll and
+// steam_api.dll. The comparison is exact (case-sensitive).
+bool isAcceptedSteamApiLibraryName(std::string_view fileName) noexcept;
 
 // Validates helper arguments: app id canonical digits; library file name
-// accepted for the current platform; file exists and is a regular file.
+// accepted; file exists and is a regular file.
 Status validateHelperArguments(std::string_view appId, const std::filesystem::path& library);
 
 // Splits a byte stream into lines ('\n', optional preceding '\r' removed).

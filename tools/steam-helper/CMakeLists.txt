@@ -7,7 +7,7 @@ add_executable(pmm-steam-helper
   main.cpp
   steam_api_loader.cpp
   steam_api_loader.hpp)
-target_link_libraries(pmm-steam-helper PRIVATE pmm_providers Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(pmm-steam-helper PRIVATE pmm_providers Threads::Threads)
 pmm_configure_target(pmm-steam-helper)
 # pmm-app looks for the helper next to its own executable, in the build tree as
 # in packages, so both share one output directory.

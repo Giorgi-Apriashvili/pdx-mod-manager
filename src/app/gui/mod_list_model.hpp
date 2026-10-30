@@ -96,18 +96,14 @@ public:
     // virtual functions of the same name; those keep working.
     using QAbstractListModel::moveRows;
     using QAbstractListModel::removeRows;
-#if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4263) // overload, not an override
-#endif
     // One undo step for a multi-row move: delta -1/+1 moves every selected
     // entry one step (keyboard semantics); larger deltas gather the selection
     // into a block whose first entry lands at rows[0] + delta (drag and drop).
     Q_INVOKABLE void moveRows(const QList<int>& rows, int delta);
     Q_INVOKABLE void removeRows(const QList<int>& rows);
-#if defined(_MSC_VER)
 #pragma warning(pop)
-#endif
     Q_INVOKABLE void addMods(const QStringList& identityKeys);
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();

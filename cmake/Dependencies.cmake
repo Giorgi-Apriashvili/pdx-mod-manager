@@ -1,7 +1,7 @@
 # Third-party dependencies, pinned by version and SHA-256 (see docs/adr/0002-dependencies.md).
 #
 # All non-Qt libraries are fetched from their upstream release archives with
-# FetchContent so that every platform builds the exact same versions. Qt 6 is a
+# FetchContent so that every build uses the exact same versions. Qt 6 is a
 # toolchain-level prerequisite located through CMAKE_PREFIX_PATH (QT_ROOT_DIR in
 # the presets); its version is pinned in CI and documented in the README.
 include(FetchContent)
@@ -32,15 +32,8 @@ add_library(pmm_zlib STATIC
   ${_zlib_dir}/trees.c ${_zlib_dir}/uncompr.c ${_zlib_dir}/zutil.c)
 target_include_directories(pmm_zlib SYSTEM PUBLIC "${_zlib_dir}")
 target_compile_definitions(pmm_zlib PUBLIC Z_PREFIX)
-if(MSVC)
-  target_compile_definitions(pmm_zlib PRIVATE _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)
-  target_compile_options(pmm_zlib PRIVATE /W0)
-else()
-  target_compile_options(pmm_zlib PRIVATE -w)
-endif()
-if(NOT WIN32)
-  target_compile_definitions(pmm_zlib PRIVATE HAVE_UNISTD_H)
-endif()
+target_compile_definitions(pmm_zlib PRIVATE _CRT_SECURE_NO_DEPRECATE _CRT_NONSTDC_NO_DEPRECATE)
+target_compile_options(pmm_zlib PRIVATE /W0)
 add_library(PMM::zlib ALIAS pmm_zlib)
 
 # --- SQLite 3.50.4 amalgamation (public domain) -------------------------------
@@ -60,13 +53,7 @@ target_compile_definitions(pmm_sqlite3 PRIVATE
   SQLITE_OMIT_LOAD_EXTENSION
   SQLITE_OMIT_DEPRECATED
   SQLITE_USE_URI=0)
-if(MSVC)
-  target_compile_options(pmm_sqlite3 PRIVATE /W0)
-else()
-  target_compile_options(pmm_sqlite3 PRIVATE -w)
-  find_package(Threads REQUIRED)
-  target_link_libraries(pmm_sqlite3 PUBLIC Threads::Threads)
-endif()
+target_compile_options(pmm_sqlite3 PRIVATE /W0)
 add_library(PMM::sqlite3 ALIAS pmm_sqlite3)
 
 # --- Catch2 3.8.1 (BSL-1.0), tests only ---------------------------------------

@@ -1,9 +1,8 @@
 #pragma once
 
 // Process creation and inspection through native OS APIs. Arguments are always
-// passed as a vector and quoted per platform rules (CreateProcessW command-line
-// quoting on Windows, posix_spawn argv elsewhere); nothing is ever routed
-// through a shell.
+// passed as a vector and quoted for the CreateProcessW command line; nothing is
+// ever routed through a shell.
 
 #include "core/result.hpp"
 
@@ -45,7 +44,7 @@ struct RunningProcess {
 // Snapshot of running processes visible to the current user.
 Result<std::vector<RunningProcess>> listProcesses();
 
-// Case-insensitive on Windows/macOS, case-sensitive on Linux.
+// ASCII case-insensitive.
 bool executableNameMatches(const std::string& runningName, const std::string& wanted);
 
 // Notes on startDetached():
@@ -54,24 +53,17 @@ bool executableNameMatches(const std::string& runningName, const std::string& wa
 //   arguments/environment, or environment names that are empty or contain '=';
 //   ProcessStartFailed for everything else (missing executable or working
 //   folder, OS refusal).
-// - Windows: CreateProcessW with bInheritHandles=FALSE and
+// - CreateProcessW with bInheritHandles=FALSE and
 //   DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_DEFAULT_ERROR_MODE,
 //   breaking away from an enclosing job object when the job allows it. The
 //   environment block is the inherited one merged with `environment`, sorted
 //   case-insensitively. System "bad image" dialogs are suppressed for the
 //   call; such failures come back as ProcessStartFailed.
-// - POSIX: posix_spawn in a new session (or process group) with stdio on
-//   /dev/null; the working folder is set with
-//   posix_spawn_file_actions_addchdir_np where available (glibc >= 2.29,
-//   macOS >= 10.15), otherwise with fork/chdir/execve. A background thread
-//   reaps the child so it never lingers as a zombie.
 
-#if defined(_WIN32)
 // Full command line for `executable` + UTF-8 `arguments`, exactly as passed to
 // CreateProcessW. Exposed for tests.
 std::wstring buildWindowsCommandLine(const fs::path& executable,
                                      const std::vector<std::string>& arguments);
-#endif
 
 std::int64_t currentProcessId() noexcept;
 

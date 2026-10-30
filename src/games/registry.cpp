@@ -12,10 +12,8 @@ namespace pmm::games {
 
 DiscoveryEnvironment DiscoveryEnvironment::current() {
     DiscoveryEnvironment env;
-    env.platform = currentOsPlatform();
     const platform::StandardDirectories dirs = platform::standardDirectories();
     env.documentsDir = dirs.documents;
-    env.xdgDataHome = dirs.xdgDataHome;
     env.home = dirs.home;
     if (auto root = platform::steam::findSteamRoot(); root)
         env.steamRoot = std::move(root).value();

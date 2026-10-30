@@ -15,7 +15,7 @@
 //   5. Result: "sha256:" + lowercase hex.
 // Directory entries themselves (including empty directories) do not
 // contribute. File names are not Unicode-normalised: a copy whose names were
-// converted to NFD (older macOS filesystems) fingerprints differently.
+// converted to NFD fingerprints differently.
 
 #include "core/result.hpp"
 

@@ -7,9 +7,7 @@ namespace {
 
 // Paradox launcher v2, as for Stellaris: dowser.exe ships in the v1.37.5.0
 // install folder too; the other names are unverified for EU4.
-constexpr std::array<std::string_view, 2> kWindowsLauncher{"Paradox Launcher.exe", "dowser.exe"};
-constexpr std::array<std::string_view, 2> kLinuxLauncher{"dowser", "paradox-launcher"};
-constexpr std::array<std::string_view, 1> kMacLauncher{"Paradox Launcher"};
+constexpr std::array<std::string_view, 2> kLauncher{"Paradox Launcher.exe", "dowser.exe"};
 // launcher-settings.json of v1.37.5.0 asks for "-enabletelemetry"; the
 // manager never opts the user into the game's telemetry.
 constexpr std::array<std::string_view, 1> kDroppedArguments{"-enabletelemetry"};
@@ -19,12 +17,8 @@ constexpr GameTraits kTraits{
     .steamAppId = "236850",
     .userDataFolder = "Europa Universalis IV",
     .launcherGameId = "eu4",
-    .windowsExecutable = "eu4.exe",
-    .linuxExecutable = "eu4",
-    .macExecutable = "eu4.app/Contents/MacOS/eu4",
-    .windowsLauncherProcesses = kWindowsLauncher,
-    .linuxLauncherProcesses = kLinuxLauncher,
-    .macLauncherProcesses = kMacLauncher,
+    .executable = "eu4.exe",
+    .launcherProcesses = kLauncher,
     // v1.37.5.0 ships an empty userdir.txt, and eu4.exe references the file.
     .userDirFile = "userdir.txt",
     .droppedArguments = kDroppedArguments,

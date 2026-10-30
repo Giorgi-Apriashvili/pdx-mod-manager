@@ -8,18 +8,7 @@
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
-
-#if defined(_WIN32)
 #include <windows.h>
-#else
-#include <spawn.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include <cerrno>
-#include <csignal>
-extern char** environ;
-#endif
 
 #include <chrono>
 #include <condition_variable>
@@ -42,14 +31,7 @@ using namespace std::chrono_literals;
 namespace {
 
 void setEnv(const char* name, const char* value) {
-#if defined(_WIN32)
     _putenv_s(name, value ? value : "");
-#else
-    if (value)
-        setenv(name, value, 1);
-    else
-        unsetenv(name);
-#endif
 }
 
 // Collects '\n'-terminated lines from a pipe on a background thread.
@@ -103,45 +85,27 @@ public:
         closeStdin();
         if (!m_exited)
             waitExit(5s);
-#if defined(_WIN32)
         if (!m_exited && m_process)
             TerminateProcess(m_process, 1);
-#else
-        if (!m_exited && m_pid > 0)
-            kill(m_pid, SIGKILL);
-#endif
         for (auto& t : m_readers)
             if (t.joinable())
                 t.join();
-#if defined(_WIN32)
         if (m_process)
             CloseHandle(m_process);
-#endif
     }
 
     void send(const std::string& line) {
         const std::string data = line + "\n";
-#if defined(_WIN32)
         DWORD written = 0;
         REQUIRE(
             WriteFile(m_stdin, data.data(), static_cast<DWORD>(data.size()), &written, nullptr));
-#else
-        REQUIRE(::write(m_stdin, data.data(), data.size()) == static_cast<ssize_t>(data.size()));
-#endif
     }
 
     void closeStdin() {
-#if defined(_WIN32)
         if (m_stdin) {
             CloseHandle(m_stdin);
             m_stdin = nullptr;
         }
-#else
-        if (m_stdin >= 0) {
-            ::close(m_stdin);
-            m_stdin = -1;
-        }
-#endif
     }
 
     HelperEvent nextEvent(std::chrono::milliseconds timeout = 10s) {
@@ -162,27 +126,11 @@ public:
     std::optional<int> waitExit(std::chrono::milliseconds timeout) {
         if (m_exited)
             return m_exitCode;
-#if defined(_WIN32)
         if (WaitForSingleObject(m_process, static_cast<DWORD>(timeout.count())) != WAIT_OBJECT_0)
             return std::nullopt;
         DWORD code = 0;
         GetExitCodeProcess(m_process, &code);
         m_exitCode = static_cast<int>(code);
-#else
-        const auto deadline = std::chrono::steady_clock::now() + timeout;
-        int status = 0;
-        for (;;) {
-            const pid_t r = waitpid(m_pid, &status, WNOHANG);
-            if (r == m_pid)
-                break;
-            if (r < 0 && errno != EINTR)
-                return std::nullopt;
-            if (std::chrono::steady_clock::now() >= deadline)
-                return std::nullopt;
-            std::this_thread::sleep_for(10ms);
-        }
-        m_exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
-#endif
         m_exited = true;
         return m_exitCode;
     }
@@ -193,7 +141,6 @@ public:
 private:
     void start(const std::vector<std::string>& args, const fs::path& library) {
         const fs::path exe = u8path(PMM_STEAM_HELPER_PATH);
-#if defined(_WIN32)
         SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
         HANDLE inRead = nullptr, inWrite = nullptr, outRead = nullptr, outWrite = nullptr,
                errRead = nullptr, errWrite = nullptr;
@@ -228,45 +175,8 @@ private:
         m_stdin = inWrite;
         m_readers.emplace_back([outRead, this] { pump(outRead, m_out); });
         m_readers.emplace_back([errRead, this] { pump(errRead, m_err); });
-#else
-        int in[2], out[2], err[2];
-        REQUIRE(pipe(in) == 0);
-        REQUIRE(pipe(out) == 0);
-        REQUIRE(pipe(err) == 0);
-        posix_spawn_file_actions_t actions;
-        posix_spawn_file_actions_init(&actions);
-        posix_spawn_file_actions_adddup2(&actions, in[0], STDIN_FILENO);
-        posix_spawn_file_actions_adddup2(&actions, out[1], STDOUT_FILENO);
-        posix_spawn_file_actions_adddup2(&actions, err[1], STDERR_FILENO);
-        for (int fd : {in[0], in[1], out[0], out[1], err[0], err[1]})
-            posix_spawn_file_actions_addclose(&actions, fd);
-        std::vector<std::string> argvStrings;
-        argvStrings.push_back(exe.string());
-        for (auto& a : args)
-            argvStrings.push_back(a);
-        if (!library.empty())
-            argvStrings.push_back(library.string());
-        std::vector<char*> argv;
-        for (auto& s : argvStrings)
-            argv.push_back(s.data());
-        argv.push_back(nullptr);
-        signal(SIGPIPE, SIG_IGN);
-        const int rc =
-            posix_spawn(&m_pid, argvStrings[0].c_str(), &actions, nullptr, argv.data(), environ);
-        posix_spawn_file_actions_destroy(&actions);
-        ::close(in[0]);
-        ::close(out[1]);
-        ::close(err[1]);
-        REQUIRE(rc == 0);
-        m_stdin = in[1];
-        const int outFd = out[0];
-        const int errFd = err[0];
-        m_readers.emplace_back([outFd, this] { pump(outFd, m_out); });
-        m_readers.emplace_back([errFd, this] { pump(errFd, m_err); });
-#endif
     }
 
-#if defined(_WIN32)
     static std::wstring quote(const std::wstring& arg) {
         std::wstring out = L"\"";
         std::size_t backslashes = 0;
@@ -295,42 +205,12 @@ private:
 
     HANDLE m_process = nullptr;
     HANDLE m_stdin = nullptr;
-#else
-    static void pump(int fd, LineCollector& collector) {
-        char buf[4096];
-        for (;;) {
-            const ssize_t got = ::read(fd, buf, sizeof buf);
-            if (got < 0 && errno == EINTR)
-                continue;
-            if (got <= 0)
-                break;
-            collector.push(std::string_view(buf, static_cast<std::size_t>(got)));
-        }
-        ::close(fd);
-        collector.close();
-    }
-
-    pid_t m_pid = -1;
-    int m_stdin = -1;
-#endif
     LineCollector m_out;
     LineCollector m_err;
     std::vector<std::thread> m_readers;
     bool m_exited = false;
     int m_exitCode = -1;
 };
-
-const char* acceptedLibraryName() {
-    switch (currentOsPlatform()) {
-    case OsPlatform::Windows:
-        return "steam_api64.dll";
-    case OsPlatform::MacOS:
-        return "libsteam_api.dylib";
-    case OsPlatform::Linux:
-        return "libsteam_api.so";
-    }
-    return "libsteam_api.so";
-}
 
 // Copies the fake library into "<temp>/Ünïcødé dir/日本語/<accepted name>".
 struct FakeSteamInstall {
@@ -340,7 +220,7 @@ struct FakeSteamInstall {
     explicit FakeSteamInstall(const char* mode = "ok") {
         const fs::path folder = dir.path() / u8path("Ünïcødé dir") / u8path("日本語");
         fs::create_directories(folder);
-        library = folder / acceptedLibraryName();
+        library = folder / "steam_api64.dll";
         fs::copy_file(u8path(PMM_FAKE_STEAM_API_PATH), library);
         setEnv("PMM_FAKE_STEAM_MODE", mode);
         setEnv("SteamAppId", nullptr); // the helper must set these itself
@@ -386,7 +266,7 @@ TEST_CASE("Helper serves state, subscribe and download against a Steam API libra
     CHECK(unknown.flags == 0);
     CHECK(unknown.installPath.empty());
 
-    // Subscribe results come from polled call results (struct size per platform).
+    // Subscribe results come from polled call results.
     helper.send(encodeCommand(SubscribeCommand{"222222222"}));
     const auto subscribed = helper.next<SubscribeResultEvent>();
     CHECK(subscribed.id == "222222222");
@@ -521,15 +401,15 @@ TEST_CASE("Helper rejects bad arguments and unloadable libraries", "[providers][
         CHECK(helper.waitExit(10s) == exitCode(HelperExitCode::InvalidArguments));
     }
     SECTION("missing library") {
-        HelperProcess helper("281990", steam.dir.path() / acceptedLibraryName());
+        HelperProcess helper("281990", steam.dir.path() / "steam_api64.dll");
         CHECK(helper.next<ReadyEvent>().error == HelperFailure::LibraryLoadFailed);
         CHECK(helper.waitExit(10s) == exitCode(HelperExitCode::LibraryLoadFailed));
     }
     SECTION("file that is not a loadable library") {
         const fs::path junkDir = steam.dir.path() / "junk";
         fs::create_directories(junkDir);
-        pmm::test::writeFile(junkDir / acceptedLibraryName(), "definitely not a library");
-        HelperProcess helper("281990", junkDir / acceptedLibraryName());
+        pmm::test::writeFile(junkDir / "steam_api64.dll", "definitely not a library");
+        HelperProcess helper("281990", junkDir / "steam_api64.dll");
         const auto ready = helper.next<ReadyEvent>();
         CHECK(ready.error == HelperFailure::LibraryLoadFailed);
         CHECK(helper.waitExit(10s) == exitCode(HelperExitCode::LibraryLoadFailed));

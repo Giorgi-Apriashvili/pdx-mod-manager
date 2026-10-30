@@ -16,13 +16,9 @@ namespace pmm::app {
 namespace {
 
 bool steamUrlHandlerRegistered() {
-#if defined(Q_OS_WIN)
     // Without a registered handler Windows would show an "open with" prompt.
     const QSettings steam(QStringLiteral("HKEY_CLASSES_ROOT\\steam"), QSettings::NativeFormat);
     return steam.contains(QStringLiteral("URL Protocol"));
-#else
-    return true; // openUrl() fails without a handler; the web page is the fallback
-#endif
 }
 
 } // namespace

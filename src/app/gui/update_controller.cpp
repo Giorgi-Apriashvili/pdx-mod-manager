@@ -33,12 +33,7 @@ UpdateControllerOptions withDefaults(UpdateControllerOptions options) {
 }
 
 bool detectInstalled(const QString& appDir) {
-#if defined(_WIN32)
     return services::hasInstallerLayout(toPath(appDir));
-#else
-    (void)appDir;
-    return false;
-#endif
 }
 
 } // namespace

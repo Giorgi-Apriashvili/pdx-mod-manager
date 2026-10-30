@@ -330,56 +330,31 @@ TEST_CASE("findSteamRoot uses the first candidate with steamapps", "[platform][s
 TEST_CASE("defaultSteamRootCandidates covers the OS default", "[platform][steam]") {
     const auto candidates = defaultSteamRootCandidates();
     REQUIRE_FALSE(candidates.empty());
-#if defined(_WIN32)
     CHECK(std::find(candidates.begin(), candidates.end(),
                     fs::path(L"C:\\Program Files (x86)\\Steam")) != candidates.end());
-#elif defined(__APPLE__)
-    CHECK(toGenericUtf8(candidates.front()).ends_with("Library/Application Support/Steam"));
-#else
-    CHECK(toGenericUtf8(candidates.front()).ends_with(".steam/steam"));
-#endif
 }
 
-TEST_CASE("isSteamRunning recognises the client per OS", "[platform][steam]") {
+TEST_CASE("isSteamRunning recognises the client", "[platform][steam]") {
     const std::vector<RunningProcess> windows = {{10, "explorer.exe", {}}, {20, "Steam.exe", {}}};
-    CHECK(isSteamRunning(windows, OsPlatform::Windows));
-    CHECK_FALSE(isSteamRunning(windows, OsPlatform::Linux));
-
-    const std::vector<RunningProcess> linux = {{1, "systemd", {}}, {42, "steam", {}}};
-    CHECK(isSteamRunning(linux, OsPlatform::Linux));
-    CHECK_FALSE(isSteamRunning({{42, "Steam", {}}}, OsPlatform::Linux));
-    CHECK_FALSE(isSteamRunning({{42, "steamwebhelper", {}}}, OsPlatform::Linux));
-    CHECK(isSteamRunning({{7, "steam_osx", {}}}, OsPlatform::MacOS));
+    CHECK(isSteamRunning(windows));
 
     // A registry pid counts only when the process name is unknown.
-    CHECK(isSteamRunning({{99, "", {}}}, OsPlatform::Windows, 99));
-    CHECK_FALSE(isSteamRunning({{99, "notepad.exe", {}}}, OsPlatform::Windows, 99));
-    CHECK_FALSE(isSteamRunning({}, OsPlatform::Windows, 99));
+    CHECK(isSteamRunning({{99, "", {}}}, 99));
+    CHECK_FALSE(isSteamRunning({{99, "notepad.exe", {}}}, 99));
+    CHECK_FALSE(isSteamRunning({}, 99));
 }
 
 TEST_CASE("findSteamApiLibrary searches the usual folders", "[platform][steam]") {
-    CHECK(std::string(steamApiLibraryName(OsPlatform::Windows)) == "steam_api64.dll");
-    CHECK(std::string(steamApiLibraryName(OsPlatform::Linux)) == "libsteam_api.so");
-    CHECK(std::string(steamApiLibraryName(OsPlatform::MacOS)) == "libsteam_api.dylib");
+    CHECK(std::string(steamApiLibraryName()) == "steam_api64.dll");
 
     TempDir temp;
     const fs::path game = temp.path() / test::unicodeSubdir() / "Game Folder";
     fs::create_directories(game);
-    CHECK_FALSE(findSteamApiLibrary(game, OsPlatform::Windows).has_value());
-    CHECK_FALSE(findSteamApiLibrary(fs::path(), OsPlatform::Windows).has_value());
+    CHECK_FALSE(findSteamApiLibrary(game).has_value());
+    CHECK_FALSE(findSteamApiLibrary(fs::path()).has_value());
 
     test::writeText(game / "steam_api64.dll", "x");
-    CHECK(findSteamApiLibrary(game, OsPlatform::Windows) == game / "steam_api64.dll");
-
-    test::writeText(game / "linux64" / "libsteam_api.so", "x");
-    CHECK(findSteamApiLibrary(game, OsPlatform::Linux) == game / "linux64" / "libsteam_api.so");
-
-    const fs::path bundle = game / "Stellaris.app";
-    test::writeText(bundle / "Contents" / "Frameworks" / "libsteam_api.dylib", "x");
-    CHECK(findSteamApiLibrary(game, OsPlatform::MacOS) ==
-          bundle / "Contents" / "Frameworks" / "libsteam_api.dylib");
-    CHECK(findSteamApiLibrary(bundle, OsPlatform::MacOS) ==
-          bundle / "Contents" / "Frameworks" / "libsteam_api.dylib");
+    CHECK(findSteamApiLibrary(game) == game / "steam_api64.dll");
 }
 
 // Read-only smoke test against the Steam installation of the machine running

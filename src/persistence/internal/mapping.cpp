@@ -30,14 +30,6 @@ std::optional<DistributionSource> distributionFromText(std::string_view text) no
     return std::nullopt;
 }
 
-std::optional<OsPlatform> platformFromText(std::string_view text) noexcept {
-    for (auto value : {OsPlatform::Windows, OsPlatform::Linux, OsPlatform::MacOS}) {
-        if (text == toString(value))
-            return value;
-    }
-    return std::nullopt;
-}
-
 std::optional<InstallState> installStateFromText(std::string_view text) noexcept {
     for (auto value : {InstallState::Ready, InstallState::NeedsUpdate, InstallState::Downloading,
                        InstallState::Broken}) {
@@ -50,27 +42,15 @@ std::optional<InstallState> installStateFromText(std::string_view text) noexcept
 // path::u8string() and the char8_t constructor throw on Windows for text
 // that is not valid UTF-16 / UTF-8, hence the hand-written conversions.
 std::string pathToText(const std::filesystem::path& path) {
-#if defined(_WIN32)
     return utf16ToUtf8(std::wstring_view(path.native()));
-#else
-    return path.native();
-#endif
 }
 
 std::filesystem::path pathFromText(std::string_view text) {
-#if defined(_WIN32)
     return std::filesystem::path(utf8ToWide(text));
-#else
-    return std::filesystem::path(std::string(text));
-#endif
 }
 
-bool isStorablePath([[maybe_unused]] const std::filesystem::path& path) noexcept {
-#if defined(_WIN32)
+bool isStorablePath(const std::filesystem::path& path) noexcept {
     return isValidUtf16(std::wstring_view(path.native()));
-#else
-    return true; // native bytes are stored as they are
-#endif
 }
 
 Status checkStorablePath(const std::filesystem::path& path, std::string_view what) {

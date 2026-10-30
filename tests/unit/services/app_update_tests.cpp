@@ -12,6 +12,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <system_error>
 
@@ -260,8 +261,9 @@ TEST_CASE("Malformed release replies are errors", "[services][update]") {
         CHECK_FALSE(parseLatestRelease(text).ok());
     }
     SECTION("wrong or missing fields") {
+        using Corrupt = std::function<void(nlohmann::json&)>;
         const auto corrupt = GENERATE(
-            +[](nlohmann::json& j) { j.erase("tag_name"); },
+            as<Corrupt>{}, +[](nlohmann::json& j) { j.erase("tag_name"); },
             +[](nlohmann::json& j) { j["tag_name"] = 123; },
             +[](nlohmann::json& j) { j["tag_name"] = nullptr; },
             +[](nlohmann::json& j) { j["tag_name"] = nlohmann::json::array({"v1.2.3"}); },

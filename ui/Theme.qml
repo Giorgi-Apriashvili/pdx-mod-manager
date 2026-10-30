@@ -62,8 +62,7 @@ QtObject {
     readonly property int fontSizeLarge: 13
     readonly property int fontSizeTitle: 15
     readonly property string uiFamily: Qt.application.font.family // qmllint disable missing-property
-    readonly property string monoFamily: Qt.platform.os === "windows" ? "Consolas"
-                                        : Qt.platform.os === "osx" ? "Menlo" : "monospace"
+    readonly property string monoFamily: "Consolas"
 
     // Metrics
     readonly property int rowHeight: 24

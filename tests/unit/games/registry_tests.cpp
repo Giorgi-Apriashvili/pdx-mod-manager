@@ -46,12 +46,8 @@ TEST_CASE("Game traits agree with the catalog", "[games][registry]") {
 TEST_CASE("The real discovery environment describes this process", "[games][registry]") {
     // Read-only: looks up standard folders and the Steam root.
     const DiscoveryEnvironment env = DiscoveryEnvironment::current();
-    CHECK(env.platform == currentOsPlatform());
     CHECK_FALSE(env.home.empty());
-    if (env.platform == OsPlatform::Linux)
-        CHECK_FALSE(env.xdgDataHome.empty());
-    else
-        CHECK_FALSE(env.documentsDir.empty());
+    CHECK_FALSE(env.documentsDir.empty());
 }
 
 TEST_CASE("Workshop ids are recognised in content paths", "[games][registry]") {

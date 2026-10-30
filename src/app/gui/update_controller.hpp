@@ -2,8 +2,8 @@
 
 // Backend.updates (docs/updates.md, docs/ui-contract.md): "Check for updates" in
 // Settings. Nothing touches the network until the user asks. An installed copy
-// on Windows downloads the verified installer, starts it and quits; every other
-// build (ZIP, development, Linux, macOS) offers the release page instead.
+// downloads the verified installer, starts it and quits; every other build (ZIP,
+// development) offers the release page instead.
 // Sessions that must not change anything (--read-only, verification runs) have
 // the whole feature off, with the reason in disabledReason.
 

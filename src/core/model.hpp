@@ -39,10 +39,6 @@ struct ModIdentity {
 // "stellaris:steam-workshop:1234567890"; for logs and map keys only.
 std::string toString(const ModIdentity& identity);
 
-enum class OsPlatform { Windows, Linux, MacOS };
-OsPlatform currentOsPlatform() noexcept;
-const char* toString(OsPlatform platform) noexcept;
-
 enum class DistributionSource { Steam, Manual, Unknown };
 const char* toString(DistributionSource source) noexcept;
 
@@ -61,7 +57,6 @@ struct GameInstallation {
     std::filesystem::path executablePath;
     std::vector<std::string> defaultArguments; // from the game's own launcher settings
     DistributionSource distribution = DistributionSource::Unknown;
-    OsPlatform platform = currentOsPlatform();
     std::string steamAppId;                 // "281990" when installed through Steam
     std::filesystem::path steamLibraryPath; // library root containing steamapps/, if Steam
     std::string version;                    // short version, e.g. "v4.5.2"

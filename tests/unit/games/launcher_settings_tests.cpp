@@ -86,7 +86,7 @@ TEST_CASE("launcher-settings.json is found in the modern and the older layout",
     auto older = readLauncherSettings(install);
     REQUIRE(older.ok());
     CHECK(older->file == install / "launcher" / "launcher-settings.json");
-    auto exe = resolveLauncherExecutable(*older, install, OsPlatform::Windows);
+    auto exe = resolveLauncherExecutable(*older, install);
     REQUIRE(exe.ok());
     CHECK(*exe == (install / "stellaris.exe").lexically_normal());
 
@@ -95,7 +95,7 @@ TEST_CASE("launcher-settings.json is found in the modern and the older layout",
     auto modern = readLauncherSettings(install);
     REQUIRE(modern.ok());
     CHECK(modern->file == install / "launcher-settings.json");
-    exe = resolveLauncherExecutable(*modern, install, OsPlatform::Windows);
+    exe = resolveLauncherExecutable(*modern, install);
     REQUIRE(exe.ok());
     CHECK(*exe == (install / "stellaris.exe").lexically_normal());
 
@@ -113,37 +113,25 @@ TEST_CASE("The launcher executable must be a regular file inside the installatio
     const fs::path install = temp.path() / test::u8path("game dir");
     test::writeText(install / "game.exe", "placeholder");
     test::writeText(install / "run.bat", "placeholder");
-    test::writeText(install / "linuxgame", "placeholder");
     test::writeText(temp.path() / "outside.exe", "placeholder");
     fs::create_directories(install / "folder.exe");
-    test::writeText(install / "game.app" / "Contents" / "MacOS" / "game", "placeholder");
 
     LauncherSettings settings;
     settings.file = install / "launcher-settings.json";
-    const auto resolve = [&](std::string exePath, OsPlatform os) {
+    const auto resolve = [&](std::string exePath) {
         settings.exePath = std::move(exePath);
-        return resolveLauncherExecutable(settings, install, os);
+        return resolveLauncherExecutable(settings, install);
     };
 
-    CHECK(resolve("./game.exe", OsPlatform::Windows).ok());
-    CHECK(resolve("sub/../game.exe", OsPlatform::Windows).ok());
-    CHECK(resolve("../outside.exe", OsPlatform::Windows).error().code ==
+    CHECK(resolve("./game.exe").ok());
+    CHECK(resolve("sub/../game.exe").ok());
+    CHECK(resolve("../outside.exe").error().code == ErrorCode::ValidationFailed);
+    CHECK(resolve(platform::pathToUtf8(temp.path() / "outside.exe")).error().code ==
           ErrorCode::ValidationFailed);
-    CHECK(resolve(platform::pathToUtf8(temp.path() / "outside.exe"), OsPlatform::Windows)
-              .error()
-              .code == ErrorCode::ValidationFailed);
-    CHECK(resolve("./missing.exe", OsPlatform::Windows).error().code == ErrorCode::NotFound);
-    CHECK(resolve("./folder.exe", OsPlatform::Windows).error().code == ErrorCode::NotFound);
-    CHECK(resolve("./run.bat", OsPlatform::Windows).error().code == ErrorCode::ValidationFailed);
-    CHECK(resolve("", OsPlatform::Windows).error().code == ErrorCode::ValidationFailed);
-
-    auto native = resolve("./linuxgame", OsPlatform::Linux);
-    REQUIRE(native.ok());
-    CHECK(*native == (install / "linuxgame").lexically_normal());
-
-    auto bundle = resolve("./game.app", OsPlatform::MacOS);
-    REQUIRE(bundle.ok());
-    CHECK(*bundle == (install / "game.app" / "Contents" / "MacOS" / "game").lexically_normal());
+    CHECK(resolve("./missing.exe").error().code == ErrorCode::NotFound);
+    CHECK(resolve("./folder.exe").error().code == ErrorCode::NotFound);
+    CHECK(resolve("./run.bat").error().code == ErrorCode::ValidationFailed);
+    CHECK(resolve("").error().code == ErrorCode::ValidationFailed);
 }
 
 TEST_CASE("gameDataPath maps %USER_DOCUMENTS% onto the documents folder",

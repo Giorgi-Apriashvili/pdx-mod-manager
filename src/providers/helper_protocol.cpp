@@ -468,16 +468,8 @@ HelperExitCode exitCodeFor(HelperFailure failure) noexcept {
     return HelperExitCode::InitFailed;
 }
 
-bool isAcceptedSteamApiLibraryName(std::string_view fileName, OsPlatform platform) noexcept {
-    switch (platform) {
-    case OsPlatform::Windows:
-        return fileName == "steam_api64.dll" || fileName == "steam_api.dll";
-    case OsPlatform::Linux:
-        return fileName == "libsteam_api.so";
-    case OsPlatform::MacOS:
-        return fileName == "libsteam_api.dylib";
-    }
-    return false;
+bool isAcceptedSteamApiLibraryName(std::string_view fileName) noexcept {
+    return fileName == "steam_api64.dll" || fileName == "steam_api.dll";
 }
 
 Status validateHelperArguments(std::string_view appId, const std::filesystem::path& library) {
@@ -488,11 +480,10 @@ Status validateHelperArguments(std::string_view appId, const std::filesystem::pa
     }
     // A name without a UTF-8 form contains U+FFFD here and is refused below.
     const std::string name = internal::displayPath(library.filename());
-    if (!isAcceptedSteamApiLibraryName(name, currentOsPlatform())) {
+    if (!isAcceptedSteamApiLibraryName(name)) {
         return makeError(ErrorCode::InvalidArgument,
                          "--steam-api must point at the game's own Steam API library "
-                         "(steam_api64.dll, steam_api.dll, libsteam_api.so or libsteam_api.dylib "
-                         "depending on the platform).",
+                         "(steam_api64.dll or steam_api.dll).",
                          "file name \"" + name + "\"");
     }
     std::error_code ec;
