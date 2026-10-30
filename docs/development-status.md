@@ -61,6 +61,11 @@ one. Headless checks use the hidden verification switches of `pmm-app`
   1.7.12 on both workflows and `clang-tidy` on the changed C++ files: no findings.
 - Hidden real-data tests, read-only: `pmm_games_tests "[.real]" -s` passes
   (187 assertions, both games).
+- Windows-only tree, in scratch folders: fresh-profile dumps and share codes and
+  migrated copies of two schema 1 profiles are byte-identical to the last
+  cross-platform build, also from the extracted ZIP; ZIP and installer have the same 80
+  files; `smoke-test-installer.ps1` and the update run's arguments with a stand-in
+  relaunch pass, leaving nothing behind.
 - Read-only application smoke test: share-code round trip between two clean
   profiles with byte-identical dumps for Stellaris and EU4, and a screenshot
   per game ([evidence](evidence/app-round-trip-2026-10-30.md)).
