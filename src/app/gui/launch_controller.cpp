@@ -84,8 +84,11 @@ void LaunchController::play() {
                 QMetaObject::invokeMethod(
                     runner,
                     [self] {
-                        if (self && self->m_state == QLatin1String("validating"))
-                            self->setState(QStringLiteral("applying"), true);
+                        // One read of the guarded pointer (GCC's null-dereference
+                        // analysis does not trust a check on a second read).
+                        LaunchController* controller = self.data();
+                        if (controller && controller->m_state == QLatin1String("validating"))
+                            controller->setState(QStringLiteral("applying"), true);
                     },
                     Qt::QueuedConnection);
                 auto launched = runtime.launcher().launch(key, playsetId);

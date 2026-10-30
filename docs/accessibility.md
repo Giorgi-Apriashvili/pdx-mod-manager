@@ -53,7 +53,7 @@ Settings → Keyboard shortcuts).
 | Ctrl+Shift+A | Add installed mods |
 | F5 | Rescan games and mods |
 | Ctrl+, | Settings |
-| F1 | Keyboard shortcuts |
+| F1 (also Cmd+? on macOS) | Keyboard shortcuts |
 | **Mod list** | |
 | Up, Down, PgUp, PgDn, Home, End | Move to another row |
 | Shift + the keys above | Extend the selection |
