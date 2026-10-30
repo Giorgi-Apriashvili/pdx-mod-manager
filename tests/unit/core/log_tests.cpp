@@ -14,7 +14,7 @@ TEST_CASE("Redaction hides the home directory in both slash styles", "[core][log
 }
 
 TEST_CASE("Redaction removes credential-looking values", "[core][log]") {
-    const pmm::RedactionContext ctx{"/home/bob", "bob"};
+    const pmm::RedactionContext ctx{"C:/Users/bob", "bob"};
     const auto out = pmm::redact("url?token=abc123&x=1 password: hunter2 api_key=\"q w\"", ctx);
     CHECK(out.find("abc123") == std::string::npos);
     CHECK(out.find("hunter2") == std::string::npos);

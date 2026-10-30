@@ -136,7 +136,7 @@ TEST_CASE("The launcher executable must be a regular file inside the installatio
 
 TEST_CASE("gameDataPath maps %USER_DOCUMENTS% onto the documents folder",
           "[games][launcher_settings]") {
-    const fs::path docs = test::u8path("/home/Ünïcødé user/Documents");
+    const fs::path docs = test::u8path("C:/Users/Ünïcødé user/Documents");
     auto mapped = resolveGameDataPath("%USER_DOCUMENTS%/Paradox Interactive/Stellaris", docs);
     REQUIRE(mapped.has_value());
     CHECK(*mapped == docs / "Paradox Interactive" / "Stellaris");

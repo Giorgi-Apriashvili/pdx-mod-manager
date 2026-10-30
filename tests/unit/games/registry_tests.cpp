@@ -55,8 +55,8 @@ TEST_CASE("Workshop ids are recognised in content paths", "[games][registry]") {
     CHECK(workshopIdFromPath(u8path("D:/Steam Library/steamapps/workshop/content/281990/123"),
                              "281990", &library) == "123");
     CHECK(library == u8path("D:/Steam Library"));
-    CHECK(workshopIdFromPath(u8path("/home/u/.local/share/Steam/SteamApps/Workshop/Content/281990/"
-                                    "9/sub/file.zip"),
+    CHECK(workshopIdFromPath(u8path("C:/Program Files (x86)/Steam/SteamApps/Workshop/Content/"
+                                    "281990/9/sub/file.zip"),
                              "281990") == "9");
     CHECK_FALSE(workshopIdFromPath(u8path("/x/steamapps/workshop/content/236850/123"), "281990"));
     CHECK_FALSE(workshopIdFromPath(u8path("/x/steamapps/workshop/content/281990/0123"), "281990"));

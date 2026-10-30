@@ -119,7 +119,7 @@ blocks the common ones).
   before modifying anything.
 - `.gitattributes` marks fixtures as binary (`-text`), so they stay byte-exact.
 - **Sanitize** anything modelled on real files: placeholder user names and
-  paths (`C:/Users/<user>`, `/home/user`), no SteamID64 values, no account
+  paths (`C:/Users/<user>`), no SteamID64 values, no account
   data, no copyrighted game or mod content beyond the minimal structure needed.
 - **Share-code regression fixtures never change.** `tests/fixtures/sharing/v1/`
   is the frozen compatibility contract of protocol version 1: existing `.code`

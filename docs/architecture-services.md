@@ -122,8 +122,7 @@ obscurely.
   after a Workshop item is installed). A rescan drops cached local-mod
   fingerprints: editing a file inside a mod folder, or anywhere in its
   subfolders, leaves the folder's own modification time unchanged on NTFS,
-  ext4 and APFS, so nothing cheap proves that a cached fingerprint still
-  matches.
+  so nothing cheap proves that a cached fingerprint still matches.
 - `setManualLocation` / `clearManualLocation`. Nothing is stored when the
   adapter rejects the folders.
 - `cachedStates()` / `cachedInventory()`: the last known state, read from the
