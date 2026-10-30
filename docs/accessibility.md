@@ -35,6 +35,9 @@ what is still missing.
   dialog, or the list for Delete and the shortcuts).
 - A control that receives focus inside a scrolled column or list is scrolled
   into view (`Theme.reveal()`).
+- In Settings → Updates, the button that was just pressed may disappear or
+  become disabled ("Check for updates" while checking). Focus then moves to the
+  section's main button, or back to "Check for updates", and stays in the section.
 
 ### Shortcuts
 
@@ -159,7 +162,9 @@ on Windows):
 - error banners when they appear or change (invalid share code in the import
   preview, launch failure, interrupted configuration change);
 - launch progress ("Checking installation and mods…", "Starting
-  Stellaris…", "Launch failed.").
+  Stellaris…", "Launch failed.");
+- each step of an update in Settings ("Version 1.2.3 is available.", errors),
+  not every percent of the download.
 
 Notifications disappear after 5 s (warnings 9 s, errors 15 s) unless the
 pointer is over them or their Dismiss button has keyboard focus. Dismissing
@@ -227,7 +232,7 @@ outlines and checked fills. Disabled controls are exempt and stay faded.
 
 Automated:
 
-- `ui/dev/preview.sh --test` (fake backend, 21 tests): besides the editing
+- `ui/dev/preview.sh --test` (fake backend, 22 tests): besides the editing
   tests, Tab visits the actions, games and mods columns in that order and
   returns to the list; F6 / Shift+F6; Enter opens Settings from its button,
   Tab stays inside the dialog and Esc returns focus to the button; Esc on the
