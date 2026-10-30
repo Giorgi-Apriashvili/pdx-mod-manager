@@ -10,6 +10,8 @@ import Pmm.Backend
 AppDialog {
     id: dialog
 
+    objectName: "addModsDialog"
+
     property var picked: ({})
     property int pickedCount: 0
 
@@ -22,7 +24,8 @@ AppDialog {
     function toggle(key: string, inPlayset: bool) {
         if (inPlayset)
             return
-        const p = picked
+        // A new object: the rows' bindings only update when the property changes.
+        const p = Object.assign({}, picked)
         if (p[key])
             delete p[key]
         else
@@ -141,6 +144,7 @@ AppDialog {
                 activeFocusOnTab: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: AppScrollBar {}
+                objectName: "inventoryList"
                 Accessible.role: Accessible.List
                 Accessible.name: qsTr("Installed mods")
                 Accessible.description: qsTr("Space selects or deselects the current mod")

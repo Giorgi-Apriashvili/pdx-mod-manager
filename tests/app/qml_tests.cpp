@@ -542,6 +542,96 @@ struct UpdatesHarness {
 
 } // namespace
 
+TEST_CASE("Rows in the Add mods dialog show their selection at once", "[app][qml]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addWorkshopMod("1002", "Beta");
+    world.addWorkshopMod("1003", "Gamma");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Picking"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+
+        REQUIRE(QMetaObject::invokeMethod(window, "openAddMods"));
+        auto* dialog = window->findChild<QObject*>(QStringLiteral("addModsDialog"));
+        REQUIRE(dialog);
+        REQUIRE(waitUntil([&] { return dialog->property("opened").toBool(); }));
+        auto* list = window->findChild<QQuickItem*>(QStringLiteral("inventoryList"));
+        REQUIRE(list);
+        REQUIRE(waitUntil([&] { return list->property("count").toInt() == 3; }));
+        list->forceActiveFocus();
+        REQUIRE(hasActiveFocus(list));
+
+        const auto currentRow = [&] { return list->property("currentItem").value<QObject*>(); };
+        const auto press = [&](Qt::Key k) {
+            QTest::keyClick(window, k);
+            QCoreApplication::processEvents();
+        };
+        REQUIRE(currentRow());
+        CHECK_FALSE(currentRow()->property("checked").toBool());
+
+        // Selecting: the row shows it, and so does the count.
+        press(Qt::Key_Space);
+        CHECK(currentRow()->property("checked").toBool());
+        CHECK(dialog->property("pickedCount").toInt() == 1);
+
+        // A second row is independent of the first.
+        QObject* first = currentRow();
+        press(Qt::Key_Down);
+        REQUIRE(currentRow() != first);
+        CHECK_FALSE(currentRow()->property("checked").toBool());
+        press(Qt::Key_Space);
+        CHECK(currentRow()->property("checked").toBool());
+        CHECK(first->property("checked").toBool());
+        CHECK(dialog->property("pickedCount").toInt() == 2);
+
+        // Selecting again clears only that row.
+        press(Qt::Key_Space);
+        CHECK_FALSE(currentRow()->property("checked").toBool());
+        CHECK(first->property("checked").toBool());
+        CHECK(dialog->property("pickedCount").toInt() == 1);
+
+        // The mouse takes the same path: click the last row.
+        press(Qt::Key_Down);
+        auto* last = qobject_cast<QQuickItem*>(currentRow());
+        REQUIRE(last);
+        CHECK_FALSE(last->property("checked").toBool());
+        const QPoint center =
+            last->mapToScene(QPointF(last->width() / 2, last->height() / 2)).toPoint();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center);
+        REQUIRE(waitUntil([&] { return dialog->property("pickedCount").toInt() == 2; }));
+        CHECK(last->property("checked").toBool());
+        CHECK(first->property("checked").toBool());
+
+        QMetaObject::invokeMethod(window, "closeDialogs");
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    CHECK(warnings.list().isEmpty());
+}
+
 TEST_CASE("The Updates section works with the keyboard", "[app][qml][a11y][update]") {
     qputenv("QT_QUICK_BACKEND", "software");
     UpdatesHarness h;
