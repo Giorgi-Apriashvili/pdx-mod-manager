@@ -1,8 +1,10 @@
 #pragma once
 
-// Minimal SHA-256 (FIPS 180-4). Used for share-code corruption detection and
-// local mod fingerprints; not used for any security decision. Verified against
-// the NIST example vectors in tests/unit/core/sha256_tests.cpp.
+// Minimal SHA-256 (FIPS 180-4). Used for share-code corruption detection, local
+// mod fingerprints and checking a downloaded installer against the release's
+// SHA256SUMS.txt (docs/updates.md says what that does and does not protect
+// against). Verified against the NIST example vectors in
+// tests/unit/core/sha256_tests.cpp.
 
 #include <array>
 #include <cstddef>
