@@ -1,5 +1,7 @@
 # Feasibility investigation
 
+> Linux and macOS were later dropped ([ADR 0009](adr/0009-windows-only.md)); this record stays as written.
+
 Status labels used throughout the project documentation:
 
 - **Verified**: observed on a real installation, with the evidence recorded.

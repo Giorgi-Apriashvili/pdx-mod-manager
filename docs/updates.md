@@ -1,7 +1,7 @@
 # Updates
 
-Settings → Updates has a "Check for updates" button. An installed copy on
-Windows can then update itself; every other build is pointed at the release
+Settings → Updates has a "Check for updates" button. An installed copy can
+then update itself; a ZIP copy or a development build is pointed at the release
 page. This page says what is contacted, what is verified and what that does
 and does not protect against.
 
@@ -85,8 +85,8 @@ start-up (except in read-only and verification sessions) and before a download.
 
 ## The update run
 
-An installed copy is recognised by `<folder of pmm-app.exe>/../unins000.exe`, on
-Windows only. It starts the verified installer with exactly
+An installed copy is recognised by `<folder of pmm-app.exe>/../unins000.exe`. It
+starts the verified installer with exactly
 
 ```text
 /SILENT /SP- /NORESTART /PMMUPDATE=1
@@ -100,7 +100,7 @@ starts the application again. User data lives outside the install folder. If the
 installer cannot finish, it says so and the current version stays in place
 ([`packaging.md`](packaging.md#windows-installer)).
 
-ZIP copies, development builds, Linux and macOS get "Open release page". The log
+ZIP copies and development builds get "Open release page". The log
 says which one a copy has, at start-up: `update mode mode=installer` or
 `mode=releasePage`.
 

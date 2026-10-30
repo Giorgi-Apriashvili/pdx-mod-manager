@@ -5,6 +5,8 @@ their responsibilities, how data flows through the main workflows, the
 threading model, the error and logging policy, and where state is stored.
 Decisions behind the structure are recorded in [`docs/adr/`](adr/README.md).
 
+The application runs on Windows only ([ADR 0009](adr/0009-windows-only.md)).
+
 Implementation status: every layer below is implemented and tested. The
 desktop application (`pmm-app`) is the only front end; there is no
 command-line tool. The application layer is described in detail in
@@ -71,7 +73,7 @@ Link dependencies as declared in CMake:
 | `sharing` | Share-code protocol v1: strict manifest parsing and canonical serialization, bounded zlib/Base64URL codec, envelope and digest | `share_code.hpp`, `manifest.hpp`, `codec.hpp`, `utf8.hpp` |
 | `persistence` | One SQLite database: migrations, upgrade backups, integrity checks, repositories for settings, installations, inventory, playsets (with undo history), acquisition jobs and launch history | `database.hpp`, `*_repository.hpp` ([details](persistence.md)) |
 | `providers` | Steam Workshop: helper wire protocol, pure acquisition reducer, EResult classification, Web API metadata request/response, manual fallback links, local mod fingerprints | `helper_protocol.hpp`, `acquisition.hpp`, `workshop_item.hpp`, `web_metadata.hpp`, `fallback.hpp`, `local_fingerprint.hpp` ([details](steam-workshop.md)) |
-| `games` | One adapter per game: discovery per OS/store, descriptor parsing, version and capability detection, load-order translation, generated configuration, executable/arguments/environment, process names, compatibility warnings. Adapters return plans; they never write files. EU4 and Stellaris share `DlcLoadJsonAdapter` with per-game traits ([Stellaris](games/stellaris.md), [EU4](games/eu4.md)) | `game_adapter.hpp`, `dlc_load_adapter.hpp`, `eu4.hpp`, `stellaris.hpp` |
+| `games` | One adapter per game: discovery per store, descriptor parsing, version and capability detection, load-order translation, generated configuration, executable/arguments/environment, process names, compatibility warnings. Adapters return plans; they never write files. EU4 and Stellaris share `DlcLoadJsonAdapter` with per-game traits ([Stellaris](games/stellaris.md), [EU4](games/eu4.md)) | `game_adapter.hpp`, `dlc_load_adapter.hpp`, `eu4.hpp`, `stellaris.hpp` |
 | `services` | Qt-free use cases called by the application on one worker thread: game discovery and scans, playset editing with undo, export/import, the acquisition coordinator (helper sessions, Web API identity gate, ticks, persistence), the launch check, launch and configuration recovery, diagnostics, application folders ([details](architecture-services.md)) | `game_service.hpp`, `playset_service.hpp`, `share_service.hpp`, `acquisition_coordinator.hpp`, `launch_service.hpp`, `app_paths.hpp` |
 | `app` | Qt composition root (`AppRuntime`), the services worker (`ServiceRunner`), `QProcess` host for the Steam helper, `QNetworkAccessManager` host for Web API metadata, the per-profile lock, GUI-ready snapshots; the `Backend` with the models and controllers of the UI contract, settings and window state, clipboard and file dialogs, the offline QML network factory, the verification switches ([details](app.md)) | `app_runtime.hpp`, `service_runner.hpp`, `session_host.hpp`, `metadata_host.hpp`, `profile_lock.hpp`, `backend.hpp` |
 | `ui` | QML module `Pmm.Ui`: the three-column window, panes, dialogs and controls; presentation and interaction only, data shown as plain text ([contract](ui-contract.md), [accessibility](accessibility.md)) | `Main.qml`, `panes/`, `dialogs/`, `controls/` |
@@ -164,7 +166,7 @@ validation; a new provider means a new provider module and a new `source` key
 4. `FileTransactionManager::apply()` writes the configuration as one
    journaled unit with backups (ADR 0005).
 5. `platform::startDetached()` starts the real game executable with
-   `CreateProcessW` or `posix_spawn`, never through a shell or a store URL that
+   `CreateProcessW`, never through a shell or a store URL that
    would reopen the Paradox launcher. Failures carry the OS error in
    `Error::detail`; the configuration written for the attempt is restored and
    the parked jobs resume.
@@ -234,15 +236,15 @@ The application side is described in detail in [`app.md`](app.md)
 
 From `platform::standardDirectories()` and [`persistence.md`](persistence.md):
 
-| What | Windows | Linux | macOS |
-| --- | --- | --- | --- |
-| Database `state.sqlite` (+ `-wal`, `-shm`, `.bak-v<N>`) | `%APPDATA%\ParadoxModManager\` | `$XDG_DATA_HOME/ParadoxModManager/` (default `~/.local/share/...`) | `~/Library/Application Support/ParadoxModManager/` |
-| Configuration transaction journals | `transactions\` in the application data directory | `transactions/` in the data directory | `transactions/` in the data directory |
-| Profile lock `pmm-app.lock` | application data directory | same | same |
-| Logs | `%LOCALAPPDATA%\ParadoxModManager\logs\` | `$XDG_STATE_HOME/ParadoxModManager/logs/` (default `~/.local/state/...`) | `~/Library/Logs/ParadoxModManager/` |
-| Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` | `$XDG_CACHE_HOME/ParadoxModManager/` (default `~/.cache/...`) | `~/Library/Caches/ParadoxModManager/` |
-| Game user data (read on scan; written only on Play, through a transaction) | `Documents\Paradox Interactive\<Game>` (Known Folder, so OneDrive redirection is honoured) | `$XDG_DATA_HOME/Paradox Interactive/<Game>` | `~/Documents/Paradox Interactive/<Game>` |
-| Steam (read-only) | registry `SteamPath` / `InstallPath`, default `C:\Program Files (x86)\Steam` | `~/.steam/steam`, `$XDG_DATA_HOME/Steam`, Flatpak and Snap paths | `~/Library/Application Support/Steam` |
+| What | Where |
+| --- | --- |
+| Database `state.sqlite` (+ `-wal`, `-shm`, `.bak-v<N>`) | `%APPDATA%\ParadoxModManager\` |
+| Configuration transaction journals | `transactions\` in the application data directory |
+| Profile lock `pmm-app.lock` | application data directory |
+| Logs | `%LOCALAPPDATA%\ParadoxModManager\logs\` |
+| Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` |
+| Game user data (read on scan; written only on Play, through a transaction) | `Documents\Paradox Interactive\<Game>` (Known Folder, so OneDrive redirection is honoured) |
+| Steam (read-only) | registry `SteamPath` / `InstallPath`, default `C:\Program Files (x86)\Steam` |
 
 With `pmm-app --profile <dir>` the database, journals, lock, logs and cache
 all live in `<dir>` ([app.md](app.md#files-and-folders)).

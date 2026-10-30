@@ -56,7 +56,7 @@ Settings → Keyboard shortcuts).
 | Ctrl+Shift+A | Add installed mods |
 | F5 | Rescan games and mods |
 | Ctrl+, | Settings |
-| F1 (also Cmd+? on macOS) | Keyboard shortcuts |
+| F1 | Keyboard shortcuts |
 | **Mod list** | |
 | Up, Down, PgUp, PgDn, Home, End | Move to another row |
 | Shift + the keys above | Extend the selection |
@@ -120,9 +120,8 @@ banner's "Show load order" link restores the view.
 
 ## Screen readers and UI Automation
 
-Qt exposes the QML items to the platform accessibility API (UI Automation on
-Windows, AT-SPI on Linux, NSAccessibility on macOS) through the `Accessible`
-attached properties.
+Qt exposes the QML items to UI Automation, the Windows accessibility API,
+through the `Accessible` attached properties.
 
 ### Roles and names
 
@@ -151,8 +150,7 @@ grids and spinners next to self-describing text are ignored.
 ### Announcements
 
 Changes that happen without a focus change are spoken with
-`Accessible.announce()` (Qt 6.8 and later; UI Automation notification events
-on Windows):
+`Accessible.announce()` (Qt 6.8 and later; UI Automation notification events):
 
 - moves: "*name* moved to position 4", "3 mods moved up";
 - Space in the mod list: "Enabled *name*", "Disabled 5 mods";
@@ -260,8 +258,8 @@ and raw views; Settings opened through its Invoke pattern):
   see its details." were missing from the tree and banners appeared as nested
   windows; both were corrected and checked again.
 
-Not performed: listening tests with NVDA, Narrator or JAWS, VoiceOver on
-macOS and Orca on Linux, and Windows high-contrast themes. The announcements
+Not performed: listening tests with NVDA, Narrator or JAWS, and Windows
+high-contrast themes. The announcements
 were checked to run without errors, not heard.
 
 ## Known gaps

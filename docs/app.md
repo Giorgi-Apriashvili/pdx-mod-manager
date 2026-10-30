@@ -74,7 +74,7 @@ written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
 - The helper is looked up next to the executable
   (`QCoreApplication::applicationDirPath()`). The `PMM_STEAM_HELPER`
   environment variable overrides this for development.
-- On Windows it starts with `CREATE_NO_WINDOW`. The process-wide error mode
+- It starts with `CREATE_NO_WINDOW`. The process-wide error mode
   set by `main()` is inherited.
 - Commands are written to stdin. Stdout is split with
   `providers::LineSplitter` and decoded with `providers::decodeEvent()`;
@@ -107,7 +107,7 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
 `UpdateClient` and `UpdateController` run on the GUI thread, with their own
 `QNetworkAccessManager`: nothing in them blocks. They only touch the network
 after a click in Settings. `main()` holds the named mutex
-`Local\ParadoxModManagerRunning` for the whole process on Windows
+`Local\ParadoxModManagerRunning` for the whole process
 (`RunningInstanceSignal`), which is what an update run's installer waits for.
 The log records at start-up whether this copy updates through the installer or the
 release page. What is contacted, verified and protected against is in
@@ -260,7 +260,7 @@ capture that shows the grey inactive selection.
 
 ## Files and folders
 
-| What | Default (Windows) | With `--profile <dir>` |
+| What | Default | With `--profile <dir>` |
 | --- | --- | --- |
 | Database | `%APPDATA%\ParadoxModManager\state.sqlite` | `<dir>\state.sqlite` |
 | Configuration journal and backups | `%APPDATA%\ParadoxModManager\transactions\` | `<dir>\transactions\` |
@@ -268,8 +268,6 @@ capture that shows the grey inactive selection.
 | Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` | `<dir>\cache\` |
 | Downloaded installer | `%LOCALAPPDATA%\ParadoxModManager\cache\updates\` | `<dir>\cache\updates\` |
 
-The Linux and macOS locations are listed in
-[`architecture.md`](architecture.md) (section "State and file locations").
 Settings → About shows the folders of the running profile and opens the logs
 folder. Qt keeps its own graphics pipeline cache in the standard per-user
 cache folder (`ParadoxModManager/Paradox Mod Manager/cache`), even with
@@ -282,7 +280,7 @@ saved when the window closes and when the application quits.
 
 ## Running from the build tree
 
-On Windows, Qt's DLLs must be found: put `<Qt>/bin` on `PATH`, or install.
+Qt's DLLs must be found: put `<Qt>/bin` on `PATH`, or install.
 The tests do this themselves (`DL_PATHS` in `tests/app/CMakeLists.txt`).
 `cmake --install build/<preset> --prefix <dir>` installs `bin/pmm-app` next to
 `bin/pmm-steam-helper` and runs Qt's deployment script. Because `Pmm.Ui` is

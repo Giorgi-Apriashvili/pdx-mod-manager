@@ -13,24 +13,22 @@ machine runs Windows 11 with Stellaris "Cygnus v4.5.2 (9776)" from Steam. It
 was only read; the game was never started by this work. Latest read-only run:
 [`../evidence/real-scan-2026-10-29.md`](../evidence/real-scan-2026-10-29.md).
 
-| Capability | Windows / Steam | Linux / Steam | macOS / Steam | Other stores |
-| --- | --- | --- | --- | --- |
-| Discover installation and user data | **Verified** (read-only) | Implemented, unverified | Implemented, unverified | Not discovered; manual selection, unverified |
-| Read `launcher-settings.json` (version, executable, arguments) | **Verified** | Implemented, unverified | Implemented, unverified | Unverified |
-| Scan Workshop and local mods, identity rules | **Verified**: 36 mods, 0 problems | Implemented, unverified | Implemented, unverified | Local mods only, unverified |
-| Registered Workshop items whose content is missing | **Verified** with a replay of the real descriptors: not installed, read as missing | Same code | Same code | n/a |
-| Read current `dlc_load.json` | **Verified**: 17 of 17 resolved | Implemented, unverified | Implemented, unverified | Unverified |
-| Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** byte-identical to the launcher's output (computed, not written) | Implemented, unverified | Implemented, unverified | Unverified |
-| Direct launch (bypassing the launcher) | **Verified** 2026-10-30: started directly with `-gdpr-compliant`, no launcher process ([live validation](../evidence/live-validation-2026-10-30.md)) | Implemented, unverified | Implemented, unverified | Unverified, no Steam environment |
-| Effective order / precedence in game | **Verified** 2026-10-30: enabled mods load, disabled do not; the later mod in `enabled_mods` wins a shared file ([load order](../load-order.md#stellaris)) | Unverified | Unverified | Unverified |
-| `supported_version` warnings incl. the Stellaris wildcard rule | **Verified** against `logs/error.log` | Same code | Same code | Same code |
+| Capability | Windows / Steam | Other stores |
+| --- | --- | --- |
+| Discover installation and user data | **Verified** (read-only) | Not discovered; manual selection, unverified |
+| Read `launcher-settings.json` (version, executable, arguments) | **Verified** | Unverified |
+| Scan Workshop and local mods, identity rules | **Verified**: 36 mods, 0 problems | Local mods only, unverified |
+| Registered Workshop items whose content is missing | **Verified** with a replay of the real descriptors: not installed, read as missing | n/a |
+| Read current `dlc_load.json` | **Verified**: 17 of 17 resolved | Unverified |
+| Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** byte-identical to the launcher's output (computed, not written) | Unverified |
+| Direct launch (bypassing the launcher) | **Verified** 2026-10-30: started directly with `-gdpr-compliant`, no launcher process ([live validation](../evidence/live-validation-2026-10-30.md)) | Unverified, no Steam environment |
+| Effective order / precedence in game | **Verified** 2026-10-30: enabled mods load, disabled do not; the later mod in `enabled_mods` wins a shared file ([load order](../load-order.md#stellaris)) | Unverified |
+| `supported_version` warnings incl. the Stellaris wildcard rule | **Verified** against `logs/error.log` | Same code |
 
 ## Installation discovery
 
 - **Steam** (`discover`): the Steam root comes from `DiscoveryEnvironment`
-  (`platform::steam::findSteamRoot()`: the registry on Windows,
-  `~/.steam/steam`, `~/.local/share/Steam`, Flatpak and Snap on Linux,
-  `~/Library/Application Support/Steam` on macOS). Libraries are read from
+  (`platform::steam::findSteamRoot()`: the registry). Libraries are read from
   `steamapps/libraryfolders.vdf`; `appmanifest_281990.acf` must report
   "fully installed" (StateFlags bit 4) and its folder must exist. Result:
   `distribution = Steam`, `steamAppId = "281990"`, `steamLibraryPath` = the
@@ -48,16 +46,12 @@ was only read; the game was never started by this work. Latest read-only run:
 
 ## User data discovery
 
-| OS | Default | Source |
-| --- | --- | --- |
-| Windows | `<Documents>/Paradox Interactive/Stellaris` | Known Folder `FOLDERID_Documents` (honours OneDrive redirection); verified |
-| macOS | `~/Documents/Paradox Interactive/Stellaris` | unverified |
-| Linux | `$XDG_DATA_HOME/Paradox Interactive/Stellaris` (default `~/.local/share/...`) | unverified |
+The default is `<Documents>/Paradox Interactive/Stellaris`, from the Known Folder
+`FOLDERID_Documents` (honours OneDrive redirection); verified.
 
 `launcher-settings.json` declares `"gameDataPath":
 "%USER_DOCUMENTS%/Paradox Interactive/Stellaris"`. `%USER_DOCUMENTS%` is mapped
-to the documents folder (Windows, macOS) or to `$XDG_DATA_HOME` (Linux). Any
-other form, `..` components or drive letters are ignored with a warning and
+to the documents folder. Any other form, `..` components or drive letters are ignored with a warning and
 the default is used. A user-chosen folder always wins.
 
 `<install>/userdir.txt` comes before `gameDataPath`, with the same rules as
@@ -84,16 +78,14 @@ v4.5.2:
 
 Validation: wrong types fail the read. `exeArgs` must be a list of at most 64
 strings of at most 4096 bytes, without NUL. `exePath` must resolve inside the
-installation folder (`platform::isWithin`) to a regular file. On Windows it
-must end in `.exe`, so the app never asks Windows to start a script or
+installation folder (`platform::isWithin`) to a regular file. It must end in
+`.exe`, so the app never asks Windows to start a script or
 document. It must not name the Paradox launcher (`dowser.exe`,
-`Paradox Launcher.exe`). An app bundle (`x.app`) resolves to
-`x.app/Contents/MacOS/x`. `alternativeExecutables` (the `-nakama`
+`Paradox Launcher.exe`). `alternativeExecutables` (the `-nakama`
 cross-store multiplayer variant) is ignored.
 
-If the file is missing, the adapter falls back to `stellaris.exe` /
-`stellaris` / `stellaris.app/Contents/MacOS/stellaris` with no arguments and
-logs a warning. If it is unreadable or names an unusable executable,
+If the file is missing, the adapter falls back to `stellaris.exe` with no
+arguments and logs a warning. If it is unreadable or names an unusable executable,
 discovery does the same, while manual inspection reports the error.
 
 ## Files
@@ -192,9 +184,8 @@ mod's content exists, and that local mods have a registered descriptor in
   names the file. Descriptors must lie directly in `mod/`, because
   `dlc_load.json` names the file only.
 
-Running-instance check (`processNames`): game `stellaris.exe` (Linux
-`stellaris`); conflicting writers `Paradox Launcher.exe` and `dowser.exe`
-(Linux `dowser`, `paradox-launcher`; macOS `Paradox Launcher`). `dowser.exe`
+Running-instance check (`processNames`): game `stellaris.exe`; conflicting
+writers `Paradox Launcher.exe` and `dowser.exe`. `dowser.exe`
 ships in the install folder; the other names are unverified.
 
 ## Backups and recovery
@@ -290,4 +281,3 @@ Workshop references keep their identity and read as not installed.
    user's approval and record the precedence result.
 2. Launch from the app and confirm that the launcher does not appear and that
    the mods are active in game (spec section 10, step 6).
-3. Repeat discovery, scan and launch on Linux and macOS.

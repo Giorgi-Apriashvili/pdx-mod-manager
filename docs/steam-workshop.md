@@ -19,8 +19,6 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Manual fallback (open Workshop page, then rescan) | Implemented. **Limited**: does not satisfy automatic download |
 | Web API metadata (names, sizes, wrong-game check) | Request builder and parser in `providers`; the app layer's `QtWorkshopMetadataHost` makes the call (tested against a local stub) |
 | Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
-| Linux helper | Compiled with GCC 16.2 (Arch Linux in WSL, 2026-10-30); the end-to-end tests against the fake library pass, also under ASan + UBSan. **Not run against a real Steam client** |
-| macOS helper | Written, **not compiled or run** (no Mac available) |
 | Europa Universalis IV | Same mechanism expected (the game ships `steam_api64.dll`). EU4 1.37.5 is installed on the development machine, but the helper has **not been run** for it yet |
 
 ## 1. Architecture
@@ -61,16 +59,15 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 ### How the helper binds to the game's library
 
 1. Validate arguments: `--app-id` must be canonical decimal digits (fits in `uint32`).
-   `--steam-api` must name exactly `steam_api64.dll` or `steam_api.dll` (Windows),
-   `libsteam_api.so` (Linux), or `libsteam_api.dylib` (macOS), and must exist as a regular file.
+   `--steam-api` must name exactly `steam_api64.dll` or `steam_api.dll`, and must exist as a
+   regular file.
 2. Before loading anything: set `SteamAppId` and `SteamGameId` to the app id. Duplicate the
    original stdout for protocol output and point the process stdout (CRT descriptor and Win32 std
-   handle) at stderr, because the library logs to stdout. On Windows, also disable system error
+   handle) at stderr, because the library logs to stdout. Also disable system error
    dialogs (`SetErrorMode`).
-3. Load the library: `LoadLibraryExW(..., LOAD_WITH_ALTERED_SEARCH_PATH)` on Windows,
-   `dlopen(RTLD_NOW | RTLD_LOCAL)` elsewhere.
+3. Load the library: `LoadLibraryExW(..., LOAD_WITH_ALTERED_SEARCH_PATH)`.
 4. Resolve flat exports. Function signatures are written by hand from the public documentation:
-   the interface pointer is the first argument, and the calling convention is `__cdecl` on Windows.
+   the interface pointer is the first argument, and the calling convention is `__cdecl`.
    Interface pointers must match the vtable layout the library's flat functions were compiled for,
    so they come from:
    - the library's own versioned accessor, probing from the highest version down:
@@ -89,7 +86,7 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
    thread performs raw OS reads from stdin into a queue, so the pump never blocks on input.
    Pending subscribe calls are polled with `IsAPICallCompleted` and read with `GetAPICallResult`
    (callback 1313, `RemoteStorageSubscribePublishedFileResult_t {EResult; uint64}`: 16 bytes with
-   Windows 8-byte callback packing, 12 bytes with 4-byte packing on Linux/macOS). If a result
+   8-byte callback packing). If a result
    doesn't arrive within 120 s, it is reported as EResult 16 (Timeout).
 7. On `quit` or end of input, the helper calls `SteamAPI_Shutdown` and exits 0.
 
@@ -350,8 +347,7 @@ picks the item up. The state machine accepts a subscribed and installed item fro
 idle failure state, and tracks a download that Steam is already running.
 
 **The fallback does not satisfy the spec's automatic-download requirement.** It exists for
-cases where the helper cannot work (incompatible library, platform without a helper) or the user
-prefers it.
+cases where the helper cannot work (incompatible library) or the user prefers it.
 
 ## 7. Web API metadata
 
@@ -400,23 +396,10 @@ Not legal advice. These points need review before release.
 
 ## 10. Platform notes
 
-- **Windows:** the 64-bit helper loads `steam_api64.dll` from the game root (verified for
-  Stellaris). A 32-bit `steam_api.dll` would need a 32-bit helper build; none of the target games
-  needs it.
-- **Linux (unverified):** native builds ship `libsteam_api.so` (expected in the game root). It
-  connects to the running client through `~/.steam/sdk64/steamclient.so`. The helper must match
-  the library's architecture (x86-64). Flatpak or Snap Steam may need the helper to run where the
-  client's IPC is reachable. Games run through Proton ship a Windows DLL that a native helper
-  cannot load, so that setup is unsupported and should fall back to the manual path.
-- **macOS (unverified):** look for `libsteam_api.dylib` inside the app bundle (`Contents/MacOS`
-  or `Contents/Frameworks`). A notarised helper with hardened runtime needs the
-  `com.apple.security.cs.disable-library-validation` entitlement to load a library signed by
-  another team. Callback structs use 4-byte packing (12-byte subscribe result) on both Linux and
-  macOS.
-- POSIX branches (`dlopen`, `dup2`, `posix_spawn` in tests) compile only on those systems. On
-  Linux they were built and tested with GCC 16.2 in WSL (no real Steam client there); macOS has
-  not been built. CI on Linux and macOS builds `pmm-steam-helper` and runs
-  `pmm_providers_tests`, which include the end-to-end helper tests against the fake library.
+The helper runs on Windows only ([ADR 0009](adr/0009-windows-only.md)). The 64-bit helper loads
+`steam_api64.dll` from the game root (verified for Stellaris). A 32-bit `steam_api.dll` would need
+a 32-bit helper build; none of the target games needs it. CI builds `pmm-steam-helper` and runs
+`pmm_providers_tests`, which include the end-to-end helper tests against the fake library.
 
 ## 11. Not verified yet, and how to verify it
 
@@ -433,5 +416,3 @@ Not legal advice. These points need review before release.
    running (the `ready` failure path against the real client).
 3. EU4 (app 236850): repeat the read-only probe (`ping`, `state`) on the development machine,
    where it is installed, with the user's approval.
-4. Linux and macOS: compile and run the unit and end-to-end tests on macOS (Linux done in WSL),
-   then repeat the read-only probe with the native library on machines with the games.

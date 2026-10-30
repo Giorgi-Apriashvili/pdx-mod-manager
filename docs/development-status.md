@@ -1,15 +1,15 @@
 # Development status (handoff, 2026-10-30)
 
-Paradox Mod Manager 0.1.0 is feature-complete for the first release on
-Windows: every layer of [`spec.md`](../spec.md) section 8 exists, the Windows
+Paradox Mod Manager is a Windows-only application
+([ADR 0009](adr/0009-windows-only.md)). Version 0.1.0 is feature-complete for the
+first release: every layer of [`spec.md`](../spec.md) section 8 exists, the Windows
 package works, and on 2026-10-30 the live acceptance steps were run with the
 user's approval ([live validation](evidence/live-validation-2026-10-30.md)):
 direct launches of both games with probe mods, a real EU4 Workshop download,
 restart persistence and the failure cases, all passing. The run found one
 defect (a stale Play blocker, fixed) and one game fact the product must
 respect: **EU4 ignores the `enabled_mods` order for file overrides** (the mod
-whose name sorts first wins). What is missing: builds of the application on
-Linux and macOS, and the open items below.
+whose name sorts first wins). What is missing: the open items below.
 
 There is no command-line tool, and none is planned: the spec does not ask for
 one. Headless checks use the hidden verification switches of `pmm-app`
@@ -20,7 +20,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 | Area | Location | State | Evidence |
 | --- | --- | --- | --- |
-| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI green on Windows, Linux and macOS since 2026-10-30, not yet on the installer and update work | |
+| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI last green on 2026-10-30, before the installer and update work and before the Windows-only jobs | |
 | Core model, catalog, logging and redaction, SHA-256, UTF-8 | `src/core` | done, tested | |
 | Playset operations, readiness, dependencies, import plan | `src/core` | done, tested | |
 | Share-code protocol v1 and regression fixtures | `src/sharing`, [`share-code-protocol.md`](share-code-protocol.md) | done, tested | |
@@ -41,9 +41,10 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 ## Test status (2026-10-30, `main`)
 
-- GitHub Actions CI: green on Windows (MSVC), Linux (GCC 13), macOS
-  (AppleClang), the sanitizer job and the format check, up to the commit before the
-  installer and update work; that work has not been through CI yet.
+- GitHub Actions CI: last green on 2026-10-30, up to the commit before the
+  installer and update work; that work has not been through CI yet. The current jobs
+  (MSVC build and tests, ASan, clang-cl warnings, format check) have not run on
+  GitHub yet.
 
 - Windows 11, MSVC 19.51, Qt 6.10.3, `debug` preset, fresh configure and clean
   build: **0 warnings** at `/W4`, **469/469 tests pass** (`ctest --preset
@@ -56,13 +57,8 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 - Read-only application smoke test: share-code round trip between two clean
   profiles with byte-identical dumps for Stellaris and EU4, and a screenshot
   per game ([evidence](evidence/app-round-trip-2026-10-30.md)).
-- Linux (Arch Linux in WSL, GCC 16.2.1, no Qt): core build with warnings as
-  errors, 398/398 tests pass (two permission tests skip themselves because
-  the WSL user is root); with AddressSanitizer and UBSan 384/384, before the update
-  check was added.
 - Not run: the 21 fake-backend QML tests (`ui/dev/preview.sh --test`, need an
-  active window on Windows; the real-backend keyboard test in ctest covers the
-  main paths), any build on macOS, any build of the application on Linux.
+  active window; the real-backend keyboard test in ctest covers the main paths).
 
 ## What remains
 
@@ -84,15 +80,7 @@ pane shows its `userNote` as a closable info banner for EU4 playsets
 done (possible later): a warning when two enabled EU4 mods contain the same
 file.
 
-### 2. Other platforms
-
-- Linux and macOS: build the application, run `pmm_app_tests`, check the
-  `Release` workflow's packages against the layouts in [`packaging.md`](packaging.md),
-  repeat the read-only helper probe and real-data tests on a machine with the
-  games, then the live steps.
-- macOS signing and notarisation (`packaging/macos/`) are unverified.
-
-### 3. Open items from the last review wave
+### 2. Open items from the last review wave
 
 Services and application:
 
@@ -136,8 +124,7 @@ Services and application:
 
 Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
-- Screen-reader listening pass with NVDA and Narrator, VoiceOver and Orca
-  where possible.
+- Screen-reader listening pass with NVDA and Narrator.
 - The minimum window size (980x600) does not fit a 1920x1080 screen at 200 %.
 - Keyboard resizing of the column dividers and table columns; a focusable
   summary of the Play blockers.
@@ -163,18 +150,21 @@ Packaging ([`packaging.md`](packaging.md)):
 ## Next steps (in order)
 
 1. Done 2026-10-30: the repository is on GitHub
-   (https://github.com/Giorgi-Apriashvili/pdx-mod-manager, public, MIT), CI
-   passes on Windows, Linux and macOS (application tests included), `main` is
+   (https://github.com/Giorgi-Apriashvili/pdx-mod-manager, public, MIT), `main` is
    protected (CI checks required for merges, no force pushes or deletion),
    and the code base is clang-tidy clean (`.clang-tidy`, `tests/.clang-tidy`).
-2. Optional: warn when two enabled EU4 mods contain the same file.
-3. Implement the services and application items above (import options,
+2. Before the Windows-only CI reaches `main`: the repository owner changes the
+   required checks to "Build and test (Windows MSVC)", "Format check",
+   "Sanitizers (Windows MSVC, ASan, Qt-free libraries)" and
+   "Warnings (Windows clang-cl, Qt-free libraries)". The old names would otherwise
+   wait forever.
+3. Optional: warn when two enabled EU4 mods contain the same file.
+4. Implement the services and application items above (import options,
    helper exit wait, launch refresh), then the discard flow for unrecoverable
    transactions, each with tests.
-4. With the user's approval, the remaining live pieces (table above). Record
+5. With the user's approval, the remaining live pieces (table above). Record
    results in [`validation.md`](validation.md) and
    [`support-matrix.md`](support-matrix.md).
-5. Linux and macOS builds and validation as far as machines allow.
 6. Release checklist in [`../CHANGELOG.md`](../CHANGELOG.md) ("0.1.0 -
    planned"), then the procedure in [`releasing.md`](releasing.md): a dry run of
    the `Release` workflow, click through the wizard once, the first release, and
