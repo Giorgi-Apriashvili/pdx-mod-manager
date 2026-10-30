@@ -1,6 +1,6 @@
 # Continuous integration: build and test on Windows with MSVC (with Qt, including
-# the application tests pmm_app_tests), ASan and clang-cl warnings on the Qt-free
-# libraries, a clang-format 22 check and the UI contrast check. Packages and
+# the application tests pmm_app_tests), ASan, and clang-cl warnings and UBSan on the
+# Qt-free libraries, a clang-format 22 check and the UI contrast check. Packages and
 # releases are in release.yml, which also runs this workflow first.
 name: CI
 
@@ -115,8 +115,8 @@ jobs:
           if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) { choco install ninja --no-progress -y }
           ninja --version
 
-      # Instrumented executables load the ASan runtime DLL from PATH, also during
-      # test discovery at build time. It ships next to the compiler.
+      # Instrumented executables load the ASan runtime DLL from PATH. It ships next
+      # to the compiler.
       - name: Put the ASan runtime on PATH
         shell: pwsh
         run: |

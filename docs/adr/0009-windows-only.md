@@ -52,7 +52,7 @@ The repository owner decided on 2026-10-30 to make the product Windows only.
 - The Windows ZIP and installer, their asset names and the update path.
 - clang-cl. `clangd` and `clang-tidy` parse this code as Clang in MSVC mode, so what
   `__clang__` needs stays, and a CI job builds the Qt-free libraries with clang-cl
-  and warnings as errors. It replaces the second and third compiler as the check on
+  and warnings as errors and runs their tests under UBSan. It replaces the second and third compiler as the check on
   non-standard code.
 - ASan, now with MSVC, as the replacement for the Linux sanitizer job.
 
@@ -67,9 +67,9 @@ The repository owner decided on 2026-10-30 to make the product Windows only.
 - **Mac players** have no version of this application.
 - A share code stays readable on any system with `scripts/share-code.py` and the
   [protocol](../share-code-protocol.md), but importing or playing one needs Windows.
-- Lost coverage: MSVC has no UBSan and ASan on Windows has no LeakSanitizer, so
-  undefined behaviour and leaks are no longer checked by CI. GCC's warnings are gone
-  as well; clang-cl and `/W4` remain.
+- Lost coverage: ASan on Windows has no LeakSanitizer, so CI no longer checks for
+  leaks, and GCC's warnings are gone; clang-cl and `/W4` remain. MSVC has no UBSan, so
+  undefined behaviour is now checked on the Qt-free libraries only, through clang-cl.
 - Some earlier records still describe three systems. They stay as history: the
   evidence files, [`feasibility.md`](../feasibility.md) and ADRs 0001, 0002, 0003 and
   0007, which are marked as superseded on this point.

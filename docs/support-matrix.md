@@ -59,7 +59,7 @@ on GitHub, and an update from one published release to the next.
 | --- | --- | --- | --- | --- |
 | Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 404 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 65 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
 | Windows (CI, `windows-2025`) | MSVC from the runner image | **Verified** 2026-10-30, CI green (before the installer and update work) | **Verified** 2026-10-30, CI green (before the installer and update work) | Unverified |
-| Windows (CI, `windows-2025`) | MSVC with ASan; clang-cl (LLVM from the runner image) | Jobs written, not run on GitHub yet | Not built in these jobs | Not built in these jobs |
+| Windows (CI, `windows-2025`) | MSVC with ASan; clang-cl with UBSan (LLVM from the runner image) | Jobs written, not run on GitHub yet | Not built in these jobs | Not built in these jobs |
 
 ## Installing and updating
 

@@ -47,7 +47,7 @@ without the dialog. Prefer the dialog: it also creates the tag.
 | Job | What it does |
 | --- | --- |
 | Validate release request | The version is `x.y.z` and equals `project(VERSION)`; the run was started by the owner; the commit is on `main`; no release with that tag exists; for a dispatched run, the tag does not exist yet. Warns if `CHANGELOG.md` has no section. |
-| CI | The whole of [`ci.yml`](../.github/workflows/ci.yml): build and test with MSVC, ASan and clang-cl warnings on the Qt-free libraries, format. |
+| CI | The whole of [`ci.yml`](../.github/workflows/ci.yml): build and test with MSVC, ASan, and clang-cl warnings and UBSan on the Qt-free libraries, format. |
 | Package (Windows) | `release` preset without tests, `cpack`, the installer, followed by [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) (silent installs to a temp folder: expected files, uninstall entry and version, another program's folders left alone, failed upgrades that leave the previous version working, a working upgrade, uninstall leaves nothing). Uploads the packages as workflow artifacts. |
 | Publish GitHub release | Needs all of the above. Generates and verifies `SHA256SUMS.txt`, creates a **draft**, uploads every asset, compares names and sizes, and only then flips the draft to published. The tag is created by that flip. |
 

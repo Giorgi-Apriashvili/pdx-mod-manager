@@ -108,7 +108,7 @@ Configure, build and test presets share the same names
 | --- | --- | --- |
 | `core-debug` | Libraries, Steam helper and unit tests, Debug | No |
 | `core-sanitize` | Same with AddressSanitizer (MSVC) and warnings as errors | No |
-| `core-clang-cl` | Same with clang-cl and warnings as errors | No |
+| `core-clang-cl` | Same with clang-cl, UBSan and warnings as errors | No |
 | `debug` | Everything including the desktop application and its tests, Debug | Yes |
 | `release` | Everything, RelWithDebInfo | Yes |
 | `ci` | Everything, RelWithDebInfo, warnings as errors | Yes |

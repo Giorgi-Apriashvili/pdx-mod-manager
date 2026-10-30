@@ -153,7 +153,8 @@ change what codes look like or which codes are accepted say so explicitly.
 - Linux and macOS support, by decision: the application is Windows only
   ([ADR 0009](docs/adr/0009-windows-only.md)). Configuring on another system stops
   with an error. Gone: the non-Windows code paths, the GCC and AppleClang CI jobs and
-  the GCC UBSan job (ASan on MSVC and a clang-cl warnings job replace them), the
+  the GCC UBSan job (ASan on MSVC and a clang-cl job with UBSan and warnings replace
+  them), the
   `.dmg` and `.tar.gz` packages, the macOS signing options and entitlements, and the
   Linux desktop entry. Existing databases keep opening: a forward migration drops
   `game_installations.platform`. Share codes are unchanged.

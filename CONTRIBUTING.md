@@ -22,7 +22,7 @@ prerequisites and commands are in the [README](README.md); the structure is in
    `python3 ui/dev/check_contrast.py`.
 4. Open a pull request against `main`. CI must pass: build and tests with
    MSVC and warnings as errors, including the application tests, ASan and a
-   clang-cl build with warnings as errors on the Qt-free libraries, the format
+   clang-cl build with UBSan and warnings as errors on the Qt-free libraries, the format
    check and the contrast check.
 5. Update documentation in the same pull request: the changelog entry under
    *Unreleased*, an ADR for a material trade-off, the support matrix only with
@@ -94,8 +94,8 @@ blocks the common ones).
 - Sanitizers: `cmake --preset core-sanitize` (MSVC, ASan). The tests load the ASan
   runtime DLL from the compiler's `bin\Hostx64\x64` folder, which the Visual Studio
   developer environment puts on `PATH`.
-- clang-cl: `cmake --preset core-clang-cl` (LLVM's `bin` folder on `PATH`). clangd
-  and clang-tidy parse the code the same way.
+- clang-cl: `cmake --preset core-clang-cl` (LLVM's `bin` folder on `PATH`), with
+  UBSan; a finding stops the test. clangd and clang-tidy parse the code the same way.
 
 ## Tests
 
