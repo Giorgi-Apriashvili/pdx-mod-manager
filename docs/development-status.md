@@ -1,15 +1,15 @@
 # Development status (handoff, 2026-10-30)
 
-Paradox Mod Manager 0.1.0 is feature-complete for the first release on
-Windows: every layer of [`spec.md`](../spec.md) section 8 exists, the Windows
+Paradox Mod Manager is a Windows-only application
+([ADR 0009](adr/0009-windows-only.md)). Version 0.1.0 is feature-complete for the
+first release: every layer of [`spec.md`](../spec.md) section 8 exists, the Windows
 package works, and on 2026-10-30 the live acceptance steps were run with the
 user's approval ([live validation](evidence/live-validation-2026-10-30.md)):
 direct launches of both games with probe mods, a real EU4 Workshop download,
 restart persistence and the failure cases, all passing. The run found one
 defect (a stale Play blocker, fixed) and one game fact the product must
 respect: **EU4 ignores the `enabled_mods` order for file overrides** (the mod
-whose name sorts first wins). What is missing: builds of the application on
-Linux and macOS, and the open items below.
+whose name sorts first wins). What is missing: the open items below.
 
 There is no command-line tool, and none is planned: the spec does not ask for
 one. Headless checks use the hidden verification switches of `pmm-app`
@@ -20,7 +20,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 | Area | Location | State | Evidence |
 | --- | --- | --- | --- |
-| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI has not run yet (nothing pushed) | |
+| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI last green on 2026-10-30, before the installer and update work and before the Windows-only jobs | |
 | Core model, catalog, logging and redaction, SHA-256, UTF-8 | `src/core` | done, tested | |
 | Playset operations, readiness, dependencies, import plan | `src/core` | done, tested | |
 | Share-code protocol v1 and regression fixtures | `src/sharing`, [`share-code-protocol.md`](share-code-protocol.md) | done, tested | |
@@ -33,30 +33,44 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
+| Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through | [installer](evidence/installer-2026-10-30.md) |
+| Update check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
+| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | written and linted, **has never run** on GitHub; its steps were run locally against a stub `gh` | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
 
 ## Test status (2026-10-30, `main`)
 
-- GitHub Actions CI: green on Windows (MSVC), Linux (GCC 13), macOS
-  (AppleClang), the sanitizer job and the format check.
+- GitHub Actions CI: last green on 2026-10-30, up to the commit before the
+  installer and update work, with the old Linux and macOS jobs. **The Windows-only
+  `ci.yml` and `release.yml` have never run on GitHub.** The jobs have only been
+  reproduced locally: their presets, not the workflows themselves, on MSVC 14.51 and
+  LLVM 22. The image's toolset and LLVM version (20.1.8 when last looked up) are
+  untried.
 
 - Windows 11, MSVC 19.51, Qt 6.10.3, `debug` preset, fresh configure and clean
-  build: **0 warnings** at `/W4`, **425/425 tests pass** (`ctest --preset
-  debug`): core 50, sharing 54, persistence 69, platform 54, providers 61,
-  games 53, services 54, application 35.
-- `scripts/check-format.sh` with clang-format 22.1.8: 225 files OK.
+  build: **0 warnings** at `/W4`, **467/467 tests pass** (`ctest --preset
+  debug`), by label (some UTF-8 tests carry two): core 50, sharing 54, persistence 71, platform 51, providers 61,
+  games 52, services 68, application 65.
+- Local runs of the other CI presets, 0 warnings: `core-sanitize` (MSVC, ASan)
+  402/402, `core-clang-cl` (LLVM 22, UBSan) 402/402.
+- Removing Linux and macOS took the suite from 469 to 467: 4 tests that only
+  exercised other systems were deleted, 4 were renamed, and 2 migration tests were
+  added.
+- `scripts/check-format.sh` with clang-format 22.1.8: 236 files OK. `actionlint`
+  1.7.12 on both workflows and `clang-tidy` on the changed C++ files: no findings.
 - Hidden real-data tests, read-only: `pmm_games_tests "[.real]" -s` passes
   (187 assertions, both games).
+- Windows-only tree, in scratch folders: fresh-profile dumps and share codes and
+  migrated copies of two schema 1 profiles are byte-identical to the last
+  cross-platform build, also from the extracted ZIP; ZIP and installer have the same 80
+  files; `smoke-test-installer.ps1` and the update run's arguments with a stand-in
+  relaunch pass, leaving nothing behind.
 - Read-only application smoke test: share-code round trip between two clean
   profiles with byte-identical dumps for Stellaris and EU4, and a screenshot
   per game ([evidence](evidence/app-round-trip-2026-10-30.md)).
-- Linux (Arch Linux in WSL, GCC 16.2.1, no Qt): core build with warnings as
-  errors, 384/384 tests pass (two permission tests skip themselves because
-  the WSL user is root); the same with AddressSanitizer and UBSan, 384/384.
 - Not run: the 21 fake-backend QML tests (`ui/dev/preview.sh --test`, need an
-  active window on Windows; the real-backend keyboard test in ctest covers the
-  main paths), any build on macOS, any build of the application on Linux.
+  active window; the real-backend keyboard test in ctest covers the main paths).
 
 ## What remains
 
@@ -78,15 +92,7 @@ pane shows its `userNote` as a closable info banner for EU4 playsets
 done (possible later): a warning when two enabled EU4 mods contain the same
 file.
 
-### 2. Other platforms
-
-- Linux and macOS: build the application, run `pmm_app_tests`, check the
-  CI `package` job output against the layouts in [`packaging.md`](packaging.md),
-  repeat the read-only helper probe and real-data tests on a machine with the
-  games, then the live steps.
-- macOS signing and notarisation (`packaging/macos/`) are unverified.
-
-### 3. Open items from the last review wave
+### 2. Open items from the last review wave
 
 Services and application:
 
@@ -130,8 +136,7 @@ Services and application:
 
 Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
-- Screen-reader listening pass with NVDA and Narrator, VoiceOver and Orca
-  where possible.
+- Screen-reader listening pass with NVDA and Narrator.
 - The minimum window size (980x600) does not fit a 1920x1080 screen at 200 %.
 - Keyboard resizing of the column dividers and table columns; a focusable
   summary of the Play blockers.
@@ -141,8 +146,14 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 Packaging ([`packaging.md`](packaging.md)):
 
-- NSIS installer not built (`makensis` missing); no code signing; no
-  application icon; no `longPathAware` manifest (the package folder path must
+- The `Release` workflow has not run yet (it cannot before it is on GitHub), and
+  no update between two published releases has happened; the update button in a real
+  installed copy and the real application's relaunch have not been run. The
+  installer's wizard has not been clicked through.
+- `ilammy/msvc-dev-cmd` and `jurplel/install-qt-action` are pinned to mutable tags in
+  the job that builds the shipped, unsigned installer; pinning them to commit SHAs
+  would narrow a supply-chain path to every user who updates.
+- No code signing; no application icon; no `longPathAware` manifest (the package folder path must
   stay below about 170 characters); not tried on a machine without the VC++
   Redistributable.
 - The Qt style prune list assumes the Basic style chosen in `main()`.
@@ -151,20 +162,25 @@ Packaging ([`packaging.md`](packaging.md)):
 ## Next steps (in order)
 
 1. Done 2026-10-30: the repository is on GitHub
-   (https://github.com/Giorgi-Apriashvili/pdx-mod-manager, public, MIT), CI
-   passes on Windows, Linux and macOS (application tests included), `main` is
+   (https://github.com/Giorgi-Apriashvili/pdx-mod-manager, public, MIT), `main` is
    protected (CI checks required for merges, no force pushes or deletion),
    and the code base is clang-tidy clean (`.clang-tidy`, `tests/.clang-tidy`).
-2. Optional: warn when two enabled EU4 mods contain the same file.
-3. Implement the services and application items above (import options,
+2. Before the Windows-only CI reaches `main`: the repository owner changes the
+   required checks to "Build and test (Windows MSVC)", "Format check",
+   "Sanitizers (Windows MSVC, ASan, Qt-free libraries)" and
+   "Warnings (Windows clang-cl, Qt-free libraries)". The old names would otherwise
+   wait forever.
+3. Optional: warn when two enabled EU4 mods contain the same file.
+4. Implement the services and application items above (import options,
    helper exit wait, launch refresh), then the discard flow for unrecoverable
    transactions, each with tests.
-4. With the user's approval, the remaining live pieces (table above). Record
+5. With the user's approval, the remaining live pieces (table above). Record
    results in [`validation.md`](validation.md) and
    [`support-matrix.md`](support-matrix.md).
-5. Linux and macOS builds and validation as far as machines allow.
 6. Release checklist in [`../CHANGELOG.md`](../CHANGELOG.md) ("0.1.0 -
-   planned").
+   planned"), then the procedure in [`releasing.md`](releasing.md): a dry run of
+   the `Release` workflow, click through the wizard once, the first release, and
+   a second release to try the update button for real.
 
 ## Working rules
 

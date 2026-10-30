@@ -1,6 +1,6 @@
 # ADR 0002: Dependencies pinned with FetchContent; Qt as a toolchain prerequisite
 
-- Status: Accepted
+- Status: Accepted; the Linux and macOS toolchains superseded by [ADR 0009](0009-windows-only.md)
 - Date: 2026-10-29
 
 ## Context

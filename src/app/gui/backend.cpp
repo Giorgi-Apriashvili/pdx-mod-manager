@@ -12,9 +12,11 @@
 #include "app/gui/notification_center.hpp"
 #include "app/gui/playsets_model.hpp"
 #include "app/gui/share_controller.hpp"
+#include "app/gui/update_controller.hpp"
 #include "persistence/settings_repository.hpp"
 
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QTimer>
@@ -24,6 +26,13 @@ namespace pmm::app {
 namespace {
 
 constexpr qint64 kLaunchRefreshThrottleMs = 5000;
+
+UpdateControllerOptions updateOptions(const BackendOptions& options) {
+    UpdateControllerOptions updates = options.updates;
+    if (updates.disabledReason.isEmpty() && options.readOnly)
+        updates.disabledReason = QObject::tr("Updates are off in read-only mode.");
+    return updates;
+}
 
 QString levelName(LogLevel level) {
     switch (level) {
@@ -52,6 +61,11 @@ Backend::Backend(ServiceRunner& runner, BackendOptions options, QObject* parent)
     m_sharing = new ShareController(this, this);
     m_acquisition = new AcquisitionController(this, this);
     m_launcher = new LaunchController(this, this);
+    m_updates = new UpdateController(updateOptions(m_options), this);
+    if (!m_options.updates.installBlocker) {
+        m_updates->setInstallBlocker(
+            [this](std::function<void(const QString&)> answer) { askUpdateBlocker(answer); });
+    }
 
     connect(&m_runner, &ServiceRunner::acquisitionChanged, this, &Backend::onAcquisitionChanged);
     m_trailingLaunchRefresh.setSingleShot(true);
@@ -86,6 +100,7 @@ void Backend::registerQmlTypes() {
                                                       reason);
     qmlRegisterUncreatableType<JobsModel>("Pmm.Backend", 1, 0, "JobsModel", reason);
     qmlRegisterUncreatableType<LaunchController>("Pmm.Backend", 1, 0, "LaunchController", reason);
+    qmlRegisterUncreatableType<UpdateController>("Pmm.Backend", 1, 0, "UpdateController", reason);
     qmlRegisterUncreatableType<AppSettings>("Pmm.Backend", 1, 0, "AppSettings", reason);
     qmlRegisterUncreatableType<NotificationCenter>("Pmm.Backend", 1, 0, "NotificationCenter",
                                                    reason);
@@ -120,6 +135,8 @@ void Backend::openLogsFolder() {
 void Backend::initialize(const RunnerStart& start) {
     m_dataDir = start.dataDir;
     m_logsDir = start.logsDir;
+    if (!start.cacheDir.isEmpty())
+        m_updates->setUpdatesDir(QDir(start.cacheDir).filePath(QStringLiteral("updates")));
     // Posted once the event loop runs, so the window's toasts see them.
     for (const StartupNotice& notice : start.notices) {
         QTimer::singleShot(0, this, [this, notice] {
@@ -180,6 +197,40 @@ QString Backend::pickInitialGame() const {
             return row.key;
     }
     return {};
+}
+
+// A launch writes game configuration and Workshop jobs write mods, and the
+// installer replaces the program under both. The downloads of the other games
+// are not in the current game's AcquisitionController, so the worker is asked.
+// The worker may be busy for a while, so the GUI's own answer is read again when
+// it replies: Play could have been pressed in between.
+void Backend::askUpdateBlocker(const std::function<void(const QString&)>& answer) {
+    const QString downloads = tr("Workshop downloads are in progress. Update when they have "
+                                 "finished, or cancel them.");
+    const auto guiBlocker = [this, downloads] {
+        if (m_launcher->busy())
+            return tr("A game is being launched. Update when it has started.");
+        return m_acquisition->active() ? downloads : QString();
+    };
+    if (const QString reason = guiBlocker(); !reason.isEmpty()) {
+        answer(reason);
+        return;
+    }
+    m_runner.call(
+        this,
+        [](AppRuntime& runtime) {
+            const services::AcquisitionCoordinator* coordinator = runtime.acquisition();
+            if (!coordinator)
+                return false;
+            for (const games::GameAdapter* adapter : runtime.context().adapters) {
+                if (coordinator->hasActiveWork(std::string(adapter->catalog().key)))
+                    return true;
+            }
+            return false;
+        },
+        [answer, downloads, guiBlocker](bool active) {
+            answer(active ? downloads : guiBlocker());
+        });
 }
 
 void Backend::finishInitialRefresh() {

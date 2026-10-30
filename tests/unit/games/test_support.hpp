@@ -95,8 +95,7 @@ inline void installFixture(std::string_view name, const fs::path& destination) {
 }
 
 // A fixture tree installed below "<temp>/Ünïcødé dir/日本語 root" plus a
-// DiscoveryEnvironment pointing into it (same folder for documents and XDG
-// data so that every OS rule finds the user data).
+// DiscoveryEnvironment pointing into it.
 struct GameFixture {
     TempDir temp;
     fs::path root;
@@ -105,10 +104,8 @@ struct GameFixture {
     explicit GameFixture(std::string_view fixture) {
         root = temp.path() / u8path("Ünïcødé dir/日本語 root");
         installFixture(fixture, root);
-        env.platform = currentOsPlatform();
         env.steamRoot = root / "Steam";
         env.documentsDir = root / "Documents";
-        env.xdgDataHome = root / "Documents";
         env.home = root;
     }
 

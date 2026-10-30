@@ -32,21 +32,9 @@ using namespace pmm::app::test;
 
 namespace {
 
-const char* acceptedLibraryName() {
-    switch (currentOsPlatform()) {
-    case OsPlatform::Windows:
-        return "steam_api64.dll";
-    case OsPlatform::MacOS:
-        return "libsteam_api.dylib";
-    case OsPlatform::Linux:
-        return "libsteam_api.so";
-    }
-    return "steam_api64.dll";
-}
-
 fs::path installFakeLibrary(const fs::path& folder) {
     fs::create_directories(folder);
-    const fs::path library = folder / acceptedLibraryName();
+    const fs::path library = folder / "steam_api64.dll";
     fs::copy_file(u8(PMM_FAKE_STEAM_API_PATH), library, fs::copy_options::overwrite_existing);
     return library;
 }

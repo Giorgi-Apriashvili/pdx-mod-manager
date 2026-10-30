@@ -1,8 +1,8 @@
 #pragma once
 
 // Filesystem primitives with explicit failure reporting. All functions accept
-// paths containing spaces and non-ASCII characters on every OS (std::filesystem
-// paths are converted with the native wide APIs on Windows).
+// paths containing spaces and non-ASCII characters (std::filesystem paths are
+// converted with the native wide APIs).
 
 #include "core/result.hpp"
 
@@ -20,9 +20,9 @@ Result<std::string> readFile(const fs::path& path, std::uint64_t maxBytes = 64ul
 
 // Atomically replaces `path` with `contents`: writes a sibling temporary file,
 // flushes it to stable storage, then renames over the target (MoveFileExW with
-// MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH on Windows, rename(2)
-// elsewhere). Creates missing parent directories. On failure the original file
-// is untouched and the temporary file is removed.
+// MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH). Creates missing parent
+// directories. On failure the original file is untouched and the temporary file
+// is removed.
 Status writeFileAtomic(const fs::path& path, std::string_view contents);
 
 // Copies `source` to `destination` (overwriting) and flushes it.
@@ -37,9 +37,7 @@ std::string pathToUtf8(const fs::path& path);
 fs::path pathFromUtf8(std::string_view utf8);
 
 // True if `path` can be stored as UTF-8 text and read back unchanged. False
-// for POSIX names that are not well-formed UTF-8 (e.g. Latin-1 bytes; text
-// stores such as JSON would replace them) and for Windows names with unpaired
-// surrogates (pathToUtf8() turns them into U+FFFD).
+// for names with unpaired surrogates (pathToUtf8() turns them into U+FFFD).
 bool isUtf8Representable(const fs::path& path);
 
 // Path with forward slashes, as written into Paradox descriptor/config files.
@@ -53,7 +51,7 @@ std::int64_t lastWriteUnixSeconds(const fs::path& path) noexcept;
 bool isWithin(const fs::path& child, const fs::path& parent);
 
 // Deletes a file; succeeds when it does not exist. Refuses directories
-// (IoError). On POSIX the parent directory is synced afterwards.
+// (IoError).
 Status removeFile(const fs::path& path);
 
 // Creates `directory` and any missing parents; succeeds when it exists.

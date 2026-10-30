@@ -19,6 +19,7 @@
 #include "app/gui/notification_center.hpp"
 #include "app/gui/playsets_model.hpp"
 #include "app/gui/share_controller.hpp"
+#include "app/gui/update_controller.hpp"
 
 #include <QElapsedTimer>
 #include <QObject>
@@ -38,6 +39,8 @@ struct BackendOptions {
     // game data); implies Workshop downloads off.
     bool readOnly = false;
     QString initialGame; // overrides the last selected game
+    // Backend.updates. Read-only sessions have it off even without a reason here.
+    UpdateControllerOptions updates;
 };
 
 class Backend : public QObject {
@@ -51,6 +54,7 @@ class Backend : public QObject {
     Q_PROPERTY(pmm::app::ShareController* sharing READ sharing CONSTANT)
     Q_PROPERTY(pmm::app::AcquisitionController* acquisition READ acquisition CONSTANT)
     Q_PROPERTY(pmm::app::LaunchController* launcher READ launcher CONSTANT)
+    Q_PROPERTY(pmm::app::UpdateController* updates READ updates CONSTANT)
     Q_PROPERTY(pmm::app::AppSettings* settings READ settings CONSTANT)
     Q_PROPERTY(pmm::app::NotificationCenter* notifications READ notifications CONSTANT)
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
@@ -76,6 +80,7 @@ public:
     ShareController* sharing() const { return m_sharing; }
     AcquisitionController* acquisition() const { return m_acquisition; }
     LaunchController* launcher() const { return m_launcher; }
+    UpdateController* updates() const { return m_updates; }
     AppSettings* settings() const { return m_settings; }
     NotificationCenter* notifications() const { return m_notifications; }
     QString appVersion() const;
@@ -137,6 +142,7 @@ private:
     void onAcquisitionChanged(const QStringList& rescanned);
     QString pickInitialGame() const;
     void finishInitialRefresh();
+    void askUpdateBlocker(const std::function<void(const QString&)>& answer);
 
     ServiceRunner& m_runner;
     BackendOptions m_options;
@@ -151,6 +157,7 @@ private:
     ShareController* m_sharing = nullptr;
     AcquisitionController* m_acquisition = nullptr;
     LaunchController* m_launcher = nullptr;
+    UpdateController* m_updates = nullptr;
 
     QString m_dataDir;
     QString m_logsDir;

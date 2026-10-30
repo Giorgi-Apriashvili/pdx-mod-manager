@@ -46,12 +46,8 @@ TEST_CASE("Game traits agree with the catalog", "[games][registry]") {
 TEST_CASE("The real discovery environment describes this process", "[games][registry]") {
     // Read-only: looks up standard folders and the Steam root.
     const DiscoveryEnvironment env = DiscoveryEnvironment::current();
-    CHECK(env.platform == currentOsPlatform());
     CHECK_FALSE(env.home.empty());
-    if (env.platform == OsPlatform::Linux)
-        CHECK_FALSE(env.xdgDataHome.empty());
-    else
-        CHECK_FALSE(env.documentsDir.empty());
+    CHECK_FALSE(env.documentsDir.empty());
 }
 
 TEST_CASE("Workshop ids are recognised in content paths", "[games][registry]") {
@@ -59,8 +55,8 @@ TEST_CASE("Workshop ids are recognised in content paths", "[games][registry]") {
     CHECK(workshopIdFromPath(u8path("D:/Steam Library/steamapps/workshop/content/281990/123"),
                              "281990", &library) == "123");
     CHECK(library == u8path("D:/Steam Library"));
-    CHECK(workshopIdFromPath(u8path("/home/u/.local/share/Steam/SteamApps/Workshop/Content/281990/"
-                                    "9/sub/file.zip"),
+    CHECK(workshopIdFromPath(u8path("C:/Program Files (x86)/Steam/SteamApps/Workshop/Content/"
+                                    "281990/9/sub/file.zip"),
                              "281990") == "9");
     CHECK_FALSE(workshopIdFromPath(u8path("/x/steamapps/workshop/content/236850/123"), "281990"));
     CHECK_FALSE(workshopIdFromPath(u8path("/x/steamapps/workshop/content/281990/0123"), "281990"));

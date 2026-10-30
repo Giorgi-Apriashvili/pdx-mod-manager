@@ -13,16 +13,8 @@
 #include "providers/workshop_item.hpp"
 #include "steam_api_loader.hpp"
 
-#if defined(_WIN32)
 #include <io.h>
 #include <windows.h>
-#else
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <cerrno>
-#include <csignal>
-#endif
 
 #include <algorithm>
 #include <chrono>
@@ -55,7 +47,7 @@ constexpr int kEResultTimeout = 16;
 
 constexpr const char* kUsage =
     "usage: pmm-steam-helper --app-id <digits> --steam-api <path to steam_api64.dll | "
-    "steam_api.dll | libsteam_api.so | libsteam_api.dylib>";
+    "steam_api.dll>";
 
 std::string utf8(const fs::path& p) {
     const auto u8 = p.u8string();
@@ -73,7 +65,6 @@ void diag(const std::string& text) {
 class ProtocolOutput {
 public:
     bool open() {
-#if defined(_WIN32)
         const HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
         if (out == nullptr || out == INVALID_HANDLE_VALUE)
             return false;
@@ -91,15 +82,6 @@ public:
             FILE* sink = nullptr;
             freopen_s(&sink, "NUL", "w", stdout);
         }
-#else
-        m_fd = dup(STDOUT_FILENO);
-        if (m_fd < 0)
-            return false;
-        fcntl(m_fd, F_SETFD, FD_CLOEXEC);
-        std::fflush(stdout);
-        dup2(STDERR_FILENO, STDOUT_FILENO);
-        std::signal(SIGPIPE, SIG_IGN);
-#endif
         m_ok = true;
         return true;
     }
@@ -112,22 +94,12 @@ public:
         const char* p = data.data();
         std::size_t left = data.size();
         while (left > 0) {
-#if defined(_WIN32)
             DWORD written = 0;
             const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(left, 1u << 20));
             if (!WriteFile(m_handle, p, chunk, &written, nullptr) || written == 0) {
                 m_ok = false;
                 return false;
             }
-#else
-            const ssize_t written = ::write(m_fd, p, left);
-            if (written < 0 && errno == EINTR)
-                continue;
-            if (written <= 0) {
-                m_ok = false;
-                return false;
-            }
-#endif
             p += written;
             left -= static_cast<std::size_t>(written);
         }
@@ -137,11 +109,7 @@ public:
     bool ok() const { return m_ok; }
 
 private:
-#if defined(_WIN32)
     HANDLE m_handle = nullptr;
-#else
-    int m_fd = -1;
-#endif
     bool m_ok = false;
 };
 
@@ -159,22 +127,12 @@ void readInput(const std::shared_ptr<InputQueue>& queue) {
     // exit never waits for this thread.
     LineSplitter splitter;
     char buf[4096];
-#if defined(_WIN32)
     const HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
-#endif
     for (;;) {
-#if defined(_WIN32)
         DWORD got = 0;
         if (in == nullptr || in == INVALID_HANDLE_VALUE ||
             !ReadFile(in, buf, sizeof buf, &got, nullptr) || got == 0)
             break;
-#else
-        const ssize_t got = ::read(STDIN_FILENO, buf, sizeof buf);
-        if (got < 0 && errno == EINTR)
-            continue;
-        if (got <= 0)
-            break;
-#endif
         auto lines = splitter.push(std::string_view(buf, static_cast<std::size_t>(got)));
         if (lines.empty())
             continue;
@@ -288,21 +246,15 @@ private:
 };
 
 void setEnvironment(const std::string& name, const std::string& value) {
-#if defined(_WIN32)
     const std::wstring wname(name.begin(), name.end()); // ASCII only
     const std::wstring wvalue(value.begin(), value.end());
     _wputenv_s(wname.c_str(), wvalue.c_str());
-#else
-    setenv(name.c_str(), value.c_str(), 1);
-#endif
 }
 
 int run(const std::vector<fs::path>& args) {
-#if defined(_WIN32)
     // A background helper must never block on a modal system dialog (e.g. the
     // "bad image" box LoadLibrary can raise, or the crash reporter).
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-#endif
     ProtocolOutput out;
     if (!out.open())
         return static_cast<int>(HelperExitCode::OutputFailed);
@@ -400,18 +352,9 @@ int run(const std::vector<fs::path>& args) {
 
 } // namespace
 
-#if defined(_WIN32)
 int wmain(int argc, wchar_t** argv) {
     std::vector<fs::path> args;
     for (int i = 1; i < argc; ++i)
         args.emplace_back(argv[i]);
     return run(args);
 }
-#else
-int main(int argc, char** argv) {
-    std::vector<fs::path> args;
-    for (int i = 1; i < argc; ++i)
-        args.emplace_back(argv[i]);
-    return run(args);
-}
-#endif

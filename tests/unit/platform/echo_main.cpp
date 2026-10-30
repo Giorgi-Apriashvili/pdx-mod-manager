@@ -39,15 +39,9 @@ int run(const std::vector<std::string>& arguments) {
 
 } // namespace
 
-#if defined(_WIN32)
 int wmain(int argc, wchar_t** argv) {
     std::vector<std::string> arguments;
     for (int i = 1; i < argc; ++i)
         arguments.push_back(pmm::platform::pathToUtf8(std::filesystem::path(argv[i])));
     return run(arguments);
 }
-#else
-int main(int argc, char** argv) {
-    return run(std::vector<std::string>(argv + 1, argv + argc));
-}
-#endif

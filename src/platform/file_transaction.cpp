@@ -45,11 +45,7 @@ std::string makeTransactionId() {
 
     const auto seconds = static_cast<std::time_t>(now / 1000);
     std::tm utc{};
-#if defined(_WIN32)
     gmtime_s(&utc, &seconds);
-#else
-    gmtime_r(&seconds, &utc);
-#endif
     char id[48];
     std::snprintf(id, sizeof id, "%04d%02d%02dT%02d%02d%02d%03dZ-%04u", utc.tm_year + 1900,
                   utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec,
@@ -79,11 +75,9 @@ bool isSafeBackupName(std::string_view name) noexcept {
 
 std::string comparisonKey(const fs::path& path) {
     std::string key = toGenericUtf8(path.lexically_normal());
-#if defined(_WIN32)
     std::transform(key.begin(), key.end(), key.begin(), [](char c) {
         return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
     });
-#endif
     return key;
 }
 
@@ -314,7 +308,6 @@ Result<TransactionRecord> FileTransactionManager::apply(std::string label,
                              "Could not create a backup folder for the configuration change.",
                              pathToUtf8(record.directory));
     }
-    detail::syncDirectoryBestEffort(m_root);
 
     for (std::size_t i = 0; i < writes.size(); ++i) {
         TransactionEntry entry;

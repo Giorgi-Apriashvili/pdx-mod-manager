@@ -124,13 +124,11 @@ inline std::string queryText(Database& db, const std::string& sql) {
     return stmt.columnText(0);
 }
 
-#if defined(_WIN32)
 // prefix + U+D800 + suffix: NTFS accepts such names although they are not
 // valid UTF-16, so they have no exact UTF-8 form.
 inline fs::path loneSurrogatePath(std::wstring prefix, const std::wstring& suffix) {
     prefix += static_cast<wchar_t>(0xD800);
     return fs::path(prefix + suffix);
 }
-#endif
 
 } // namespace pmm::persistence::test

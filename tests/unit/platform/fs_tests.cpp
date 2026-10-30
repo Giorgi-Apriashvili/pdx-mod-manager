@@ -6,32 +6,17 @@
 #include <chrono>
 #include <string>
 
-#if !defined(_WIN32)
-#include <unistd.h>
-#endif
-
 using namespace pmm;
 using namespace pmm::platform;
 using pmm::test::TempDir;
 
 namespace {
 
-// Platform-specific way to make writing `file` fail with PermissionDenied.
-// Windows: read-only attribute on the file. POSIX: read-only parent folder
-// (rename() needs write access to the directory). Returns false when the
-// check cannot work (POSIX root ignores permissions).
-bool makeUnwritable(const fs::path& file) {
-#if defined(_WIN32)
+// Makes writing `file` fail with PermissionDenied: read-only attribute on the
+// file.
+void makeUnwritable(const fs::path& file) {
     fs::permissions(file, fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write,
                     fs::perm_options::remove);
-    return true;
-#else
-    if (::geteuid() == 0)
-        return false;
-    fs::permissions(file.parent_path(), fs::perms::owner_read | fs::perms::owner_exec,
-                    fs::perm_options::replace);
-    return true;
-#endif
 }
 
 void makeWritable(const fs::path& file) {
@@ -98,9 +83,7 @@ TEST_CASE("writeFileAtomic reports PermissionDenied and keeps the original", "[p
     TempDir temp;
     const fs::path file = temp.path() / test::unicodeSubdir() / "locked.txt";
     test::writeText(file, "original");
-    if (!makeUnwritable(file)) {
-        SKIP("permissions are not enforced for root");
-    }
+    makeUnwritable(file);
 
     const Status status = writeFileAtomic(file, "new");
     makeWritable(file);
@@ -148,17 +131,6 @@ TEST_CASE("isDirectoryWritable probes without leaving files", "[platform][fs]") 
     const auto notFolder = isDirectoryWritable(temp / "file.txt");
     REQUIRE_FALSE(notFolder.ok());
     CHECK(notFolder.error().code == ErrorCode::InvalidArgument);
-
-#if !defined(_WIN32)
-    if (::geteuid() != 0) {
-        fs::permissions(dir, fs::perms::owner_read | fs::perms::owner_exec,
-                        fs::perm_options::replace);
-        const auto readOnly = isDirectoryWritable(dir);
-        fs::permissions(dir, fs::perms::owner_all, fs::perm_options::add);
-        REQUIRE(readOnly.ok());
-        CHECK_FALSE(*readOnly);
-    }
-#endif
 }
 
 TEST_CASE("UTF-8 path conversion round-trips non-ASCII names", "[platform][fs]") {
@@ -167,11 +139,9 @@ TEST_CASE("UTF-8 path conversion round-trips non-ASCII names", "[platform][fs]")
     CHECK(toGenericUtf8(path) == utf8);
     CHECK(pathFromUtf8(pathToUtf8(path)) == path);
     CHECK(path.filename() == pathFromUtf8("emoji \xF0\x9F\x98\x80.txt"));
-#if defined(_WIN32)
     CHECK(path.native().find(L"\u65E5\u672C\u8A9E") != std::wstring::npos);
     CHECK(toGenericUtf8(fs::path(L"C:\\Users\\Example\\Documents")) ==
           "C:/Users/Example/Documents");
-#endif
     CHECK(pathToUtf8(fs::path()).empty());
     CHECK(pathFromUtf8("").empty());
 }
@@ -180,20 +150,11 @@ TEST_CASE("isUtf8Representable rejects paths that have no exact UTF-8 form", "[p
     CHECK(
         isUtf8Representable(pathFromUtf8("Ünïcødé dir/日本語 folder/emoji \xF0\x9F\x98\x80.txt")));
     CHECK(isUtf8Representable(fs::path()));
-#if defined(_WIN32)
     CHECK(isUtf8Representable(fs::path(L"pair \xD83D\xDE00")));
     CHECK_FALSE(isUtf8Representable(fs::path(L"C:\\caf\xD800\\dlc_load.json"))); // lone high
     CHECK_FALSE(isUtf8Representable(fs::path(L"lone \xDC00 low")));
     CHECK_FALSE(isUtf8Representable(fs::path(L"reversed \xDE00\xD83D")));
     CHECK_FALSE(isUtf8Representable(fs::path(L"trailing \xD83D")));
-#else
-    CHECK(isUtf8Representable(fs::path("max \xF4\x8F\xBF\xBF")));
-    for (const char* name :
-         {"/home/caf\xE9/dlc_load.json", // Latin-1
-          "overlong \xC0\xAF", "surrogate \xED\xA0\x80", "above max \xF4\x90\x80\x80",
-          "truncated \xE6\x97", "stray \x80 continuation", "five bytes \xF8\x88\x80\x80\x80"})
-        CHECK_FALSE(isUtf8Representable(fs::path(name)));
-#endif
 }
 
 TEST_CASE("lastWriteUnixSeconds reflects the modification time", "[platform][fs]") {
@@ -221,12 +182,8 @@ TEST_CASE("isWithin compares normalised paths component by component", "[platfor
     CHECK_FALSE(isWithin(root.parent_path(), root));
     CHECK_FALSE(isWithin(fs::path(), root));
     CHECK_FALSE(isWithin(root, fs::path()));
-#if defined(_WIN32)
     CHECK(isWithin(fs::path(L"C:\\Games\\Steam\\steamapps"), fs::path(L"c:/games/STEAM")));
     CHECK_FALSE(isWithin(fs::path(L"D:\\Games\\Steam"), fs::path(L"C:\\Games")));
-#else
-    CHECK_FALSE(isWithin("/games/Steam/steamapps", "/games/steam"));
-#endif
 }
 
 TEST_CASE("removeFile and createDirectories", "[platform][fs]") {

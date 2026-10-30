@@ -16,10 +16,14 @@ add_library(pmm_appcore STATIC
   core/profile_lock.hpp
   core/qt_util.cpp
   core/qt_util.hpp
+  core/running_instance.cpp
+  core/running_instance.hpp
   core/service_runner.cpp
   core/service_runner.hpp
   core/session_host.cpp
   core/session_host.hpp
+  core/update_client.cpp
+  core/update_client.hpp
   core/view_data.cpp
   core/view_data.hpp)
 target_link_libraries(pmm_appcore PUBLIC pmm_services Qt6::Core Qt6::Network)
@@ -53,14 +57,16 @@ add_library(pmm_appgui STATIC
   gui/playsets_model.cpp
   gui/playsets_model.hpp
   gui/share_controller.cpp
-  gui/share_controller.hpp)
+  gui/share_controller.hpp
+  gui/update_controller.cpp
+  gui/update_controller.hpp)
 target_link_libraries(pmm_appgui PUBLIC pmm_appcore Qt6::Gui Qt6::Qml)
 target_compile_definitions(pmm_appgui PUBLIC
   PMM_APP_VERSION="${PROJECT_VERSION}"
   PMM_SHARE_PROTOCOL_VERSION=${PMM_SHARE_PROTOCOL_VERSION})
 pmm_configure_target(pmm_appgui)
 
-qt_add_executable(pmm-app WIN32 MACOSX_BUNDLE
+qt_add_executable(pmm-app WIN32
   gui/main.cpp
   gui/verification.cpp
   gui/verification.hpp)
@@ -68,19 +74,7 @@ target_link_libraries(pmm-app PRIVATE pmm_appgui pmm_uiplugin Qt6::Quick Qt6::Qu
 pmm_configure_target(pmm-app)
 # Next to pmm-steam-helper, which the app looks for in its own folder.
 set_target_properties(pmm-app PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
-  MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.pmm.ParadoxModManager"
-  MACOSX_BUNDLE_BUNDLE_NAME "Paradox Mod Manager"
-  MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-  MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
-if(APPLE AND TARGET pmm-steam-helper)
-  # Inside the bundle the helper sits next to the executable (Contents/MacOS).
-  add_custom_command(TARGET pmm-app POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:pmm-steam-helper>"
-            "$<TARGET_FILE_DIR:pmm-app>/"
-    VERBATIM)
-  add_dependencies(pmm-app pmm-steam-helper)
-endif()
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
 # Packaging (docs/packaging.md): cmake/Packaging.cmake installs the helper next
 # to the executable and the MSVC runtime, Qt's script deploys Qt itself. Pmm.Ui
@@ -89,27 +83,17 @@ endif()
 set_target_properties(pmm-app PROPERTIES QT_QML_IMPORT_SCANNER_EXTRA_ROOT_PATHS
   "${PROJECT_SOURCE_DIR}/ui/controls;${PROJECT_SOURCE_DIR}/ui/panes;${PROJECT_SOURCE_DIR}/ui/dialogs")
 install(TARGETS pmm-app
-  BUNDLE DESTINATION .
   RUNTIME DESTINATION bin)
 # Ship only what the application loads: no Qt translations (it installs no
-# translator), no QML debugging or generic input plugins. On Windows Qt Quick
-# renders with Direct3D 11 (WARP when no GPU driver works): no software OpenGL
+# translator), no QML debugging or generic input plugins. Qt Quick renders with
+# Direct3D 11 (WARP when no GPU driver works): no software OpenGL
 # library, no Direct3D 12 shader compiler (DXC), and D3DCompiler_47.dll is part
 # of Windows 10+. packaging/windows/ then removes the remaining unused files.
-set(pmm_deploy_tool_options "")
-if(WIN32)
-  set(pmm_deploy_tool_options DEPLOY_TOOL_OPTIONS
-    --no-system-d3d-compiler --no-system-dxc-compiler --no-opengl-sw)
-endif()
 qt_generate_deploy_qml_app_script(TARGET pmm-app
   OUTPUT_SCRIPT pmm_deploy_script
-  NO_UNSUPPORTED_PLATFORM_ERROR
   NO_COMPILER_RUNTIME
   NO_TRANSLATIONS
   EXCLUDE_PLUGIN_TYPES qmltooling generic
-  ${pmm_deploy_tool_options}
-  DEPLOY_USER_QML_MODULES_ON_UNSUPPORTED_PLATFORM)
+  DEPLOY_TOOL_OPTIONS --no-system-d3d-compiler --no-system-dxc-compiler --no-opengl-sw)
 install(SCRIPT "${pmm_deploy_script}")
-if(WIN32)
-  install(SCRIPT "${PROJECT_SOURCE_DIR}/packaging/windows/prune-qt-deployment.cmake")
-endif()
+install(SCRIPT "${PROJECT_SOURCE_DIR}/packaging/windows/prune-qt-deployment.cmake")

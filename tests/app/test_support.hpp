@@ -235,7 +235,6 @@ inline RuntimeOptions hermeticOptions(const fs::path& profile, const FakeAdapter
     games::DiscoveryEnvironment env;
     env.home = profile;
     env.documentsDir = profile;
-    env.xdgDataHome = profile;
     options.environment = env;
     options.configureContext = [](services::ServiceContext& context) {
         context.startProcess =

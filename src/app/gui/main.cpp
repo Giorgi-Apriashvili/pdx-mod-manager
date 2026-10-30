@@ -6,11 +6,14 @@
 
 #include "app/core/profile_lock.hpp"
 #include "app/core/qt_util.hpp"
+#include "app/core/running_instance.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
 #include "app/gui/network_guard.hpp"
 #include "app/gui/verification.hpp"
 #include "core/log.hpp"
+
+#include <windows.h>
 
 #include <QCommandLineParser>
 #include <QDir>
@@ -24,10 +27,6 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
-
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 
 Q_IMPORT_QML_PLUGIN(Pmm_UiPlugin)
 
@@ -175,10 +174,10 @@ ApplicationWindow {
 } // namespace
 
 int main(int argc, char* argv[]) {
-#if defined(_WIN32)
     // No modal system error boxes for this process or the processes it starts.
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-#endif
+    // An update run waits for this (docs/updates.md); held until the process ends.
+    const RunningInstanceSignal runningInstance;
     if (argumentGiven(argc, argv, "--screenshot")) {
         // Reproducible captures: exactly the window's logical size.
         qputenv("QT_SCALE_FACTOR", "1");
@@ -187,7 +186,6 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setOrganizationName(QStringLiteral("ParadoxModManager"));
     QGuiApplication::setApplicationName(QStringLiteral("Paradox Mod Manager"));
     QGuiApplication::setApplicationVersion(QStringLiteral(PMM_APP_VERSION));
-    QGuiApplication::setDesktopFileName(QStringLiteral("paradox-mod-manager"));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QGuiApplication app(argc, argv);
     // Every QML engine of the process: no network access (outlives them).
@@ -250,6 +248,9 @@ int main(int argc, char* argv[]) {
     BackendOptions backendOptions;
     backendOptions.readOnly = line.readOnly;
     backendOptions.initialGame = line.game;
+    if (line.verification.active())
+        backendOptions.updates.disabledReason =
+            QStringLiteral("Updates are off during verification runs.");
     backend = std::make_unique<Backend>(runner, backendOptions);
     backend->initialize(start);
     qmlRegisterSingletonInstance("Pmm.Backend", 1, 0, "Backend", backend.get());

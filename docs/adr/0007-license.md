@@ -1,6 +1,6 @@
 # ADR 0007: MIT license; Qt under LGPLv3 with dynamic linking
 
-- Status: Accepted
+- Status: Accepted; the Linux and macOS deployment superseded by [ADR 0009](0009-windows-only.md)
 - Date: 2026-10-29
 
 ## Context

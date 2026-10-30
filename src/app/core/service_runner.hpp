@@ -57,6 +57,7 @@ struct RunnerStart {
     std::vector<StartupNotice> notices;
     QString dataDir;
     QString logsDir;
+    QString cacheDir;
 };
 
 class ServiceRunner : public QObject {

@@ -30,10 +30,8 @@ namespace fs = std::filesystem;
 // Everything discovery depends on, injectable so tests never touch real
 // Steam or Documents folders.
 struct DiscoveryEnvironment {
-    OsPlatform platform = currentOsPlatform();
     std::optional<fs::path> steamRoot; // nullopt: not installed / not found
-    fs::path documentsDir;             // Windows/macOS Paradox user data parent
-    fs::path xdgDataHome;              // Linux Paradox user data parent
+    fs::path documentsDir;             // Paradox user data parent
     fs::path home;
 
     // Real environment of the current process (uses platform::steam and

@@ -185,7 +185,7 @@ TEST_CASE("Exported local fingerprints follow edits that leave the mod folder's 
     CHECK(original == require(providers::fingerprintDirectory(modDir)));
 
     // Editing files inside a folder does not change the folder's own time on
-    // NTFS, ext4 or APFS; restoring it makes that deterministic here.
+    // NTFS; restoring it makes that deterministic here.
     std::error_code ec;
     const fs::file_time_type folderTime = fs::last_write_time(modDir, ec);
     REQUIRE_FALSE(ec);

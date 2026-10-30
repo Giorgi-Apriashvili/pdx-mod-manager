@@ -11,6 +11,7 @@
 #include "app/gui/network_guard.hpp"
 #include "core/log.hpp"
 #include "test_support.hpp"
+#include "update_stub.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -437,6 +438,194 @@ TEST_CASE("Pmm.Ui keyboard paths work against the real backend", "[app][qml][a11
         backend.shutdown();
         runner.shutdown();
     }
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+namespace {
+
+// The window on a hermetic profile, at its minimum size, with Settings open and
+// the updates on a local stub.
+struct UpdatesHarness {
+    TempDir temp;
+    FakeWorld world{temp.path() / "world"};
+    FakeAdapter adapter{world};
+    ReleaseStub stub;
+    int starts = 0;
+    int quits = 0;
+    int pages = 0;
+    std::unique_ptr<ServiceRunner> runner;
+    std::unique_ptr<Backend> backend;
+    std::unique_ptr<BackendRegistration> registration;
+    std::unique_ptr<QQmlApplicationEngine> engine;
+    QQuickWindow* window = nullptr;
+
+    void open(bool readOnly) {
+        RunnerOptions runnerOptions;
+        runnerOptions.runtime = hermeticOptions(temp.path() / "profile", adapter);
+        runnerOptions.steam = false;
+        runner = std::make_unique<ServiceRunner>(runnerOptions);
+        const RunnerStart start = runner->start();
+        REQUIRE(start.ok);
+
+        BackendOptions options;
+        options.readOnly = readOnly;
+        options.updates.currentVersion = QStringLiteral("0.1.0");
+        options.updates.installed = true;
+        options.updates.client.endpoints = stub.endpoints();
+        options.updates.startProcess = [this](const platform::ProcessSpec&) {
+            ++starts;
+            return Result<platform::StartedProcess>(platform::StartedProcess{1});
+        };
+        options.updates.requestQuit = [this] { ++quits; };
+        options.updates.openUrl = [this](const QUrl&) { ++pages; };
+        backend = std::make_unique<Backend>(*runner, options);
+        backend->initialize(start);
+        registration = registerBackend(*backend);
+        engine = std::make_unique<QQmlApplicationEngine>();
+        engine->loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine->rootObjects().size() == 1);
+        window = qobject_cast<QQuickWindow*>(engine->rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend->initialRefreshDone(); }));
+        window->resize(window->minimumSize());
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        QMetaObject::invokeMethod(window, "openSettings");
+        REQUIRE(waitUntil([&] { return item("settingsDialog")->property("opened").toBool(); }));
+    }
+
+    void close() {
+        window->close();
+        backend->shutdown();
+        runner->shutdown();
+        engine.reset();
+        registration.reset();
+        backend.reset();
+    }
+
+    QObject* item(const char* name) const {
+        QObject* found = window->findChild<QObject*>(QLatin1String(name));
+        REQUIRE(found);
+        return found;
+    }
+    QString text(const char* name) const { return item(name)->property("text").toString(); }
+    bool visible(const char* name) const { return item(name)->property("visible").toBool(); }
+    void key(Qt::Key k) const {
+        QTest::keyClick(window, k);
+        QCoreApplication::processEvents();
+    }
+    // The way a keyboard user gets there; false if Tab never reaches it.
+    bool tabTo(const char* name) const {
+        for (int i = 0; i < 16; ++i) {
+            if (hasActiveFocus(item(name)))
+                return true;
+            key(Qt::Key_Tab);
+        }
+        return hasActiveFocus(item(name));
+    }
+    QString accessibleName(const char* name) const {
+        QObject* object = item(name);
+        QQmlExpression expression(qmlContext(object), object, QStringLiteral("Accessible.name"));
+        return expression.evaluate().toString();
+    }
+    bool waitForState(const char* state) const {
+        return waitUntil([&] { return backend->updates()->state() == QLatin1String(state); });
+    }
+    // The dialog stays inside the smallest window, whatever the section shows.
+    void checkFits() const {
+        const qreal height = item("settingsDialog")->property("height").toReal();
+        INFO("dialog height " << height << " in a window of " << window->height());
+        CHECK(height <= window->height() - 32);
+    }
+};
+
+} // namespace
+
+TEST_CASE("The Updates section works with the keyboard", "[app][qml][a11y][update]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    UpdatesHarness h;
+    h.stub.serveRelease("1.2.3", QByteArray("installer"));
+    QmlWarnings warnings;
+    h.open(false);
+
+    CHECK(h.visible("updateCheckButton"));
+    CHECK_FALSE(h.visible("updateAction"));
+    CHECK_FALSE(h.visible("updateError"));
+    CHECK_FALSE(h.visible("updateDisabledReason"));
+    CHECK(h.accessibleName("updateCheckButton") == "Check for updates");
+    CHECK(h.stub.connections() == 0);
+    h.checkFits();
+
+    REQUIRE(h.tabTo("updateCheckButton"));
+    h.key(Qt::Key_Return);
+    REQUIRE(h.waitForState("available"));
+    CHECK(h.text("updateStatus") == "Version 1.2.3 is available.");
+    CHECK(h.accessibleName("updateStatus") == "Version 1.2.3 is available.");
+    CHECK(h.text("updateAction") == "Update and restart");
+    CHECK(h.accessibleName("updateAction") == "Update and restart");
+    // The button that was pressed went away for a moment: focus stayed in the section.
+    CHECK(waitUntil([&] { return hasActiveFocus(h.item("updateAction")); }));
+    h.checkFits();
+
+    h.key(Qt::Key_Return);
+    REQUIRE(h.waitForState("installing"));
+    CHECK(h.starts == 1);
+    CHECK(h.quits == 1);
+    CHECK(h.text("updateStatus").startsWith("Starting the installer"));
+    h.checkFits();
+
+    h.close();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("The Updates section shows errors with a way out", "[app][qml][update]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    UpdatesHarness h;
+    h.stub.serveRelease("1.2.3", QByteArray("installer"));
+    h.stub.routes[ReleaseStub::installerPath("1.2.3")].body = "tampered!";
+    QmlWarnings warnings;
+    h.open(false);
+
+    h.backend->updates()->check();
+    REQUIRE(h.waitForState("available"));
+    QMetaObject::invokeMethod(h.item("updateAction"), "clicked");
+    REQUIRE(h.waitForState("failed"));
+    CHECK(h.visible("updateError"));
+    CHECK(h.item("updateError")->property("text").toString().contains("does not match"));
+    CHECK(h.text("updateAction") == "Try again");
+    CHECK(h.visible("updateReleasePage"));
+    CHECK(h.starts == 0);
+    h.checkFits();
+
+    QMetaObject::invokeMethod(h.item("updateReleasePage"), "clicked");
+    CHECK(h.pages == 1);
+
+    // Try again downloads anew.
+    h.stub.routes[ReleaseStub::installerPath("1.2.3")].body = "installer";
+    QMetaObject::invokeMethod(h.item("updateAction"), "clicked");
+    REQUIRE(h.waitForState("installing"));
+    CHECK(h.starts == 1);
+
+    h.close();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("The Updates section explains why it is off", "[app][qml][update]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    UpdatesHarness h;
+    QmlWarnings warnings;
+    h.open(true);
+    CHECK(h.visible("updateDisabledReason"));
+    CHECK(h.item("updateDisabledReason")->property("text").toString().contains("read-only"));
+    CHECK_FALSE(h.item("updateCheckButton")->property("enabled").toBool());
+    CHECK_FALSE(h.tabTo("updateCheckButton"));
+    h.checkFits();
+    CHECK(h.stub.connections() == 0);
+
+    h.close();
     INFO(warnings.list().join('\n').toStdString());
     CHECK(QmlWarnings::list().isEmpty());
 }

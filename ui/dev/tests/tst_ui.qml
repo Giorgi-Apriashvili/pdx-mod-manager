@@ -358,6 +358,44 @@ Item {
             verify(row.activeFocus)
         }
 
+        function test_a10_settingsUpdates() {
+            requireFocus()
+            win.openSettings()
+            const dialog = named("settingsDialog")
+            tryVerify(() => dialog.opened)
+            const check = findChild(dialog.contentItem, "updateCheckButton")
+            const action = findChild(dialog.contentItem, "updateAction")
+            verify(check.enabled)
+            verify(!action.visible)
+            compare(check.Accessible.name, "Check for updates")
+
+            // Reachable with Tab, and the keyboard stays in the section.
+            for (let i = 0; i < 12 && !check.activeFocus; ++i)
+                press(Qt.Key_Tab)
+            verify(check.activeFocus)
+            press(Qt.Key_Return)
+            compare(Backend.updates.state, "checking")
+            tryVerify(() => action.activeFocus)
+            compare(action.text, "Cancel")
+            tryCompare(Backend.updates, "state", "available")
+            compare(action.text, "Update and restart")
+            verify(action.activeFocus)
+
+            // Cancelling a download goes back to the offer; then it runs through.
+            press(Qt.Key_Return)
+            compare(Backend.updates.state, "downloading")
+            compare(action.text, "Cancel")
+            press(Qt.Key_Return)
+            compare(Backend.updates.state, "available")
+            press(Qt.Key_Return)
+            tryCompare(Backend.updates, "state", "installing")
+            verify(!check.enabled)
+
+            Backend.updates.state = "idle"
+            press(Qt.Key_Escape)
+            tryVerify(() => !dialog.visible)
+        }
+
         name: "PmmUi"
         when: windowShown
     }

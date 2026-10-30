@@ -2,7 +2,7 @@
 // pmm-steam-helper resolves, with in-memory behaviour, so the helper can be
 // tested end to end without Steam. Written from the public flat API
 // signatures; contains no Valve code. Tests copy the built library to a temp
-// directory under the accepted name (steam_api64.dll / libsteam_api.so / ...).
+// directory under the accepted name (steam_api64.dll).
 //
 // PMM_FAKE_STEAM_MODE selects a scenario: ok (default), no_client, init_fail,
 // no_user, offline, not_owned.
@@ -18,13 +18,8 @@
 #include <map>
 #include <string>
 
-#if defined(_WIN32)
 #define FAKE_EXPORT extern "C" __declspec(dllexport)
 #define FAKE_CALL __cdecl
-#else
-#define FAKE_EXPORT extern "C" __attribute__((visibility("default")))
-#define FAKE_CALL
-#endif
 
 namespace {
 
@@ -58,7 +53,6 @@ State& state() {
 int interfaceToken = 0; // address used as the fake interface pointers
 
 std::string env(const char* name) {
-#if defined(_WIN32)
     char* value = nullptr;
     std::size_t len = 0;
     if (_dupenv_s(&value, &len, name) != 0 || value == nullptr)
@@ -66,10 +60,6 @@ std::string env(const char* name) {
     std::string out(value);
     std::free(value);
     return out;
-#else
-    const char* value = std::getenv(name);
-    return value ? std::string(value) : std::string();
-#endif
 }
 
 std::string installPath(std::uint64_t id) {
@@ -253,11 +243,7 @@ FAKE_EXPORT bool FAKE_CALL SteamAPI_ISteamUtils_GetAPICallResult(void*, std::uin
                                                                  bool* failed) {
     State& s = state();
     const auto it = s.calls.find(call);
-#if defined(_WIN32)
     constexpr int kExpectedSize = 16;
-#else
-    constexpr int kExpectedSize = 12;
-#endif
     if (it == s.calls.end() || expected != 1313 || size != kExpectedSize) {
         *failed = true;
         return false;

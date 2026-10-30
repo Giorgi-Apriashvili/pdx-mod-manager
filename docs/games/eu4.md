@@ -13,18 +13,18 @@ machine runs Windows 11 with "EU4 v1.37.5.0 Inca (491d)" from Steam (build
 on 2026-10-30 it was launched by the application with probe mods, with the
 user's approval ([live validation](../evidence/live-validation-2026-10-30.md)).
 
-| Capability | Windows / Steam | Linux, macOS, other stores |
+| Capability | Windows / Steam | Other stores |
 | --- | --- | --- |
-| Discover installation and user data (`appmanifest_236850.acf`, `launcher-settings.json`, `userdir.txt`) | **Verified** (read-only) | Implemented, unverified |
-| Read `launcher-settings.json` (version, executable, arguments) | **Verified**; `-enabletelemetry` is dropped (see Launch) | Implemented, unverified |
-| Scan Workshop and local mods, identity rules | **Verified**: 13 mods (12 Workshop, 1 local with a `remote_file_id`), 0 problems | Implemented, unverified |
-| Registered Workshop items whose content is missing | **Verified** with a replay of the real descriptors: not installed, read as missing | Same code |
-| Read current `dlc_load.json` | **Verified**: 9 of 9 resolved; equals the launcher's active (custom-ordered) playset | Implemented, unverified |
-| Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** byte-identical to the launcher's output (computed, not written): 0 writes, 12 of 12 descriptors identical | Implemented, unverified |
-| Legacy zipped mods (`archive=`) | Implemented, fixture-tested; none on the machine | Implemented, unverified |
+| Discover installation and user data (`appmanifest_236850.acf`, `launcher-settings.json`, `userdir.txt`) | **Verified** (read-only) | Not discovered; manual selection, unverified |
+| Read `launcher-settings.json` (version, executable, arguments) | **Verified**; `-enabletelemetry` is dropped (see Launch) | Unverified |
+| Scan Workshop and local mods, identity rules | **Verified**: 13 mods (12 Workshop, 1 local with a `remote_file_id`), 0 problems | Local mods only, unverified |
+| Registered Workshop items whose content is missing | **Verified** with a replay of the real descriptors: not installed, read as missing | n/a |
+| Read current `dlc_load.json` | **Verified**: 9 of 9 resolved; equals the launcher's active (custom-ordered) playset | Unverified |
+| Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** byte-identical to the launcher's output (computed, not written): 0 writes, 12 of 12 descriptors identical | Unverified |
+| Legacy zipped mods (`archive=`) | Implemented, fixture-tested; none on the machine | Unverified |
 | `supported_version` warnings (no wildcard rule) | **Verified** against the installed descriptors | Same code |
-| Direct launch (bypassing the launcher) | **Verified** 2026-10-30: started directly with `-gdpr-compliant`, no launcher process, no restart through Steam | Unverified |
-| Workshop subscribe and download (helper in EU4's app context) | **Verified** 2026-10-30: one item subscribed, downloaded and verified through the app | Unverified |
+| Direct launch (bypassing the launcher) | **Verified** 2026-10-30: started directly with `-gdpr-compliant`, no launcher process, no restart through Steam | Unverified, no Steam environment |
+| Workshop subscribe and download (helper in EU4's app context) | **Verified** 2026-10-30: one item subscribed, downloaded and verified through the app | Unsupported: requires the game on a Steam account |
 | Effective order / precedence in game | **Verified** 2026-10-30: enabled mods load, disabled do not; **the order of `enabled_mods` does not decide file overrides: the mod whose `name` sorts first wins** ([load order](../load-order.md#europa-universalis-iv)) | Unverified |
 
 Not supported: EU4 versions that predate the Paradox launcher v2 and listed
@@ -91,13 +91,7 @@ In this order:
 3. `launcher-settings.json` `gameDataPath`
    (`%USER_DOCUMENTS%/Paradox Interactive/Europa Universalis IV` on
    v1.37.5.0), mapped exactly as for Stellaris.
-4. The OS default:
-
-| OS | Default |
-| --- | --- |
-| Windows | `<Documents>/Paradox Interactive/Europa Universalis IV` (verified) |
-| macOS | `~/Documents/Paradox Interactive/Europa Universalis IV` (unverified) |
-| Linux | `$XDG_DATA_HOME/Paradox Interactive/Europa Universalis IV` (unverified) |
+4. The default: `<Documents>/Paradox Interactive/Europa Universalis IV` (verified).
 
 ## launcher-settings.json
 
@@ -152,8 +146,7 @@ with the real descriptors.
 ## Launch
 
 Executable from `launcher-settings.json` `exePath` (`./eu4.exe`, validated as
-for Stellaris), falling back to `eu4.exe` / `eu4` / `eu4.app/Contents/MacOS/eu4`
-without arguments. The working directory is the installation folder. Steam
+for Stellaris), falling back to `eu4.exe` without arguments. The working directory is the installation folder. Steam
 installations get `SteamAppId=236850` and `SteamGameId=236850`.
 
 **Arguments**: `exeArgs` without `-enabletelemetry`. The manager never enables
@@ -164,7 +157,7 @@ both when the installation is read and when a launch plan is built (for
 installations stored earlier). This is silent: no warning is shown. On
 v1.37.5.0 the arguments are `["-gdpr-compliant"]`.
 
-Running-instance check: game `eu4.exe` (Linux/macOS `eu4`). Conflicting
+Running-instance check: game `eu4.exe`. Conflicting
 writers are the Paradox launcher processes as for Stellaris
 (`Paradox Launcher.exe`, `dowser.exe`); `dowser.exe` ships in the EU4 install
 folder too, the other names are unverified for EU4.
@@ -217,4 +210,3 @@ regenerated Workshop descriptors identical to the launcher's: 12 of 12
    game does not restart through Steam (no `steam_appid.txt`), that the mods
    are active, and that a legacy zipped mod loads.
 3. Observe how EU4 treats a non-empty `userdir.txt` (absolute and relative).
-4. Repeat discovery, scan and launch on Linux and macOS.

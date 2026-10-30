@@ -35,6 +35,9 @@ what is still missing.
   dialog, or the list for Delete and the shortcuts).
 - A control that receives focus inside a scrolled column or list is scrolled
   into view (`Theme.reveal()`).
+- In Settings → Updates, the button that was just pressed may disappear or
+  become disabled ("Check for updates" while checking). Focus then moves to the
+  section's main button, or back to "Check for updates", and stays in the section.
 
 ### Shortcuts
 
@@ -53,7 +56,7 @@ Settings → Keyboard shortcuts).
 | Ctrl+Shift+A | Add installed mods |
 | F5 | Rescan games and mods |
 | Ctrl+, | Settings |
-| F1 (also Cmd+? on macOS) | Keyboard shortcuts |
+| F1 | Keyboard shortcuts |
 | **Mod list** | |
 | Up, Down, PgUp, PgDn, Home, End | Move to another row |
 | Shift + the keys above | Extend the selection |
@@ -117,9 +120,8 @@ banner's "Show load order" link restores the view.
 
 ## Screen readers and UI Automation
 
-Qt exposes the QML items to the platform accessibility API (UI Automation on
-Windows, AT-SPI on Linux, NSAccessibility on macOS) through the `Accessible`
-attached properties.
+Qt exposes the QML items to UI Automation, the Windows accessibility API,
+through the `Accessible` attached properties.
 
 ### Roles and names
 
@@ -148,8 +150,7 @@ grids and spinners next to self-describing text are ignored.
 ### Announcements
 
 Changes that happen without a focus change are spoken with
-`Accessible.announce()` (Qt 6.8 and later; UI Automation notification events
-on Windows):
+`Accessible.announce()` (Qt 6.8 and later; UI Automation notification events):
 
 - moves: "*name* moved to position 4", "3 mods moved up";
 - Space in the mod list: "Enabled *name*", "Disabled 5 mods";
@@ -159,7 +160,9 @@ on Windows):
 - error banners when they appear or change (invalid share code in the import
   preview, launch failure, interrupted configuration change);
 - launch progress ("Checking installation and mods…", "Starting
-  Stellaris…", "Launch failed.").
+  Stellaris…", "Launch failed.");
+- each step of an update in Settings ("Version 1.2.3 is available.", errors),
+  not every percent of the download.
 
 Notifications disappear after 5 s (warnings 9 s, errors 15 s) unless the
 pointer is over them or their Dismiss button has keyboard focus. Dismissing
@@ -227,7 +230,7 @@ outlines and checked fills. Disabled controls are exempt and stay faded.
 
 Automated:
 
-- `ui/dev/preview.sh --test` (fake backend, 21 tests): besides the editing
+- `ui/dev/preview.sh --test` (fake backend, 22 tests): besides the editing
   tests, Tab visits the actions, games and mods columns in that order and
   returns to the list; F6 / Shift+F6; Enter opens Settings from its button,
   Tab stays inside the dialog and Esc returns focus to the button; Esc on the
@@ -255,8 +258,8 @@ and raw views; Settings opened through its Invoke pattern):
   see its details." were missing from the tree and banners appeared as nested
   windows; both were corrected and checked again.
 
-Not performed: listening tests with NVDA, Narrator or JAWS, VoiceOver on
-macOS and Orca on Linux, and Windows high-contrast themes. The announcements
+Not performed: listening tests with NVDA, Narrator or JAWS, and Windows
+high-contrast themes. The announcements
 were checked to run without errors, not heard.
 
 ## Known gaps

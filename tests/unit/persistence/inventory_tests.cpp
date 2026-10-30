@@ -162,7 +162,6 @@ TEST_CASE("A failure part-way through a replace keeps the previous inventory",
     CHECK(mods[0].descriptor.name == "A");
 }
 
-#if defined(_WIN32)
 TEST_CASE("A scanned path that is not valid UTF-16 fails the replace instead of throwing",
           "[persistence][inventory]") {
     auto db = openMemory();
@@ -188,19 +187,3 @@ TEST_CASE("A scanned path that is not valid UTF-16 fails the replace instead of 
 
     CHECK(ids(require(repo.list("stellaris"))) == std::vector<std::string>{"1"});
 }
-#else
-TEST_CASE("Paths that are not valid UTF-8 round-trip as their raw bytes",
-          "[persistence][inventory]") {
-    auto db = openMemory();
-    InventoryRepository repo(*db);
-    auto mod = localMod();
-    mod.contentPath = fs::path("/home/example/mods/caf\xE9");
-    mod.descriptorPath = fs::path("/home/example/.local/share/Paradox Interactive/Stellaris/mod/"
-                                  "caf\xE8.mod");
-    requireOk(repo.replaceForGame("stellaris", {mod}));
-    auto mods = require(repo.list("stellaris"));
-    REQUIRE(mods.size() == 1);
-    CHECK(mods[0].contentPath.native() == mod.contentPath.native());
-    CHECK(mods[0].descriptorPath.native() == mod.descriptorPath.native());
-}
-#endif

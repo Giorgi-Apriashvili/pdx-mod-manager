@@ -34,12 +34,10 @@ per-user data directory, i.e.
 | OS | Database file |
 | --- | --- |
 | Windows | `%APPDATA%\ParadoxModManager\state.sqlite` |
-| Linux | `$XDG_DATA_HOME/ParadoxModManager/state.sqlite` (default `~/.local/share/...`) |
-| macOS | `~/Library/Application Support/ParadoxModManager/state.sqlite` |
 
 `Database::open()` creates missing parent directories. Paths are handed to
 SQLite as UTF-8 (SQLite's Windows VFS converts them to UTF-16), so folders with
-spaces and non-ASCII characters work on every OS. A Windows path that is not
+spaces and non-ASCII characters work. A path that is not
 valid UTF-16 (see Conventions) is refused with `ErrorCode::InvalidArgument`
 rather than opened under an altered name. While the application runs,
 SQLite keeps `state.sqlite-wal` and `state.sqlite-shm` next to the file; they
@@ -91,21 +89,18 @@ Tests use `Database::openInMemory()` or a unique temporary directory.
   `18446744073709551615` or `000123` round-trips exactly); empty ids are
   rejected by `CHECK` constraints. Playset entries additionally require the
   provider and provider id to be **valid UTF-8**, because history snapshots
-  are JSON (see Undo history). On Linux a local mod's id is its descriptor
-  file stem as raw bytes, so a descriptor whose name is Latin-1 encoded
-  (`café.mod` as bytes `63 61 66 E9 ...`) cannot be added to a playset:
+  are JSON (see Undo history); any other id cannot be added to a playset:
   `ErrorCode::InvalidArgument`, "rename the file, then rescan". The
   inventory stores ids as they are.
-* Paths are `TEXT` in native format: the native bytes on POSIX (any bytes,
-  stored exactly), UTF-8 on Windows. Path conversion never throws. NTFS
+* Paths are `TEXT` in UTF-8. Path conversion never throws. NTFS
   allows names that are not valid UTF-16 (an unpaired surrogate, usually
   created by a tool); they have no UTF-8 form, so the inventory, installation
   and database-open paths reject them with `ErrorCode::InvalidArgument`
   instead of storing an altered path. Every stored path therefore
-  round-trips exactly; ill-formed UTF-8 found in a stored Windows path
+  round-trips exactly; ill-formed UTF-8 found in a stored path
   (damaged or foreign data) is read with U+FFFD instead of failing.
 * Enumerations are stored as their stable `toString()` names (`steam`,
-  `windows`, `ready`, `download_requested`, ...). Unknown stored values are
+  `ready`, `download_requested`, ...). Unknown stored values are
   reported as damaged data rather than guessed. Adding an enumeration value
   that is persisted requires a schema version bump, so older builds refuse the
   database instead of misreading it.
@@ -113,6 +108,19 @@ Tests use `Database::openInMemory()` or a unique temporary directory.
 * Lookups by key (`settings`, installation by game, inventory `find`) return
   `std::optional`; lookups by local id (playset, job, history entry) return
   `ErrorCode::NotFound` for unknown or deleted rows.
+
+## Schema version 2
+
+Version 2 drops `game_installations.platform` (`ALTER TABLE ... DROP COLUMN`).
+The other tables and all rows are unchanged, so a version 1 database upgrades in
+place after the usual `state.sqlite.bak-v1` backup. The tables below are the
+version 1 layout; the version 2 `game_installations` is:
+
+```text
+game_installations(game_key TEXT PRIMARY KEY, install_path, user_data_path, executable_path,
+    default_args_json, distribution, steam_app_id, steam_library_path,
+    version, version_label, manually_configured 0/1, updated_at)
+```
 
 ## Schema version 1
 

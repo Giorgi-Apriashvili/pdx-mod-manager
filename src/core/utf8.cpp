@@ -189,7 +189,6 @@ std::u16string utf8ToUtf16(std::string_view text) {
     return decodeToUtf16<std::u16string>(text);
 }
 
-#if defined(_WIN32)
 bool isValidUtf16(std::wstring_view text) noexcept {
     return validUtf16(text);
 }
@@ -201,6 +200,5 @@ std::string utf16ToUtf8(std::wstring_view text) {
 std::wstring utf8ToWide(std::string_view text) {
     return decodeToUtf16<std::wstring>(text);
 }
-#endif
 
 } // namespace pmm

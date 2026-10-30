@@ -9,10 +9,6 @@
 #include <system_error>
 #include <vector>
 
-#if !defined(_WIN32)
-#include <unistd.h>
-#endif
-
 using namespace pmm;
 using namespace pmm::platform;
 using pmm::test::TempDir;
@@ -245,17 +241,9 @@ TEST_CASE("A permission failure surfaces PermissionDenied and rolls back",
     const fs::path lockedDir = s.temp.path() / test::unicodeSubdir() / "locked dir";
     const fs::path locked = lockedDir / "locked.txt";
     test::writeText(locked, "locked original");
-#if defined(_WIN32)
     fs::permissions(locked,
                     fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write,
                     fs::perm_options::remove);
-#else
-    if (::geteuid() == 0) {
-        SKIP("permissions are not enforced for root");
-    }
-    fs::permissions(lockedDir, fs::perms::owner_read | fs::perms::owner_exec,
-                    fs::perm_options::replace);
-#endif
     FileTransactionManager manager(s.journal);
     const auto result =
         manager.apply("locked", {{s.first, "new"}, {locked, "new"}, {s.third, "new"}});
@@ -305,15 +293,10 @@ TEST_CASE("apply refuses a target path that has no exact UTF-8 form", "[platform
     // that round trip would be journaled as a different file, so recover() and
     // restore() would write there and still report success.
     Scenario s;
-#if defined(_WIN32)
     // NTFS accepts names with unpaired surrogates.
     const fs::path folder = s.gameDir / fs::path(L"caf\xD800");
-#else
-    // "café" in Latin-1, e.g. a legacy home folder name.
-    const fs::path folder = s.gameDir / fs::path("caf\xE9");
-#endif
     const fs::path target = folder / "dlc_load.json";
-    // Some filesystems (APFS) reject such names; then there is no original.
+    // Some filesystems reject such names; then there is no original.
     std::error_code ec;
     const bool hasOriginal = fs::create_directory(folder, ec);
     if (hasOriginal)

@@ -8,14 +8,15 @@ decision itself unchanged are appended as a dated "Amendment" section (0001,
 
 | # | Decision | Status |
 | --- | --- | --- |
-| [0001](0001-qt-quick-frontend.md) | Qt 6 Quick/QML frontend over Qt-free C++ core layers | Accepted, amended 2026-10-30 |
-| [0002](0002-dependencies.md) | Dependencies: FetchContent pinned by URL + SHA-256; Qt as a toolchain prerequisite | Accepted |
-| [0003](0003-steam-workshop-helper.md) | Steam Workshop acquisition through a per-game helper process using the game's own Steam API library | Accepted |
+| [0001](0001-qt-quick-frontend.md) | Qt 6 Quick/QML frontend over Qt-free C++ core layers | Accepted, amended 2026-10-30; other systems superseded by 0009 |
+| [0002](0002-dependencies.md) | Dependencies: FetchContent pinned by URL + SHA-256; Qt as a toolchain prerequisite | Accepted; other systems superseded by 0009 |
+| [0003](0003-steam-workshop-helper.md) | Steam Workshop acquisition through a per-game helper process using the game's own Steam API library | Accepted; other systems superseded by 0009 |
 | [0004](0004-share-code-format.md) | Share-code format `PMM1` (zlib + Base64URL + SHA-256), strict validation, independent versioning | Accepted, amended 2026-10-30 |
 | [0005](0005-journaled-config-writes.md) | Game configuration written through a journaled file transaction with backups and crash recovery | Accepted, amended 2026-10-30 |
 | [0006](0006-probe-mod-verification.md) | Load order verified in-game with observable probe mods | Accepted |
-| [0007](0007-license.md) | MIT license; Qt used under LGPLv3 with dynamic linking | Accepted |
+| [0007](0007-license.md) | MIT license; Qt used under LGPLv3 with dynamic linking | Accepted; other systems superseded by 0009 |
 | [0008](0008-sqlite-migrations.md) | SQLite schema and migration policy | Accepted |
+| [0009](0009-windows-only.md) | Windows only: Linux and macOS support removed | Accepted |
 
 ## Template
 

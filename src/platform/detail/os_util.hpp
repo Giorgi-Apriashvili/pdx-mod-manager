@@ -2,8 +2,8 @@
 
 // Internal helpers shared by the platform implementation files: OS error text,
 // mapping of OS error numbers onto pmm::ErrorCode, UTF-8 validation, and UTF-16
-// conversions on Windows. Not part of the public platform API; other modules
-// must not include this header.
+// conversions. Not part of the public platform API; other modules must not
+// include this header.
 
 #include "core/result.hpp"
 #include "core/utf8.hpp"
@@ -15,7 +15,7 @@
 
 namespace pmm::platform::detail {
 
-// GetLastError() on Windows, errno elsewhere.
+// GetLastError().
 int lastOsError() noexcept;
 
 // UTF-8 description of an OS error number, including the numeric code.
@@ -25,7 +25,7 @@ std::string osErrorText(int error);
 // NotFound, "exists" to AlreadyExists; anything else to `fallback`.
 ErrorCode classifyOsError(int error, ErrorCode fallback) noexcept;
 
-// True for Windows sharing/lock violations and POSIX EBUSY/ETXTBSY.
+// True for sharing and lock violations.
 bool isFileInUseError(int error) noexcept;
 
 // Builds an Error from an OS error number. `detail` becomes
@@ -51,13 +51,7 @@ inline std::string toValidUtf8(std::string_view text) {
     return sanitizeUtf8(text);
 }
 
-// fsync() of a directory so that renames/creations inside it are durable.
-// No-op on Windows (MOVEFILE_WRITE_THROUGH covers it). Best effort.
-void syncDirectoryBestEffort(const std::filesystem::path& directory) noexcept;
-
-#if defined(_WIN32)
 std::wstring utf8ToWide(std::string_view utf8);
 std::string wideToUtf8(std::wstring_view wide);
-#endif
 
 } // namespace pmm::platform::detail

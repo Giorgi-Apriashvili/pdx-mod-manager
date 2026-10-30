@@ -20,10 +20,10 @@ prerequisites and commands are in the [README](README.md); the structure is in
    (`ctest --preset debug` includes the application tests, among them the
    check that QML shows data as plain text) and, after colour changes,
    `python3 ui/dev/check_contrast.py`.
-4. Open a pull request against `main`. CI must pass: build and tests on
-   Windows (MSVC), Linux (GCC) and macOS (AppleClang) with warnings as
-   errors, including the application tests, ASan + UBSan on the Qt-free
-   libraries, the format check and the contrast check.
+4. Open a pull request against `main`. CI must pass: build and tests with
+   MSVC and warnings as errors, including the application tests, ASan and a
+   clang-cl build with UBSan and warnings as errors on the Qt-free libraries, the format
+   check and the contrast check.
 5. Update documentation in the same pull request: the changelog entry under
    *Unreleased*, an ADR for a material trade-off, the support matrix only with
    evidence.
@@ -42,7 +42,7 @@ blocks the common ones).
 
 ## Code conventions
 
-- C++20 on every platform. 4-space indentation, 100 columns, `#pragma once`.
+- C++20, Windows only ([ADR 0009](docs/adr/0009-windows-only.md)). 4-space indentation, 100 columns, `#pragma once`.
 - Types `PascalCase`, functions and variables `camelCase`, members
   `m_camelCase`, constants `kCamelCase`, namespaces `pmm::<module>`.
 - Includes use the module path from `src/` (`#include "core/result.hpp"`),
@@ -88,11 +88,14 @@ blocks the common ones).
   clang-tidy is not a CI gate yet because existing code still has findings;
   do not add new ones in the files you touch.
 
-- Compiler warnings: `/W4` plus extra warnings on MSVC, `-Wall -Wextra
-  -Wpedantic -Wshadow -Wold-style-cast ...` on GCC/Clang
+- Compiler warnings: `/W4` plus extra warnings, on MSVC and clang-cl
   (`cmake/CompilerWarnings.cmake`). Keep builds warning-free; CI uses
   warnings as errors.
-- Sanitizers: `cmake --preset core-sanitize` (Linux/macOS, ASan + UBSan).
+- Sanitizers: `cmake --preset core-sanitize` (MSVC, ASan). The tests load the ASan
+  runtime DLL from the compiler's `bin\Hostx64\x64` folder, which the Visual Studio
+  developer environment puts on `PATH`.
+- clang-cl: `cmake --preset core-clang-cl` (LLVM's `bin` folder on `PATH`), with
+  UBSan; a finding stops the test. clangd and clang-tidy parse the code the same way.
 
 ## Tests
 
@@ -114,10 +117,9 @@ blocks the common ones).
 - Fixtures live in `tests/fixtures/<module>/` and are read through
   `PMM_FIXTURES_DIR`. They are read-only: copy them to a temporary directory
   before modifying anything.
-- `.gitattributes` marks fixtures as binary (`-text`), so they stay byte-exact
-  on every platform.
+- `.gitattributes` marks fixtures as binary (`-text`), so they stay byte-exact.
 - **Sanitize** anything modelled on real files: placeholder user names and
-  paths (`C:/Users/<user>`, `/home/user`), no SteamID64 values, no account
+  paths (`C:/Users/<user>`), no SteamID64 values, no account
   data, no copyrighted game or mod content beyond the minimal structure needed.
 - **Share-code regression fixtures never change.** `tests/fixtures/sharing/v1/`
   is the frozen compatibility contract of protocol version 1: existing `.code`

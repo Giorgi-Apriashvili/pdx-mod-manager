@@ -1,0 +1,322 @@
+# Release: full CI, the Windows packages (ZIP and installer), then a GitHub
+# release. Procedure: docs/releasing.md. Pull requests that touch the packaging
+# only build and smoke test the packages; they never publish.
+#
+# The release is created as a draft, filled, and only then published, so the
+# releases/latest API that the in-app updater reads never sees a partial release.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (x.y.z); must equal project(VERSION) in CMakeLists.txt
+        required: true
+        type: string
+      dry_run:
+        description: Dry run (build and test, upload workflow artifacts, publish nothing)
+        type: boolean
+        default: false
+      prerelease:
+        description: Mark the GitHub release as a pre-release
+        type: boolean
+        default: false
+  push:
+    tags: ['v*.*.*']
+  pull_request:
+    paths:
+      - 'packaging/**'
+      - 'cmake/Packaging.cmake'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: read
+
+# Must differ from the group of the called ci.yml (ci-<workflow>-<ref>), or the
+# run would wait for itself.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  QT_VERSION: '6.10.3'
+  AQT_VERSION: '==3.3.*'
+  # Same as on the windows-2025 image; choco is the fallback for an image without it.
+  INNO_SETUP_VERSION: '6.7.1'
+
+jobs:
+  validate:
+    name: Validate release request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash # explicit: adds -o pipefail
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      publish: ${{ steps.check.outputs.publish }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check version, tag and branch
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+
+          project_version="$(sed -n '/^project(ParadoxModManager/,/)/ s/^ *VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)"
+          [ -n "$project_version" ] || fail "Could not read project(VERSION) from CMakeLists.txt."
+
+          publish=false
+          prerelease=false
+          case "$GITHUB_EVENT_NAME" in
+            workflow_dispatch)
+              version="$INPUT_VERSION"
+              if [ "$INPUT_DRY_RUN" != true ]; then publish=true; fi
+              prerelease="$INPUT_PRERELEASE"
+              ;;
+            push)
+              version="${GITHUB_REF_NAME#v}"
+              publish=true
+              ;;
+            pull_request)
+              version="$project_version"
+              ;;
+            *)
+              fail "Unexpected event $GITHUB_EVENT_NAME."
+              ;;
+          esac
+          tag="v$version"
+
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Version '$version' is not x.y.z."
+          [ "$version" = "$project_version" ] ||
+            fail "Version $version does not match project(VERSION) $project_version in CMakeLists.txt."
+
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            [ "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER" ] ||
+              fail "Only the repository owner can run a release (triggered by $GITHUB_TRIGGERING_ACTOR)."
+
+            # "identical" or "behind": main contains this commit.
+            status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status)"
+            case "$status" in
+              identical | behind) ;;
+              *) fail "Commit $GITHUB_SHA is not on main ($status)." ;;
+            esac
+
+            if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .html_url > /dev/null 2>&1; then
+              fail "Release $tag already exists."
+            fi
+          fi
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            existing="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag" \
+              --jq "map(select(.ref == \"refs/tags/$tag\")) | length")"
+            [ "$existing" = 0 ] || fail "Tag $tag already exists."
+          fi
+
+          if ! bash scripts/changelog-section.sh "$version" > /dev/null; then
+            echo "::warning::CHANGELOG.md has no section for $version; the release would use GitHub's generated notes."
+          fi
+
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "publish=$publish"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $version, tag $tag, publish=$publish, prerelease=$prerelease"
+
+  # A pull request already runs ci.yml on its own.
+  ci:
+    name: CI
+    needs: validate
+    if: ${{ github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/ci.yml
+
+  package:
+    name: Package (Windows)
+    needs: [validate, ci]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.ci.result == 'success' || needs.ci.result == 'skipped') }}
+    runs-on: windows-2025
+    timeout-minutes: 60
+    env:
+      CC: cl
+      CXX: cl
+      VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) { choco install ninja --no-progress -y }
+          ninja --version
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --version=$env:INNO_SETUP_VERSION --no-progress -y
+          }
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          aqtversion: ${{ env.AQT_VERSION }}
+          cache: true
+
+      - name: Configure
+        run: cmake --preset release -DPMM_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build --preset release
+
+      - name: Package
+        run: cpack --config build/release/CPackConfig.cmake -B build/release/dist
+
+      - name: Build the installer
+        run: cmake --build --preset release --target installer
+
+      - name: Smoke test the installer
+        shell: pwsh
+        run: >-
+          ./packaging/windows/smoke-test-installer.ps1
+          -Installer "build/release/dist/ParadoxModManager-$env:VERSION-windows-x86_64-setup.exe"
+          -Version $env:VERSION
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages-windows-2025
+          path: |
+            build/release/dist/*.zip
+            build/release/dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish GitHub release
+    needs: [validate, ci, package]
+    if: ${{ !cancelled() && needs.validate.outputs.publish == 'true' && needs.ci.result == 'success' && needs.package.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash # explicit: adds -o pipefail
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      TAG: ${{ needs.validate.outputs.tag }}
+      PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: packages-*
+          path: assets
+          merge-multiple: true
+
+      - name: Generate and verify SHA256SUMS.txt
+        working-directory: assets
+        run: |
+          for pattern in \
+            "ParadoxModManager-$VERSION-windows-x86_64-setup.exe" \
+            "ParadoxModManager-$VERSION-windows-x86_64.zip"; do
+            compgen -G "$pattern" > /dev/null || { echo "::error::No asset matches $pattern."; exit 1; }
+          done
+          # --text: the "<hex>  <name>" format the in-app updater parses.
+          sha256sum --text -- * > ../SHA256SUMS.txt
+          mv ../SHA256SUMS.txt SHA256SUMS.txt
+          sha256sum --check --strict SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Write the release notes
+        run: |
+          if ! bash scripts/changelog-section.sh "$VERSION" > notes.md; then
+            echo "::warning::CHANGELOG.md has no section for $VERSION; using GitHub's generated notes."
+            gh api -X POST "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" --jq .body > notes.md
+          fi
+          cat >> notes.md <<EOF
+
+          ---
+
+          The Windows installer is not code signed yet, so SmartScreen may warn when you start it.
+          EOF
+          cat notes.md
+
+      # A run that failed halfway may have left a draft behind. Drafts have no tag
+      # yet and are invisible to the public; a second one would only be confusing.
+      - name: Remove drafts of an earlier attempt
+        run: |
+          gh api --paginate "repos/$GH_REPO/releases" \
+            --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" |
+            while read -r id; do
+              echo "Deleting draft release $id"
+              gh api -X DELETE "repos/$GH_REPO/releases/$id"
+            done
+
+      - name: Create the draft release
+        run: |
+          args=(--draft --title "Paradox Mod Manager $VERSION" --notes-file notes.md)
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            args+=(--verify-tag)
+          else
+            args+=(--target "$GITHUB_SHA")
+          fi
+          if [ "$PRERELEASE" = true ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$TAG" "${args[@]}"
+
+      - name: Upload the assets
+        run: gh release upload "$TAG" assets/*
+
+      - name: Check the uploaded assets
+        run: |
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size)"' | sort > uploaded.txt
+          (cd assets && find . -maxdepth 1 -type f -printf '%f %s\n') | sort > local.txt
+          cat uploaded.txt
+          diff local.txt uploaded.txt
+
+      # Creating a tag with the workflow token starts no new workflow run, so a
+      # dispatched release does not trigger the tag push path of this workflow.
+      - name: Publish the release
+        run: gh release edit "$TAG" --draft=false
+
+      - name: Check the published release
+        run: |
+          test "$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)" = false
+          tagged="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)"
+          if [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag $TAG points at $tagged, expected $GITHUB_SHA."
+            exit 1
+          fi
+          url="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .html_url)"
+          echo "Published $url" | tee -a "$GITHUB_STEP_SUMMARY"

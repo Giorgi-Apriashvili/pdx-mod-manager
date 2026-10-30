@@ -17,28 +17,6 @@ std::string toString(const ModIdentity& identity) {
     return out;
 }
 
-OsPlatform currentOsPlatform() noexcept {
-#if defined(_WIN32)
-    return OsPlatform::Windows;
-#elif defined(__APPLE__)
-    return OsPlatform::MacOS;
-#else
-    return OsPlatform::Linux;
-#endif
-}
-
-const char* toString(OsPlatform platform) noexcept {
-    switch (platform) {
-    case OsPlatform::Windows:
-        return "windows";
-    case OsPlatform::Linux:
-        return "linux";
-    case OsPlatform::MacOS:
-        return "macos";
-    }
-    return "unknown";
-}
-
 const char* toString(DistributionSource source) noexcept {
     switch (source) {
     case DistributionSource::Steam:

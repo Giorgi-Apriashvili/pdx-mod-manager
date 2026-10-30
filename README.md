@@ -1,25 +1,29 @@
 # Paradox Mod Manager
 
-A compact, cross-platform desktop mod manager for Paradox games. It keeps named
+A compact desktop mod manager for Paradox games, for Windows only. It keeps named
 playsets per game, shares a playset's exact mod list, order and enabled flags as
 a copyable code (`PMM1.…`), acquires missing Steam Workshop mods through the
 user's own Steam client, and starts the game directly with the selected mods,
 without the Paradox launcher.
 
-The first release targets **Stellaris** and **Europa Universalis IV** on Windows,
-Linux and macOS. It needs no server, account or telemetry.
+The first release targets **Stellaris** and **Europa Universalis IV** on Windows
+10 and 11. Linux, macOS, the Steam Deck and Proton are not supported
+([ADR 0009](docs/adr/0009-windows-only.md)). It needs no server, account or
+telemetry.
 
 > **Status: pre-release (0.1.0 in development).** The desktop application
 > (`pmm-app`), the EU4 and Stellaris adapters and every layer below them are
-> implemented and covered by 425 automated tests. On Windows 11 with Steam,
+> implemented and covered by 467 automated tests. On Windows 11 with Steam,
 > both games were started directly by the application with the selected mods
 > (checked in the games' own logs), a missing Workshop mod was subscribed and
 > downloaded live for each game, and the failure cases behaved as specified
 > ([live validation](docs/evidence/live-validation-2026-10-30.md)). **EU4
 > ignores the mod order for file overrides** (the mod whose name sorts first
-> wins); Stellaris follows it. Linux and macOS are unverified; see the
+> wins); Stellaris follows it. See the
 > [support matrix](docs/support-matrix.md) and the
-> [development status](docs/development-status.md).
+> [development status](docs/development-status.md). **Nothing has been published
+> yet**: the release workflow has never run, and an update between two published
+> releases has not happened.
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -46,15 +50,15 @@ reason documented.
 | Manual Workshop fallback (open the item in Steam, then rescan) | Implemented, unverified | Limited: does not satisfy automatic download |
 | Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, Windows 11 | No launcher process; EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration |
 | In-game verification of loaded mods and order | **Verified** 2026-10-30 with probe mods, both games | Stellaris: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
-| Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md); NSIS installer not built |
-| Linux | Core libraries, helper and unit tests build and pass (GCC 16, WSL); the application was not built | No Qt in that environment; CI builds everything |
-| macOS | Unverified | Not built yet; CI builds everything |
+| Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md) |
+| Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the wizard was not clicked through; not code signed |
+| Update button: check GitHub on request, verify the installer's SHA-256, install and restart | Implemented, unverified end to end | [Updates](docs/updates.md): no published release exists yet. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch |
+| GitHub releases from a workflow | Implemented, never run | [Releasing](docs/releasing.md) |
 | Hearts of Iron IV, Crusader Kings III, Victoria 3 | Unsupported | Known to the catalog only; their share codes are rejected as "not supported by this version" |
 
 ## Prerequisites
 
-All platforms:
-
+- Windows 10 or 11, x64.
 - CMake 3.25 or newer and Ninja.
 - A C++20 compiler (see below).
 - Network access on the first configure: CMake downloads the pinned
@@ -63,7 +67,8 @@ All platforms:
 - Qt 6.5 or newer for the application presets (`debug`, `release`, `ci`);
   Qt 6.10.3 is the tested version. Required modules: Core, Gui, Qml, Quick,
   Quick Controls 2, Network, Concurrent (all part of the default Qt desktop
-  installation). The `core-debug` and `core-sanitize` presets need no Qt.
+  installation). The `core-debug`, `core-sanitize` and `core-clang-cl` presets
+  need no Qt.
 - Python 3 only for [`tools/probe-mods`](tools/probe-mods/probe_mods.py) and
   the helper scripts in `scripts/` and `ui/dev/`.
 
@@ -72,31 +77,27 @@ or with [aqtinstall](https://github.com/miurahr/aqtinstall):
 
 ```sh
 python -m pip install aqtinstall
-python -m aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 -O C:/Qt   # Windows
-python -m aqt install-qt linux desktop 6.10.3 linux_gcc_64 -O ~/Qt           # Linux
-python -m aqt install-qt mac desktop 6.10.3 clang_64 -O ~/Qt                 # macOS
+python -m aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 -O C:/Qt
 ```
 
-Then point `QT_ROOT_DIR` at the kit, for example `C:/Qt/6.10.3/msvc2022_64`,
-`~/Qt/6.10.3/gcc_64` or `~/Qt/6.10.3/macos`. When neither `QT_ROOT_DIR`,
-`CMAKE_PREFIX_PATH` nor `Qt6_DIR` is set, configure uses the newest kit found
-under `C:/Qt` or `~/Qt` and prints which one.
+Then point `QT_ROOT_DIR` at the kit, for example `C:/Qt/6.10.3/msvc2022_64`.
+When neither `QT_ROOT_DIR`, `CMAKE_PREFIX_PATH` nor `Qt6_DIR` is set, configure
+uses the newest kit found under `C:/Qt` and prints which one.
 
-VS Code (CMake Tools): open the folder and select a configure preset. On
-Windows the presets declare the x64 MSVC toolset, so CMake Tools loads the
+VS Code (CMake Tools): open the folder and select a configure preset. The
+presets declare the x64 MSVC toolset, so CMake Tools loads the
 Visual Studio developer environment for the Ninja generator. A machine-specific
 `CMakeUserPresets.json` (gitignored) can pin the Qt kit and compiler, e.g. a
 preset inheriting `debug` with `"environment": {"QT_ROOT_DIR": "..."}` and
 `"cacheVariables": {"CMAKE_CXX_COMPILER": "cl", "CMAKE_C_COMPILER": "cl"}`.
-In a plain terminal on Windows, load the environment first (Developer
+In a plain terminal, load the environment first (Developer
 PowerShell, or `source scripts/msvc-env.sh` in Git Bash); otherwise configure
 stops with "cl ... was not found in the PATH".
 
-| OS | Compiler | Tested | Additional packages |
-| --- | --- | --- | --- |
-| Windows 10/11 x64 | MSVC with the "Desktop development with C++" workload | MSVC 19.51 (Visual Studio 2026), all presets | Ninja (bundled with Visual Studio's CMake component, or `winget install Ninja-build.Ninja`) |
-| Linux | GCC 13 or newer | GCC 16.2 (Arch Linux in WSL), `core-debug` and `core-sanitize` only; CI uses GCC 13 | Ubuntu 24.04: `sudo apt install build-essential cmake ninja-build libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libfontconfig1` |
-| macOS | AppleClang 15 or newer (Xcode command line tools) | Not yet (CI) | `brew install cmake ninja` |
+| Compiler | Tested | Additional packages |
+| --- | --- | --- |
+| MSVC with the "Desktop development with C++" workload | MSVC 19.51 (Visual Studio 2026) | Ninja (bundled with Visual Studio's CMake component, or `winget install Ninja-build.Ninja`) |
+| clang-cl, only for the `core-clang-cl` preset | LLVM 22 | LLVM (`winget install LLVM.LLVM`), and the MSVC workload above for its headers and libraries |
 
 ## Build and test
 
@@ -106,7 +107,8 @@ Configure, build and test presets share the same names
 | Preset | Contents | Qt |
 | --- | --- | --- |
 | `core-debug` | Libraries, Steam helper and unit tests, Debug | No |
-| `core-sanitize` | Same with AddressSanitizer + UBSan and warnings as errors (Linux/macOS) | No |
+| `core-sanitize` | Same with AddressSanitizer (MSVC) and warnings as errors | No |
+| `core-clang-cl` | Same with clang-cl, UBSan and warnings as errors | No |
 | `debug` | Everything including the desktop application and its tests, Debug | Yes |
 | `release` | Everything, RelWithDebInfo | Yes |
 | `ci` | Everything, RelWithDebInfo, warnings as errors | Yes |
@@ -123,17 +125,17 @@ ctest --preset core-debug -L pmm_sharing_tests    # one suite (label = test exec
 With the application (Qt):
 
 ```sh
-export QT_ROOT_DIR=~/Qt/6.10.3/gcc_64             # PowerShell: $env:QT_ROOT_DIR = "C:/Qt/6.10.3/msvc2022_64"
+export QT_ROOT_DIR=C:/Qt/6.10.3/msvc2022_64       # PowerShell: $env:QT_ROOT_DIR = "C:/Qt/6.10.3/msvc2022_64"
 cmake --preset debug
 cmake --build --preset debug
-ctest --preset debug                              # 424 tests on Windows, 34 of them pmm_app_tests
+ctest --preset debug                              # 467 tests, 65 of them pmm_app_tests
 ```
 
 The application tests (`-L pmm_app_tests`) run on Qt's offscreen platform;
-the test properties set `QT_QPA_PLATFORM=offscreen` and, on Windows, put Qt's
-`bin` folder on `PATH`.
+the test properties set `QT_QPA_PLATFORM=offscreen` and put Qt's `bin` folder on
+`PATH`.
 
-On Windows the compiler must be on `PATH`. Either open a *Developer PowerShell
+The compiler must be on `PATH`. Either open a *Developer PowerShell
 for VS* / *x64 Native Tools Command Prompt*, or, in Git Bash, import the
 Visual Studio environment into the current shell first:
 
@@ -143,10 +145,25 @@ source scripts/msvc-env.sh
 
 Formatting and static analysis: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## Installing
+
+Once a version is published, download
+`ParadoxModManager-<version>-windows-x86_64-setup.exe` from
+[Releases](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases) and run
+it. It needs no administrator rights and installs to
+`%LOCALAPPDATA%\Programs\ParadoxModManager`. The setup is not code signed yet, so
+SmartScreen may warn (*More info > Run anyway*). Your playsets and settings are kept
+outside that folder, so upgrading or uninstalling leaves them alone.
+
+To update, open **Settings > Updates > Check for updates**. An installed copy can
+then download a new version, verify it, install it and restart. The application
+only contacts GitHub when you press the button ([what it contacts and
+verifies](docs/updates.md)). A ZIP copy gets a link to the release page instead.
+
 ## Running
 
 From the build tree: `pmm-app` is written to `build/<preset>/bin/`, next to
-`pmm-steam-helper`. On Windows, Qt's DLLs must be on `PATH`:
+`pmm-steam-helper`. Qt's DLLs must be on `PATH`:
 
 ```sh
 export PATH="/c/Qt/6.10.3/msvc2022_64/bin:$PATH"   # PowerShell: $env:PATH = "C:\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
@@ -154,11 +171,9 @@ build/debug/bin/pmm-app.exe                         # normal profile
 build/debug/bin/pmm-app.exe --profile "<empty folder>" --read-only
 ```
 
-From a package: extract the Windows ZIP and run `bin\pmm-app.exe` (keep the
-path of the folder that contains `bin\` below about 170 characters); on Linux
-extract the `.tar.gz` and run `bin/pmm-app`; on macOS open the `.dmg` and
-start `pmm-app.app`. Only the Windows package has been verified
-([packaging](docs/packaging.md)).
+From a package: extract the ZIP and run `bin\pmm-app.exe` (keep the path of the
+folder that contains `bin\` below about 170 characters;
+[packaging](docs/packaging.md)).
 
 Options: `--profile <dir>` keeps every application file (database, journal,
 logs, cache) in `<dir>`; `--game <key>` selects `stellaris` or `eu4`;
@@ -183,16 +198,18 @@ shortcut list (F1) and the accessibility checks are described in
 ```sh
 cmake --preset release -DPMM_BUILD_TESTS=OFF
 cmake --build --preset release
-cpack --config build/release/CPackConfig.cmake -B dist
+cpack --config build/release/CPackConfig.cmake -B build/release/dist
+cmake --build --preset release --target installer   # needs Inno Setup 6
 ```
 
-This produces `ParadoxModManager-<version>-<os>-<arch>` packages: ZIP (plus an
-NSIS installer when `makensis` is available) on Windows, a `.dmg` on macOS and
-a `.tar.gz` on Linux. On Windows run it from an x64 Visual Studio developer
-environment. Qt deployment, package contents, code signing and LGPL
-compliance are described in [`docs/packaging.md`](docs/packaging.md); the
-Windows ZIP was verified on 2026-10-29
-([evidence](docs/evidence/packaging-2026-10-29.md)).
+This produces `ParadoxModManager-<version>-windows-x86_64.zip` and a per-user
+installer, `ParadoxModManager-<version>-windows-x86_64-setup.exe`, in
+`build/release/dist`. Run it from an x64 Visual Studio developer
+environment. Qt deployment, package contents, code signing and LGPL compliance are
+described in [`docs/packaging.md`](docs/packaging.md); the ZIP was verified
+on 2026-10-29 ([evidence](docs/evidence/packaging-2026-10-29.md)) and the installer
+on 2026-10-30 ([evidence](docs/evidence/installer-2026-10-30.md)). Publishing to
+GitHub Releases: [`docs/releasing.md`](docs/releasing.md).
 
 ## Project layout
 
@@ -212,8 +229,8 @@ tools/steam-helper/  pmm-steam-helper (loads the game's own Steam API library)
 tools/probe-mods/    observable probe mods for in-game load-order checks
 tests/            unit tests and fixtures (tests/unit), application tests (tests/app)
 docs/             architecture, decisions, protocol, support matrix, validation, evidence
-packaging/        license texts, macOS entitlements, Linux desktop entry,
-                  Windows version resource and Qt deployment prune script
+packaging/        license texts, Windows version resource, Qt deployment prune
+                  script, installer and its test
 scripts/          developer scripts (formatting, MSVC environment, share-code tool)
 ```
 
@@ -228,9 +245,9 @@ scripts/          developer scripts (formatting, MSVC environment, share-code to
 - [Steam Workshop acquisition](docs/steam-workshop.md)
 - [Persistence](docs/persistence.md)
 - [Manual validation procedure](docs/validation.md)
-- [Packaging](docs/packaging.md)
+- [Packaging](docs/packaging.md), [releasing](docs/releasing.md) and [updates](docs/updates.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- Evidence: [Steam helper probe](docs/evidence/steam-helper-probe.md), [real EU4 and Stellaris data](docs/evidence/real-scan-2026-10-29.md), [Windows package](docs/evidence/packaging-2026-10-29.md), [application round trip](docs/evidence/app-round-trip-2026-10-30.md)
+- Evidence: [Steam helper probe](docs/evidence/steam-helper-probe.md), [real EU4 and Stellaris data](docs/evidence/real-scan-2026-10-29.md), [Windows package](docs/evidence/packaging-2026-10-29.md), [Windows installer](docs/evidence/installer-2026-10-30.md), [application round trip](docs/evidence/app-round-trip-2026-10-30.md)
 - [Changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md), [third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Troubleshooting

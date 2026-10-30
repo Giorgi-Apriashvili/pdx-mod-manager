@@ -74,7 +74,7 @@ written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
 - The helper is looked up next to the executable
   (`QCoreApplication::applicationDirPath()`). The `PMM_STEAM_HELPER`
   environment variable overrides this for development.
-- On Windows it starts with `CREATE_NO_WINDOW`. The process-wide error mode
+- It starts with `CREATE_NO_WINDOW`. The process-wide error mode
   set by `main()` is inherited.
 - Commands are written to stdin. Stdout is split with
   `providers::LineSplitter` and decoded with `providers::decodeEvent()`;
@@ -101,6 +101,17 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
 - `PMM_WORKSHOP_METADATA_URL` overrides the endpoint (tests, local stubs).
 - It only runs for acquisition jobs, to show names and reject items of the
   wrong game.
+
+### Updates
+
+`UpdateClient` and `UpdateController` run on the GUI thread, with their own
+`QNetworkAccessManager`: nothing in them blocks. They only touch the network
+after a click in Settings. `main()` holds the named mutex
+`Local\ParadoxModManagerRunning` for the whole process
+(`RunningInstanceSignal`), which is what an update run's installer waits for.
+The log records at start-up whether this copy updates through the installer or the
+release page. What is contacted, verified and protected against is in
+[`updates.md`](updates.md).
 
 ## Start-up sequence
 
@@ -169,7 +180,7 @@ and joins the thread.
 | `--verbose` | Write debug-level log records (including redacted helper stderr). |
 | `--game <key>` | Select this game at start-up (`stellaris`, `eu4`). |
 | `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing, so a later session with Steam downloads them only after **Download missing**. |
-| `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. |
+| `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. "Check for updates" is off too, and says so. |
 
 ### Hidden verification switches
 
@@ -249,15 +260,14 @@ capture that shows the grey inactive selection.
 
 ## Files and folders
 
-| What | Default (Windows) | With `--profile <dir>` |
+| What | Default | With `--profile <dir>` |
 | --- | --- | --- |
 | Database | `%APPDATA%\ParadoxModManager\state.sqlite` | `<dir>\state.sqlite` |
 | Configuration journal and backups | `%APPDATA%\ParadoxModManager\transactions\` | `<dir>\transactions\` |
 | Logs | `%LOCALAPPDATA%\ParadoxModManager\logs\` | `<dir>\logs\` |
 | Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` | `<dir>\cache\` |
+| Downloaded installer | `%LOCALAPPDATA%\ParadoxModManager\cache\updates\` | `<dir>\cache\updates\` |
 
-The Linux and macOS locations are listed in
-[`architecture.md`](architecture.md) (section "State and file locations").
 Settings → About shows the folders of the running profile and opens the logs
 folder. Qt keeps its own graphics pipeline cache in the standard per-user
 cache folder (`ParadoxModManager/Paradox Mod Manager/cache`), even with
@@ -270,7 +280,7 @@ saved when the window closes and when the application quits.
 
 ## Running from the build tree
 
-On Windows, Qt's DLLs must be found: put `<Qt>/bin` on `PATH`, or install.
+Qt's DLLs must be found: put `<Qt>/bin` on `PATH`, or install.
 The tests do this themselves (`DL_PATHS` in `tests/app/CMakeLists.txt`).
 `cmake --install build/<preset> --prefix <dir>` installs `bin/pmm-app` next to
 `bin/pmm-steam-helper` and runs Qt's deployment script. Because `Pmm.Ui` is
@@ -311,6 +321,8 @@ platform:
   API library, including subscribe, download and install through the
   coordinator;
 - `QtWorkshopMetadataHost` against a local HTTP stub;
+- `UpdateClient` and `UpdateController` against a local stub, and the Settings
+  section with the keyboard ([`updates.md`](updates.md));
 - `AppRuntime` start-up failures, retention and interrupted transactions;
   the profile lock.
 

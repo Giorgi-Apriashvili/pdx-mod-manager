@@ -49,6 +49,7 @@ accepted.
 | `sharing` | `ShareController` | export/import share codes |
 | `acquisition` | `AcquisitionController` | Workshop downloads |
 | `launcher` | `LaunchController` | Play |
+| `updates` | `UpdateController` | "Check for updates" in Settings ([`updates.md`](updates.md)) |
 | `settings` | `AppSettings` | theme, geometry, column widths |
 | `notifications` | `NotificationCenter` | transient messages |
 | `appVersion` | `string` | semantic version |
@@ -326,6 +327,40 @@ Invokables:
 - `copyDiagnostics()`: regenerates the redacted report and copies it.
 
 Signals: `launched(pid)`, `launchFailed(message)`, `diagnosticsReady(text)`.
+
+## `UpdateController` (QObject)
+
+Nothing touches the network until `check()` or `startUpdate()` is called
+([`updates.md`](updates.md)).
+
+Properties:
+
+- `state`: "idle" | "checking" | "upToDate" | "noRelease" | "available" |
+  "downloading" | "ready" | "installing" | "failed";
+- `currentVersion`, `latestVersion` (empty until a check saw a release);
+- `progress` (real): 0..1 while downloading, -1 while the size is unknown;
+- `errorMessage`: why the last step failed ("failed"), or why it is held back
+  (a launch or Workshop downloads are busy; the state stays "available" or
+  "ready"). Empty otherwise;
+- `mode`: "installer" (an installed copy, with a release that has
+  the installer and its checksum file) or "releasePage" (everything else);
+- `canCheck` (bool);
+- `disabledReason` (string): set in read-only and verification sessions, where
+  the whole feature is off and every invokable does nothing. Shown in its place.
+
+Invokables:
+
+- `check()`;
+- `startUpdate()`: downloads and verifies the installer, starts it and quits the
+  application through the normal path. From "ready" it continues without
+  downloading again. In "releasePage" mode it is `openReleasePage()`;
+- `cancel()`: a check goes back to "idle", a download to "available", with
+  nothing left behind;
+- `openReleasePage()`: opens the page of the release the last check saw, or the
+  list of releases. The address never comes from a reply;
+- `retry()`: the step that failed, again.
+
+Failures are in `errorMessage`, not in `notifications`.
 
 ## `AppSettings` (QObject)
 

@@ -63,6 +63,9 @@ QtObject {
     readonly property FakeAcquisitionController acquisition: FakeAcquisitionController {
         notifications: backend.notifications
     }
+    readonly property FakeUpdateController updates: FakeUpdateController {
+        notifications: backend.notifications
+    }
     readonly property FakeLaunchController launcher: FakeLaunchController {
         notifications: backend.notifications
         mods: backend.mods

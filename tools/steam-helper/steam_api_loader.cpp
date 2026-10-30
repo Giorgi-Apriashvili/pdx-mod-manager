@@ -1,10 +1,6 @@
 #include "steam_api_loader.hpp"
 
-#if defined(_WIN32)
 #include <windows.h>
-#else
-#include <dlfcn.h>
-#endif
 
 #include <algorithm>
 #include <cstdio>
@@ -15,11 +11,7 @@
 #include <system_error>
 #include <vector>
 
-#if defined(_WIN32)
 #define PMM_STEAM_CALL __cdecl
-#else
-#define PMM_STEAM_CALL
-#endif
 
 namespace pmm::steamhelper {
 namespace {
@@ -115,7 +107,6 @@ std::string readImage(const fs::path& path) {
 } // namespace
 
 std::string lastLoaderError() {
-#if defined(_WIN32)
     const DWORD code = GetLastError();
     wchar_t* text = nullptr;
     const DWORD len = FormatMessageW(
@@ -134,10 +125,6 @@ std::string lastLoaderError() {
     if (text)
         LocalFree(text);
     return out + " (error " + std::to_string(code) + ")";
-#else
-    const char* text = dlerror();
-    return text ? std::string(text) : std::string("unknown loader error");
-#endif
 }
 
 SteamApi::~SteamApi() {
@@ -145,16 +132,12 @@ SteamApi::~SteamApi() {
 }
 
 void* SteamApi::symbol(const char* name) const {
-#if defined(_WIN32)
     const FARPROC p = GetProcAddress(static_cast<HMODULE>(m_library), name);
     void* v = nullptr;
     static_assert(sizeof(p) == sizeof(v));
     // NOLINTNEXTLINE(bugprone-multi-level-implicit-pointer-conversion,bugprone-bitwise-pointer-cast)
     std::memcpy(&v, &p, sizeof v);
     return v;
-#else
-    return dlsym(m_library, name);
-#endif
 }
 
 std::optional<Failure> SteamApi::load(const fs::path& library) {
@@ -163,7 +146,6 @@ std::optional<Failure> SteamApi::load(const fs::path& library) {
     if (ec)
         absolute = library;
     m_image = readImage(absolute);
-#if defined(_WIN32)
     // Altered search path: the library's own dependencies resolve from its folder.
     HMODULE handle = LoadLibraryExW(absolute.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!handle) {
@@ -171,14 +153,6 @@ std::optional<Failure> SteamApi::load(const fs::path& library) {
                        "Could not load the game's Steam API library: " + lastLoaderError()};
     }
     m_library = handle;
-#else
-    void* handle = dlopen(absolute.c_str(), RTLD_NOW | RTLD_LOCAL);
-    if (!handle) {
-        return Failure{HelperFailure::LibraryLoadFailed,
-                       "Could not load the game's Steam API library: " + lastLoaderError()};
-    }
-    m_library = handle;
-#endif
     return std::nullopt;
 }
 

@@ -84,8 +84,7 @@ void LaunchController::play() {
                 QMetaObject::invokeMethod(
                     runner,
                     [self] {
-                        // One read of the guarded pointer (GCC's null-dereference
-                        // analysis does not trust a check on a second read).
+                        // One read of the guarded pointer.
                         LaunchController* controller = self.data();
                         if (controller && controller->m_state == QLatin1String("validating"))
                             controller->setState(QStringLiteral("applying"), true);

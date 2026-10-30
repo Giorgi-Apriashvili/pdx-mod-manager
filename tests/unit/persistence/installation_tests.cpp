@@ -18,7 +18,6 @@ GameInstallation stellaris() {
     g.executablePath = g.installPath / "stellaris.exe";
     g.defaultArguments = {"-gdpr-compliant", "--flag with spaces"};
     g.distribution = DistributionSource::Steam;
-    g.platform = OsPlatform::Windows;
     g.steamAppId = "281990";
     g.steamLibraryPath = fs::path(u8"C:/Program Files (x86)/Steam");
     g.version = "v4.5.2";
@@ -34,7 +33,6 @@ void checkEqual(const GameInstallation& a, const GameInstallation& b) {
     CHECK(a.executablePath == b.executablePath);
     CHECK(a.defaultArguments == b.defaultArguments);
     CHECK(a.distribution == b.distribution);
-    CHECK(a.platform == b.platform);
     CHECK(a.steamAppId == b.steamAppId);
     CHECK(a.steamLibraryPath == b.steamLibraryPath);
     CHECK(a.version == b.version);
@@ -64,12 +62,11 @@ TEST_CASE("Upserting replaces an installation and list is ordered by game",
 
     GameInstallation eu4;
     eu4.game = "eu4";
-    eu4.installPath = fs::path(u8"/home/example/Games/Europa Universalis IV");
-    eu4.userDataPath = fs::path(u8"/home/example/.local/share/Paradox Interactive/Europa "
+    eu4.installPath = fs::path(u8"D:/Games/Europa Universalis IV");
+    eu4.userDataPath = fs::path(u8"C:/Users/Example/Documents/Paradox Interactive/Europa "
                                 u8"Universalis IV");
-    eu4.executablePath = eu4.installPath / "eu4";
+    eu4.executablePath = eu4.installPath / "eu4.exe";
     eu4.distribution = DistributionSource::Manual;
-    eu4.platform = OsPlatform::Linux;
     eu4.manuallyConfigured = true;
     requireOk(repo.upsert(eu4));
 
@@ -77,7 +74,6 @@ TEST_CASE("Upserting replaces an installation and list is ordered by game",
     changed.version = "v4.6.0";
     changed.defaultArguments.clear();
     changed.distribution = DistributionSource::Unknown;
-    changed.platform = OsPlatform::MacOS;
     requireOk(repo.upsert(changed));
 
     auto all = require(repo.list());
@@ -97,7 +93,6 @@ TEST_CASE("Installations require a game key", "[persistence][installations]") {
     CHECK(status.error().code == ErrorCode::InvalidArgument);
 }
 
-#if defined(_WIN32)
 TEST_CASE("An installation path that is not valid UTF-16 is rejected instead of throwing",
           "[persistence][installations]") {
     auto db = openMemory();
@@ -117,4 +112,3 @@ TEST_CASE("An installation path that is not valid UTF-16 is rejected instead of 
     REQUIRE(loaded.has_value());
     checkEqual(*loaded, original);
 }
-#endif
