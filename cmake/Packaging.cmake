@@ -118,7 +118,7 @@ set(CPACK_GENERATOR ZIP)
 
 # Source packages are produced with `git archive`; keep CPack's source target
 # from sweeping up build trees and local state if someone runs it anyway.
-set(CPACK_SOURCE_GENERATOR ZIP)
+set(CPACK_SOURCE_GENERATOR TGZ)
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-source")
 set(CPACK_SOURCE_IGNORE_FILES
   "/\\.git/" "/\\.git$" "/\\.claude/" "/\\.vs/" "/\\.vscode/" "/\\.idea/" "/\\.cache/"
