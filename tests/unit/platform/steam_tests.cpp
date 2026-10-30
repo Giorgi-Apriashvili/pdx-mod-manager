@@ -355,6 +355,19 @@ TEST_CASE("findSteamApiLibrary searches the usual folders", "[platform][steam]")
 
     test::writeText(game / "steam_api64.dll", "x");
     CHECK(findSteamApiLibrary(game) == game / "steam_api64.dll");
+
+    for (const char* folder : {"bin", "binaries", "win64"}) {
+        CAPTURE(folder);
+        const fs::path nested = game / folder / "steam_api64.dll";
+        test::writeText(nested, "x");
+        CHECK(findSteamApiLibrary(game) == game / "steam_api64.dll"); // the root wins
+
+        fs::remove(game / "steam_api64.dll");
+        CHECK(findSteamApiLibrary(game) == nested);
+
+        fs::remove(nested);
+        test::writeText(game / "steam_api64.dll", "x");
+    }
 }
 
 // Read-only smoke test against the Steam installation of the machine running
