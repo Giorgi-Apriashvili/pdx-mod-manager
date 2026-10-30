@@ -114,6 +114,19 @@ Tests use `Database::openInMemory()` or a unique temporary directory.
   `std::optional`; lookups by local id (playset, job, history entry) return
   `ErrorCode::NotFound` for unknown or deleted rows.
 
+## Schema version 2
+
+Version 2 drops `game_installations.platform` (`ALTER TABLE ... DROP COLUMN`).
+The other tables and all rows are unchanged, so a version 1 database upgrades in
+place after the usual `state.sqlite.bak-v1` backup. The tables below are the
+version 1 layout; the version 2 `game_installations` is:
+
+```text
+game_installations(game_key TEXT PRIMARY KEY, install_path, user_data_path, executable_path,
+    default_args_json, distribution, steam_app_id, steam_library_path,
+    version, version_label, manually_configured 0/1, updated_at)
+```
+
 ## Schema version 1
 
 ```text

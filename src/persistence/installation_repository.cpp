@@ -10,7 +10,7 @@ namespace {
 
 constexpr const char* kSelect =
     "SELECT game_key, install_path, user_data_path, executable_path, default_args_json, "
-    "distribution, platform, steam_app_id, steam_library_path, version, version_label, "
+    "distribution, steam_app_id, steam_library_path, version, version_label, "
     "manually_configured FROM game_installations";
 
 Result<GameInstallation> readInstallation(const Statement& stmt) {
@@ -23,18 +23,15 @@ Result<GameInstallation> readInstallation(const Statement& stmt) {
         args, stringListFromJson(stmt.columnText(4), "game_installations.default_args_json"));
     out.defaultArguments = std::move(*args);
     const auto distribution = distributionFromText(stmt.columnText(5));
-    const auto platform = platformFromText(stmt.columnText(6));
-    if (!distribution || !platform)
-        return corruptValue("installation of " + out.game, "distribution='" + stmt.columnText(5) +
-                                                               "' platform='" + stmt.columnText(6) +
-                                                               "'");
+    if (!distribution)
+        return corruptValue("installation of " + out.game,
+                            "distribution='" + stmt.columnText(5) + "'");
     out.distribution = *distribution;
-    out.platform = *platform;
-    out.steamAppId = stmt.columnText(7);
-    out.steamLibraryPath = pathFromText(stmt.columnText(8));
-    out.version = stmt.columnText(9);
-    out.versionLabel = stmt.columnText(10);
-    out.manuallyConfigured = stmt.columnBool(11);
+    out.steamAppId = stmt.columnText(6);
+    out.steamLibraryPath = pathFromText(stmt.columnText(7));
+    out.version = stmt.columnText(8);
+    out.versionLabel = stmt.columnText(9);
+    out.manuallyConfigured = stmt.columnBool(10);
     return out;
 }
 
@@ -52,16 +49,16 @@ Status InstallationRepository::upsert(const GameInstallation& installation) {
     PMM_DB_TRY_VALUE(stmt,
                      guard.connection().prepare(
                          "INSERT INTO game_installations (game_key, install_path, user_data_path, "
-                         "executable_path, default_args_json, distribution, platform, "
+                         "executable_path, default_args_json, distribution, "
                          "steam_app_id, steam_library_path, version, version_label, "
                          "manually_configured, updated_at) "
-                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                          "ON CONFLICT (game_key) DO UPDATE SET "
                          "install_path = excluded.install_path, "
                          "user_data_path = excluded.user_data_path, "
                          "executable_path = excluded.executable_path, "
                          "default_args_json = excluded.default_args_json, "
-                         "distribution = excluded.distribution, platform = excluded.platform, "
+                         "distribution = excluded.distribution, "
                          "steam_app_id = excluded.steam_app_id, "
                          "steam_library_path = excluded.steam_library_path, "
                          "version = excluded.version, version_label = excluded.version_label, "
@@ -70,10 +67,9 @@ Status InstallationRepository::upsert(const GameInstallation& installation) {
     stmt->bindAll(installation.game, pathToText(installation.installPath),
                   pathToText(installation.userDataPath), pathToText(installation.executablePath),
                   stringListToJson(installation.defaultArguments),
-                  toString(installation.distribution), toString(installation.platform),
-                  installation.steamAppId, pathToText(installation.steamLibraryPath),
-                  installation.version, installation.versionLabel, installation.manuallyConfigured,
-                  m_db.now());
+                  toString(installation.distribution), installation.steamAppId,
+                  pathToText(installation.steamLibraryPath), installation.version,
+                  installation.versionLabel, installation.manuallyConfigured, m_db.now());
     return stmt->run();
 }
 
