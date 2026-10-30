@@ -62,10 +62,10 @@ TEST_CASE("Upserting replaces an installation and list is ordered by game",
 
     GameInstallation eu4;
     eu4.game = "eu4";
-    eu4.installPath = fs::path(u8"/home/example/Games/Europa Universalis IV");
-    eu4.userDataPath = fs::path(u8"/home/example/.local/share/Paradox Interactive/Europa "
+    eu4.installPath = fs::path(u8"D:/Games/Europa Universalis IV");
+    eu4.userDataPath = fs::path(u8"C:/Users/Example/Documents/Paradox Interactive/Europa "
                                 u8"Universalis IV");
-    eu4.executablePath = eu4.installPath / "eu4";
+    eu4.executablePath = eu4.installPath / "eu4.exe";
     eu4.distribution = DistributionSource::Manual;
     eu4.manuallyConfigured = true;
     requireOk(repo.upsert(eu4));

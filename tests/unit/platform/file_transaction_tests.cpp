@@ -296,7 +296,7 @@ TEST_CASE("apply refuses a target path that has no exact UTF-8 form", "[platform
     // NTFS accepts names with unpaired surrogates.
     const fs::path folder = s.gameDir / fs::path(L"caf\xD800");
     const fs::path target = folder / "dlc_load.json";
-    // Some filesystems (APFS) reject such names; then there is no original.
+    // Some filesystems reject such names; then there is no original.
     std::error_code ec;
     const bool hasOriginal = fs::create_directory(folder, ec);
     if (hasOriginal)
