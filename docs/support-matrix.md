@@ -60,9 +60,9 @@ Not observed yet: Linux and macOS, other stores, Steam's own offline mode, the
 | --- | --- | --- | --- | --- |
 | Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 404 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 65 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
 | Linux x86_64 (Arch Linux in WSL) | GCC 16.2.1, no Qt | **Verified** 2026-10-30: 398 tests pass with warnings as errors; ASan + UBSan: 384 pass, before the update check was added | Not built (no Qt in that environment) | TGZ of the core build only (2026-10-29) |
-| Windows (CI, `windows-2025`) | MSVC from the runner image | Unverified until the first CI run | Unverified until the first CI run | Unverified |
-| Linux (CI, `ubuntu-24.04`) | GCC 13 | Unverified until the first CI run | Unverified until the first CI run | Unverified |
-| macOS (CI, `macos-15`) | AppleClang | Unverified until the first CI run | Unverified until the first CI run | Unverified |
+| Windows (CI, `windows-2025`) | MSVC from the runner image | **Verified** 2026-10-30, CI green (before the installer and update work) | **Verified** 2026-10-30, CI green (before the installer and update work) | Unverified |
+| Linux (CI, `ubuntu-24.04`) | GCC 13 | **Verified** 2026-10-30, CI green (before the installer and update work) | **Verified** 2026-10-30, CI green (before the installer and update work) | Unverified |
+| macOS (CI, `macos-15`) | AppleClang | **Verified** 2026-10-30, CI green (before the installer and update work) | **Verified** 2026-10-30, CI green (before the installer and update work) | Unverified |
 
 ## Installing and updating
 

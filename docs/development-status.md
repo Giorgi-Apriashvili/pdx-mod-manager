@@ -20,7 +20,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 | Area | Location | State | Evidence |
 | --- | --- | --- | --- |
-| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI has not run yet (nothing pushed) | |
+| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI green on Windows, Linux and macOS since 2026-10-30, not yet on the installer and update work | |
 | Core model, catalog, logging and redaction, SHA-256, UTF-8 | `src/core` | done, tested | |
 | Playset operations, readiness, dependencies, import plan | `src/core` | done, tested | |
 | Share-code protocol v1 and regression fixtures | `src/sharing`, [`share-code-protocol.md`](share-code-protocol.md) | done, tested | |
