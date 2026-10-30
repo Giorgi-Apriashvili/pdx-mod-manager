@@ -12,7 +12,7 @@ toolchain prerequisite whose tested version is pinned in CI.
 | [SQLite](https://sqlite.org/) | 3.50.4 | Public domain | Application database | Statically linked (amalgamation) |
 | [Catch2](https://github.com/catchorg/Catch2) | 3.8.1 | BSL-1.0 | Unit tests | No (test-only) |
 | [Qt](https://www.qt.io/) | 6.10.3 tested, 6.5 minimum | LGPL-3.0-only (open-source option) | Desktop application (`pmm-app`) | Yes, as shared libraries next to the application |
-| Microsoft Visual C++ runtime | matches the compiler | Visual Studio redistribution terms | C++ runtime of the Windows binaries | Windows packages only, as the redistributable DLLs |
+| Microsoft Visual C++ runtime | matches the compiler | Visual Studio redistribution terms | C++ runtime of the binaries | Yes, as the redistributable DLLs |
 | [Inno Setup](https://jrsoftware.org/isinfo.php) | 6.7 (6.3 minimum) | Inno Setup License | Builds the Windows installer | Runtime inside the setup and `unins000.exe`, notices unchanged. Copyright (C) 1997-2026 Jordan Russell, portions Copyright (C) 2000-2026 Martijn Laan |
 
 No other code is vendored. `tools/probe-mods/probe_mods.py` and the scripts in
@@ -59,14 +59,12 @@ How this project meets the LGPLv3 obligations (details in
 [`docs/packaging.md`](docs/packaging.md)):
 
 - **Dynamic linking only.** Release packages link the unmodified Qt shared
-  libraries (DLLs, `.so` files, frameworks) deployed by `windeployqt`,
-  `macdeployqt` or Qt's Linux deployment script. Qt is never linked statically
+  libraries (DLLs) deployed by `windeployqt`. Qt is never linked statically
   into release builds.
 - **Replaceability (relinking).** Users can replace the Qt libraries in a
   package with their own compatible build. The application's source code and
   build files are available under the MIT License, so it can also be rebuilt
-  against a modified Qt. On macOS, replacing a framework invalidates the code
-  signature; re-sign the bundle (an ad hoc signature is sufficient locally).
+  against a modified Qt.
 - **Notices.** Packages that contain Qt include this file and the LGPLv3 and
   GPLv3 texts (`licenses/`), installed by `cmake/Packaging.cmake`.
 - **Source availability.** The Qt source code for the version in a package is
@@ -143,7 +141,7 @@ code." See <https://sqlite.org/copyright.html>.
 
 Boost Software License 1.0, <https://www.boost.org/LICENSE_1_0.txt>.
 
-### Microsoft Visual C++ runtime (Windows packages)
+### Microsoft Visual C++ runtime
 
 The runtime DLLs (`concrt140.dll`, `msvcp140*.dll`, `vcruntime140*.dll`) are
 redistributed app-locally under the Microsoft Visual Studio license terms for

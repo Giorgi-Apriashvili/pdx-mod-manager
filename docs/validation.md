@@ -82,10 +82,8 @@ subscriptions afterwards in the Steam client if wanted.
 | --- | --- | --- |
 | `<appid>` | `281990` | `236850` |
 | `<install>` | `<Steam library>/steamapps/common/Stellaris` | `<Steam library>/steamapps/common/Europa Universalis IV` |
-| `<exe>` | `stellaris.exe` (Windows), `stellaris` (Linux), `stellaris.app` (macOS) | `eu4.exe` (Windows, observed); `eu4`, `eu4.app` (unverified) |
-| `<userdata>` Windows | `Documents\Paradox Interactive\Stellaris` | `Documents\Paradox Interactive\Europa Universalis IV`, unless `<install>/userdir.txt` names another folder |
-| `<userdata>` Linux | `~/.local/share/Paradox Interactive/Stellaris` | `~/.local/share/Paradox Interactive/Europa Universalis IV` |
-| `<userdata>` macOS | `~/Documents/Paradox Interactive/Stellaris` | `~/Documents/Paradox Interactive/Europa Universalis IV` |
+| `<exe>` | `stellaris.exe` | `eu4.exe` (observed) |
+| `<userdata>` | `Documents\Paradox Interactive\Stellaris` | `Documents\Paradox Interactive\Europa Universalis IV`, unless `<install>/userdir.txt` names another folder |
 | Version source | `<install>/launcher-settings.json` (`version`, `rawVersion`) and `buildid` in `steamapps/appmanifest_<appid>.acf` | same files (observed: `rawVersion` `v1.37.5.0`) |
 | Arguments the game's launcher passes (`exeArgs`) | `-gdpr-compliant` | `-enabletelemetry -gdpr-compliant`; direct launches are designed to drop `-enabletelemetry` |
 | `steam_appid.txt` in `<install>` | present | **absent**: a direct start relies on `SteamAppId`/`SteamGameId` set by the manager |
@@ -99,9 +97,7 @@ Capture these for the results row:
 
 ```sh
 # OS
-Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version   # Windows (PowerShell)
-cat /etc/os-release; uname -r            # Linux
-sw_vers                                  # macOS
+Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version   # PowerShell
 # Game version and Steam build
 python -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); print(d.get('version'), d.get('rawVersion'), d.get('distPlatform'))" "<install>/launcher-settings.json"
 grep buildid "<Steam library>/steamapps/appmanifest_<appid>.acf"
@@ -221,9 +217,8 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
 1. Make sure the game and the Paradox launcher are not running. Press **Play**.
 2. Expected:
    - no Paradox launcher window; the game process starts directly
-     (Windows: `tasklist /FI "IMAGENAME eq <exe>"` lists it and
-     `tasklist | findstr /I "dowser bootstrapper Paradox"` lists nothing;
-     Linux/macOS: `ps aux | grep -i -E "<exe>|paradox"`);
+     (`tasklist /FI "IMAGENAME eq <exe>"` lists it and
+     `tasklist | findstr /I "dowser bootstrapper Paradox"` lists nothing);
    - EU4 only (no `steam_appid.txt`): the game does not quit and restart
      itself through Steam; record the process list a few seconds after the
      start, and whether Steam shows the game as running;
@@ -289,8 +284,8 @@ python scripts/share-code.py encode disabled-unavailable.json > disabled-unavail
 | Failed download | Import a code with an enabled U, or disconnect the network while a download runs | Job fails with a reason (unavailable, or retryable with backoff until "automatic retries are exhausted"); the entry stays in the playset; Retry and the manual fallback are offered; Play blocked while the entry is enabled | Reconnect |
 | Offline use | Steam: *Go Offline*, or disconnect the network, then start the manager | Playsets and inventory available; acquisition explains that Steam is offline or not signed in; record whether a ready playset still launches | Go online |
 | Bad share code | Paste (a) the code without its last character, (b) the code with `PMM1.` changed to `PMM2.`, (c) arbitrary text, (d) the code with a space inserted | (a) truncated or damaged, (b) created by a newer version, (c) not a share code, (d) rejected; no playset, no job, no file written | none |
-| Configuration permission failure | Hash `dlc_load.json` (`certutil -hashfile dlc_load.json SHA256` / `shasum -a 256 dlc_load.json`); Windows: `attrib +R "<userdata>\dlc_load.json"`; Linux/macOS: `chmod u-w "<userdata>"`; press Play | Launch refused with a permission message before the game starts; hash unchanged; no interrupted transaction left behind | `attrib -R ...` / `chmod u+w "<userdata>"` |
-| Process-start failure | Deny execution of the game executable temporarily. Windows (may need an elevated prompt): `icacls "<install>\<exe>" /deny "%USERNAME%:(X)"`; Linux/macOS: `chmod a-x "<install>/<exe>"`; press Play | Error that the game could not be started, with the OS error in the details and diagnostics; no Paradox launcher; record whether the configuration written for this launch was restored automatically or offered for restore | `icacls "<install>\<exe>" /remove:d "%USERNAME%"` / `chmod a+x ...`; if in doubt, Steam *Verify integrity of game files* |
+| Configuration permission failure | Hash `dlc_load.json` (`certutil -hashfile dlc_load.json SHA256`); `attrib +R "<userdata>\dlc_load.json"`; press Play | Launch refused with a permission message before the game starts; hash unchanged; no interrupted transaction left behind | `attrib -R ...` |
+| Process-start failure | Deny execution of the game executable temporarily (may need an elevated prompt): `icacls "<install>\<exe>" /deny "%USERNAME%:(X)"`; press Play | Error that the game could not be started, with the OS error in the details and diagnostics; no Paradox launcher; record whether the configuration written for this launch was restored automatically or offered for restore | `icacls "<install>\<exe>" /remove:d "%USERNAME%"`; if in doubt, Steam *Verify integrity of game files* |
 
 Afterwards: remove the probes (`probe_mods.py remove "<userdata>/mod"`), and
 use **Restore pre-launch configuration** if you want the game's previous
@@ -299,7 +294,7 @@ use **Restore pre-launch configuration** if you want the game's previous
 ## 5. Evidence
 
 - Put screenshots, `analyze` outputs and transcripts under
-  `docs/evidence/<date>-<game>-<os>/`.
+  `docs/evidence/<date>-<game>/`.
 - Redact before committing: user names, home paths (use `~` / `<user>`),
   SteamID64 values, and anything account-related. The application's
   **Copy diagnostics** output is meant to be redacted (check it anyway); raw
@@ -309,7 +304,7 @@ use **Restore pre-launch configuration** if you want the game's previous
 
 ## 6. Results
 
-One row per game, OS and distribution combination (repeat rows for reruns).
+One row per game, Windows version and distribution combination (repeat rows for reruns).
 **Result** is `pass`, `fail` or `partial`, with failed step numbers.
 
 | Game | Game version (build) | OS | Distribution | App version (commit) | Date | Steps run | Result | Evidence |

@@ -342,7 +342,7 @@ Properties:
 - `errorMessage`: why the last step failed ("failed"), or why it is held back
   (a launch or Workshop downloads are busy; the state stays "available" or
   "ready"). Empty otherwise;
-- `mode`: "installer" (an installed copy on Windows, with a release that has
+- `mode`: "installer" (an installed copy, with a release that has
   the installer and its checksum file) or "releasePage" (everything else);
 - `canCheck` (bool);
 - `disabledReason` (string): set in read-only and verification sessions, where

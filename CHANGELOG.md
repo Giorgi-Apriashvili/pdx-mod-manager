@@ -21,12 +21,12 @@ change what codes look like or which codes are accepted say so explicitly.
   ([evidence](docs/evidence/installer-2026-10-30.md)); the wizard was not clicked
   through.
 - Settings > Updates: "Check for updates" asks GitHub for the latest release, only
-  when pressed. An installed copy on Windows then downloads the installer, verifies
+  when pressed. An installed copy then downloads the installer, verifies
   it against the release's `SHA256SUMS.txt`, starts it and quits; the installer
-  starts the new version. Other builds get the release page. See
+  starts the new version. ZIP copies and development builds get the release page. See
   [`docs/updates.md`](docs/updates.md). No update between two published releases
   has happened yet.
-- `Release` workflow: full CI, packages for all three systems, smoke test of the
+- `Release` workflow: full CI, the Windows ZIP and installer, smoke test of the
   installer, then a GitHub release that stays a draft until complete; a dry run
   publishes nothing ([`docs/releasing.md`](docs/releasing.md)). It has never run.
 - Live acceptance run on Windows 11 / Steam with the user's approval
@@ -43,7 +43,7 @@ change what codes look like or which codes are accepted say so explicitly.
   `select`, `locate`, `blockers`, `jobs`, with timestamped job, launch and
   notification transitions, for recorded acceptance runs.
 - Build system: target-based CMake with configure, build and test presets
-  (`core-debug`, `core-sanitize`, `debug`, `release`, `ci`); dependencies
+  (`core-debug`, `core-sanitize`, `core-clang-cl`, `debug`, `release`, `ci`); dependencies
   pinned by URL and SHA-256 (nlohmann/json 3.12.0, zlib 1.3.1, SQLite 3.50.4,
   Catch2 3.8.1); strict warnings, optional sanitizers.
 - Core domain model, game catalog (EU4 and Stellaris supported; HOI4, CK3 and
@@ -108,9 +108,9 @@ change what codes look like or which codes are accepted say so explicitly.
   observations of an EU4 1.37.5.0 installation.
 - Repository infrastructure: README, contributing guide, architecture
   description, decision records, support matrix, manual validation procedure,
-  troubleshooting guide, third-party notices, CI for Windows, Linux and macOS
-  (with the application tests), sanitizers, a clang-format 22 check and a
-  contrast check, CPack packaging, and an independent share-code tool
+  troubleshooting guide, third-party notices, CI on Windows with MSVC
+  (with the application tests), ASan and clang-cl jobs, a clang-format 22 check
+  and a contrast check, CPack packaging, and an independent share-code tool
   (`scripts/share-code.py`).
 
 ### Changed
@@ -148,6 +148,16 @@ change what codes look like or which codes are accepted say so explicitly.
   a newer version" even when it also exceeds a version 1 structural limit.
   Which codes are accepted is unchanged.
 
+### Removed
+
+- Linux and macOS support, by decision: the application is Windows only
+  ([ADR 0009](docs/adr/0009-windows-only.md)). Configuring on another system stops
+  with an error. Gone: the non-Windows code paths, the GCC and AppleClang CI jobs and
+  the GCC UBSan job (ASan on MSVC and a clang-cl warnings job replace them), the
+  `.dmg` and `.tar.gz` packages, the macOS signing options and entitlements, and the
+  Linux desktop entry. Existing databases keep opening: a forward migration drops
+  `game_installations.platform`. Share codes are unchanged.
+
 ### Fixed
 
 - Play's blockers could keep showing an acquisition job as queued after it
@@ -170,7 +180,7 @@ change what codes look like or which codes are accepted say so explicitly.
 - Launch plans never overwrite another mod's descriptor, require descriptors
   directly in `mod/`, do not rewrite a `dlc_load.json` that only differs in
   layout, and match `mod/` prefixes case-insensitively.
-- Nested `PMM_TRY` expansions no longer shadow each other (GCC `-Wshadow`).
+- Nested `PMM_TRY` expansions no longer shadow each other (`-Wshadow`).
 
 ### Security
 
@@ -190,8 +200,8 @@ the entries above stay under Unreleased.
   executed and recorded for EU4 and Stellaris, with the support matrix updated
   from the evidence. Combinations that could not be tested stay marked as
   unverified.
-- CI passing on Windows, Linux and macOS.
-- Packages for Windows, Linux and macOS built by CI and checked against
+- CI passing.
+- The Windows ZIP and installer built by CI and checked against
   [`docs/packaging.md`](docs/packaging.md).
 - The open launch-related items in
   [`docs/development-status.md`](docs/development-status.md) resolved.

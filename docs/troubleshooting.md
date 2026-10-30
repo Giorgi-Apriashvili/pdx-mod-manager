@@ -12,13 +12,13 @@ Workshop downloads) follows the design in [`ui-contract.md`](ui-contract.md),
 
 ## Logs and diagnostics
 
-| What | Windows | Linux | macOS |
-| --- | --- | --- | --- |
-| Log files | `%LOCALAPPDATA%\ParadoxModManager\logs\` | `~/.local/state/ParadoxModManager/logs/` (or `$XDG_STATE_HOME/...`) | `~/Library/Logs/ParadoxModManager/` |
-| Database | `%APPDATA%\ParadoxModManager\state.sqlite` | `~/.local/share/ParadoxModManager/state.sqlite` (or `$XDG_DATA_HOME/...`) | `~/Library/Application Support/ParadoxModManager/state.sqlite` |
-| Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` | `~/.cache/ParadoxModManager/` | `~/Library/Caches/ParadoxModManager/` |
-| Configuration journals and backups | `%APPDATA%\ParadoxModManager\transactions\` | `~/.local/share/ParadoxModManager/transactions/` | `~/Library/Application Support/ParadoxModManager/transactions/` |
-| Game files the manager writes on Play | `Documents\Paradox Interactive\<Game>\dlc_load.json`, `...\mod\*.mod` | `~/.local/share/Paradox Interactive/<Game>/...` | `~/Documents/Paradox Interactive/<Game>/...` |
+| What | Where |
+| --- | --- |
+| Log files | `%LOCALAPPDATA%\ParadoxModManager\logs\` |
+| Database | `%APPDATA%\ParadoxModManager\state.sqlite` |
+| Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` |
+| Configuration journals and backups | `%APPDATA%\ParadoxModManager\transactions\` |
+| Game files the manager writes on Play | `Documents\Paradox Interactive\<Game>\dlc_load.json`, `...\mod\*.mod` |
 
 When started with an isolated profile (`pmm-app --profile <dir>`), all
 application files live inside `<dir>` instead. **Settings → About** shows the
@@ -101,9 +101,8 @@ missing mod descriptors in the game's user-data folder. If that fails, the
 launch is refused, any partial change is rolled back, and the game is not
 started. Common causes:
 
-- **Read-only file**: Windows: file *Properties* > clear *Read-only*, or
-  `attrib -R "<file>"`; Linux/macOS: `chmod u+w "<file>"` and check that the
-  folder is writable.
+- **Read-only file**: file *Properties* > clear *Read-only*, or
+  `attrib -R "<file>"`.
 - **Windows Controlled folder access** (ransomware protection) blocks writes
   to `Documents`: *Windows Security > Virus & threat protection > Ransomware
   protection > Allow an app through Controlled folder access*, add the
@@ -111,8 +110,6 @@ started. Common causes:
 - **OneDrive-redirected Documents**: the manager follows the redirected folder
   (the same one the game uses). If files are "online-only" or OneDrive is
   paused or out of space, make the folder available offline.
-- **macOS privacy prompt**: allow the manager to access the Documents folder
-  (*System Settings > Privacy & Security > Files and Folders*).
 - **Another program holds the file** (the Paradox launcher, a sync tool, an
   editor): close it and try again.
 
@@ -191,8 +188,8 @@ operating system's reason:
 | Reason | What to do |
 | --- | --- |
 | File not found | The game was moved or uninstalled: rescan or locate the installation |
-| Access denied | Antivirus or an access rule blocks the executable: allow it, or check file permissions (`icacls` / `ls -l`); on Linux/macOS make sure it is executable (`chmod +x`) |
-| Bad executable format / wrong architecture | The selected file is not the game for this OS (for example a Windows `.exe` on Linux): select the native installation |
+| Access denied | Antivirus or an access rule blocks the executable: allow it, or check file permissions (`icacls`) |
+| Bad executable format / wrong architecture | The selected file is damaged or not a Windows build of the game: verify the game files in Steam, or select the right installation |
 | Working directory missing | Rescan; the game folder changed |
 
 The manager starts processes with an argument list (no shell) and suppresses
@@ -204,7 +201,7 @@ pre-launch configuration** if you do not want to keep it.
 
 Play is blocked while the game or a conflicting configuration writer (such as
 the Paradox launcher) runs, so neither overwrites the other. Close it (check
-the task manager / `ps`) and press Play again.
+Task Manager) and press Play again.
 
 ## "Already running for this profile"
 
@@ -283,6 +280,6 @@ releases has not happened yet, so please report anything unexpected.
 
 ## Reporting a problem
 
-Include the application version, OS, game and game version, distribution
+Include the application version, Windows version, game and game version, distribution
 (Steam, other), what you did, what you expected, and the **Copy diagnostics**
 output. Check attached logs for personal paths before posting them.

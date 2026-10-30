@@ -32,7 +32,7 @@ composition root (the Qt application or a test):
 | `database` | `Database::open(AppPaths::databaseFile)` | all application state |
 | `transactions` | `FileTransactionManager(AppPaths::transactionsDir)` | crash-safe game configuration writes |
 | `adapters` | `games::adapters()` (raw pointers, not owned) | game-specific behaviour |
-| `environment` | `games::DiscoveryEnvironment::current()` | Steam root, Documents, XDG, home |
+| `environment` | `games::DiscoveryEnvironment::current()` | Steam root, Documents, home |
 | `paths` | `AppPaths::standard()` (or `fromProfileDir()`) | data, journal, logs, cache folders |
 | `clock` | `nowUnixMs` | timestamps and timeouts |
 | `startProcess` | `platform::startDetached` | starting the game (argv vector, never a shell) |
