@@ -106,6 +106,10 @@ stops with "cl ... was not found in the PATH".
 Configure, build and test presets share the same names
 ([`CMakePresets.json`](CMakePresets.json)); build trees go to `build/<preset>`.
 
+Build from a folder whose path has only ASCII characters: Qt's `qmlimportscanner`
+fails during configure otherwise. This only affects building; the installed
+application runs from any folder.
+
 | Preset | Contents | Qt |
 | --- | --- | --- |
 | `core-debug` | Libraries, Steam helper and unit tests, Debug | No |
