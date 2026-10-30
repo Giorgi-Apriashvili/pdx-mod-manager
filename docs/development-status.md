@@ -20,7 +20,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 | Area | Location | State | Evidence |
 | --- | --- | --- | --- |
-| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI last green on 2026-10-30, before the installer and update work and before the Windows-only jobs | |
+| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI green on `main` on 2026-10-30 with the four Windows-only checks | |
 | Core model, catalog, logging and redaction, SHA-256, UTF-8 | `src/core` | done, tested | |
 | Playset operations, readiness, dependencies, import plan | `src/core` | done, tested | |
 | Share-code protocol v1 and regression fixtures | `src/sharing`, [`share-code-protocol.md`](share-code-protocol.md) | done, tested | |
@@ -35,18 +35,16 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
 | Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through | [installer](evidence/installer-2026-10-30.md) |
 | Update check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
-| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | written and linted, **has never run** on GitHub; its steps were run locally against a stub `gh` | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
+| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | dry run passed on GitHub on 2026-10-30 (validation, full CI, package, installer smoke test); **the publish step has not run**, only locally against a stub `gh` | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
 
 ## Test status (2026-10-30, `main`)
 
-- GitHub Actions CI: last green on 2026-10-30, up to the commit before the
-  installer and update work, with the old Linux and macOS jobs. **The Windows-only
-  `ci.yml` and `release.yml` have never run on GitHub.** The jobs have only been
-  reproduced locally: their presets, not the workflows themselves, on MSVC 14.51 and
-  LLVM 22. The image's toolset and LLVM version (20.1.8 when last looked up) are
-  untried.
+- GitHub Actions CI: green on `main` on 2026-10-30 with the Windows-only jobs: MSVC
+  467/467, ASan 402/402, clang-cl with UBSan on LLVM 20.1.8 402/402, format check. The
+  `Release` workflow's dry run for 0.1.0 passed on the same day, calling that CI
+  suite, then building and smoke testing the package on a runner.
 
 - Windows 11, MSVC 19.51, Qt 6.10.3, `debug` preset, fresh configure and clean
   build: **0 warnings** at `/W4`, **467/467 tests pass** (`ctest --preset
@@ -146,8 +144,8 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 Packaging ([`packaging.md`](packaging.md)):
 
-- The `Release` workflow has not run yet (it cannot before it is on GitHub), and
-  no update between two published releases has happened; the update button in a real
+- The `Release` workflow's publish step has not run, and no update between two
+  published releases has happened; the update button in a real
   installed copy and the real application's relaunch have not been run. The
   installer's wizard has not been clicked through.
 - `ilammy/msvc-dev-cmd` and `jurplel/install-qt-action` are pinned to mutable tags in
@@ -165,11 +163,9 @@ Packaging ([`packaging.md`](packaging.md)):
    (https://github.com/Giorgi-Apriashvili/pdx-mod-manager, public, MIT), `main` is
    protected (CI checks required for merges, no force pushes or deletion),
    and the code base is clang-tidy clean (`.clang-tidy`, `tests/.clang-tidy`).
-2. Before the Windows-only CI reaches `main`: the repository owner changes the
-   required checks to "Build and test (Windows MSVC)", "Format check",
-   "Sanitizers (Windows MSVC, ASan, Qt-free libraries)" and
-   "Warnings (Windows clang-cl, Qt-free libraries)". The old names would otherwise
-   wait forever.
+2. Done 2026-10-30: the required checks are "Build and test (Windows MSVC)",
+   "Format check", "Sanitizers (Windows MSVC, ASan, Qt-free libraries)" and
+   "Warnings (Windows clang-cl, Qt-free libraries)".
 3. Optional: warn when two enabled EU4 mods contain the same file.
 4. Implement the services and application items above (import options,
    helper exit wait, launch refresh), then the discard flow for unrecoverable
@@ -178,8 +174,8 @@ Packaging ([`packaging.md`](packaging.md)):
    results in [`validation.md`](validation.md) and
    [`support-matrix.md`](support-matrix.md).
 6. Release checklist in [`../CHANGELOG.md`](../CHANGELOG.md) ("0.1.0 -
-   planned"), then the procedure in [`releasing.md`](releasing.md): a dry run of
-   the `Release` workflow, click through the wizard once, the first release, and
+   planned"), then the procedure in [`releasing.md`](releasing.md): the dry run has
+   passed, so click through the wizard once, the first release, and
    a second release to try the update button for real.
 
 ## Working rules

@@ -105,7 +105,7 @@ says which one a copy has, at start-up: `update mode mode=installer` or
 `mode=releasePage`.
 
 **Not verified yet:** no update between two published releases has happened, and
-the `Release` workflow has never run. What has been run is listed in the
+the `Release` workflow's publish step has not run. What has been run is listed in the
 [installer evidence](evidence/installer-2026-10-30.md#after-merging-the-update-check):
 the installer with these exact arguments, waiting for the real `pmm-app`, with a
 stand-in program for the relaunch, and the client against a local stub and a real

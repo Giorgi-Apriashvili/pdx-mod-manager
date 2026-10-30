@@ -261,4 +261,5 @@ and exercised with real installs in a scratch folder, including the update run,
 the wait for a held mutex (also the real `pmm-app`'s), the timeout, failed upgrades
 and uninstall, with a stand-in program for every relaunch:
 [evidence/installer-2026-10-30.md](evidence/installer-2026-10-30.md). The `Release`
-workflow has never run, and no update between two published releases has happened.
+workflow's dry run has passed on GitHub, including the smoke test on a runner; its
+publish step has not run, and no update between two published releases has happened.

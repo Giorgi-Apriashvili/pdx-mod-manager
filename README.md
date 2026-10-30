@@ -22,8 +22,8 @@ telemetry.
 > wins); Stellaris follows it. See the
 > [support matrix](docs/support-matrix.md) and the
 > [development status](docs/development-status.md). **Nothing has been published
-> yet**: the release workflow has never run, and an update between two published
-> releases has not happened.
+> yet**: a dry run of the release workflow has passed, but its publish step has not
+> run, and an update between two published releases has not happened.
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -53,7 +53,7 @@ reason documented.
 | Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md) |
 | Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the wizard was not clicked through; not code signed |
 | Update button: check GitHub on request, verify the installer's SHA-256, install and restart | Implemented, unverified end to end | [Updates](docs/updates.md): no published release exists yet. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch |
-| GitHub releases from a workflow | Implemented, never run | [Releasing](docs/releasing.md) |
+| GitHub releases from a workflow | Dry run passed 2026-10-30; publishing not run yet | [Releasing](docs/releasing.md) |
 | Hearts of Iron IV, Crusader Kings III, Victoria 3 | Unsupported | Known to the catalog only; their share codes are rejected as "not supported by this version" |
 
 ## Prerequisites

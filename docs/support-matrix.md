@@ -58,7 +58,7 @@ on GitHub, and an update from one published release to the next.
 | Platform | Compiler | Core libraries + unit tests | Desktop application + tests | Packages |
 | --- | --- | --- | --- | --- |
 | Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 402 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 65 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
-| Windows (CI, `windows-2025`) | MSVC from the runner image | **Verified** 2026-10-30, CI green (before the installer and update work) | **Verified** 2026-10-30, CI green (before the installer and update work) | Unverified |
+| Windows (CI, `windows-2025`) | MSVC from the runner image | **Verified** 2026-10-30, CI green | **Verified** 2026-10-30, CI green | Unverified |
 | Windows (CI, `windows-2025`) | MSVC with ASan; clang-cl with UBSan (LLVM from the runner image) | Jobs written, not run on GitHub yet | Not built in these jobs | Not built in these jobs |
 
 ## Installing and updating
@@ -68,7 +68,7 @@ on GitHub, and an update from one published release to the next.
 | Per-user installer: install, upgrade, failed upgrade, uninstall | **Verified** 2026-10-30, silent runs in a scratch folder ([evidence](evidence/installer-2026-10-30.md)); wizard not clicked through |
 | "Check for updates" | Implemented, unverified against a published release (none exists yet); tested against a local stub |
 | "Update and restart" (download, verify, installer, relaunch) | Implemented, unverified end to end. Parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch |
-| `Release` workflow | Never run |
+| `Release` workflow | Dry run **verified** 2026-10-30 (full CI, package, installer smoke test); publish step not run |
 
 ## Stellaris (Steam app 281990)
 

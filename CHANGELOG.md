@@ -28,7 +28,8 @@ change what codes look like or which codes are accepted say so explicitly.
   has happened yet.
 - `Release` workflow: full CI, the Windows ZIP and installer, smoke test of the
   installer, then a GitHub release that stays a draft until complete; a dry run
-  publishes nothing ([`docs/releasing.md`](docs/releasing.md)). It has never run.
+  publishes nothing ([`docs/releasing.md`](docs/releasing.md)). A dry run has passed;
+  the publish step has not run yet.
 - Live acceptance run on Windows 11 / Steam with the user's approval
   ([evidence](docs/evidence/live-validation-2026-10-30.md)): direct launches
   of Stellaris 4.5.2 and EU4 1.37.5 with probe mods, a real EU4 Workshop

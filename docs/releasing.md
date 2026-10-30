@@ -5,8 +5,8 @@ How a version gets from `main` to GitHub Releases. The work is done by the
 procedure for the repository owner. The workflow refuses to run a release for
 anyone else, and it publishes nothing for pull requests.
 
-**The workflow has never run on GitHub**, and no update between two published
-releases has happened yet. A pre-release is not offered by the update button, so
+**A dry run has passed on GitHub (2026-10-30), but the publish step has not run**,
+and no update between two published releases has happened yet. A pre-release is not offered by the update button, so
 the first real test of the button needs two normal releases. Treat the first
 release as the test of this page.
 
