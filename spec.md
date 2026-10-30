@@ -1,8 +1,10 @@
 # Paradox Mod Manager — Implementation Specification
 
+> Amended 2026-10-30: the product is Windows only; the reason is in [docs/adr/0009-windows-only.md](docs/adr/0009-windows-only.md).
+
 ## Instructions to the implementation agent
 
-Build a professional, compact, cross-platform desktop mod manager for Paradox games. Treat this document as the product specification and implementation prompt. Deliver working software, tests, build configuration, and documentation. Do not substitute a visual prototype or mocked integrations for the required functionality.
+Build a professional, compact Windows desktop mod manager for Paradox games. Treat this document as the product specification and implementation prompt. Deliver working software, tests, build configuration, and documentation. Do not substitute a visual prototype or mocked integrations for the required functionality.
 
 Use a C++ backend, CMake, and Git. Use Qt 6 Quick/QML for the frontend unless a documented technical investigation establishes a compelling reason to change it. Keep domain logic in C++, with QML responsible for presentation and interaction.
 
@@ -20,7 +22,7 @@ The primary workflow is:
 4. Another player imports that code, resolves and downloads missing mods, and obtains the same ordered selection.
 5. Press **Play** to launch the selected game with the selected mods, without opening the Paradox launcher.
 
-The application must run on Windows, Linux, and macOS. Support for a particular game on an operating system depends on that game's available executable and validated integration; do not equate application portability with universal game compatibility.
+The application must run on Windows only. Support for a particular game depends on that game's available executable and validated integration; do not equate the application running with universal game compatibility.
 
 ## 2. Scope and priorities
 
@@ -34,7 +36,7 @@ The application must run on Windows, Linux, and macOS. Support for a particular 
 - Export and import portable share codes containing mod identities, enabled states, and ordering.
 - Resolve missing mods and automate subscription/download where a validated integration permits it.
 - Launch supported games directly with the active playset.
-- Package the desktop application for Windows, Linux, and macOS.
+- Package the desktop application for Windows.
 
 Design the adapter architecture to accommodate games such as Hearts of Iron IV, Crusader Kings III, and Victoria 3. Additional games are subsequent work, not placeholders advertised as supported.
 
@@ -291,7 +293,7 @@ Review dependency licenses and Qt distribution obligations before choosing the r
 - Configuration writes preserve unrelated fields and recover after simulated failures.
 - Database migrations and recovery behavior are exercised.
 - Launch-plan tests verify executable, working directory, arguments, and translated order without requiring proprietary game binaries in CI.
-- Build and test in CI on Windows, Linux, and macOS; apply platform-appropriate compiler warnings and sanitizers where practical.
+- Build and test in CI on Windows; apply platform-appropriate compiler warnings and sanitizers where practical.
 
 ### Manual end-to-end acceptance
 

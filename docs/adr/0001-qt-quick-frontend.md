@@ -1,6 +1,6 @@
 # ADR 0001: Qt 6 Quick/QML frontend over Qt-free C++ core layers
 
-- Status: Accepted
+- Status: Accepted; the Linux and macOS scope superseded by [ADR 0009](0009-windows-only.md)
 - Date: 2026-10-29
 
 ## Context

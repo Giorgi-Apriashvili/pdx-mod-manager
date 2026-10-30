@@ -1,6 +1,6 @@
 # ADR 0003: Workshop acquisition through a per-game helper using the game's own Steam API library
 
-- Status: Accepted
+- Status: Accepted; the Linux and macOS helper superseded by [ADR 0009](0009-windows-only.md)
 - Date: 2026-10-29
 
 ## Context
