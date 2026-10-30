@@ -10,8 +10,14 @@ function(pmm_configure_target target)
     endif()
   else()
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor
-      -Wold-style-cast -Wcast-align -Woverloaded-virtual -Wnull-dereference -Wformat=2
+      -Wold-style-cast -Wcast-align -Woverloaded-virtual -Wformat=2
       -Wimplicit-fallthrough -Wmisleading-indentation)
+    # Clang checks null dereferences in the source as written. GCC's check runs
+    # after inlining and, at -O2, reports false positives inside libstdc++ and
+    # Qt headers (seen with GCC 13 in CI), so it is not enabled there.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      target_compile_options(${target} PRIVATE -Wnull-dereference)
+    endif()
     if(PMM_WARNINGS_AS_ERRORS)
       target_compile_options(${target} PRIVATE -Werror)
     endif()
