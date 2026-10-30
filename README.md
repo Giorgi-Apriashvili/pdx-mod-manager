@@ -11,7 +11,7 @@ Linux and macOS. It needs no server, account or telemetry.
 
 > **Status: pre-release (0.1.0 in development).** The desktop application
 > (`pmm-app`), the EU4 and Stellaris adapters and every layer below them are
-> implemented and covered by 425 automated tests. On Windows 11 with Steam,
+> implemented and covered by 469 automated tests. On Windows 11 with Steam,
 > both games were started directly by the application with the selected mods
 > (checked in the games' own logs), a missing Workshop mod was subscribed and
 > downloaded live for each game, and the failure cases behaved as specified
@@ -19,7 +19,9 @@ Linux and macOS. It needs no server, account or telemetry.
 > ignores the mod order for file overrides** (the mod whose name sorts first
 > wins); Stellaris follows it. Linux and macOS are unverified; see the
 > [support matrix](docs/support-matrix.md) and the
-> [development status](docs/development-status.md).
+> [development status](docs/development-status.md). **Nothing has been published
+> yet**: the release workflow has never run, and an update between two published
+> releases has not happened.
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -46,7 +48,10 @@ reason documented.
 | Manual Workshop fallback (open the item in Steam, then rescan) | Implemented, unverified | Limited: does not satisfy automatic download |
 | Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, Windows 11 | No launcher process; EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration |
 | In-game verification of loaded mods and order | **Verified** 2026-10-30 with probe mods, both games | Stellaris: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
-| Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md); NSIS installer not built |
+| Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md) |
+| Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the wizard was not clicked through; not code signed |
+| Update button: check GitHub on request, verify the installer's SHA-256, install and restart | Implemented, unverified end to end | [Updates](docs/updates.md): no published release exists yet. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch |
+| GitHub releases from a workflow | Implemented, never run | [Releasing](docs/releasing.md) |
 | Linux | Core libraries, helper and unit tests build and pass (GCC 16, WSL); the application was not built | No Qt in that environment; CI builds everything |
 | macOS | Unverified | Not built yet; CI builds everything |
 | Hearts of Iron IV, Crusader Kings III, Victoria 3 | Unsupported | Known to the catalog only; their share codes are rejected as "not supported by this version" |
@@ -126,7 +131,7 @@ With the application (Qt):
 export QT_ROOT_DIR=~/Qt/6.10.3/gcc_64             # PowerShell: $env:QT_ROOT_DIR = "C:/Qt/6.10.3/msvc2022_64"
 cmake --preset debug
 cmake --build --preset debug
-ctest --preset debug                              # 424 tests on Windows, 34 of them pmm_app_tests
+ctest --preset debug                              # 469 tests on Windows, 65 of them pmm_app_tests
 ```
 
 The application tests (`-L pmm_app_tests`) run on Qt's offscreen platform;
@@ -142,6 +147,24 @@ source scripts/msvc-env.sh
 ```
 
 Formatting and static analysis: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Installing
+
+Windows: once a version is published, download
+`ParadoxModManager-<version>-windows-x86_64-setup.exe` from
+[Releases](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases) and run
+it. It needs no administrator rights and installs to
+`%LOCALAPPDATA%\Programs\ParadoxModManager`. The setup is not code signed yet, so
+SmartScreen may warn (*More info > Run anyway*). Your playsets and settings are kept
+outside that folder, so upgrading or uninstalling leaves them alone.
+
+To update, open **Settings > Updates > Check for updates**. An installed copy can
+then download a new version, verify it, install it and restart. The application
+only contacts GitHub when you press the button ([what it contacts and
+verifies](docs/updates.md)). A ZIP copy, Linux and macOS get a link to the release
+page instead.
+
+Packages for Linux and macOS will be on the same page, but are not verified yet.
 
 ## Running
 
@@ -214,8 +237,8 @@ tools/steam-helper/  pmm-steam-helper (loads the game's own Steam API library)
 tools/probe-mods/    observable probe mods for in-game load-order checks
 tests/            unit tests and fixtures (tests/unit), application tests (tests/app)
 docs/             architecture, decisions, protocol, support matrix, validation, evidence
-packaging/        license texts, macOS entitlements, Linux desktop entry,
-                  Windows version resource and Qt deployment prune script
+packaging/        license texts, macOS entitlements, Linux desktop entry, Windows
+                  version resource, Qt deployment prune script, installer and its test
 scripts/          developer scripts (formatting, MSVC environment, share-code tool)
 ```
 
@@ -230,9 +253,9 @@ scripts/          developer scripts (formatting, MSVC environment, share-code to
 - [Steam Workshop acquisition](docs/steam-workshop.md)
 - [Persistence](docs/persistence.md)
 - [Manual validation procedure](docs/validation.md)
-- [Packaging](docs/packaging.md)
+- [Packaging](docs/packaging.md), [releasing](docs/releasing.md) and [updates](docs/updates.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- Evidence: [Steam helper probe](docs/evidence/steam-helper-probe.md), [real EU4 and Stellaris data](docs/evidence/real-scan-2026-10-29.md), [Windows package](docs/evidence/packaging-2026-10-29.md), [application round trip](docs/evidence/app-round-trip-2026-10-30.md)
+- Evidence: [Steam helper probe](docs/evidence/steam-helper-probe.md), [real EU4 and Stellaris data](docs/evidence/real-scan-2026-10-29.md), [Windows package](docs/evidence/packaging-2026-10-29.md), [Windows installer](docs/evidence/installer-2026-10-30.md), [application round trip](docs/evidence/app-round-trip-2026-10-30.md)
 - [Changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md), [third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Troubleshooting

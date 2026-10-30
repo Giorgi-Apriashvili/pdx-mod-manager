@@ -227,7 +227,17 @@ ISCC /Q /DAppVersion=<x.y.z> /DStageDir=<stage> /DLicensePath=<license with CRLF
 - **Upgrades** install over the existing folder. `AppId` is fixed and must never
   change; it is what links a new version to the installed one. The folder page is
   skipped and earlier choices (folder, tasks) are kept. `bin\`, `plugins\` and
-  `qml\` are deleted first, so files a new Qt no longer ships do not stay behind.
+  `qml\` are replaced whole, so files a new Qt no longer ships do not stay behind:
+  just before copying they are moved to `pmm-upgrade-backup\` in the install folder,
+  which is deleted when the upgrade has finished. If Setup fails or is cancelled
+  after that, its rollback runs and they are moved back, so the previous version
+  keeps working. If they cannot be moved because something has a file open, a
+  Retry/Cancel message says so and nothing has changed.
+- **Only a real upgrade touches those folders**: the folder must have
+  `unins000.exe`, and the `InstallLocation` of this `AppId`'s `HKCU` uninstall entry
+  must be that folder. A first install into an existing folder, chosen in the wizard
+  or with `/DIR=`, leaves its own `bin`, `plugins` and `qml` alone, and so does the
+  uninstaller.
 - **User data** lives outside the install folder (see [`app.md`](app.md), "Files and
   folders"). Neither an upgrade nor the uninstaller touches it.
 - **A running application** is detected through the mutex
@@ -242,15 +252,19 @@ ISCC /Q /DAppVersion=<x.y.z> /DStageDir=<stage> /DLicensePath=<license with CRLF
   check, so no prompt appears in the normal case. After the timeout a Retry/Cancel
   message says what happened and that the current version is unchanged. The
   installer shows only its progress window and starts `bin\pmm-app.exe` when it is
-  done, which only an update run does. An installed copy is recognised by
-  `..\unins000.exe` next to the folder of `pmm-app.exe`.
+  done, which only an update run does. If the update fails after the program files
+  were moved, a message says the update was not installed and the current version
+  is still in place; the application is not started in that case. An installed copy
+  is recognised by `..\unins000.exe` next to the folder of `pmm-app.exe`.
 - Every run writes a log to `%TEMP%\Setup Log <date> #<n>.txt` (`SetupLogging`),
   the first place to look when an update did not arrive.
-- `pmm-app` must be built with the mutex for any of this to apply. An installed
-  version that holds no mutex is seen as not running.
 
 [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) is the
-check the release workflow runs on a built setup. It refuses to run if the
+check the release workflow runs on a built setup, also for pull requests that touch
+the packaging. It covers the first install, a first install into a folder with
+another program's files, two failed upgrades (a file locked outside and inside the
+replaced folders), a working upgrade and the uninstall. It never starts the
+application, so the update run itself is not part of it. It refuses to run if the
 application is installed, because the test would take over the installation's
 uninstall registration.
 
@@ -356,8 +370,10 @@ code signing.
 **Windows installer, 2026-10-30** (Inno Setup 6.7.3): built with the `installer`
 target from the same tree as the ZIP (80 files, 16.6 MB against the ZIP's 22.1 MB)
 and exercised with real installs in a scratch folder, including the update run,
-the wait for a held mutex, the timeout, and uninstall:
-[evidence/installer-2026-10-30.md](evidence/installer-2026-10-30.md).
+the wait for a held mutex (also the real `pmm-app`'s), the timeout, failed upgrades
+and uninstall, with a stand-in program for every relaunch:
+[evidence/installer-2026-10-30.md](evidence/installer-2026-10-30.md). The `Release`
+workflow has never run, and no update between two published releases has happened.
 
 **Linux, 2026-10-29** (WSL Arch Linux, GCC 16.2, CMake 4.4, no Qt): a core
 build (`PMM_BUILD_APP=OFF`) packaged with `cpack` gives

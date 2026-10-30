@@ -74,8 +74,10 @@ Every redirect is checked before it is followed, up to 5 per request: only
 4. Right before the start the digest is computed again, because the file has
    been sitting in a folder of this user since it was verified.
 5. Workshop downloads in progress and a game launch in progress hold the start
-   back with the reason shown. "Install and restart" then continues without
-   downloading again.
+   back with the reason shown, also when they begin while the services worker is
+   still answering. "Install and restart" then continues without downloading
+   again. A job the worker has not started yet when it answers is not seen; it stops
+   with the application and continues after the restart, as jobs do at any quit.
 
 The folder is `updates` under the cache folder of the running profile, so
 `--profile` stays isolated. Every file in it is disposable: it is emptied at
@@ -94,9 +96,21 @@ and quits through the normal path, so settings are saved. If the start fails, th
 application keeps running and reports it. The process holds the named mutex
 `Local\ParadoxModManagerRunning` for its whole lifetime, verification runs
 included; the installer waits for it, installs over the existing folder and
-starts the application again. User data lives outside the install folder.
+starts the application again. User data lives outside the install folder. If the
+installer cannot finish, it says so and the current version stays in place
+([`packaging.md`](packaging.md#windows-installer)).
 
-ZIP copies, development builds, Linux and macOS get "Open release page".
+ZIP copies, development builds, Linux and macOS get "Open release page". The log
+says which one a copy has, at start-up: `update mode mode=installer` or
+`mode=releasePage`.
+
+**Not verified yet:** no update between two published releases has happened, and
+the `Release` workflow has never run. What has been run is listed in the
+[installer evidence](evidence/installer-2026-10-30.md#after-merging-the-update-check):
+the installer with these exact arguments, waiting for the real `pmm-app`, with a
+stand-in program for the relaunch, and the client against a local stub and a real
+GitHub asset. The button pressed in a real installed copy, and the relaunch of the
+real application, have not been run.
 
 ## Threat model
 

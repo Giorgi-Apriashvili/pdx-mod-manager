@@ -40,6 +40,10 @@ Stellaris "Cygnus v4.5.2 (9776)" build 25664273, EU4 "EU4 v1.37.5.0 Inca
   ([evidence](evidence/app-round-trip-2026-10-30.md)).
 - Windows ZIP package, 2026-10-29: built, inspected and run from an extracted
   copy without Qt or Visual Studio ([evidence](evidence/packaging-2026-10-29.md)).
+- Windows installer, 2026-10-30: real silent installs, upgrades, failed upgrades
+  and uninstalls in a scratch folder, including the update run's arguments and its
+  wait for the real `pmm-app`, with a stand-in program for the relaunch
+  ([evidence](evidence/installer-2026-10-30.md)). The wizard was not clicked through.
 - Both games, 2026-10-30, live (with the user's approval): direct launches
   without the Paradox launcher, enabled and disabled mods and the effective
   override order observed in the games' own logs with probe mods, restore of
@@ -47,17 +51,27 @@ Stellaris "Cygnus v4.5.2 (9776)" build 25664273, EU4 "EU4 v1.37.5.0 Inca
   download through the application, restart persistence of a pending job, and
   the failure cases ([evidence](evidence/live-validation-2026-10-30.md)).
 
-Not observed yet: Linux and macOS, other stores, Steam's own offline mode.
+Not observed yet: Linux and macOS, other stores, Steam's own offline mode, the
+`Release` workflow on GitHub, and an update from one published release to the next.
 
 ## Application build
 
 | Platform | Compiler | Core libraries + unit tests | Desktop application + tests | Packages |
 | --- | --- | --- | --- | --- |
-| Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 390 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 35 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
-| Linux x86_64 (Arch Linux in WSL) | GCC 16.2.1, no Qt | **Verified** 2026-10-30: 384 tests pass with warnings as errors, also with ASan + UBSan | Not built (no Qt in that environment) | TGZ of the core build only (2026-10-29) |
+| Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 404 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 65 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
+| Linux x86_64 (Arch Linux in WSL) | GCC 16.2.1, no Qt | **Verified** 2026-10-30: 398 tests pass with warnings as errors; ASan + UBSan: 384 pass, before the update check was added | Not built (no Qt in that environment) | TGZ of the core build only (2026-10-29) |
 | Windows (CI, `windows-2025`) | MSVC from the runner image | Unverified until the first CI run | Unverified until the first CI run | Unverified |
 | Linux (CI, `ubuntu-24.04`) | GCC 13 | Unverified until the first CI run | Unverified until the first CI run | Unverified |
 | macOS (CI, `macos-15`) | AppleClang | Unverified until the first CI run | Unverified until the first CI run | Unverified |
+
+## Installing and updating
+
+| Capability | Windows 11 | Linux | macOS |
+| --- | --- | --- | --- |
+| Per-user installer: install, upgrade, failed upgrade, uninstall | **Verified** 2026-10-30, silent runs in a scratch folder ([evidence](evidence/installer-2026-10-30.md)); wizard not clicked through | No installer | No installer |
+| "Check for updates" | Implemented, unverified against a published release (none exists yet); tested against a local stub | Same; offers the release page | Same; offers the release page |
+| "Update and restart" (download, verify, installer, relaunch) | Implemented, unverified end to end. Parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch | Not available | Not available |
+| `Release` workflow | Never run | Never run | Never run |
 
 ## Stellaris (Steam app 281990)
 

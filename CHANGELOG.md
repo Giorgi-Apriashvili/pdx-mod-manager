@@ -13,6 +13,22 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Added
 
+- Windows installer (Inno Setup): per-user, no administrator rights, default folder
+  `%LOCALAPPDATA%\Programs\ParadoxModManager`. It replaces the earlier NSIS
+  configuration, which was never shipped. A failed or cancelled upgrade leaves the
+  previous version working, and a first install leaves an existing folder's own
+  files alone. Verified with real silent runs in a scratch folder
+  ([evidence](docs/evidence/installer-2026-10-30.md)); the wizard was not clicked
+  through.
+- Settings > Updates: "Check for updates" asks GitHub for the latest release, only
+  when pressed. An installed copy on Windows then downloads the installer, verifies
+  it against the release's `SHA256SUMS.txt`, starts it and quits; the installer
+  starts the new version. Other builds get the release page. See
+  [`docs/updates.md`](docs/updates.md). No update between two published releases
+  has happened yet.
+- `Release` workflow: full CI, packages for all three systems, smoke test of the
+  installer, then a GitHub release that stays a draft until complete; a dry run
+  publishes nothing ([`docs/releasing.md`](docs/releasing.md)). It has never run.
 - Live acceptance run on Windows 11 / Steam with the user's approval
   ([evidence](docs/evidence/live-validation-2026-10-30.md)): direct launches
   of Stellaris 4.5.2 and EU4 1.37.5 with probe mods, a real EU4 Workshop
@@ -99,6 +115,8 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Changed
 
+- Packaging moved from `ci.yml` to the `Release` workflow, which runs it on tags,
+  on request, and for pull requests that touch the packaging.
 - EU4's `LoadOrderInfo` states the observed rule: the order of
   `enabled_mods` does not decide file overrides, the mod whose name sorts
   first wins. Stellaris: the later mod in the list wins. Both are now

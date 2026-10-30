@@ -102,14 +102,57 @@ runs. The real application was never started against the standard profile.
 An uninstall leaves a folder `%TEMP%\is-*-uninstall.tmp` with two small temp files
 for a while. Those from these runs were removed by hand.
 
+## After merging the update check
+
+Same machine and compiler, the merged tree. A review found that the first version of
+the installer deleted `bin`, `plugins` and `qml` before copying. That had two effects:
+a first install with `/DIR=` deleted those folders of whatever was there, and an
+upgrade that failed after that point left no application. Both were reproduced on the
+merged tree before the fix, with `smoke-test-installer.ps1` extended by those cases:
+
+| Check on the setup from the same stage | Before the fix | After the fix |
+| --- | --- | --- |
+| First install keeps `bin\my-own-tool.txt`, `plugins\my-plugin.txt`, `qml\my-notes.txt` | **Lost all three**, also after the uninstall | Kept, also after the uninstall |
+| Upgrade with `LICENSE` locked, `/NOCLOSEAPPLICATIONS` | Exit 5, **`bin`, `plugins`, `qml` gone** | Exit 5, the previous version complete, no backup left |
+| Upgrade with `bin\qt.conf` locked | Not reached: `bin\qt.conf` was already gone | Exit 3 after about 10 s of retries, nothing moved |
+| Working upgrade: stale files removed, no backup left | Not reached | Passes |
+| Uninstall: folder and entry gone | Not reached | Passes |
+
+The real package of this tree: 16 623 179 bytes, 82 files installed. `/SUPPRESSMSGBOXES`
+was on for the failing runs, so nothing modal opened; Inno Setup logs the text of a
+suppressed box. The cases below used `bin\pmm-app.exe` replaced by a stand-in that
+records its start and exits, except where the real application is named.
+
+| # | Run | Result |
+| --- | --- | --- |
+| 14 | Update run with `LICENSE` locked (`/VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /PMMUPDATE=1 /NOCLOSEAPPLICATIONS`) | Exit 5. Log: backup made, `Defaulting to Abort`, `Rolling back changes.`, `not completed; restoring`. Version unchanged, old files back, no relaunch |
+| 15 | The same with `bin\qt.conf` locked | Exit 3 after 20 attempts, about 10 s. Log has "Setup cannot replace the program files". Nothing moved, no relaunch |
+| 16 | **Update 0.1.1 to 0.1.2**, exactly `/SILENT /SP- /NORESTART /PMMUPDATE=1`, mutex held by a separate process | Exit 0 after 6 s, waited for the mutex. Stale files gone, no backup left, stand-in started once from `bin\` with no arguments |
+| 17 | Leftovers of a killed setup: `qml` only in `pmm-upgrade-backup\`, a partial `bin` backup beside the real `bin` | Exit 0, complete, leftovers gone |
+| 18 | Uninstall with a `pmm-upgrade-backup\` still there | Folder and entry gone |
+| 19 | First install where a file named `unins000.exe` exists, without an uninstall entry; and with the entry naming another folder | Its `bin` and `qml` files stay in both cases. Inno Setup uses `unins001.exe` there |
+| 20 | **Real application**: real package installed, `bin\pmm-app.exe --profile <scratch> --game stellaris --screenshot <png> --screenshot-delay-ms 9000` | Holds `Local\ParadoxModManagerRunning` (opened from outside). Its log: `app.update update mode mode=installer`. Exit 0, capture normal |
+| 21 | **Update over the real application** from run 20, exact arguments, stand-in 0.1.2 setup | Log: waiting at 15:18:12.962, not running at 15:18:20.084, upgrade follows. Real application exited by itself with 0. Exit 0, 0.1.2, the stand-in relaunched |
+
+A debug build tree logs `update mode mode=releasePage`. The strings of the contract
+(arguments, mutex, asset names, checksum file, detection, tag, repository) were
+compared across `src/`, `installer.iss`, `build-installer.cmake`, `release.yml` and
+the smoke test by a script: no differences.
+
+Afterwards: no uninstall entry, no `%LOCALAPPDATA%\Programs\ParadoxModManager`, no
+Start Menu group, no desktop link, and no `pmm-app` or setup process.
+
 ## Not verified
 
 - The wizard itself: license page, task page, the "launch" checkbox, the look of
-  the three boxes above, and Retry after a timeout. They need clicks on a visible
-  window, which these runs avoid on purpose.
-- The update run with the real `pmm-app` holding the real mutex and quitting; the
-  mutex was held by a stand-in process and the relaunch recorded by a stand-in
-  executable. That needs the updater change merged.
+  the message boxes, and Retry after a timeout or a locked file. They need clicks on
+  a visible window, which these runs avoid on purpose. The same goes for Cancel on
+  the `/SILENT` progress window; in Inno Setup's source it ends in the same rollback
+  as the Abort that was run.
+- The update button pressed in a real installed copy, and the relaunch of the real
+  application: the relaunch has no arguments, so it would open the standard profile.
+  The stand-in stood in for that one step.
+- A real update between two published releases: none exists.
 - Inno Setup 6.7.1 as on the runner image (6.7.3 here), and the `Release` workflow:
   the workflow cannot run before it is pushed. Its bash steps were run locally
   against a stub `gh`, see below.

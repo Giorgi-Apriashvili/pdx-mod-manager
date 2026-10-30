@@ -261,6 +261,26 @@ The first output line is the `ready` event (`ok`, `loggedOn`, `ownsApp`, or an
 ([steam-workshop.md §2](steam-workshop.md#2-helper-protocol-version-1)). The
 error output can contain your SteamID64.
 
+## An update did not install
+
+Your playsets, settings and logs are outside the install folder, so a failed update
+does not touch them. Every installer run writes `%TEMP%\Setup Log <date> #<n>.txt`;
+look at the newest one first.
+
+| Message | Meaning | What to do |
+| --- | --- | --- |
+| "... is still running after 60 seconds" | The application did not quit in time. Nothing has changed | Close it (if no window is visible, end `pmm-app.exe` in Task Manager), then **Retry** |
+| "Setup cannot replace the program files ..." | Another program has a file in the install folder open, such as a command window in `bin` or a file viewer. Nothing has changed | Close it, then **Retry**, or **Cancel** and update later |
+| "The update was not installed. Your current version ... is still in place" | The installer failed or was cancelled while copying and put the previous files back | Start the application as usual and try again; the log has the reason |
+| "... the previous program files could not be put back" | Something kept the folder from being restored | Run the setup from the [releases page](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases) to repair the installation |
+
+"Update and restart" is held back while a game is being launched or Workshop
+downloads are running; it says so, and you can press it again afterwards. Only a
+copy installed with the setup can update itself. A ZIP copy gets **Open release
+page** instead. Windows SmartScreen may warn about the setup, because it is not code
+signed yet (*More info > Run anyway*). The first update between two published
+releases has not happened yet, so please report anything unexpected.
+
 ## Reporting a problem
 
 Include the application version, OS, game and game version, distribution

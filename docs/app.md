@@ -109,7 +109,9 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
 after a click in Settings. `main()` holds the named mutex
 `Local\ParadoxModManagerRunning` for the whole process on Windows
 (`RunningInstanceSignal`), which is what an update run's installer waits for.
-What is contacted, verified and protected against is in [`updates.md`](updates.md).
+The log records at start-up whether this copy updates through the installer or the
+release page. What is contacted, verified and protected against is in
+[`updates.md`](updates.md).
 
 ## Start-up sequence
 

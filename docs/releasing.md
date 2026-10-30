@@ -5,6 +5,11 @@ How a version gets from `main` to GitHub Releases. The work is done by the
 procedure for the repository owner. The workflow refuses to run a release for
 anyone else, and it publishes nothing for pull requests.
 
+**The workflow has never run on GitHub**, and no update between two published
+releases has happened yet. A pre-release is not offered by the update button, so
+the first real test of the button needs two normal releases. Treat the first
+release as the test of this page.
+
 What a release contains:
 
 | Asset | For |
@@ -45,7 +50,7 @@ without the dialog. Prefer the dialog: it also creates the tag.
 | --- | --- |
 | Validate release request | The version is `x.y.z` and equals `project(VERSION)`; the run was started by the owner; the commit is on `main`; no release with that tag exists; for a dispatched run, the tag does not exist yet. Warns if `CHANGELOG.md` has no section. |
 | CI | The whole of [`ci.yml`](../.github/workflows/ci.yml): build and test on three OSes, sanitizers, format. |
-| Package (Windows, Linux, macOS) | `release` preset without tests, `cpack`; on Windows also the installer, followed by [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) (silent install to a temp folder, expected files, uninstall entry and version, uninstall leaves nothing). Uploads the packages as workflow artifacts. |
+| Package (Windows, Linux, macOS) | `release` preset without tests, `cpack`; on Windows also the installer, followed by [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) (silent installs to a temp folder: expected files, uninstall entry and version, another program's folders left alone, failed upgrades that leave the previous version working, a working upgrade, uninstall leaves nothing). Uploads the packages as workflow artifacts. |
 | Publish GitHub release | Needs all of the above. Generates and verifies `SHA256SUMS.txt`, creates a **draft**, uploads every asset, compares names and sizes, and only then flips the draft to published. The tag is created by that flip. |
 
 The publish job is the only one with `contents: write`. Because the release stays

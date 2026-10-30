@@ -33,27 +33,33 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
+| Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through | [installer](evidence/installer-2026-10-30.md) |
+| Update check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
+| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | written and linted, **has never run** on GitHub; its steps were run locally against a stub `gh` | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
 
 ## Test status (2026-10-30, `main`)
 
 - GitHub Actions CI: green on Windows (MSVC), Linux (GCC 13), macOS
-  (AppleClang), the sanitizer job and the format check.
+  (AppleClang), the sanitizer job and the format check, up to the commit before the
+  installer and update work; that work has not been through CI yet.
 
 - Windows 11, MSVC 19.51, Qt 6.10.3, `debug` preset, fresh configure and clean
-  build: **0 warnings** at `/W4`, **425/425 tests pass** (`ctest --preset
-  debug`): core 50, sharing 54, persistence 69, platform 54, providers 61,
-  games 53, services 54, application 35.
-- `scripts/check-format.sh` with clang-format 22.1.8: 225 files OK.
+  build: **0 warnings** at `/W4`, **469/469 tests pass** (`ctest --preset
+  debug`), by label (some UTF-8 tests carry two): core 50, sharing 54, persistence 69, platform 54, providers 61,
+  games 53, services 68, application 65.
+- `scripts/check-format.sh` with clang-format 22.1.8: 236 files OK. `actionlint`
+  1.7.12 on both workflows and `clang-tidy` on the changed C++ files: no findings.
 - Hidden real-data tests, read-only: `pmm_games_tests "[.real]" -s` passes
   (187 assertions, both games).
 - Read-only application smoke test: share-code round trip between two clean
   profiles with byte-identical dumps for Stellaris and EU4, and a screenshot
   per game ([evidence](evidence/app-round-trip-2026-10-30.md)).
 - Linux (Arch Linux in WSL, GCC 16.2.1, no Qt): core build with warnings as
-  errors, 384/384 tests pass (two permission tests skip themselves because
-  the WSL user is root); the same with AddressSanitizer and UBSan, 384/384.
+  errors, 398/398 tests pass (two permission tests skip themselves because
+  the WSL user is root); with AddressSanitizer and UBSan 384/384, before the update
+  check was added.
 - Not run: the 21 fake-backend QML tests (`ui/dev/preview.sh --test`, need an
   active window on Windows; the real-backend keyboard test in ctest covers the
   main paths), any build on macOS, any build of the application on Linux.
@@ -141,8 +147,14 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 Packaging ([`packaging.md`](packaging.md)):
 
-- The `Release` workflow has not run yet (it cannot before it is on GitHub); no
-  code signing; no application icon; no `longPathAware` manifest (the package folder path must
+- The `Release` workflow has not run yet (it cannot before it is on GitHub), and
+  no update between two published releases has happened; the update button in a real
+  installed copy and the real application's relaunch have not been run. The
+  installer's wizard has not been clicked through.
+- `ilammy/msvc-dev-cmd` and `jurplel/install-qt-action` are pinned to mutable tags in
+  the job that builds the shipped, unsigned installer; pinning them to commit SHAs
+  would narrow a supply-chain path to every user who updates.
+- No code signing; no application icon; no `longPathAware` manifest (the package folder path must
   stay below about 170 characters); not tried on a machine without the VC++
   Redistributable.
 - The Qt style prune list assumes the Basic style chosen in `main()`.
@@ -164,7 +176,9 @@ Packaging ([`packaging.md`](packaging.md)):
    [`support-matrix.md`](support-matrix.md).
 5. Linux and macOS builds and validation as far as machines allow.
 6. Release checklist in [`../CHANGELOG.md`](../CHANGELOG.md) ("0.1.0 -
-   planned").
+   planned"), then the procedure in [`releasing.md`](releasing.md): a dry run of
+   the `Release` workflow, click through the wizard once, the first release, and
+   a second release to try the update button for real.
 
 ## Working rules
 
