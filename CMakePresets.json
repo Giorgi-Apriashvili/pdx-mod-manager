@@ -51,18 +51,26 @@
     },
     {
       "name": "core-sanitize",
-      "displayName": "Core without Qt, ASan + UBSan (GCC/Clang)",
+      "displayName": "Core without Qt, MSVC with AddressSanitizer",
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "PMM_BUILD_APP": "OFF",
         "PMM_ENABLE_SANITIZERS": "ON",
         "PMM_WARNINGS_AS_ERRORS": "ON"
-      },
-      "condition": {
-        "type": "notEquals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "core-clang-cl",
+      "displayName": "Core without Qt, clang-cl with UBSan, warnings as errors",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "PMM_BUILD_APP": "OFF",
+        "PMM_ENABLE_UBSAN": "ON",
+        "PMM_WARNINGS_AS_ERRORS": "ON"
       }
     },
     {
@@ -91,6 +99,10 @@
     {
       "name": "core-sanitize",
       "configurePreset": "core-sanitize"
+    },
+    {
+      "name": "core-clang-cl",
+      "configurePreset": "core-clang-cl"
     },
     {
       "name": "ci",
@@ -127,7 +139,15 @@
     {
       "name": "core-sanitize",
       "inherits": "base",
-      "configurePreset": "core-sanitize"
+      "configurePreset": "core-sanitize",
+      "environment": {
+        "PATH": "$env{VCToolsInstallDir}bin/Hostx64/x64;$penv{PATH}"
+      }
+    },
+    {
+      "name": "core-clang-cl",
+      "inherits": "base",
+      "configurePreset": "core-clang-cl"
     },
     {
       "name": "ci",

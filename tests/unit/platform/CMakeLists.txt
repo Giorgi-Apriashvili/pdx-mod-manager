@@ -15,6 +15,4 @@ pmm_add_test(pmm_platform_tests
 add_dependencies(pmm_platform_tests pmm_platform_echo)
 target_compile_definitions(pmm_platform_tests PRIVATE
   PMM_ECHO_EXE="$<TARGET_FILE:pmm_platform_echo>")
-if(WIN32)
-  target_link_libraries(pmm_platform_tests PRIVATE shell32) # CommandLineToArgvW
-endif()
+target_link_libraries(pmm_platform_tests PRIVATE shell32) # CommandLineToArgvW
