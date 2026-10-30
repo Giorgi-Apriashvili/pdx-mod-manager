@@ -42,14 +42,21 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 ## Test status (2026-10-30, `main`)
 
 - GitHub Actions CI: last green on 2026-10-30, up to the commit before the
-  installer and update work; that work has not been through CI yet. The current jobs
-  (MSVC build and tests, ASan, clang-cl warnings, format check) have not run on
-  GitHub yet.
+  installer and update work, with the old Linux and macOS jobs. **The Windows-only
+  `ci.yml` and `release.yml` have never run on GitHub.** The jobs have only been
+  reproduced locally: their presets, not the workflows themselves, on MSVC 14.51 and
+  LLVM 22. The image's toolset and LLVM version (20.1.8 when last looked up) are
+  untried.
 
 - Windows 11, MSVC 19.51, Qt 6.10.3, `debug` preset, fresh configure and clean
-  build: **0 warnings** at `/W4`, **469/469 tests pass** (`ctest --preset
-  debug`), by label (some UTF-8 tests carry two): core 50, sharing 54, persistence 69, platform 54, providers 61,
-  games 53, services 68, application 65.
+  build: **0 warnings** at `/W4`, **467/467 tests pass** (`ctest --preset
+  debug`), by label (some UTF-8 tests carry two): core 50, sharing 54, persistence 71, platform 51, providers 61,
+  games 52, services 68, application 65.
+- Local runs of the other CI presets, 0 warnings: `core-sanitize` (MSVC, ASan)
+  402/402, `core-clang-cl` (LLVM 22, UBSan) 402/402.
+- Removing Linux and macOS took the suite from 469 to 467: 4 tests that only
+  exercised other systems were deleted, 4 were renamed, and 2 migration tests were
+  added.
 - `scripts/check-format.sh` with clang-format 22.1.8: 236 files OK. `actionlint`
   1.7.12 on both workflows and `clang-tidy` on the changed C++ files: no findings.
 - Hidden real-data tests, read-only: `pmm_games_tests "[.real]" -s` passes

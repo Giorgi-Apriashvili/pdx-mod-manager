@@ -13,7 +13,7 @@ telemetry.
 
 > **Status: pre-release (0.1.0 in development).** The desktop application
 > (`pmm-app`), the EU4 and Stellaris adapters and every layer below them are
-> implemented and covered by 469 automated tests. On Windows 11 with Steam,
+> implemented and covered by 467 automated tests. On Windows 11 with Steam,
 > both games were started directly by the application with the selected mods
 > (checked in the games' own logs), a missing Workshop mod was subscribed and
 > downloaded live for each game, and the failure cases behaved as specified
@@ -128,7 +128,7 @@ With the application (Qt):
 export QT_ROOT_DIR=C:/Qt/6.10.3/msvc2022_64       # PowerShell: $env:QT_ROOT_DIR = "C:/Qt/6.10.3/msvc2022_64"
 cmake --preset debug
 cmake --build --preset debug
-ctest --preset debug                              # 469 tests, 65 of them pmm_app_tests
+ctest --preset debug                              # 467 tests, 65 of them pmm_app_tests
 ```
 
 The application tests (`-L pmm_app_tests`) run on Qt's offscreen platform;
