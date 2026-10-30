@@ -81,7 +81,7 @@ file.
 ### 2. Other platforms
 
 - Linux and macOS: build the application, run `pmm_app_tests`, check the
-  CI `package` job output against the layouts in [`packaging.md`](packaging.md),
+  `Release` workflow's packages against the layouts in [`packaging.md`](packaging.md),
   repeat the read-only helper probe and real-data tests on a machine with the
   games, then the live steps.
 - macOS signing and notarisation (`packaging/macos/`) are unverified.
@@ -141,8 +141,8 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 Packaging ([`packaging.md`](packaging.md)):
 
-- NSIS installer not built (`makensis` missing); no code signing; no
-  application icon; no `longPathAware` manifest (the package folder path must
+- The `Release` workflow has not run yet (it cannot before it is on GitHub); no
+  code signing; no application icon; no `longPathAware` manifest (the package folder path must
   stay below about 170 characters); not tried on a machine without the VC++
   Redistributable.
 - The Qt style prune list assumes the Basic style chosen in `main()`.

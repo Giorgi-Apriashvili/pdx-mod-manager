@@ -8,8 +8,9 @@
 # documentation and the license texts. It works with or without pmm-app (for
 # example with the core-debug preset, which packages the helper and docs).
 #
-# Packages: Windows ZIP (+ NSIS when makensis is found), macOS DragNDrop (.dmg),
-# Linux TGZ. File names: ParadoxModManager-<version>-<os>-<arch>.
+# Packages: Windows ZIP, macOS DragNDrop (.dmg), Linux TGZ. File names:
+# ParadoxModManager-<version>-<os>-<arch>. The Windows installer is the separate
+# `installer` target at the end of this file.
 include_guard(GLOBAL)
 
 if(NOT PROJECT_IS_TOP_LEVEL)
@@ -163,31 +164,13 @@ set(CPACK_PACKAGE_CHECKSUM SHA256)
 set(CPACK_VERBATIM_VARIABLES ON)
 set(CPACK_STRIP_FILES OFF)
 
-# Installers display the license; NSIS and DragNDrop expect a .txt file.
+# DragNDrop expects a .txt file.
 configure_file("${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_BINARY_DIR}/packaging/LICENSE.txt" COPYONLY)
 set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_BINARY_DIR}/packaging/LICENSE.txt")
-
-if(TARGET ${PMM_APP_TARGET})
-  set(CPACK_PACKAGE_EXECUTABLES "${PMM_APP_TARGET}" "Paradox Mod Manager")
-endif()
 
 # --- Generators -----------------------------------------------------------------
 if(WIN32)
   set(CPACK_GENERATOR ZIP)
-  set(_pmm_pf86 "ProgramFiles(x86)")
-  find_program(PMM_MAKENSIS_EXECUTABLE makensis
-    PATHS "$ENV{ProgramFiles}/NSIS" "$ENV{${_pmm_pf86}}/NSIS"
-    DOC "NSIS compiler; enables the NSIS installer package when found")
-  if(PMM_MAKENSIS_EXECUTABLE)
-    list(APPEND CPACK_GENERATOR NSIS)
-    set(CPACK_NSIS_EXECUTABLE "${PMM_MAKENSIS_EXECUTABLE}")
-    set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
-    set(CPACK_NSIS_PACKAGE_NAME "Paradox Mod Manager")
-    set(CPACK_NSIS_DISPLAY_NAME "Paradox Mod Manager ${PROJECT_VERSION}")
-    set(CPACK_NSIS_URL_INFO_ABOUT "${PROJECT_HOMEPAGE_URL}")
-    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
-    set(CPACK_NSIS_MANIFEST_DPI_AWARE ON)
-  endif()
 elseif(APPLE)
   set(CPACK_GENERATOR DragNDrop)
   set(CPACK_DMG_VOLUME_NAME "Paradox Mod Manager")
@@ -216,3 +199,20 @@ set(CPACK_SOURCE_IGNORE_FILES
   "/build/" "/out/" "/install/" "/dist/" "/CMakeUserPresets\\.json$")
 
 include(CPack)
+
+# --- Windows installer ----------------------------------------------------------
+# Not a CPack generator: Inno Setup compiles packaging/windows/installer.iss from
+# the staged install tree. `cmake --build <build dir> --target installer` builds
+# what is installed and writes <build dir>/dist/<package name>-setup.exe.
+if(WIN32 AND TARGET ${PMM_APP_TARGET} AND TARGET ${PMM_HELPER_TARGET})
+  add_custom_target(installer
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPMM_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+      "-DPMM_BUILD_DIR=${PROJECT_BINARY_DIR}"
+      "-DPMM_VERSION=${PROJECT_VERSION}"
+      "-DPMM_CONFIG=$<CONFIG>"
+      -P "${PROJECT_SOURCE_DIR}/packaging/windows/build-installer.cmake"
+    USES_TERMINAL
+    VERBATIM)
+  add_dependencies(installer ${PMM_APP_TARGET} ${PMM_HELPER_TARGET})
+endif()

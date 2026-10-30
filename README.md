@@ -183,16 +183,18 @@ shortcut list (F1) and the accessibility checks are described in
 ```sh
 cmake --preset release -DPMM_BUILD_TESTS=OFF
 cmake --build --preset release
-cpack --config build/release/CPackConfig.cmake -B dist
+cpack --config build/release/CPackConfig.cmake -B build/release/dist
+cmake --build --preset release --target installer   # Windows, needs Inno Setup 6
 ```
 
-This produces `ParadoxModManager-<version>-<os>-<arch>` packages: ZIP (plus an
-NSIS installer when `makensis` is available) on Windows, a `.dmg` on macOS and
-a `.tar.gz` on Linux. On Windows run it from an x64 Visual Studio developer
-environment. Qt deployment, package contents, code signing and LGPL
-compliance are described in [`docs/packaging.md`](docs/packaging.md); the
-Windows ZIP was verified on 2026-10-29
-([evidence](docs/evidence/packaging-2026-10-29.md)).
+This produces `ParadoxModManager-<version>-<os>-<arch>` packages in
+`build/release/dist`: a ZIP and a per-user installer on Windows, a `.dmg` on macOS
+and a `.tar.gz` on Linux. On Windows run it from an x64 Visual Studio developer
+environment. Qt deployment, package contents, code signing and LGPL compliance are
+described in [`docs/packaging.md`](docs/packaging.md); the Windows ZIP was verified
+on 2026-10-29 ([evidence](docs/evidence/packaging-2026-10-29.md)) and the installer
+on 2026-10-30 ([evidence](docs/evidence/installer-2026-10-30.md)). Publishing to
+GitHub Releases: [`docs/releasing.md`](docs/releasing.md).
 
 ## Project layout
 
