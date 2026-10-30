@@ -38,6 +38,9 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 ## Test status (2026-10-30, `main`)
 
+- GitHub Actions CI: green on Windows (MSVC), Linux (GCC 13), macOS
+  (AppleClang), the sanitizer job and the format check.
+
 - Windows 11, MSVC 19.51, Qt 6.10.3, `debug` preset, fresh configure and clean
   build: **0 warnings** at `/W4`, **425/425 tests pass** (`ctest --preset
   debug`): core 50, sharing 54, persistence 69, platform 54, providers 61,
@@ -147,8 +150,11 @@ Packaging ([`packaging.md`](packaging.md)):
 
 ## Next steps (in order)
 
-1. Check the first CI run on Windows, Linux and macOS (first run of the
-   application tests on Linux and macOS) and fix what it finds.
+1. Done 2026-10-30: the repository is on GitHub
+   (https://github.com/Giorgi-Apriashvili/pdx-mod-manager, public, MIT), CI
+   passes on Windows, Linux and macOS (application tests included), `main` is
+   protected (CI checks required for merges, no force pushes or deletion),
+   and the code base is clang-tidy clean (`.clang-tidy`, `tests/.clang-tidy`).
 2. Optional: warn when two enabled EU4 mods contain the same file.
 3. Implement the services and application items above (import options,
    helper exit wait, launch refresh), then the discard flow for unrecoverable
