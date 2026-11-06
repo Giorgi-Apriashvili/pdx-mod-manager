@@ -1,6 +1,7 @@
 // ServiceRunner marshalling and shutdown, and the Backend driving the real
 // services through it: edits are persisted and undoable, playset management,
-// the share-code round trip and start-up failures.
+// the share-code round trip, start-up failures and the downloads view after a
+// launch (the real pmm-steam-helper with the fake Steam API library).
 
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
@@ -14,9 +15,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QPointer>
+#include <QSignalSpy>
 #include <QThread>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -585,3 +589,122 @@ TEST_CASE("Importing with downloads off leaves nothing for a later session to do
     CHECK(sessions.opened == 0);
     CHECK(sessions.sent == 0);
 }
+
+#if defined(PMM_STEAM_HELPER_PATH) && defined(PMM_FAKE_STEAM_API_PATH)
+
+TEST_CASE("The downloads view follows a launch at once (fake Steam, Backend)",
+          "[app][backend][helper][acquisition]") {
+    // A launch parks the game's downloads, and a launch that fails after that
+    // resumes them. Neither raises a coordinator event, and the next one may
+    // not come for a long time: the view must not wait for it.
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("111111111", "Installed Item");
+    const fs::path library = world.install / platform::steam::steamApiLibraryName();
+    fs::copy_file(u8(PMM_FAKE_STEAM_API_PATH), library);
+    FakeAdapter adapter(world);
+
+    auto startFails = std::make_shared<std::atomic<bool>>(false);
+    RunnerOptions options = runnerOptions(temp.path() / "profile", adapter);
+    const auto hermetic = options.runtime.configureContext;
+    options.runtime.configureContext = [hermetic, startFails](services::ServiceContext& context) {
+        hermetic(context);
+        context.startProcess =
+            [startFails](const platform::ProcessSpec&) -> Result<platform::StartedProcess> {
+            if (*startFails)
+                return makeError(ErrorCode::ProcessStartFailed, "fake start failure");
+            return platform::StartedProcess{4242};
+        };
+    };
+    options.steam = true;
+    options.metadata = false; // no network in tests
+    options.helperExecutable = qs(PMM_STEAM_HELPER_PATH);
+    options.tickInterval = std::chrono::milliseconds(100);
+    options.configureCoordinator = [](services::CoordinatorOptions& coordinator) {
+        coordinator.policy.retryBaseDelayMs = 3'600'000; // not due during the test
+    };
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    REQUIRE(runner.steamEnabled());
+
+    // The installed mod is enabled. 444444444 (the fake's SubscribeItem fails)
+    // is disabled, so its job, waiting for the automatic retry, is still in
+    // progress without blocking Play.
+    const bool prepared = runner.callBlocking([](AppRuntime& runtime) {
+        runtime.games().refreshAll();
+        Playset playset;
+        playset.game = kGame;
+        playset.name = "Parked";
+        playset.entries = {PlaysetEntry{ModIdentity{kGame, source::SteamWorkshop, "111111111"},
+                                        true,
+                                        "Installed Item",
+                                        {},
+                                        {}},
+                           PlaysetEntry{ModIdentity{kGame, source::SteamWorkshop, "444444444"},
+                                        false,
+                                        "Failing Item",
+                                        {},
+                                        {}}};
+        auto id = persistence::PlaysetRepository(runtime.database()).create(playset);
+        return id && runtime.playsets().setActivePlayset(kGame, id.value()) &&
+               runtime.acquisition()->acquireMissing(id.value());
+    });
+    REQUIRE(prepared);
+
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    const auto job = [&]() -> const JobRowData* {
+        const std::vector<JobRowData>& rows = backend.acquisition()->jobs()->rows();
+        return rows.size() == 1 ? &rows[0] : nullptr;
+    };
+    const auto shows = [&](const char* jobState, const char* entryStatus) {
+        const ModRowData* entry = backend.mods()->row(1);
+        return job() && job()->state == QLatin1String(jobState) && entry &&
+               entry->status == QLatin1String(entryStatus);
+    };
+    REQUIRE(waitUntil([&] { return shows("failed", "failed"); }, std::chrono::seconds(30)));
+    REQUIRE(job()->errorMessage.contains(QLatin1String("Retrying automatically")));
+    REQUIRE(waitUntil([&] { return backend.launcher()->canPlay(); }));
+    // The idle helper session is closed: nothing is left to report.
+    REQUIRE(waitUntil([&] {
+        return !runner.callBlocking(
+            [](AppRuntime& runtime) { return runtime.acquisition()->sessionOpen(kGame); });
+    }));
+
+    SECTION("a started game leaves the job parked") {
+        QSignalSpy coordinatorEvents(&runner, &ServiceRunner::acquisitionChanged);
+        backend.launcher()->play();
+        REQUIRE(waitUntil([&] { return backend.launcher()->state() == QLatin1String("started"); }));
+        // Saved as the queued run that the automatic retry would have started.
+        CHECK(waitUntil([&] { return shows("pending", "pending"); }, std::chrono::seconds(3)));
+        CHECK(job()->stateText == QLatin1String("Waiting to resume"));
+        CHECK(backend.mods()->row(1)->statusText == QLatin1String("Queued"));
+        CHECK_FALSE(backend.acquisition()->active());
+        CHECK(coordinatorEvents.isEmpty());
+    }
+    SECTION("a game that cannot be started resumes the job") {
+        // Without the Steam API library the resumed run stops at once, before
+        // any helper starts that could report it. The library is free once the
+        // closed helper has exited.
+        REQUIRE(waitUntil([&] {
+            std::error_code ec;
+            fs::remove(library, ec);
+            return !fs::exists(library, ec);
+        }));
+        *startFails = true;
+        QSignalSpy coordinatorEvents(&runner, &ServiceRunner::acquisitionChanged);
+        backend.launcher()->play();
+        REQUIRE(waitUntil([&] { return backend.launcher()->state() == QLatin1String("failed"); }));
+        CHECK(waitUntil([&] { return shows("needs_user_action", "needs_user_action"); },
+                        std::chrono::seconds(3)));
+        CHECK(job()->errorMessage.contains(QLatin1String("Steam API library")));
+        CHECK(backend.acquisition()->providerStatus() == QLatin1String("unavailable"));
+        CHECK(coordinatorEvents.isEmpty());
+    }
+    backend.shutdown();
+    runner.shutdown();
+}
+
+#endif

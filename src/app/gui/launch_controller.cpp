@@ -102,8 +102,12 @@ void LaunchController::play() {
             return outcome;
         },
         [this, game](Outcome outcome) {
-            if (game == m_backend->currentGame())
+            if (game == m_backend->currentGame()) {
                 apply(std::move(outcome.launch));
+                // Parking the game's downloads for the launch, and resuming them
+                // after a failure, change job states without a coordinator event.
+                m_backend->refreshAcquisition();
+            }
             const GameRowData* row = m_backend->games()->find(game);
             const QString gameName = row ? row->name : game;
             if (outcome.error) {

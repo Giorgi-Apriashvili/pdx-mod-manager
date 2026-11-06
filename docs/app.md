@@ -65,6 +65,12 @@ written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
   change, `ServiceRunner::acquisitionChanged` makes the Backend refresh the
   downloads, the affected playset rows and the launch verdict, coalesced to
   one request at a time.
+- **A launch changes job states without a coordinator event.** It closes the
+  game's helper session and parks its downloads; when the game cannot be
+  started after that, they resume. `LaunchController::play()` therefore asks
+  for the same refresh (`Backend::refreshAcquisition()`) after every outcome,
+  so the downloads and the playset rows show the parked or resumed jobs at
+  once.
 
 ### Steam helper host
 
