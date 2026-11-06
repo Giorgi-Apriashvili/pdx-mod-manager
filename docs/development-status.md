@@ -35,33 +35,71 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
 | Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; compiled without warnings, **not run** (the smoke test runs them on GitHub) | [installer](evidence/installer-2026-10-30.md) |
-| Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists. 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
-| Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes locally on a copy with the updater's id change applied; **not run on GitHub yet** | |
+| Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists. 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
+| Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; **not run on GitHub yet** | |
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | dry run passed on GitHub on 2026-10-30 (validation, full CI, package, installer smoke test); **the publish step has not run**, only locally against a stub `gh`. The contract checks and the extended smoke test of 2026-11-06 have not run on GitHub | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
 
-## Test status (2026-11-06, update contract and installer)
+## Test status (2026-11-06, updater lockdown merged)
 
-Local only; nothing of this has run on GitHub yet.
+The updater's three branches (`agent/updater-core`, `agent/update-daily`,
+`agent/update-contract`) merged without conflicts on `agent/updater-lockdown`, in
+that order: `agent/update-contract` alone fails its own contract check, because the
+repository id comes with `agent/updater-core`, so the three land together. A review of
+the merge found that "Open release page" still used the compiled slug instead of the
+repository the reply named (reproduced, fixed, regression tests in
+`update_tests.cpp` and `qml_tests.cpp`). Local runs on the merged tree; nothing of this
+has run on GitHub yet.
 
-- `installer.iss` compiles with Inno Setup 6.7.3 without warnings (against a
-  stand-in stage); no setup was run on the development machine.
-- `scripts/check-update-contract.sh`: on this branch alone it reports exactly the
-  three values the updater's change brings (`PMM_GITHUB_REPOSITORY_ID` in CMake, the
-  request by `/repositories/` and the id in the code that builds it). On a copy with
-  that change applied: 54 source checks OK, and `scripts/test-update-contract.sh`
-  passes 80 cases (each mutation of a contract value is found for its own reason, a comment is not;
-  bad versions, published releases through a stub `gh`, and bad release assets are
-  refused).
-- `smoke-test-installer.ps1`: PowerShell's parser finds no errors; the mutex helper
-  and the process lookup were exercised on their own with another mutex name. The
-  script itself was not run (it starts setups and the application).
+- `debug` preset, fresh configure and clean build: **0 warnings**, **500/500 tests
+  pass**, by label (some tests carry two): core 50, sharing 54, persistence 71,
+  platform 51, providers 61, games 52, services 77, application 89. The new
+  release-page tests fail with the previous `openReleasePage()` and pass with the
+  fix.
+- `core-sanitize` (MSVC, ASan) 411/411 and `core-clang-cl` (LLVM 22, UBSan)
+  411/411, 0 warnings.
+- The 71 update test cases (`[update]`, application and services) passed 10 times
+  each, eight in parallel: 710 runs, no failure.
+- `scripts/check-format.sh`: 238 files OK. `clang-tidy` 22.1.8 on the ten changed
+  `.cpp` files (and the headers they include): no findings. QML lint
+  (`ui/dev/preview.sh --lint`): clean. `actionlint` 1.7.12 on both workflows: no
+  findings.
+- `scripts/check-update-contract.sh`: 54 source checks OK; a changed setup argument
+  in `app_update.cpp` and a changed mutex name in `docs/updates.md` each fail it
+  (reverted). `scripts/test-update-contract.sh`: 80 cases pass.
+- `release` preset without tests, `cpack` and the `installer` target: 0 warnings;
+  the ZIP has 80 files, the same list as a package built the same way from
+  `07f8cbf`, and the installer stage has the same 80 files, including
+  `plugins/tls/qschannelbackend.dll`. Both `pmm-app.exe` files contain the id
+  `1439071956` as the workflow's `grep -a` expects.
+- `installer.iss` compiles with Inno Setup 6.7.3 without warnings from the real
+  stage (also without `/Q`); no setup was run on the development machine.
+- The Release workflow's asset steps on the real packages: `SHA256SUMS.txt` written
+  as the workflow writes it passes `check-update-contract.sh assets`; CRLF, a BOM,
+  the binary marker, uppercase digests, an unlisted file, a name with spaces, a
+  name listed twice, a blank line, a changed file, a missing installer, a leading
+  zero and an `-rc1` suffix are refused.
+- `smoke-test-installer.ps1`: PowerShell's parser finds no errors in the merged
+  script; the mutex helper and the process lookup were exercised on their own with
+  another mutex name (on `agent/update-contract`). The script itself was not run (it
+  starts setups and the application).
 - `prune-qt-deployment.cmake` fails on a fake deployment without
-  `plugins/tls/qschannelbackend.dll` and passes with it.
-- `actionlint` 1.7.12 on both workflows: no findings.
-- One unauthenticated `GET https://api.github.com/repositories/1439071956/releases/latest`:
-  HTTP 404 without a redirect, as expected while nothing is published.
+  `plugins/tls/qschannelbackend.dll` and passes with it (on `agent/update-contract`).
+- Read-only `--screenshot` of Stellaris with a new scratch profile, also with
+  Settings open: the window renders as before, the Updates section shows the
+  daily-check setting, off in a verification run, and the log says
+  `update mode mode=releasePage installed=false dailyCheck=false`. The capture
+  replaced `screenshots/app-settings-updates.png`.
+- One unauthenticated `GET https://api.github.com/repositories/1439071956/releases/latest`
+  (by the review): HTTP 404 without a redirect, as expected while nothing is
+  published. A wrong id would also answer 404, so this does not prove the id; the
+  Release workflow compares it with `GITHUB_REPOSITORY_ID` before anything is built.
+
+**Not verified:** the installer changes of 2026-11-06 and the new smoke-test cases
+run only on the GitHub runner, and have not run there yet; the contract checks of
+the workflows have not run on GitHub; a real update between two published releases
+has never run, and neither has the update button in a real installed copy.
 
 ## Test status (2026-11-06, after the launch fixes)
 
@@ -189,6 +227,18 @@ Packaging ([`packaging.md`](packaging.md)):
 - The package job's check that `pmm-app.exe` contains the repository id needs the
   id compiled in as text (a string define, as `PMM_GITHUB_REPOSITORY_ID` is passed);
   an id formatted from a number at run time would fail it.
+- The repository id 1439071956 has not been confirmed against GitHub from the
+  development machine (a 404 from `releases/latest` does not tell a wrong id from an
+  empty repository). The `Release` workflow's validation compares it with
+  `GITHUB_REPOSITORY_ID` before anything is built, so a wrong id cannot be released.
+- Accepted for 0.1.0 after the lockdown review: `check-update-contract.sh` matches
+  text, so a value that survives only in a comment still passes (for example
+  `/releases/latest` removed from the code, or the relaunch's `Check:` flipped); the
+  unit test that pins `latestReleaseApiUrl()` and the smoke test on the runner catch
+  those. An update run that the downgrade guard refuses does not start the
+  application again; that needs an installed version newer than the running one.
+  "Open release page" falls back to the compiled slug's list of releases while no
+  reply in the session has named the repository (no release yet, or no answer).
 - `ilammy/msvc-dev-cmd` and `jurplel/install-qt-action` are pinned to mutable tags in
   the job that builds the shipped, unsigned installer; pinning them to commit SHAs
   would narrow a supply-chain path to every user who updates.
@@ -224,9 +274,11 @@ Packaging ([`packaging.md`](packaging.md)):
    unsigned, a daily check that is on by default, no rehearsal of an update between
    two releases): the values every copy relies on are frozen in
    [`../packaging/update-contract.txt`](../packaging/update-contract.txt) and checked in
-   CI and in the workflow. The next dry run is the first run of the extended smoke
-   test and of the contract checks on GitHub. Click through the installer wizard
-   once, then the first release, and a second release to try the update for real.
+   CI and in the workflow; the three updater branches land together through
+   `agent/updater-lockdown`, never one by one. The next dry run is the first run of
+   the extended smoke test and of the contract checks on GitHub. Click through the
+   installer wizard once, then the first release, and a second release to try the
+   update for real.
 
 ## Working rules
 

@@ -357,3 +357,11 @@ wizard's box, and the MIT check failed the build on a changed word, a changed ye
 line break joining two words, a changed `LICENSE` and a lost marker. No setup was run
 for this, so the wizard's license page and header image have not been seen in the
 wizard itself.
+
+**Updater lockdown, 2026-11-06** (same tools, Inno Setup 6.7.3): from the merged
+updater branches, the `release` preset, `cpack` and the `installer` target built
+without warnings. The ZIP holds the same 80 file names as a package built the same
+way from the commit before them, the installer stage the same 80, and both
+`pmm-app.exe` files contain the repository id as text. ISCC compiled the setup
+without warnings; it was not run. The installer changes of that day run first in the
+smoke test on the GitHub runner.
