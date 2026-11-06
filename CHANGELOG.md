@@ -9,221 +9,33 @@ The share-code protocol is versioned independently of the application
 [`docs/share-code-protocol.md`](docs/share-code-protocol.md)). Entries that
 change what codes look like or which codes are accepted say so explicitly.
 
+A version's section becomes its GitHub release notes
+([`docs/releasing.md`](docs/releasing.md)), so each paragraph and list item in it
+is one line, and its links are full URLs.
+
 ## [Unreleased]
+
+## [0.1.0] - unreleased
+
+This is the first release of Paradox Mod Manager, a small Windows program that keeps named playsets of mods for Stellaris and Europa Universalis IV, shares them as copyable codes, downloads missing Steam Workshop mods through your own Steam client and starts the game directly with your mods, without the Paradox launcher. It needs no account, collects no telemetry and goes online only for Workshop downloads you ask for and when you check for updates. From this version on, an installed copy can update itself from Settings > Updates.
 
 ### Added
 
-- Application icon: a blue hexagon holding an ordered list, on `pmm-app.exe` (so the
-  title bar, taskbar, Explorer and shortcuts show it) and on the setup, whose wizard
-  also shows it. Regenerate it with `tools/icon-gen`, see
-  [`docs/packaging.md`](docs/packaging.md#application-icon). Building the installer
-  now needs Inno Setup 6.5.2 or newer.
-- The installer's license page is now a readable page that reflows to the window: the
-  MIT License, what the installation ships and under which terms, and the
-  non-affiliation statement. Building the installer fails if its MIT text no longer
-  matches `LICENSE`.
-- Windows installer (Inno Setup): per-user, no administrator rights, default folder
-  `%LOCALAPPDATA%\Programs\ParadoxModManager`. It replaces the earlier NSIS
-  configuration, which was never shipped. A failed or cancelled upgrade leaves the
-  previous version working, and a first install leaves an existing folder's own
-  files alone. Verified with real silent runs in a scratch folder
-  ([evidence](docs/evidence/installer-2026-10-30.md)); the wizard was not clicked
-  through.
-- Settings > Updates: "Check for updates" asks GitHub for the latest release, only
-  when pressed. An installed copy then downloads the installer, verifies
-  it against the release's `SHA256SUMS.txt`, starts it and quits; the installer
-  starts the new version. ZIP copies and development builds get the release page. See
-  [`docs/updates.md`](docs/updates.md). No update between two published releases
-  has happened yet.
-- `Release` workflow: full CI, the Windows ZIP and installer, smoke test of the
-  installer, then a GitHub release that stays a draft until complete; a dry run
-  publishes nothing ([`docs/releasing.md`](docs/releasing.md)). A dry run has passed;
-  the publish step has not run yet.
-- Live acceptance run on Windows 11 / Steam with the user's approval
-  ([evidence](docs/evidence/live-validation-2026-10-30.md)): direct launches
-  of Stellaris 4.5.2 and EU4 1.37.5 with probe mods, a real EU4 Workshop
-  subscription and download, restart persistence, and the failure cases.
-- EU4 playsets show a closable note above the mod list: EU4 does not use
-  the playset order when two mods change the same file (the mod whose name
-  comes first alphabetically wins). `GamesModel` gains the `loadOrderNote`
-  role and `currentLoadOrderNote`; adapters expose it as
-  `LoadOrderInfo::userNote`.
-- `pmm-app --live-test <steps>` (hidden, requires `--profile`): the
-  self-test steps plus `play`, `play-fails`, `wait-ready`, `restore`,
-  `select`, `locate`, `blockers`, `jobs`, with timestamped job, launch and
-  notification transitions, for recorded acceptance runs.
-- Build system: target-based CMake with configure, build and test presets
-  (`core-debug`, `core-sanitize`, `core-clang-cl`, `debug`, `release`, `ci`); dependencies
-  pinned by URL and SHA-256 (nlohmann/json 3.12.0, zlib 1.3.1, SQLite 3.50.4,
-  Catch2 3.8.1); strict warnings, optional sanitizers.
-- Core domain model, game catalog (EU4 and Stellaris supported; HOI4, CK3 and
-  Victoria 3 known but unsupported), structured `Result`/`Error` handling,
-  structured logging with redaction for exported diagnostics.
-- Playset editing operations, view filtering rules that never change load
-  order, launch readiness, name-based dependency checks and import planning.
-- Share-code protocol version 1 (`PMM1.<payload>.<digest>`): canonical,
-  deterministic encoding; strict, bounded decoding; frozen regression fixtures
-  in `tests/fixtures/sharing/v1`.
-- SQLite persistence: schema version 1, ordered migrations with pre-upgrade
-  backups, integrity checks, playset undo history, acquisition jobs, launch
-  history.
-- Platform layer: standard per-user directories, durable atomic file writes,
-  detached process start without a shell, process listing, Steam root,
-  library, app manifest and Workshop manifest discovery, and journaled
-  multi-file transactions with rollback, crash recovery and restore.
-- Steam Workshop provider: helper wire protocol, pure acquisition state
-  machine (retry, cancel, restart reconciliation, stall detection), EResult
-  classification, Web API metadata parsing, manual fallback links and local
-  mod fingerprints.
-- `pmm-steam-helper`, which loads the game's own Steam API library at run time
-  (no Steamworks SDK files); read-only probe verified with Stellaris 4.5.2 on
-  Windows 11.
-- Europa Universalis IV and Stellaris adapters on a shared `dlc_load.json`
-  implementation: installation and user-data discovery (including
-  `userdir.txt`), descriptors, `supported_version` warnings, the current
-  configuration, generated `dlc_load.json` and Workshop descriptors, and launch
-  plans. Verified read-only against Stellaris 4.5.2 and EU4 1.37.5 on
-  Windows 11 (`docs/evidence/real-scan-2026-10-29.md`); hidden real-data tests
-  `pmm_games_tests "[.real]"`.
-- Qt-free application services (`src/services`): game discovery and scans,
-  playset editing with undo, export and import with exact reconciliation, the
-  acquisition coordinator (one helper session per game, Workshop identity gate
-  through the Web API, at most one job per mod, retries parked across launches
-  and restarts), the launch check, direct launch through one journaled
-  configuration transaction, recovery and restore, redacted diagnostics.
-- Desktop application `pmm-app` (`src/app`, QML module `Pmm.Ui` in `ui/`): the
-  three-column window of the UI contract, one services worker thread, Steam
-  helper host (`QProcess`), Web API host, settings and window state, start-up
-  notices and a fatal error window. Options `--profile`, `--game`,
-  `--no-steam`, `--read-only`, `--verbose`; hidden verification switches
-  `--self-test` and `--screenshot` for headless checks. One instance per
-  profile (lock file in the data folder).
-- Accessibility: complete keyboard operation (Tab order across the columns,
-  F6, shortcuts, an F1 shortcut list, keyboard context menu, Alt/Ctrl+Up/Down
-  reordering), 2 px focus rings, accessible names, descriptions and
-  announcements, WCAG 2.x AA contrast in both themes (`ui/dev/check_contrast.py`),
-  checks at scale factors 1.5 and 2; see `docs/accessibility.md`.
-- Application tests (`tests/app`): models, the services worker, Backend flows
-  in a temporary profile, a 2,000-entry performance budget, the real QML module
-  against the real Backend, keyboard paths with real key events, a source
-  check that data is shown as plain text, the Steam helper host with the fake
-  Steam API library and the Web API host against a local stub.
-- Windows packaging: only the Qt files the application loads, the C++
-  runtime app-local, version resources and release link options for both
-  executables (`packaging/windows/`); the ZIP was verified from an extracted
-  copy (`docs/evidence/packaging-2026-10-29.md`).
-- Observable probe mods (`tools/probe-mods`) for in-game load-order checks.
-- Feasibility record: how the Paradox launcher hands mods to Stellaris,
-  Workshop acquisition constraints and alternatives, and read-only
-  observations of an EU4 1.37.5.0 installation.
-- Repository infrastructure: README, contributing guide, architecture
-  description, decision records, support matrix, manual validation procedure,
-  troubleshooting guide, third-party notices, CI on Windows with MSVC
-  (with the application tests), ASan and clang-cl jobs, a clang-format 22 check
-  and a contrast check, CPack packaging, and an independent share-code tool
-  (`scripts/share-code.py`).
+- **Playsets.** Keep as many named playsets per game as you like: create, duplicate, rename and delete them, or start one from the mods the game currently has enabled. Enable and disable mods, add installed ones and reorder them by drag and drop or with Alt+Up/Down. Changes to the mod list are saved at once and can be undone (Ctrl+Z, Ctrl+Y), and deleted playsets, playsets replaced by an import and removed mods can be brought back from **History**. Search, filters and sorting change only the view, never the load order. A mod's details show its version and tags, warn when it was made for another game version, and list declared dependencies that are missing, disabled or placed after it (matched by name; nothing is changed for you).
+- **Share codes.** Export a playset as one line of text (`PMM1.…`) to copy or save to a file, and import a code from the clipboard or a file (Ctrl+E, Ctrl+I). A code carries the exact mods, their order and which of them are enabled; it never contains mod files, paths or anything to run. Before anything changes, the import shows a preview of the game and every entry, installed or missing. Import it as a new playset or replace an existing one, and missing Workshop mods are queued for download. The same mods in the same order do not guarantee identical files or multiplayer checksums, because mod versions can differ. Codes use share-code protocol version 1; a code from a newer version of the application is reported as such.
+- **Workshop downloads.** **Download missing** fetches the Workshop mods a playset lacks, and imports queue them on their own. The application subscribes and downloads through your own Steam client, using the game's own Steam library, so Steam must be running and signed in to an account that owns the game. Before subscribing, it asks the Steam Web API whether the item exists and belongs to that game, so a share code cannot subscribe you to a deleted or banned item or to one for another game. Downloads show their progress, can be retried or cancelled, and carry on after a restart. When an item cannot be downloaded automatically, its Workshop page can be opened to subscribe by hand.
+- **Direct launch and restore.** **Play** writes the playset into the game's mod configuration (`dlc_load.json` and the Workshop descriptors in the game's `mod` folder) and starts the game's own executable, without the Paradox launcher. When Play is unavailable, the reasons are listed next to it, for example missing mods or the game or the Paradox launcher already running. Every write is journaled with backups: if writing fails or the game does not start, the previous configuration is put back; a change interrupted by a crash or power loss is offered for **Recover** at the next start; and **Restore pre-launch configuration** returns the files to how they were before the last launch from the application, for example before you go back to the Paradox launcher. The launcher's own database is never read or changed.
+- **EU4 load order note.** Europa Universalis IV does not use the playset order when two mods change the same file: the mod whose name comes first alphabetically wins (observed in the game). EU4 playsets show this as a closable note above the mod list; the order is still saved, shared and written for the game. In Stellaris the later mod in the list wins.
+- **Installer.** `ParadoxModManager-0.1.0-windows-x86_64-setup.exe` installs for your Windows user without administrator rights, to `%LOCALAPPDATA%\Programs\ParadoxModManager`, with a Start menu shortcut and an optional desktop shortcut, and uninstalls from the Windows list of installed apps. Playsets and settings are stored in `%APPDATA%\ParadoxModManager`, outside the program folder, so upgrades and uninstalling leave them alone. A failed or cancelled upgrade leaves the previous version working. A portable ZIP is also available; extract it to a folder whose path is shorter than about 170 characters.
+- **Update button.** Settings > Updates > **Check for updates** asks GitHub for the latest release, only when you press it; nothing checks in the background. An installed copy then offers **Update and restart**: it downloads the new installer, checks its SHA-256 against the release's `SHA256SUMS.txt`, runs it and closes, and the installer starts the new version. It does not install while a Workshop download or a game launch is in progress, and it never offers a pre-release or an older version. A ZIP copy gets a link to the release page instead. Details: [what it contacts and verifies](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/v0.1.0/docs/updates.md).
+- **Accessibility.** Everything works from the keyboard: Tab and Shift+Tab through the controls, F6 between the columns, shortcuts (F1 lists them), context menus with Shift+F10 or the Menu key, and Alt+Up/Down to move mods. Focus is always visible, controls have names and descriptions for screen readers, and launch progress and failures are announced; a listening test with NVDA or Narrator has not been done yet. The light and dark themes (or follow Windows) meet WCAG 2.x AA contrast, and the window was checked at 150 % and 200 % display scaling.
+- **Privacy.** No account, no server and no telemetry; your playsets stay on your computer. The application goes online only for Workshop downloads you asked for, including unfinished ones it resumes after a restart (the Steam Web API check sends only item ids, without a key, and Steam does the download), and when you press **Check for updates**. Direct launches never pass `-enabletelemetry` to the game, even when the game's launcher settings ask for it. Mod names and other text from mods and share codes are shown as plain text, and the window loads nothing from the network, so a crafted code or mod cannot make it fetch anything. **Copy diagnostics** puts a report with user names and personal paths removed on the clipboard; nothing is sent anywhere automatically.
 
-### Changed
+### Known limitations
 
-- Packaging moved from `ci.yml` to the `Release` workflow, which runs it on tags,
-  on request, and for pull requests that touch the packaging.
-- EU4's `LoadOrderInfo` states the observed rule: the order of
-  `enabled_mods` does not decide file overrides, the mod whose name sorts
-  first wins. Stellaris: the later mod in the list wins. Both are now
-  `verifiedInGame`.
-- `tools/probe-mods` also writes event files: neither game reports unknown
-  triggers in scripted triggers that nothing uses.
-- Direct launches never pass `-enabletelemetry`, even when the game's launcher
-  settings ask for it.
-- Workshop items that are registered with a game but have no content are
-  treated as not installed: playset entries show them as Missing and can
-  acquire them (before: Broken, not acquired).
-- Mods whose content or descriptor path has no UTF-8 form stay in the
-  inventory as Broken, with the name to rename, instead of failing the scan.
-- UTF-8 handling is one implementation in `core/utf8`. Invalid text is
-  repaired with one U+FFFD per ill-formed sequence (before: one per byte), so
-  descriptor text and configuration-change labels with broken UTF-8 can read
-  slightly differently. Share codes are not affected.
-- Proposed playset names (imports, copies, de-duplication) stay within the
-  256-byte limit, cut on a character boundary before the suffix.
-- An interrupted configuration change blocks launching only its own game;
-  those of other games are warnings.
-- A launch closes the game's Steam helper session only once the launch plan
-  is valid, and resumes the parked downloads when no game was started.
-- Imports with Workshop downloads off (`--no-steam`, `--read-only`) queue no
-  downloads; missing entries wait for **Download missing**.
-- Read-only sessions run the full launch check except the folder write
-  probes, so they report the same blockers as a normal session.
-- Share codes: a code from a newer schema version is reported as "created by
-  a newer version" even when it also exceeds a version 1 structural limit.
-  Which codes are accepted is unchanged.
-
-### Removed
-
-- Linux and macOS support, by decision: the application is Windows only
-  ([ADR 0009](docs/adr/0009-windows-only.md)). Configuring on another system stops
-  with an error. Gone: the non-Windows code paths, the GCC and AppleClang CI jobs and
-  the GCC UBSan job (ASan on MSVC and a clang-cl job with UBSan and warnings replace
-  them), the
-  `.dmg` and `.tar.gz` packages, the macOS signing options and entitlements, and the
-  Linux desktop entry. Existing databases keep opening: a forward migration drops
-  `game_installations.platform`. Share codes are unchanged.
-
-### Fixed
-
-- A launch could start the game while its Steam helper was still exiting, so Steam
-  might still have counted the game as running (never observed). The game now starts
-  only after the helper has exited: the launch waits up to 3 s, then kills the helper,
-  logs a warning and waits up to 1 s more, and goes ahead either way.
-- After pressing Play, the downloads list and the playset's mod rows kept showing
-  the jobs as before (downloading or failed) until the next download event, although
-  the launch had parked them, or resumed them after the game failed to start. Both
-  now refresh after every launch outcome.
-- Play's blockers could keep showing an acquisition job as queued after it
-  had ended (for example Unavailable) when the last update fell inside the
-  5 s launch-refresh throttle; a trailing refresh now follows every
-  throttled update.
-- Mod list edits made while an undo or redo was in flight could apply to the
-  wrong rows; edits now carry the identities of their entries.
-- Replies superseded by later requests could leave the window on a stale
-  playset; reloads follow the stored active playset.
-- Undo and the launch verdict now stay current while edits are being saved;
-  the outcome of a launch is shown even after switching games.
-- Workshop subscriptions are held until the Web API confirms the item, and a
-  mod never has two acquisition jobs at once.
-- Local-mod fingerprints are recomputed on every export.
-- Path conversions in persistence and providers no longer throw on Windows
-  names with unpaired surrogates; transaction targets without an exact UTF-8
-  path are refused; playset provider ids that are not valid UTF-8 are
-  rejected.
-- Launch plans never overwrite another mod's descriptor, require descriptors
-  directly in `mod/`, do not rewrite a `dlc_load.json` that only differs in
-  layout, and match `mod/` prefixes case-insensitively.
-- Nested `PMM_TRY` expansions no longer shadow each other (`-Wshadow`).
-
-### Security
-
-- The user interface shows every piece of data (playset and mod names, tags,
-  paths, messages) as plain text, so a crafted share code or descriptor can no
-  longer make the window load a remote image. The QML engine's network access
-  refuses every URL except local resources.
-
-## [0.1.0] - planned
-
-First release. It will be tagged only when the following are done; until then
-the entries above stay under Unreleased.
-
-- The live steps of the manual acceptance procedure in
-  [`docs/validation.md`](docs/validation.md) (Workshop download, direct launch
-  without the Paradox launcher, in-game order, blocking and failure cases)
-  executed and recorded for EU4 and Stellaris, with the support matrix updated
-  from the evidence. Combinations that could not be tested stay marked as
-  unverified.
-- CI passing.
-- The Windows ZIP and installer built by CI and checked against
-  [`docs/packaging.md`](docs/packaging.md).
-- The launch-related items in
-  [`docs/development-status.md`](docs/development-status.md): the Steam helper exit
-  wait and the downloads refresh after a launch are done (2026-11-06); the discard
-  flow for unrecoverable configuration transactions is deferred to after 0.1.0 (the
-  owner's decision of 2026-11-06).
+- **Windows only:** Windows 10 version 1809 or later and Windows 11, 64-bit; tested on Windows 11. Linux, macOS, the Steam Deck and Proton are not supported.
+- **Two games:** Stellaris and Europa Universalis IV, tested with their Steam versions. A copy from another store can be located by hand (**Locate installation…**); that is untested and works with local mods only, because Workshop downloads need the game on Steam. Hearts of Iron IV, Crusader Kings III and Victoria 3 are not supported, and their share codes are rejected.
+- **Not code signed:** Windows SmartScreen may show "Windows protected your PC" when you start the setup; choose **More info**, then **Run anyway**.
+- **Unrecoverable interrupted changes:** if **Recover** cannot undo an interrupted configuration change because its backup is missing or damaged, Play stays blocked for that game. A way to discard such a record from the application is planned for a later version; until then, [troubleshooting](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/v0.1.0/docs/troubleshooting.md#recover-reports-a-missing-or-damaged-backup) has the manual steps.
+- **What is verified:** on 2026-10-29 and 2026-10-30, on Windows 11 with Steam, Stellaris 4.5.2 and EU4 1.37.5, with development builds of this version: detection of the games and their mods, playsets, a share-code round trip, a real Workshop download for each game, direct launches with the loaded mods and their order checked in the games' own logs, and failure cases such as a blocked configuration write and a game that does not start. Later changes were tested with automated tests and read-only runs only, and Stellaris 4.5.3 has not been tested. The [support matrix](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/v0.1.0/docs/support-matrix.md) lists every capability with its evidence; what it does not mark as verified, such as other stores or Steam's offline mode, has not been observed with the real game or store.
+- **First release:** no update from one published release to the next has happened yet.

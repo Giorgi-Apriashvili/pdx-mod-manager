@@ -42,7 +42,8 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 ## Test status (2026-11-06, after the launch fixes)
 
-Local runs only; CI has not run on this state yet.
+Local runs, and GitHub Actions CI: green on `main` at `d427f3c` on 2026-11-06, all
+four required jobs.
 
 - `debug` preset, fresh configure and clean build: **0 warnings**, **473/473
   tests pass**, by label: core 50, sharing 54, persistence 71, platform 51,
@@ -185,9 +186,13 @@ Packaging ([`packaging.md`](packaging.md)):
 5. With the user's approval, the remaining live pieces (table above). Record
    results in [`validation.md`](validation.md) and
    [`support-matrix.md`](support-matrix.md).
-6. Release checklist in [`../CHANGELOG.md`](../CHANGELOG.md) ("0.1.0 -
-   planned"), then the procedure in [`releasing.md`](releasing.md): the dry run has
-   passed, so click through the wizard once, the first release, and
+6. Release 0.1.0. Its notes are drafted in [`../CHANGELOG.md`](../CHANGELOG.md)
+   (`## [0.1.0] - unreleased`; set the date when releasing). The checklist they
+   replace is met: the live validation is recorded, CI passed on `main` at
+   `d427f3c` on 2026-11-06, the 2026-10-30 dry run built and smoke tested both
+   packages (before the launch fixes, so the procedure in
+   [`releasing.md`](releasing.md) runs a new one), and the launch items are done or
+   deferred. Click through the installer wizard once, then the first release, and
    a second release to try the update button for real.
 
 ## Working rules

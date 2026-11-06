@@ -27,10 +27,15 @@ two differ.
 1. **Bump the version** in `CMakeLists.txt` (`project(ParadoxModManager VERSION
    x.y.z ...)`).
 2. **Update `CHANGELOG.md`**: move the entries under `## [Unreleased]` to a new
-   section `## [x.y.z] - YYYY-MM-DD`. That section becomes the release notes.
-   The `## [0.1.0] - planned` section is a to-do list, not notes: rewrite it
-   before releasing 0.1.0. A version without a section still releases, with
-   GitHub's generated notes and a workflow warning.
+   section `## [x.y.z] - YYYY-MM-DD`. That section becomes the release notes:
+   [`changelog-section.sh`](../scripts/changelog-section.sh) takes everything below
+   the heading, so the heading's date is not part of the notes. For 0.1.0 the notes
+   are drafted as `## [0.1.0] - unreleased`: fold in anything added under
+   Unreleased since, and replace `unreleased` with the date. Write each paragraph
+   and list item of a section on one line and use full `https://` links: GitHub
+   shows a line break inside a paragraph of release notes as a line break, and a
+   relative link does not resolve on the release page. A version without a section
+   still releases, with GitHub's generated notes and a workflow warning.
 3. **Commit to `main`** and wait for CI to pass.
 4. **Dry run**: GitHub > Actions > Release > Run workflow, branch `main`, the
    version, *dry run* ticked. See below for what it does.
