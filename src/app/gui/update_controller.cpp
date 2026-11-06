@@ -217,6 +217,7 @@ void UpdateController::onCheckFinished(const UpdateCheckResult& result) {
     }
     const services::ReleaseInfo& release = *result.value();
     m_latest = release.version;
+    m_repository = release.repository; // where the release page is, also when up to date
     if (release.version > *m_current) {
         m_release = release;
         logInfo(kComponent, "a newer release is available",
@@ -325,9 +326,11 @@ void UpdateController::cancel() {
     }
 }
 
+// Never the compiled slug once a reply has named the repository: after a
+// rename or a transfer, someone else may own the old name.
 void UpdateController::openReleasePage() {
     if (enabled())
-        m_options.openUrl(QUrl(qs(services::releasePageUrl(m_latest))));
+        m_options.openUrl(QUrl(qs(services::releasePageUrl(m_repository, m_latest))));
 }
 
 void UpdateController::retry() {

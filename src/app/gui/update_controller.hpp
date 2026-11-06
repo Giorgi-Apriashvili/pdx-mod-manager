@@ -23,6 +23,7 @@
 #include <chrono>
 #include <functional>
 #include <optional>
+#include <string>
 
 namespace pmm::app {
 
@@ -93,6 +94,9 @@ public:
     // the same as openReleasePage().
     Q_INVOKABLE void startUpdate();
     Q_INVOKABLE void cancel();
+    // In the browser: the page of the version the last check saw, or the list
+    // of releases, in the repository a reply named (docs/updates.md). The
+    // compiled slug's list only while no reply has named one.
     Q_INVOKABLE void openReleasePage();
     // The step that failed, again.
     Q_INVOKABLE void retry();
@@ -151,6 +155,7 @@ private:
     qreal m_progress = 0;
     std::optional<services::AppVersion> m_latest;   // what the last check saw
     std::optional<services::ReleaseInfo> m_release; // a newer release to offer
+    std::string m_repository; // as the last reply named it; kept for the session
     std::optional<DownloadedInstaller> m_installer;
     bool m_askingBlocker = false;
     bool m_automatic = false; // the last check was the daily one

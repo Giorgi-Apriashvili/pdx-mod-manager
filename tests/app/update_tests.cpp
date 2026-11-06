@@ -438,6 +438,62 @@ TEST_CASE("A renamed repository's release is checked and downloaded", "[app][upd
     CHECK(f.stub.requestsFor(ReleaseStub::installerPath(kNew)) == 0);
 }
 
+TEST_CASE("The release page is in the repository the reply named", "[app][update]") {
+    // After a rename or a transfer someone else may own the compiled name: the
+    // browser goes where the id-pinned reply says the repository is now.
+    Fixture f;
+    const QString renamed = QStringLiteral("Someone-Else/renamed-manager");
+    const QUrl page(
+        QStringLiteral("https://github.com/Someone-Else/renamed-manager/releases/tag/v1.2.3"));
+    f.stub.serveRelease(kNew, kInstallerBytes, renamed);
+    SECTION("a copy that cannot install") { // "Open release page" in the banner and Settings
+        f.options.installed = false;
+        f.reachAvailable();
+        f.controller->startUpdate();
+        REQUIRE(f.opened.size() == 1);
+        CHECK(f.opened[0] == page);
+        CHECK(f.controller->state() == "available");
+    }
+    SECTION("a session that cannot install") {
+        f.options.installUnavailableReason = UpdateController::sessionInstallBlocker(true, false);
+        f.reachAvailable();
+        f.controller->startUpdate();
+        REQUIRE(f.opened.size() == 1);
+        CHECK(f.opened[0] == page);
+        CHECK(f.stub.requestsFor(ReleaseStub::checksumPath(kNew, renamed)) == 0);
+    }
+    SECTION("a failed download") { // Settings offers the page next to "Try again"
+        f.stub.routes[ReleaseStub::installerPath(kNew, renamed)].body = "tampered!";
+        f.reachAvailable();
+        f.controller->startUpdate();
+        REQUIRE(f.waitForState(QStringLiteral("failed")));
+        f.controller->openReleasePage();
+        REQUIRE(f.opened.size() == 1);
+        CHECK(f.opened[0] == page);
+        CHECK(f.starts.empty());
+    }
+    SECTION("an answer that is not newer") {
+        f.stub.serveRelease("0.1.0", kInstallerBytes, renamed);
+        f.make().check();
+        REQUIRE(f.waitForState(QStringLiteral("upToDate")));
+        f.controller->openReleasePage();
+        REQUIRE(f.opened.size() == 1);
+        CHECK(f.opened[0] ==
+              QUrl(QStringLiteral(
+                  "https://github.com/Someone-Else/renamed-manager/releases/tag/v0.1.0")));
+    }
+    SECTION("a later check without a release") {
+        f.reachAvailable();
+        f.stub.routes[ReleaseStub::apiPath()].status = 500;
+        f.controller->check();
+        REQUIRE(f.waitForState(QStringLiteral("failed")));
+        f.controller->openReleasePage();
+        REQUIRE(f.opened.size() == 1);
+        CHECK(f.opened[0] ==
+              QUrl(QStringLiteral("https://github.com/Someone-Else/renamed-manager/releases")));
+    }
+}
+
 TEST_CASE("A reply that names two repositories is refused", "[app][update]") {
     ClientFixture f;
     f.stub.serveRelease(kNew, kInstallerBytes);

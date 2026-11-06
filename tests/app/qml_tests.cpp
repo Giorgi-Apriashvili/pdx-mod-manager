@@ -31,11 +31,13 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTest>
+#include <QUrl>
 #include <QtQml/qqml.h>
 
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 Q_IMPORT_QML_PLUGIN(Pmm_UiPlugin)
 
@@ -448,6 +450,11 @@ TEST_CASE("Pmm.Ui keyboard paths work against the real backend", "[app][qml][a11
 
 namespace {
 
+// A repository under another name than the compiled one, as after a rename.
+const QString kRenamed = QStringLiteral("Someone-Else/renamed-manager");
+const QUrl kRenamedPage(
+    QStringLiteral("https://github.com/Someone-Else/renamed-manager/releases/tag/v1.2.3"));
+
 // The window on a hermetic profile, at its minimum size, with Settings open and
 // the updates on a local stub. start() leaves Settings closed; `daily` turns the
 // daily check on, due 50 ms after the start-up refresh.
@@ -458,7 +465,7 @@ struct UpdatesHarness {
     ReleaseStub stub;
     int starts = 0;
     int quits = 0;
-    int pages = 0;
+    std::vector<QUrl> pages; // what the browser was asked to open
     bool daily = false;
     bool installed = true;
     QString installUnavailableReason;
@@ -495,7 +502,7 @@ struct UpdatesHarness {
             return Result<platform::StartedProcess>(platform::StartedProcess{1});
         };
         options.updates.requestQuit = [this] { ++quits; };
-        options.updates.openUrl = [this](const QUrl&) { ++pages; };
+        options.updates.openUrl = [this](const QUrl& url) { pages.push_back(url); };
         options.updates.installed = installed;
         options.updates.installUnavailableReason = installUnavailableReason;
         options.updates.dailyCheck = daily;
@@ -708,8 +715,9 @@ TEST_CASE("The Updates section works with the keyboard", "[app][qml][a11y][updat
 TEST_CASE("The Updates section shows errors with a way out", "[app][qml][update]") {
     qputenv("QT_QUICK_BACKEND", "software");
     UpdatesHarness h;
-    h.stub.serveRelease("1.2.3", QByteArray("installer"));
-    h.stub.routes[ReleaseStub::installerPath("1.2.3")].body = "tampered!";
+    // Under a new name, as after a rename: the way out follows the reply.
+    h.stub.serveRelease("1.2.3", QByteArray("installer"), kRenamed);
+    h.stub.routes[ReleaseStub::installerPath("1.2.3", kRenamed)].body = "tampered!";
     QmlWarnings warnings;
     h.open(false);
 
@@ -725,10 +733,11 @@ TEST_CASE("The Updates section shows errors with a way out", "[app][qml][update]
     h.checkFits();
 
     QMetaObject::invokeMethod(h.item("updateReleasePage"), "clicked");
-    CHECK(h.pages == 1);
+    REQUIRE(h.pages.size() == 1);
+    CHECK(h.pages[0] == kRenamedPage);
 
     // Try again downloads anew.
-    h.stub.routes[ReleaseStub::installerPath("1.2.3")].body = "installer";
+    h.stub.routes[ReleaseStub::installerPath("1.2.3", kRenamed)].body = "installer";
     QMetaObject::invokeMethod(h.item("updateAction"), "clicked");
     REQUIRE(h.waitForState("installing"));
     CHECK(h.starts == 1);
@@ -892,7 +901,7 @@ TEST_CASE("Copies and sessions that cannot install offer the release page", "[ap
     const QString reason =
         QStringLiteral("Restart Paradox Mod Manager without --profile or --no-steam to update.");
     UpdatesHarness h;
-    h.stub.serveRelease("1.2.3", QByteArray("installer"));
+    h.stub.serveRelease("1.2.3", QByteArray("installer"), kRenamed);
     h.daily = true;
     const bool session = GENERATE(true, false);
     INFO((session ? "--profile session of an installed copy" : "ZIP copy"));
@@ -911,7 +920,8 @@ TEST_CASE("Copies and sessions that cannot install offer the release page", "[ap
         h.capture(QStringLiteral("update-banner-session"));
 
     QMetaObject::invokeMethod(h.item("updateBannerAction"), "clicked");
-    CHECK(h.pages == 1);
+    REQUIRE(h.pages.size() == 1);
+    CHECK(h.pages[0] == kRenamedPage); // where the reply says it is, not the compiled name
     waitUntil([] { return false; }, std::chrono::milliseconds(200));
     CHECK(h.stub.requests().size() == 1);
     CHECK(h.starts == 0);

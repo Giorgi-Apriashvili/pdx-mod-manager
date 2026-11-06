@@ -23,7 +23,7 @@ them everywhere.
 | --- | --- | --- |
 | Once a day ([below](#the-daily-check)), and "Check for updates" | `GET https://api.github.com/repositories/1439071956/releases/latest`; a redirect is not followed | `api.github.com` |
 | "Update and restart" | `SHA256SUMS.txt` of the release, then the installer | `github.com`, which redirects to a host under `githubusercontent.com` |
-| "Open release page" | the browser opens `https://github.com/<owner>/<repository>/releases/tag/v<version>` | `github.com` |
+| "Open release page" | the browser opens `https://github.com/<owner>/<repository>/releases/tag/v<version>`, with the owner and repository of the checked reply ([below](#what-is-decided-from-a-reply)) | `github.com` |
 
 The requests carry a `User-Agent: ParadoxModManager/<version>` (GitHub requires
 one) and nothing else about the user: no token, no cookie, no telemetry. GitHub
@@ -46,7 +46,10 @@ changes where a shipped build connects. The repository is GitHub's numeric id
 root `CMakeLists.txt`. The id stays the same when the repository is renamed or
 transferred, and whoever registers an old name cannot take its place. The slug in
 `HOMEPAGE_URL` (`Giorgi-Apriashvili/pdx-mod-manager`) is documentation and the
-literal the Release workflow compares; the updater does not use it.
+literal the Release workflow compares. The updater never asks it anything and
+never downloads from it; its only use is the list of releases that "Open release
+page" opens while no reply in the session has named the repository (no release
+published yet, or no check got an answer).
 
 ### The daily check
 
@@ -97,7 +100,10 @@ The reply of the API is untrusted input, read with a size limit of 1 MiB:
 - Wrong types, missing fields, or the same asset listed twice reject the reply.
 - Release notes and every other field are not read, and nothing from the reply
   is rendered. The release page's address is built from the checked owner,
-  repository and version, never copied from the reply.
+  repository and version, never copied from the reply. The application keeps the
+  owner and repository of the last reply for the session, so the page after a
+  failed download, or the list of releases after a later check that failed, is in
+  that repository too.
 - A release without the installer or the checksum file is still offered, through
   its release page.
 
@@ -256,12 +262,17 @@ enough to ship an update.
 - `tests/unit/services/app_update_tests.cpp`: versions, hostile release JSON, URL
   and redirect allow-lists, checksum files.
 - `tests/app/update_tests.cpp`, against a local `QTcpServer` stub: the check, 404,
-  malformed replies, refused redirects, checksum mismatch, cancel, size limit,
-  stall timeout, the download. "Installing" starts the harmless test program
-  `pmm_platform_echo` under the installer's name and checks its arguments. The
-  real installer is never run by tests.
-- `tests/app/qml_tests.cpp`: the Settings section against the real backend, with
-  the keyboard, at the smallest window size.
+  malformed replies, refused redirects, a renamed repository and its release page,
+  checksum mismatch, cancel, size limit, stall timeout, the locked final save, the
+  download. "Installing" starts the harmless test program `pmm_platform_echo` under
+  the installer's name and checks its arguments. The real installer is never run
+  by tests.
+- `tests/app/update_auto_tests.cpp`, on the same stub with an injected calendar:
+  the daily check once per local date, no record after a network failure, the
+  date recorded after any HTTP answer, the setting, read-only and verification
+  sessions, and the release page in `--profile` and `--no-steam` sessions.
+- `tests/app/qml_tests.cpp`: the Settings section and the banner against the real
+  backend, with the keyboard, at the smallest window size.
 - `pmm_app_tests "[.live-update]"`, by hand only: one unauthenticated request to
   the real API through the client. CTest does not run it.
 - [`scripts/check-update-contract.sh`](../scripts/check-update-contract.sh) and its

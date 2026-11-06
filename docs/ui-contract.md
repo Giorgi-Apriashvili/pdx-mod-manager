@@ -383,7 +383,10 @@ Invokables:
 - `cancel()`: a check goes back to "idle", a download to "available", with
   nothing left behind;
 - `openReleasePage()`: opens the page of the release the last check saw, or the
-  list of releases. The address never comes from a reply;
+  list of releases, in the repository the last reply of the session named (owner
+  and repository as checked by the parser). The address is built, never copied
+  from a reply; the compiled slug's list is used only while no reply has named
+  the repository;
 - `retry()`: the step that failed, again.
 
 Failures are in `errorMessage`, not in `notifications`.

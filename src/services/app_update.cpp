@@ -324,22 +324,20 @@ std::string latestReleaseApiUrl(const UpdateEndpoints& endpoints) {
 }
 
 std::string releasePageUrl(const std::optional<AppVersion>& version) {
-    std::string out(kWebOrigin);
-    out += '/';
-    out += kRepository;
-    out += "/releases";
-    if (version)
-        out += "/tag/v" + version->toString();
-    return out;
+    return releasePageUrl(kRepository, version);
 }
 
 std::string releasePageUrl(const ReleaseInfo& release) {
-    if (!splitRepository(release.repository)) // not from parseLatestRelease
-        return releasePageUrl(release.version);
+    return releasePageUrl(release.repository, release.version);
+}
+
+std::string releasePageUrl(std::string_view repository, const std::optional<AppVersion>& version) {
     std::string out(kWebOrigin);
     out += '/';
-    out += release.repository;
-    out += "/releases/tag/v" + release.version.toString();
+    out += splitRepository(repository) ? repository : kRepository; // else not from a reply
+    out += "/releases";
+    if (version)
+        out += "/tag/v" + version->toString();
     return out;
 }
 

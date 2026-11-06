@@ -315,6 +315,18 @@ TEST_CASE("The release page is built, never copied from the reply", "[services][
           "https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v1.2.3");
 }
 
+TEST_CASE("The release list is in the repository a reply named", "[services][update]") {
+    const std::string renamed = "Someone-Else/renamed.manager_2";
+    CHECK(releasePageUrl(renamed, kVersion) ==
+          "https://github.com/" + renamed + "/releases/tag/v1.2.3");
+    CHECK(releasePageUrl(renamed, std::nullopt) == "https://github.com/" + renamed + "/releases");
+    // No reply named one yet: the compiled slug's list.
+    const std::string none = GENERATE(as<std::string>{}, "", "x", "a/b/c", "../x", "a/b?c");
+    INFO(none);
+    CHECK(releasePageUrl(none, std::nullopt) ==
+          "https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases");
+}
+
 TEST_CASE("The reply's url and html_url must name one repository", "[services][update]") {
     const std::string api = "https://api.github.com/repos/";
     const std::string page = "https://github.com/";

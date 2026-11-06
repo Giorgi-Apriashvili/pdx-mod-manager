@@ -56,9 +56,10 @@ struct UpdateEndpoints {
     int port = -1; // -1: URLs must not name a port
 };
 
-// The repository slug from CMake ("owner/name"; root CMakeLists.txt). Only
-// documentation now: the check asks for the id, and a reply's own owner and
-// name decide where its assets may be.
+// The repository slug from CMake ("owner/name"; root CMakeLists.txt). The check
+// asks for the id, and a reply's own owner and name decide where its assets and
+// its release page are; the slug only gives the list of releases while no reply
+// has named the repository.
 std::string_view updateRepository() noexcept;
 // The repository's numeric GitHub id (PMM_GITHUB_REPOSITORY_ID in the root
 // CMakeLists.txt), which survives renames and transfers.
@@ -67,7 +68,8 @@ std::string_view updateRepositoryId() noexcept;
 std::string latestReleaseApiUrl(const UpdateEndpoints& endpoints = {});
 // From the slug and a parsed version: the release's page, or the list of
 // releases without a version. For when no reply named the repository (none
-// was published yet); a parsed release has releasePageUrl(ReleaseInfo).
+// was published yet, or no check got an answer); otherwise the overloads
+// below build it from the repository the reply named.
 std::string releasePageUrl(const std::optional<AppVersion>& version);
 std::string installerAssetName(const AppVersion& version);
 // The arguments of an update run; the installer's side of this contract is
@@ -102,6 +104,10 @@ struct ReleaseInfo {
 // https://github.com/<repository>/releases/tag/v<version>, built from the
 // validated repository and version of a parsed release, never copied from it.
 std::string releasePageUrl(const ReleaseInfo& release);
+// The same for a repository a reply named (ReleaseInfo::repository): the page
+// of `version`, or the list of releases without one. The slug's when
+// `repository` is empty (no reply named one) or not "<owner>/<name>".
+std::string releasePageUrl(std::string_view repository, const std::optional<AppVersion>& version);
 
 // A reply of the releases/latest endpoint. Empty for a release flagged as draft
 // or prerelease, which is ignored. An error for anything malformed: oversized,
