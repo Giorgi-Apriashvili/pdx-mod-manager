@@ -21,6 +21,7 @@
 #include "services/service_context.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <process.h>
 
 #include <algorithm>
 #include <atomic>
@@ -83,10 +84,14 @@ class TempDir {
 public:
     TempDir() {
         static std::atomic<unsigned> counter{0};
-        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        m_path = fs::temp_directory_path() / u8("pmm services Ünïcødé " + std::to_string(stamp) +
-                                                "-" + std::to_string(counter++));
-        fs::create_directories(m_path);
+        // Unique across the test processes ctest runs in parallel: the process id,
+        // and a fresh name whenever the folder already exists.
+        do {
+            const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            m_path = fs::temp_directory_path() /
+                     u8("pmm services Ünïcødé " + std::to_string(_getpid()) + "-" +
+                        std::to_string(stamp) + "-" + std::to_string(counter++));
+        } while (!fs::create_directory(m_path));
     }
     ~TempDir() {
         std::error_code ec;
