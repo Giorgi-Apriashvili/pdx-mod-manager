@@ -47,7 +47,8 @@ tested. Results:
 - Windows installer, 2026-10-30: real silent installs, upgrades, failed upgrades
   and uninstalls in a scratch folder, including the update run's arguments and its
   wait for the real `pmm-app`, with a stand-in program for the relaunch
-  ([evidence](evidence/installer-2026-10-30.md)). The wizard was not clicked through.
+  ([evidence](evidence/installer-2026-10-30.md)). On 2026-11-06 the owner installed
+  the published 0.1.0 with the wizard, and it worked.
 - Both games, 2026-10-30, live (with the user's approval): direct launches
   without the Paradox launcher, enabled and disabled mods and the effective
   override order observed in the games' own logs with probe mods, restore of
@@ -70,7 +71,7 @@ published release to the next.
 
 | Capability | Windows 11 |
 | --- | --- |
-| Per-user installer: install, upgrade, failed upgrade, uninstall | **Verified** 2026-10-30, silent runs in a scratch folder ([evidence](evidence/installer-2026-10-30.md)); wizard not clicked through |
+| Per-user installer: install, upgrade, failed upgrade, uninstall | **Verified** 2026-10-30, silent runs in a scratch folder ([evidence](evidence/installer-2026-10-30.md)); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked |
 | Installer: no downgrade over a newer version, one Start Menu shortcut, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, a folder with a non-ASCII name | **Verified** 2026-11-06 by the extended smoke test on a clean GitHub runner ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) |
 | "Check for updates" and the daily check (on by default, once a day, a banner for a new version) | Implemented; tested against a local stub. The real request by repository id on 2026-11-06: HTTP 404 without a redirect before 0.1.0 was published, HTTP 200 with `v0.1.0` after. Not yet seen offering a newer version, since none exists |
 | "Update and restart" (download, verify, installer, relaunch) | Implemented, unverified end to end. Parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch. The relaunch of the real `pmm-app.exe` after an update run passed in the smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). Not available in `--profile` and `--no-steam` sessions |

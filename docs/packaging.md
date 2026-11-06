@@ -11,7 +11,7 @@ Status (2026-10-30):
 | Package | Status |
 | --- | --- |
 | ZIP with `pmm-app`, the helper, Qt and the C++ runtime | **Verified**: built with the `release` preset, inspected, and run from an extracted copy without Qt or Visual Studio on `PATH` against the real Stellaris and EU4 installations ([evidence](evidence/packaging-2026-10-29.md)) |
-| Per-user installer (Inno Setup) | **Verified** with real installs in a scratch folder: fresh install, update run, running-application handling, uninstall ([evidence](evidence/installer-2026-10-30.md)); the interactive wizard pages have not been looked at. The changes of 2026-11-06 (no downgrade, one Start Menu shortcut, the desktop shortcut in update runs, the restart after a failed update run, the uninstall message) compile without warnings with Inno Setup 6.7.3 but have not been run; the extended smoke test runs them on GitHub |
+| Per-user installer (Inno Setup) | **Verified** with real installs in a scratch folder: fresh install, update run, running-application handling, uninstall ([evidence](evidence/installer-2026-10-30.md)); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked. The changes of 2026-11-06 (no downgrade, one Start Menu shortcut, the desktop shortcut in update runs, the restart after a failed update run, the uninstall message) compile without warnings with Inno Setup 6.7.3 and passed the extended smoke test on GitHub on 2026-11-06 |
 
 The [`Release` workflow](../.github/workflows/release.yml) is unverified: it cannot
 run before it is on GitHub. Publishing is described in [`releasing.md`](releasing.md).
@@ -355,8 +355,8 @@ window class icon (32 and 16 px; `WM_GETICON` returns nothing, as nothing sets o
 explicitly). The license page was rendered with a hidden RichEdit at the width of the
 wizard's box, and the MIT check failed the build on a changed word, a changed year, a
 line break joining two words, a changed `LICENSE` and a lost marker. No setup was run
-for this, so the wizard's license page and header image have not been seen in the
-wizard itself.
+for this; the wizard itself was first used when the owner installed the published
+0.1.0 on 2026-11-06, and it worked.
 
 **Updater lockdown, 2026-11-06** (same tools, Inno Setup 6.7.3): from the merged
 updater branches, the `release` preset, `cpack` and the `installer` target built
