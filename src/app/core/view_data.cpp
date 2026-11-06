@@ -334,20 +334,37 @@ PlaysetStateData playsetState(AppRuntime& runtime, std::int64_t playsetId, QStri
     return data;
 }
 
+Result<std::optional<std::int64_t>> launchPlayset(AppRuntime& runtime, const QString& game,
+                                                  std::int64_t playsetId) {
+    if (playsetId >= 0)
+        return std::optional<std::int64_t>(playsetId);
+    if (auto active = runtime.playsets().activePlaysetId(utf8(game)); !active)
+        return Error(active.error().code,
+                     "The active playset could not be read: " + active.error().message,
+                     active.error().detail);
+    return std::optional<std::int64_t>();
+}
+
 LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t playsetId,
                       const QueryOptions& options) {
     const GameKey key = utf8(game);
     LaunchData data;
-    // Read-only mode runs the same check without its write probes in the
-    // game's user-data folder. Without a playset the game starts without mods.
-    services::LaunchCheckOptions checkOptions;
-    checkOptions.probeWriteAccess = !options.readOnly;
-    const services::LaunchCheck check =
-        runtime.launcher().check(key, launchPlayset(playsetId), checkOptions);
-    data.canPlay = check.canLaunch;
-    data.blockers = qlist(check.blockers);
-    data.warnings = qlist(check.warnings);
-    data.interrupted = check.interruptedTransaction;
+    if (auto playset = launchPlayset(runtime, game, playsetId); !playset) {
+        data.blockers.push_back(qs(playset.error().message));
+        if (auto interrupted = runtime.launcher().interruptedTransactions())
+            data.interrupted = !interrupted.value().empty();
+    } else {
+        // Read-only mode runs the same check without its write probes in the
+        // game's user-data folder. Without a playset the game starts without mods.
+        services::LaunchCheckOptions checkOptions;
+        checkOptions.probeWriteAccess = !options.readOnly;
+        const services::LaunchCheck check =
+            runtime.launcher().check(key, playset.value(), checkOptions);
+        data.canPlay = check.canLaunch;
+        data.blockers = qlist(check.blockers);
+        data.warnings = qlist(check.warnings);
+        data.interrupted = check.interruptedTransaction;
+    }
     if (options.readOnly) {
         // Launching and restoring a backup would write game configuration.
         data.canPlay = false;
@@ -450,7 +467,9 @@ GameContextData gameContext(AppRuntime& runtime, const QString& game,
     data.playset = playsetState(runtime, chosen, &data.error);
     data.inventory = inventoryRows(runtime, game);
     data.acquisition = acquisitionData(runtime, game, options);
-    data.launch = launchData(runtime, game, data.playset.playsetId, options);
+    // The selected playset even when it could not be loaded: its check then
+    // blocks, where -1 would start the game without mods.
+    data.launch = launchData(runtime, game, chosen, options);
     return data;
 }
 

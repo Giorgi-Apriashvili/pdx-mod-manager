@@ -536,7 +536,10 @@ std::optional<Verification::Step> Verification::liveStep(const QString& name,
                                   .arg(launcher->blockers().join(QStringLiteral(" | "))));
                          return;
                      }
-                     say(QStringLiteral("every enabled entry is ready; Play is available"));
+                     say(m_backend.activePlaysetId() >= 0
+                             ? QStringLiteral("every enabled entry is ready; Play is available")
+                             : QStringLiteral("no playset: Play is available and starts the game "
+                                              "without mods"));
                      next();
                  });
         };

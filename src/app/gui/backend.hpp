@@ -95,6 +95,8 @@ public:
     bool steamEnabled() const;
     QueryOptions queryOptions() const;
     QString currentGame() const { return m_game; }
+    // The playset selected in the list (-1: none). Its mods may have failed to
+    // load: mods()->playsetId() is then -1.
     std::int64_t activePlaysetId() const { return m_playsetId; }
     bool initialRefreshDone() const { return m_initialDone; }
 

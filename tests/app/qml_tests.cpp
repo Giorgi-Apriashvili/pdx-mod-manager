@@ -683,6 +683,14 @@ TEST_CASE("Play is available without a playset and says the game starts without 
     FakeAdapter adapter(world);
     RunnerOptions options;
     options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    const auto hermetic = options.runtime.configureContext;
+    options.runtime.configureContext = [hermetic](services::ServiceContext& context) {
+        hermetic(context);
+        // Pretends to start the game; nothing is executed.
+        context.startProcess = [](const platform::ProcessSpec&) {
+            return Result<platform::StartedProcess>(platform::StartedProcess{4242});
+        };
+    };
     options.steam = false;
     ServiceRunner runner(options);
     const RunnerStart start = runner.start();
@@ -714,10 +722,14 @@ TEST_CASE("Play is available without a playset and says the game starts without 
         CHECK(evaluate("toolTipText").toString().contains("without mods"));
         CHECK(evaluate("root.warningLines.join('|')").toString() ==
               "No playset is selected, so the game starts without mods.");
+
+        backend.launcher()->play();
+        REQUIRE(waitUntil([&] { return backend.launcher()->state() == QLatin1String("started"); }));
         CHECK(evaluate("root.stateText('started')").toString() ==
               "Stellaris is running without mods.");
 
-        // With a playset, Play applies it (an empty one also starts without mods).
+        // With a playset, Play applies it (an empty one also starts without
+        // mods). The running game was started without one, and still says so.
         backend.playsets()->create(QStringLiteral("Campaign"));
         REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
         REQUIRE(waitUntil([&] {
@@ -725,6 +737,11 @@ TEST_CASE("Play is available without a playset and says the game starts without 
                    "Starts the game with this playset";
         }));
         CHECK(play->isEnabled());
+        CHECK(evaluate("root.stateText('started')").toString() ==
+              "Stellaris is running without mods.");
+        backend.launcher()->play();
+        REQUIRE(waitUntil([&] { return backend.launcher()->startedWithPlayset(); }));
+        CHECK(backend.launcher()->state() == QLatin1String("started"));
         CHECK(evaluate("root.stateText('started')").toString() ==
               "Stellaris is running with this playset.");
 

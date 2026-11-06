@@ -20,6 +20,7 @@ QtObject {
     property string state: "idle"
     property string lastError
     property string lastErrorDetail
+    property bool startedWithPlayset: false
     property bool hasInterruptedTransaction: false
     property bool canRestoreBackup: true
 
@@ -30,6 +31,8 @@ QtObject {
         if (!canPlay)
             return
         busy = true
+        // What the launch uses, read while "started" is shown.
+        startedWithPlayset = !!playsets && playsets.activeId >= 0
         state = "validating"
         stepTimer.restart()
     }

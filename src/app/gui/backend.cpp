@@ -248,7 +248,9 @@ void Backend::applyContext(GameContextData data) {
     if (data.game != m_game)
         return;
     m_playsets->setList(data.list);
-    m_playsetId = data.playset.playsetId;
+    // The selected playset, as the list shows it, even when its mods could not
+    // be loaded: Play then checks it instead of starting the game without mods.
+    m_playsetId = data.list.activeId;
     if (data.playset.playsetId != m_mods->playsetId())
         m_mods->resetTo(std::move(data.playset));
     else
@@ -712,7 +714,8 @@ void Backend::refreshAcquisition(bool includeLaunch) {
                     m_playsets->updateCounts(playsetId, m_mods->count(), m_mods->enabledCount(),
                                              {});
                 }
-                if (outcome.launch) {
+                // A verdict for another playset than the selected one is stale.
+                if (outcome.launch && playsetId == m_playsetId) {
                     m_launcher->apply(std::move(*outcome.launch));
                     m_sinceLaunchRefresh.restart();
                 }

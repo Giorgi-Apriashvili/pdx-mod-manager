@@ -28,8 +28,9 @@ Rectangle {
         case "validating": return qsTr("Checking installation and mods…")
         case "applying": return qsTr("Writing game configuration…")
         case "starting": return qsTr("Starting %1…").arg(Backend.games.currentName)
-        case "started": return root.hasPlayset ? qsTr("%1 is running with this playset.").arg(Backend.games.currentName)
-                                               : qsTr("%1 is running without mods.").arg(Backend.games.currentName)
+        // What the launch used, not the current selection.
+        case "started": return root.launcher.startedWithPlayset ? qsTr("%1 is running with this playset.").arg(Backend.games.currentName)
+                                                                 : qsTr("%1 is running without mods.").arg(Backend.games.currentName)
         case "failed": return qsTr("Launch failed.")
         default: return ""
         }
@@ -143,6 +144,7 @@ Rectangle {
         }
 
         Text {
+            id: stateLine
             Layout.fillWidth: true
             visible: text.length > 0
             text: root.stateText(root.launcher.state)
@@ -155,9 +157,9 @@ Rectangle {
             Accessible.name: text
             // Launch progress is spoken as it happens; failures interrupt.
             onTextChanged: {
-                if (text.length > 0)
-                    Accessible.announce(text, root.launcher.state === "failed" ? Accessible.Assertive
-                                                                               : Accessible.Polite)
+                if (stateLine.text.length > 0)
+                    Accessible.announce(stateLine.text, root.launcher.state === "failed" ? Accessible.Assertive
+                                                                                         : Accessible.Polite)
             }
         }
 

@@ -365,10 +365,12 @@ TEST_CASE("Play without a playset starts the game without mods", "[app][backend]
     backend.launcher()->play();
     REQUIRE(waitUntil([&] { return backend.launcher()->state() == QLatin1String("started"); }));
     CHECK(*started == 1);
+    CHECK_FALSE(backend.launcher()->startedWithPlayset());
     const QVariantMap notification = backend.notifications()->latest();
     CHECK(notification.value("title").toString() == "Stellaris started");
-    CHECK(notification.value("text").toString().contains("without mods"));
-    CHECK_FALSE(notification.value("text").toString().contains("with this playset"));
+    // The check's warning is what the notification says.
+    CHECK(notification.value("text").toString() ==
+          "No playset is selected, so the game starts without mods.");
     CHECK(backend.launcher()->canRestoreBackup());
 
     // One journaled change with the label of a launch without mods, and a
@@ -384,6 +386,58 @@ TEST_CASE("Play without a playset starts the game without mods", "[app][backend]
     });
     CHECK(recorded.first == "launch stellaris without mods");
     CHECK(recorded.second);
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Play stays blocked when the active playset cannot be loaded", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("3001", "Only");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    backend.playsets()->create(QStringLiteral("Campaign"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    const std::int64_t id = backend.activePlaysetId();
+    REQUIRE(waitUntil([&] { return backend.launcher()->canPlay(); }));
+
+    // A damaged inventory row: the playset's mods cannot be loaded.
+    REQUIRE(runner.callBlocking([](AppRuntime& runtime) {
+        auto access = runtime.database().access();
+        return access.connection().exec("UPDATE installed_mods SET state = 'bogus'").ok();
+    }));
+    bool reloaded = false;
+    backend.reloadContext(std::nullopt, [&] { reloaded = true; });
+    REQUIRE(waitUntil([&] { return reloaded; }));
+    // Still the selected playset, so Play checks it rather than starting the
+    // game without mods.
+    CHECK(backend.playsets()->activeId() == id);
+    CHECK(backend.activePlaysetId() == id);
+    CHECK(backend.mods()->playsetId() == -1);
+    CHECK_FALSE(backend.launcher()->canPlay());
+    CHECK(backend.launcher()->blockers().join('\n').contains("database could not be read"));
+    CHECK(backend.launcher()->warnings().filter("No playset").isEmpty());
+
+    // Later refreshes keep it blocked, and Play refuses.
+    QSignalSpy refreshed(backend.launcher(), &LaunchController::changed);
+    backend.refreshAcquisition(true);
+    backend.refreshLaunch();
+    REQUIRE(waitUntil([&] { return refreshed.count() >= 2; }));
+    CHECK_FALSE(backend.launcher()->canPlay());
+    backend.launcher()->play();
+    CHECK(backend.launcher()->state() == QLatin1String("idle"));
+    CHECK(backend.notifications()->latest().value("title").toString() ==
+          "The game cannot be started yet");
+    const bool launched = runner.callBlocking([](AppRuntime& runtime) {
+        auto history = persistence::LaunchHistoryRepository(runtime.database()).latest(kGame, 5);
+        return !history || !history.value().empty();
+    });
+    CHECK_FALSE(launched);
     backend.shutdown();
     runner.shutdown();
 }

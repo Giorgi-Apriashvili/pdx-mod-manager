@@ -672,6 +672,34 @@ TEST_CASE("A missing installation or executable blocks with an explanation", "[s
     CHECK(w.started.empty());
 }
 
+TEST_CASE("An interrupted change is offered for recovery when nothing else can be checked",
+          "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    interruptChange(w, LaunchService::transactionLabel("eu4", std::nullopt),
+                    w.root / "elsewhere" / "dlc_load.json");
+    LaunchService launcher(w.ctx, nullptr);
+
+    SECTION("no adapter for the game") {
+        w.ctx.adapters.clear();
+        CHECK(contains(launcher.check(kGame, std::nullopt).blockers, "not supported"));
+    }
+    SECTION("the installation cannot be read") {
+        {
+            auto access = w.db->access();
+            requireOk(access.connection().exec("DROP TABLE game_installations;"));
+        }
+        CHECK(contains(launcher.check(kGame, std::nullopt).blockers,
+                       "application database could not be read"));
+    }
+    const LaunchCheck check = launcher.check(kGame, std::nullopt);
+    CHECK_FALSE(check.canLaunch);
+    CHECK(check.interruptedTransaction);
+    CHECK_FALSE(check.interruptedBlocks);
+    CHECK(contains(check.warnings, "launch eu4 without mods"));
+}
+
 TEST_CASE("Launching closes the game's Steam helper session before starting the game",
           "[services][launch]") {
     AcquiringRig r;

@@ -109,6 +109,30 @@ void checkWritable(const fs::path& directory, const char* what, std::set<fs::pat
     }
 }
 
+// Interrupted transactions of any game offer Recover; this game's block
+// (`userData` empty: attributed by their launch label alone), others warn.
+void checkInterrupted(const ServiceContext& ctx, const GameKey& game, const std::string& gameName,
+                      const fs::path& userData, LaunchCheck& check) {
+    auto incomplete = ctx.transactions.listIncomplete();
+    if (!incomplete) {
+        check.warnings.push_back("Interrupted configuration changes could not be checked: " +
+                                 incomplete.error().message);
+        return;
+    }
+    for (const platform::TransactionRecord& record : incomplete.value()) {
+        check.interruptedTransaction = true;
+        if (!belongsTo(record, game, userData)) {
+            check.warnings.push_back(interruptedElsewhere(record, gameName));
+        } else if (!check.interruptedBlocks) {
+            check.interruptedBlocks = true;
+            check.blockers.push_back("A previous configuration change was interrupted (" +
+                                     record.label +
+                                     "). Recover it before launching so that the game's files "
+                                     "are consistent.");
+        }
+    }
+}
+
 Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                  const GameKey& game, std::optional<std::int64_t> playsetId,
                  const LaunchCheckOptions& options) {
@@ -119,6 +143,7 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
     if (!prepared.adapter) {
         check.blockers.push_back(gameName + " is not supported by this version, so it cannot be "
                                             "launched from here.");
+        checkInterrupted(ctx, game, gameName, {}, check);
         return prepared;
     }
     const games::GameAdapter& adapter = *prepared.adapter;
@@ -128,6 +153,7 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
     if (!installation) {
         check.blockers.push_back("The application database could not be read: " +
                                  installation.error().message);
+        checkInterrupted(ctx, game, gameName, {}, check);
         return prepared;
     }
     if (!installation.value()) {
@@ -250,26 +276,8 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
         }
     }
 
-    auto incomplete = ctx.transactions.listIncomplete();
-    if (!incomplete) {
-        check.warnings.push_back("Interrupted configuration changes could not be checked: " +
-                                 incomplete.error().message);
-    } else {
-        const fs::path userData =
-            check.installation ? check.installation->userDataPath : fs::path();
-        for (const platform::TransactionRecord& record : incomplete.value()) {
-            check.interruptedTransaction = true;
-            if (!belongsTo(record, game, userData)) {
-                check.warnings.push_back(interruptedElsewhere(record, gameName));
-            } else if (!check.interruptedBlocks) {
-                check.interruptedBlocks = true;
-                check.blockers.push_back("A previous configuration change was interrupted (" +
-                                         record.label +
-                                         "). Recover it before launching so that the game's files "
-                                         "are consistent.");
-            }
-        }
-    }
+    checkInterrupted(ctx, game, gameName,
+                     check.installation ? check.installation->userDataPath : fs::path(), check);
     check.canLaunch = check.blockers.empty();
     return prepared;
 }

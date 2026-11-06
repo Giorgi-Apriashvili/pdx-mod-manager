@@ -155,7 +155,8 @@ struct PlaysetListData {
 struct GameContextData {
     QString game;
     PlaysetListData list;
-    PlaysetStateData playset; // playsetId -1 without an active playset
+    PlaysetStateData playset; // playsetId -1 without an active playset, or when it
+                              // could not be loaded (list.activeId still names it)
     std::vector<InventoryRowData> inventory;
     AcquisitionData acquisition;
     LaunchData launch;
@@ -179,10 +180,10 @@ PlaysetListData playsetList(AppRuntime& runtime, const QString& game);
 PlaysetStateData playsetState(AppRuntime& runtime, std::int64_t playsetId,
                               QString* error = nullptr);
 // The playset a launch uses: none for -1 (no active playset), and the game
-// then starts without mods.
-inline std::optional<std::int64_t> launchPlayset(std::int64_t playsetId) {
-    return playsetId >= 0 ? std::optional<std::int64_t>(playsetId) : std::nullopt;
-}
+// then starts without mods. When the game's active playset cannot be read, -1
+// is not "none": the error says why the game must not start without mods.
+Result<std::optional<std::int64_t>> launchPlayset(AppRuntime& runtime, const QString& game,
+                                                  std::int64_t playsetId);
 LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t playsetId,
                       const QueryOptions& options);
 std::vector<InventoryRowData> inventoryRows(AppRuntime& runtime, const QString& game);
