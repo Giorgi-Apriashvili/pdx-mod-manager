@@ -210,7 +210,10 @@ Packaging ([`packaging.md`](packaging.md)):
 ## Facts established on the development machine
 
 See [`feasibility.md`](feasibility.md) and the evidence files: Windows 11,
-Steam, Stellaris 4.5.2 (36 mods) and EU4 1.37.5 (13 mods). EU4 has no
+Steam, Stellaris 4.5.2 (36 mods) and EU4 1.37.5 (13 mods), the versions tested on
+2026-10-29 and 2026-10-30. Stellaris 4.5.3 ("Cygnus v4.5.3 (4e91)", build
+26325427) is installed now (read-only check, 2026-11-06) and has not been
+tested. EU4 has no
 `steam_appid.txt`, so a direct start sets `SteamAppId`/`SteamGameId`; its
 launcher arguments include `-enabletelemetry`, which direct launches drop.
 The helper initialised the Steam API in Stellaris's app context and read item

@@ -4,7 +4,8 @@ What works for which game and store, and how we know. The application runs on
 Windows only ([ADR 0009](adr/0009-windows-only.md)). Support for a combination
 depends on the game's own executable and a validated integration (spec section 1).
 
-Last reviewed: 2026-10-30 (after the live validation), application 0.1.0 (in development).
+Last reviewed: 2026-11-06 (installed Stellaris version), after the live validation of
+2026-10-30; application 0.1.0 (in development).
 
 ## Status legend
 
@@ -19,9 +20,13 @@ version, OS, distribution, link to `docs/validation.md` results or
 `docs/evidence/`). Untested combinations are **unverified, not supported**.
 Nothing here is inferred from another game.
 
-Verified so far (development machine: Windows 11 Enterprise 23H2, Steam,
-Stellaris "Cygnus v4.5.2 (9776)" build 25664273, EU4 "EU4 v1.37.5.0 Inca
-(491d)" build 15918133):
+Verified so far on the development machine (Windows 11 Enterprise 23H2, Steam)
+with the game versions installed at the time: Stellaris "Cygnus v4.5.2 (9776)"
+build 25664273 and EU4 "EU4 v1.37.5.0 Inca (491d)" build 15918133. Stellaris 4.5.2
+is the version tested on 2026-10-29 and 2026-10-30. Steam has since updated it on
+that machine to "Cygnus v4.5.3 (4e91)" build 26325427 (read-only check of
+`launcher-settings.json` and the app manifest, 2026-11-06), which has not been
+tested. Results:
 
 - Both games, 2026-10-29, read-only: installation, user data, executable,
   arguments, environment, mod inventory (36 and 13 mods), the current

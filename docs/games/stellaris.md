@@ -9,8 +9,12 @@ Steam app 281990, catalog key `stellaris`. Code: `src/games/stellaris.{hpp,cpp}`
 ## Status
 
 Status labels as in [`../feasibility.md`](../feasibility.md). The development
-machine runs Windows 11 with Stellaris "Cygnus v4.5.2 (9776)" from Steam. It
-was only read; the game was never started by this work. Latest read-only run:
+machine runs Windows 11 with Stellaris from Steam. "Cygnus v4.5.2 (9776)" is the
+version tested on 2026-10-29 and 2026-10-30; "Cygnus v4.5.3 (4e91)" is installed
+now (read-only check, 2026-11-06) and has not been tested. The game was only
+read until the live validation of 2026-10-30, which started it with the user's
+approval ([live validation](../evidence/live-validation-2026-10-30.md)). Latest
+read-only run:
 [`../evidence/real-scan-2026-10-29.md`](../evidence/real-scan-2026-10-29.md).
 
 | Capability | Windows / Steam | Other stores |
