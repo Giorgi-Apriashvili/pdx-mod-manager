@@ -243,6 +243,15 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
    the order, consistent with the reported precedence.
 5. Record: both `analyze` outputs, the `dlc_load.json` contents, and the
    precedence rule (this is the evidence for the adapter's `LoadOrderInfo`).
+6. Without a playset (0.1.1): start the manager with a new, empty profile, so
+   that the game has no playset. Expected: **Play** is available with the note
+   "No playset is selected, so the game starts without mods." Press it.
+   Expected: the game starts directly without mods; `enabled_mods` in
+   `dlc_load.json` is `[]` while `disabled_dlcs` and every other key are
+   unchanged; **Restore pre-launch configuration** brings the previous
+   `enabled_mods` back. Record `dlc_load.json` before the launch, after it
+   and after the restore. `pmm-app --profile <new dir> --game <key>
+   --live-test "wait-ready,play,restore"` runs the same sequence.
 
 ### Step 7: blocking and unavailable entries (B)
 

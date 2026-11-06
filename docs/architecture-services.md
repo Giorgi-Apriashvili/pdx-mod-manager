@@ -243,8 +243,10 @@ It never unsubscribes or deletes anything.
   - no interrupted configuration transaction of this game is waiting for
     recovery (one with its launch label or a target in its user-data folder).
     Interrupted transactions of other games are warnings that name their
-    game; `LaunchCheck::interruptedTransaction` still offers Recover, and
-    `interruptedBlocks` says whether one of them blocks.
+    game; `LaunchCheck::interruptedTransaction` still offers Recover (also
+    when the check stops early because the game has no adapter or its
+    installation cannot be read), and `interruptedBlocks` says whether one of
+    them blocks.
 - `launch()`: see the launch flow below.
 - Recovery functions: `interruptedTransactions()`, `recoverInterrupted(txid)`,
   `lastRestorableTransaction(game)` (the newest committed launch of the game,

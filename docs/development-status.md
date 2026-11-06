@@ -48,10 +48,10 @@ Local runs only; nothing of this has run on GitHub, and the application was not
 started against the real games (in read-only verification mode Play is blocked
 anyway).
 
-- `debug` preset, fresh configure and clean build: **0 warnings**, **504/504
-  tests pass**, by label: core 50, sharing 54, persistence 71, platform 51,
-  providers 61, games 52, services 79, application 91.
-- `core-clang-cl` (LLVM 22, UBSan, warnings as errors): 0 warnings, 413/413.
+- `debug` preset: **0 warnings**, **507/507 tests pass**, by label: core 50,
+  sharing 54, persistence 71, platform 51, providers 61, games 52, services
+  80, application 93.
+- `core-clang-cl` (LLVM 22, UBSan, warnings as errors): 0 warnings, 414/414.
 - New tests: in `launch_service_tests.cpp`, a launch without a playset through
   the real Stellaris adapter (one warning, `enabled_mods` emptied with
   `disabled_dlcs` and an unknown key kept, one transaction labelled
@@ -63,8 +63,23 @@ anyway).
   `lastRestorableTransaction()`, or the old `hasPlayset` condition in
   `PlaySection.qml`, makes them fail. The new and changed launch tests passed
   10 times each (90 runs).
+- After the adversarial review: a selected playset whose mods cannot be
+  loaded no longer turns into a launch without mods (the Backend and the
+  launch check keep the selected id; `runtime_tests.cpp` and
+  `runner_tests.cpp` damage an inventory row and check that Play stays
+  blocked, also after later refreshes), and an active playset that cannot be
+  read blocks instead of counting as none. Launch verdicts computed for
+  another playset are dropped, the "started" text follows what the launch
+  used (`LaunchController::startedWithPlayset`; `qml_tests.cpp` launches,
+  then creates a playset), and an interrupted change is offered for recovery
+  even when the check stops early (no adapter, installation unreadable).
+  Reverting each fix makes its test fail, except the dropping of stale
+  verdicts, which depends on reply timing and has no test; the new tests
+  passed 10 times each (70 runs). The Play section's state line no longer uses the deprecated
+  injected `text` parameter in `onTextChanged` (a QML warning on every launch,
+  seen once the QML test pressed Play).
 - Fake-backend QML tests (`ui/dev/preview.sh --test`, offscreen): 23/23.
-- `scripts/check-format.sh`: 238 files OK. `clang-tidy` 22.1.8 on the eight
+- `scripts/check-format.sh`: 238 files OK. `clang-tidy` 22.1.8 on the nine
   changed `.cpp` files: no findings. QML lint (`ui/dev/preview.sh --lint`, and
   `qmllint` on the changed dev files): clean, apart from two earlier
   `missing-property` warnings in `tst_ui.qml` (`activeFocusItem.text`, lines this
