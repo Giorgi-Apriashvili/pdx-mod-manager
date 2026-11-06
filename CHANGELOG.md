@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-07
+
+Two changes to **Play**. Installed copies of 0.1.0 can update to this version from the update banner or **Settings > Updates**.
+
 ### Changed
 
 - **Play without a playset.** When no playset is selected, **Play** now starts the game without mods instead of staying unavailable, and a note next to it says so. The game's mod list is emptied through the same journaled write as any launch, so your DLC choices are kept and **Restore pre-launch configuration** brings the previous mods back.
