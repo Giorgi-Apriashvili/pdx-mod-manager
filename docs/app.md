@@ -329,7 +329,11 @@ platform:
 - Backend edits through persistence and undo, playset management, the
   share-code round trip, and settings restore, in a temporary profile with a
   folder-scanning adapter double; row edits made while an undo is in flight,
-  replies superseded by later requests, and imports with downloads off;
+  replies superseded by later requests, and imports with downloads off; Play
+  without a playset (a launch without mods through a recording process
+  starter, and the Play button enabled with its accessible description), and
+  Play kept blocked when the selected playset cannot be loaded or the active
+  one cannot be read;
 - a 2,000-entry playset with a time budget for each GUI-thread operation;
 - the real QML module against the real Backend, without QML warnings, with a
   playset and a mod named like rich text with a remote image: nothing tries

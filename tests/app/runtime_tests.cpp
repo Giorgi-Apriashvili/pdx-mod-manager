@@ -184,6 +184,14 @@ TEST_CASE("Read-only launch data keeps every blocker except the write probes", "
     const auto joined = [](const LaunchData& data) { return data.blockers.join(QLatin1Char('|')); };
 
     CHECK(queries::launchData(*runtime, game, id, normal).canPlay);
+    // Without a playset the same check runs, and the game starts without mods.
+    constexpr std::int64_t kNoPlayset = -1;
+    const LaunchData vanilla = queries::launchData(*runtime, game, kNoPlayset, normal);
+    CHECK(vanilla.canPlay);
+    CHECK(vanilla.blockers.isEmpty());
+    CHECK(vanilla.warnings ==
+          QStringList{QStringLiteral("No playset is selected, so the game starts without mods.")});
+    CHECK_FALSE(queries::launchData(*runtime, game, kNoPlayset, readOnly).canPlay);
     const LaunchData verifying = queries::launchData(*runtime, game, id, readOnly);
     CHECK_FALSE(verifying.canPlay);
     CHECK_FALSE(verifying.canRestoreBackup);
@@ -200,6 +208,8 @@ TEST_CASE("Read-only launch data keeps every blocker except the write probes", "
     REQUIRE(blockedReadOnly.blockers.size() == blocked.blockers.size() + 1);
     for (qsizetype i = 0; i < blocked.blockers.size(); ++i)
         CHECK(blockedReadOnly.blockers[i] == blocked.blockers[i]);
+    CHECK(joined(queries::launchData(*runtime, game, kNoPlayset, normal))
+              .contains(QStringLiteral("already running")));
 
     // Write probes run in normal sessions only: a file where the mod folder belongs.
     *running = false;
@@ -209,6 +219,57 @@ TEST_CASE("Read-only launch data keeps every blocker except the write probes", "
               .contains(QStringLiteral("mod folder")));
     CHECK_FALSE(joined(queries::launchData(*runtime, game, id, readOnly))
                     .contains(QStringLiteral("mod folder")));
+    CHECK(joined(queries::launchData(*runtime, game, kNoPlayset, normal))
+              .contains(QStringLiteral("mod folder")));
+    CHECK_FALSE(joined(queries::launchData(*runtime, game, kNoPlayset, readOnly))
+                    .contains(QStringLiteral("mod folder")));
+}
+
+TEST_CASE("An active playset that cannot be read blocks Play instead of a launch without mods",
+          "[app][runtime]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("2000000001", "UI Overhaul");
+    FakeAdapter adapter(world);
+    auto runtime = require(AppRuntime::create(hermeticOptions(temp.path() / "profile", adapter)));
+    runtime->games().refreshAll();
+    persistence::PlaysetRepository repo(runtime->database());
+    Playset playset;
+    playset.game = kGame;
+    playset.name = "Main";
+    PlaysetEntry entry;
+    entry.identity = ModIdentity{kGame, source::SteamWorkshop, "2000000001"};
+    playset.entries = {entry};
+    const std::int64_t id = require(repo.create(playset));
+    requireOk(runtime->playsets().setActivePlayset(kGame, id));
+    const QString game = QString::fromLatin1(kGame);
+    const QueryOptions normal;
+    REQUIRE(queries::gameContext(*runtime, game, std::nullopt, normal).launch.canPlay);
+    const auto damage = [&](const char* sql) {
+        auto access = runtime->database().access();
+        requireOk(access.connection().exec(sql));
+    };
+
+    SECTION("its mods cannot be loaded: the selected playset is checked") {
+        damage("UPDATE installed_mods SET state = 'bogus'");
+        const GameContextData data = queries::gameContext(*runtime, game, std::nullopt, normal);
+        CHECK(data.list.activeId == id);
+        CHECK(data.playset.playsetId == -1);
+        CHECK_FALSE(data.error.isEmpty());
+        CHECK_FALSE(data.launch.canPlay);
+        CHECK(data.launch.blockers.join('|').contains("application database could not be read"));
+        CHECK(data.launch.warnings.filter("No playset").isEmpty());
+    }
+    SECTION("the active playset itself cannot be read: -1 is not \"none\"") {
+        damage("ALTER TABLE playsets RENAME TO playsets_unreadable");
+        const GameContextData data = queries::gameContext(*runtime, game, std::nullopt, normal);
+        CHECK(data.list.activeId == -1);
+        CHECK_FALSE(data.launch.canPlay);
+        REQUIRE(data.launch.blockers.size() == 1);
+        CHECK(data.launch.blockers.front().startsWith("The active playset could not be read: "));
+        CHECK(data.launch.warnings.isEmpty());
+        CHECK_FALSE(queries::launchPlayset(*runtime, game, -1));
+    }
 }
 
 TEST_CASE("FileLogSink writes daily files and keeps a bounded number", "[app][runtime]") {

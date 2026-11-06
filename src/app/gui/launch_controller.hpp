@@ -5,14 +5,17 @@
 // the playset, the inventory or the downloads change, and when the window is
 // activated (a game or the Paradox launcher may have been started meanwhile).
 // The blockers always say why Play is unavailable: game not installed or not
-// located, no active playset, enabled mods not ready, a running game or
-// launcher, an interrupted configuration change.
+// located, enabled mods not ready, a running game or launcher, an interrupted
+// configuration change. Without an active playset Play starts the game
+// without mods, and a warning says so.
 //
 // play() moves through validating -> applying -> starting -> started (or
 // failed); the configuration is written by LaunchService as one file
-// transaction and the game executable is started directly. A launch parks the
-// game's Workshop downloads (and resumes them if it fails), so the downloads
-// view is refreshed after every outcome.
+// transaction and the game executable is started directly. startedWithPlayset
+// says whether the last started launch used a playset (the selection may
+// change while the game runs). A launch parks the game's Workshop downloads
+// (and resumes them if it fails), so the downloads view is refreshed after
+// every outcome.
 
 #include "app/core/view_data.hpp"
 
@@ -33,6 +36,7 @@ class LaunchController : public QObject {
     Q_PROPERTY(QString state READ state NOTIFY stateChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY stateChanged)
     Q_PROPERTY(QString lastErrorDetail READ lastErrorDetail NOTIFY stateChanged)
+    Q_PROPERTY(bool startedWithPlayset READ startedWithPlayset NOTIFY stateChanged)
     Q_PROPERTY(bool hasInterruptedTransaction READ hasInterruptedTransaction NOTIFY changed)
     Q_PROPERTY(bool canRestoreBackup READ canRestoreBackup NOTIFY changed)
 
@@ -46,6 +50,7 @@ public:
     QString state() const { return m_state; }
     QString lastError() const { return m_lastError; }
     QString lastErrorDetail() const { return m_lastErrorDetail; }
+    bool startedWithPlayset() const { return m_startedWithPlayset; }
     bool hasInterruptedTransaction() const { return m_data.interrupted; }
     bool canRestoreBackup() const { return m_data.canRestoreBackup; }
 
@@ -76,6 +81,7 @@ private:
     bool m_busy = false;
     QString m_lastError;
     QString m_lastErrorDetail;
+    bool m_startedWithPlayset = false;
     QString m_diagnostics;
 };
 

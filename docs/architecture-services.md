@@ -231,6 +231,10 @@ It never unsubscribes or deletes anything.
   - every enabled entry is Ready (disabled entries never block; they produce a
     warning);
   - a playset with no enabled mods is allowed, with a warning;
+  - no playset at all (`std::nullopt`; the owner's decision of 2026-11-06) is
+    a launch without mods: the playset checks are skipped, a warning says the
+    game starts without mods, and every check below still runs. A playset id
+    that no longer exists blocks;
   - the user-data and mod folders are writable (probed with a temporary file;
     `LaunchCheckOptions::probeWriteAccess = false` skips the probes, which the
     app's read-only verification mode does so that it reports every other
@@ -239,12 +243,15 @@ It never unsubscribes or deletes anything.
   - no interrupted configuration transaction of this game is waiting for
     recovery (one with its launch label or a target in its user-data folder).
     Interrupted transactions of other games are warnings that name their
-    game; `LaunchCheck::interruptedTransaction` still offers Recover, and
-    `interruptedBlocks` says whether one of them blocks.
+    game; `LaunchCheck::interruptedTransaction` still offers Recover (also
+    when the check stops early because the game has no adapter or its
+    installation cannot be read), and `interruptedBlocks` says whether one of
+    them blocks.
 - `launch()`: see the launch flow below.
 - Recovery functions: `interruptedTransactions()`, `recoverInterrupted(txid)`,
-  `lastRestorableTransaction(game)` and `restoreTransaction(txid)` (the user's
-  "restore pre-launch configuration").
+  `lastRestorableTransaction(game)` (the newest committed launch of the game,
+  with either label form) and `restoreTransaction(txid)` (the user's "restore
+  pre-launch configuration").
 
 ### diagnostics (`diagnostics.hpp`)
 
@@ -353,16 +360,18 @@ every game on exit.
 ## Data flow: launch
 
 ```text
- launch(game, playset)
+ launch(game, playset or std::nullopt)
    check() again                       -> blockers: Error (ConflictingProcess,
                                           Interrupted or ValidationFailed); nothing written
-   adapter.buildLaunchPlan(installation, enabled InstalledMods in playset order)
+   adapter.buildLaunchPlan(installation, enabled InstalledMods in playset order;
+                           none without a playset)
    validate plan (absolute existing executable, absolute config targets)
        failure -> Error recorded; helper sessions and jobs untouched
    coordinator.closeSessionsForLaunch(game)   (parked update returned in LaunchOutcome)
        close the helper session, wait until the helper has exited (a stuck one is
        killed after the grace period, with a warning; the launch goes on), park jobs
    FileTransactionManager::apply("launch <game> playset <id> (<name>)", configWrites)
+       (label "launch <game> without mods" without a playset)
        journal, durable backups, atomic replace, rollback on failure
        failure -> Error, game not started, parked jobs resumed, previous configuration
                   unchanged (or, if even the rollback failed, recovery offered)

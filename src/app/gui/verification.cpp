@@ -245,8 +245,10 @@ void Verification::playStep(int timeoutMs, bool expectFailure, std::function<voi
                                  fail(QStringLiteral("the launch failed"));
                          }));
              const QString warnings = launcher->warnings().join(QStringLiteral(" | "));
-             say(QStringLiteral("pressing Play for playset %1%2")
-                     .arg(m_backend.activePlaysetId())
+             const std::int64_t playsetId = m_backend.activePlaysetId();
+             say(QStringLiteral("pressing Play %1%2")
+                     .arg(playsetId >= 0 ? QStringLiteral("for playset %1").arg(playsetId)
+                                         : QStringLiteral("without a playset"))
                      .arg(warnings.isEmpty() ? QString()
                                              : QStringLiteral(" (warnings: %1)").arg(warnings)));
              launcher->play();
@@ -534,7 +536,10 @@ std::optional<Verification::Step> Verification::liveStep(const QString& name,
                                   .arg(launcher->blockers().join(QStringLiteral(" | "))));
                          return;
                      }
-                     say(QStringLiteral("every enabled entry is ready; Play is available"));
+                     say(m_backend.activePlaysetId() >= 0
+                             ? QStringLiteral("every enabled entry is ready; Play is available")
+                             : QStringLiteral("no playset: Play is available and starts the game "
+                                              "without mods"));
                      next();
                  });
         };

@@ -74,8 +74,13 @@ void LaunchController::play() {
         [runner, self, game, playsetId, options](AppRuntime& runtime) {
             Outcome outcome;
             const GameKey key = utf8(game);
-            const services::LaunchCheck check = runtime.launcher().check(key, playsetId);
-            if (!check.canLaunch) {
+            // Without an active playset the game starts without mods.
+            const auto playset = queries::launchPlayset(runtime, game, playsetId);
+            const services::LaunchCheck check =
+                playset ? runtime.launcher().check(key, playset.value()) : services::LaunchCheck{};
+            if (!playset) {
+                outcome.error = playset.error();
+            } else if (!check.canLaunch) {
                 std::string text;
                 for (const std::string& blocker : check.blockers)
                     text += (text.empty() ? "" : "\n") + blocker;
@@ -90,7 +95,7 @@ void LaunchController::play() {
                             controller->setState(QStringLiteral("applying"), true);
                     },
                     Qt::QueuedConnection);
-                auto launched = runtime.launcher().launch(key, playsetId);
+                auto launched = runtime.launcher().launch(key, playset.value());
                 if (!launched) {
                     outcome.error = launched.error();
                 } else {
@@ -101,9 +106,13 @@ void LaunchController::play() {
             outcome.launch = queries::launchData(runtime, game, playsetId, options);
             return outcome;
         },
-        [this, game](Outcome outcome) {
+        [this, game, playsetId](Outcome outcome) {
             if (game == m_backend->currentGame()) {
-                apply(std::move(outcome.launch));
+                // The verdict is for the playset Play was pressed with.
+                if (playsetId == m_backend->activePlaysetId())
+                    apply(std::move(outcome.launch));
+                else
+                    m_backend->refreshLaunch();
                 // Parking the game's downloads for the launch, and resuming them
                 // after a failure, change job states without a coordinator event.
                 m_backend->refreshAcquisition();
@@ -119,7 +128,9 @@ void LaunchController::play() {
                 emit launchFailed(m_lastError);
                 return;
             }
+            m_startedWithPlayset = playsetId >= 0;
             setState(QStringLiteral("started"), false);
+            // A launch without a playset always has the warning that says so.
             m_backend->notifications()->info(
                 tr("%1 started").arg(gameName),
                 outcome.warnings.isEmpty()

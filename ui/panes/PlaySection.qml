@@ -9,16 +9,17 @@ Rectangle {
 
     readonly property var launcher: Backend.launcher
     readonly property bool hasGame: Backend.games.currentSupported && Backend.games.currentInstalled
+    // Without a playset Play starts the game without mods; a warning says so.
     readonly property bool hasPlayset: Backend.playsets.activeId >= 0
     // The backend always explains why Play is unavailable (game not located,
-    // no active playset, mods not ready, game or launcher running, ...).
+    // mods not ready, game or launcher running, ...).
     readonly property list<string> blockerLines: {
         const lines = Theme.lines(launcher.blockers)
         if (lines.length > 0 || Backend.games.currentName.length > 0)
             return lines
         return [qsTr("Select a supported game first.")]
     }
-    readonly property bool playable: launcher.canPlay && !launcher.busy && hasGame && hasPlayset
+    readonly property bool playable: launcher.canPlay && !launcher.busy && hasGame
     readonly property list<string> warningLines: Theme.lines(launcher.warnings)
     readonly property int maxBlockers: 4
 
@@ -27,7 +28,9 @@ Rectangle {
         case "validating": return qsTr("Checking installation and mods…")
         case "applying": return qsTr("Writing game configuration…")
         case "starting": return qsTr("Starting %1…").arg(Backend.games.currentName)
-        case "started": return qsTr("%1 is running with this playset.").arg(Backend.games.currentName)
+        // What the launch used, not the current selection.
+        case "started": return root.launcher.startedWithPlayset ? qsTr("%1 is running with this playset.").arg(Backend.games.currentName)
+                                                                 : qsTr("%1 is running without mods.").arg(Backend.games.currentName)
         case "failed": return qsTr("Launch failed.")
         default: return ""
         }
@@ -122,11 +125,12 @@ Rectangle {
             text: Backend.games.currentName.length > 0 ? qsTr("Play %1").arg(Backend.games.currentName) : qsTr("Play")
             font.pixelSize: 14
             enabled: root.playable
-            toolTipText: root.playable
-                         ? qsTr("Apply this playset and start the game directly, without the Paradox launcher")
-                         : root.blockerLines.length > 0 ? root.blockerLines.join("\n") : ""
-            Accessible.description: root.playable ? qsTr("Starts the game with this playset")
-                                                          : qsTr("Blocked: %1").arg(root.blockerLines.join("; "))
+            toolTipText: !root.playable ? (root.blockerLines.length > 0 ? root.blockerLines.join("\n") : "")
+                         : root.hasPlayset ? qsTr("Apply this playset and start the game directly, without the Paradox launcher")
+                                           : qsTr("Start the game directly, without mods and without the Paradox launcher")
+            Accessible.description: !root.playable ? qsTr("Blocked: %1").arg(root.blockerLines.join("; "))
+                                    : root.hasPlayset ? qsTr("Starts the game with this playset")
+                                                      : qsTr("Starts the game without mods")
             onClicked: root.launcher.play()
 
             Spinner {
@@ -140,6 +144,7 @@ Rectangle {
         }
 
         Text {
+            id: stateLine
             Layout.fillWidth: true
             visible: text.length > 0
             text: root.stateText(root.launcher.state)
@@ -152,9 +157,9 @@ Rectangle {
             Accessible.name: text
             // Launch progress is spoken as it happens; failures interrupt.
             onTextChanged: {
-                if (text.length > 0)
-                    Accessible.announce(text, root.launcher.state === "failed" ? Accessible.Assertive
-                                                                               : Accessible.Polite)
+                if (stateLine.text.length > 0)
+                    Accessible.announce(stateLine.text, root.launcher.state === "failed" ? Accessible.Assertive
+                                                                                         : Accessible.Polite)
             }
         }
 

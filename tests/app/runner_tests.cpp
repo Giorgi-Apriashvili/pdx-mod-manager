@@ -1,12 +1,14 @@
 // ServiceRunner marshalling and shutdown, and the Backend driving the real
 // services through it: edits are persisted and undoable, playset management,
-// the share-code round trip, start-up failures and the downloads view after a
-// launch (the real pmm-steam-helper with the fake Steam API library).
+// the share-code round trip, start-up failures, Play without a playset and the
+// downloads view after a launch (the real pmm-steam-helper with the fake Steam
+// API library).
 
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
 #include "persistence/acquisition_job_repository.hpp"
+#include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/settings_repository.hpp"
 #include "platform/steam.hpp"
@@ -23,6 +25,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace pmm;
@@ -168,7 +171,11 @@ TEST_CASE("Backend edits are persisted, undoable and reflected in the models", "
     CHECK(backend.games()->currentInstalled());
     CHECK(backend.inventory()->totalCount() == 5);
     CHECK(backend.playsets()->count() == 0);
-    CHECK(backend.launcher()->blockers().join(' ').contains("No active playset"));
+    // No playset: Play starts the installed game without mods.
+    CHECK(backend.launcher()->blockers().isEmpty());
+    CHECK(backend.launcher()->canPlay());
+    CHECK(backend.launcher()->warnings() ==
+          QStringList{"No playset is selected, so the game starts without mods."});
 
     backend.playsets()->create(QStringLiteral("Campaign"));
     REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
@@ -289,7 +296,7 @@ TEST_CASE("Backend edits are persisted, undoable and reflected in the models", "
     runner.shutdown();
 }
 
-TEST_CASE("Launch blockers explain a running game and a missing playset", "[app][backend]") {
+TEST_CASE("Launch blockers explain a running game, with or without a playset", "[app][backend]") {
     TempDir temp;
     FakeWorld world(temp.path() / "world");
     world.addWorkshopMod("3001", "Only");
@@ -312,17 +319,126 @@ TEST_CASE("Launch blockers explain a running game and a missing playset", "[app]
     Backend backend(runner, {});
     backend.initialize(start);
     REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
-    const QString blockers = backend.launcher()->blockers().join('\n');
-    CHECK(blockers.contains("already running"));
-    CHECK(blockers.contains("No active playset"));
+    // Without a playset the game would start without mods, but it is running.
+    const QStringList blockers = backend.launcher()->blockers();
+    REQUIRE(blockers.size() == 1);
+    CHECK(blockers.front().contains("already running"));
+    CHECK(backend.launcher()->warnings().join('\n').contains("No playset is selected"));
     CHECK_FALSE(backend.launcher()->canPlay());
 
     backend.playsets()->create(QStringLiteral("Running"));
     REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
     REQUIRE(waitUntil(
-        [&] { return !backend.launcher()->blockers().join('\n').contains("No active"); }));
+        [&] { return !backend.launcher()->warnings().join('\n').contains("No playset"); }));
     CHECK(backend.launcher()->blockers().join('\n').contains("already running"));
     CHECK_FALSE(backend.launcher()->canPlay());
+    runner.shutdown();
+}
+
+TEST_CASE("Play without a playset starts the game without mods", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("3001", "Only");
+    FakeAdapter adapter(world);
+    auto started = std::make_shared<std::atomic<int>>(0);
+    RunnerOptions options = runnerOptions(temp.path() / "profile", adapter);
+    const auto hermetic = options.runtime.configureContext;
+    options.runtime.configureContext = [hermetic, started](services::ServiceContext& context) {
+        hermetic(context);
+        // Records the start; nothing is executed.
+        context.startProcess =
+            [started](const platform::ProcessSpec&) -> Result<platform::StartedProcess> {
+            ++*started;
+            return platform::StartedProcess{4242};
+        };
+    };
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    REQUIRE(backend.activePlaysetId() == -1);
+    REQUIRE(backend.launcher()->canPlay());
+    CHECK_FALSE(backend.launcher()->canRestoreBackup());
+
+    backend.launcher()->play();
+    REQUIRE(waitUntil([&] { return backend.launcher()->state() == QLatin1String("started"); }));
+    CHECK(*started == 1);
+    CHECK_FALSE(backend.launcher()->startedWithPlayset());
+    const QVariantMap notification = backend.notifications()->latest();
+    CHECK(notification.value("title").toString() == "Stellaris started");
+    // The check's warning is what the notification says.
+    CHECK(notification.value("text").toString() ==
+          "No playset is selected, so the game starts without mods.");
+    CHECK(backend.launcher()->canRestoreBackup());
+
+    // One journaled change with the label of a launch without mods, and a
+    // history row without a playset.
+    const auto recorded = runner.callBlocking([](AppRuntime& runtime) {
+        auto restorable = runtime.launcher().lastRestorableTransaction(kGame);
+        auto history = persistence::LaunchHistoryRepository(runtime.database()).latest(kGame, 5);
+        std::string label = restorable && restorable.value() ? restorable.value()->label : "";
+        const bool noPlayset = history && history.value().size() == 1 &&
+                               history.value()[0].outcome == "started" &&
+                               !history.value()[0].playsetId;
+        return std::make_pair(label, noPlayset);
+    });
+    CHECK(recorded.first == "launch stellaris without mods");
+    CHECK(recorded.second);
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Play stays blocked when the active playset cannot be loaded", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("3001", "Only");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    backend.playsets()->create(QStringLiteral("Campaign"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    const std::int64_t id = backend.activePlaysetId();
+    REQUIRE(waitUntil([&] { return backend.launcher()->canPlay(); }));
+
+    // A damaged inventory row: the playset's mods cannot be loaded.
+    REQUIRE(runner.callBlocking([](AppRuntime& runtime) {
+        auto access = runtime.database().access();
+        return access.connection().exec("UPDATE installed_mods SET state = 'bogus'").ok();
+    }));
+    bool reloaded = false;
+    backend.reloadContext(std::nullopt, [&] { reloaded = true; });
+    REQUIRE(waitUntil([&] { return reloaded; }));
+    // Still the selected playset, so Play checks it rather than starting the
+    // game without mods.
+    CHECK(backend.playsets()->activeId() == id);
+    CHECK(backend.activePlaysetId() == id);
+    CHECK(backend.mods()->playsetId() == -1);
+    CHECK_FALSE(backend.launcher()->canPlay());
+    CHECK(backend.launcher()->blockers().join('\n').contains("database could not be read"));
+    CHECK(backend.launcher()->warnings().filter("No playset").isEmpty());
+
+    // Later refreshes keep it blocked, and Play refuses.
+    QSignalSpy refreshed(backend.launcher(), &LaunchController::changed);
+    backend.refreshAcquisition(true);
+    backend.refreshLaunch();
+    REQUIRE(waitUntil([&] { return refreshed.count() >= 2; }));
+    CHECK_FALSE(backend.launcher()->canPlay());
+    backend.launcher()->play();
+    CHECK(backend.launcher()->state() == QLatin1String("idle"));
+    CHECK(backend.notifications()->latest().value("title").toString() ==
+          "The game cannot be started yet");
+    const bool launched = runner.callBlocking([](AppRuntime& runtime) {
+        auto history = persistence::LaunchHistoryRepository(runtime.database()).latest(kGame, 5);
+        return !history || !history.value().empty();
+    });
+    CHECK_FALSE(launched);
+    backend.shutdown();
     runner.shutdown();
 }
 

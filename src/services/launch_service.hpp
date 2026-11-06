@@ -1,6 +1,8 @@
 #pragma once
 
-// Validated direct launch with the active playset (spec section 7).
+// Validated direct launch with the active playset, or without one (spec
+// section 7; the owner's decision of 2026-11-06: no playset means a launch
+// without mods).
 //
 // check() gathers every blocking condition and warning without changing
 // anything: installation present and its executable on disk, direct launch
@@ -12,15 +14,18 @@
 // (one with its launch label or a target in its user-data folder). Other
 // interrupted transactions are warnings: they cannot make this game's files
 // inconsistent, and one that cannot be recovered must not keep every game
-// from launching.
+// from launching. Without a playset (std::nullopt) only the playset checks
+// are skipped and a warning says the game starts without mods; a playset id
+// that no longer exists still blocks.
 //
 // launch() re-checks, builds the adapter's LaunchPlan for the enabled mods in
-// playset order and validates it. Only then does it ask the coordinator to
-// close the game's Steam helper session, wait until the helper has exited and
-// park its acquisition jobs, so a launch refused while preparing leaves
-// acquisition alone. It applies
+// playset order (no mods without a playset) and validates it. Only then does
+// it ask the coordinator to close the game's Steam helper session, wait until
+// the helper has exited and park its acquisition jobs, so a launch refused
+// while preparing leaves acquisition alone. It applies
 // plan.configWrites as ONE file transaction (backups, rollback, crash journal;
-// label "launch <game> playset <id> (<name>)") and starts the executable
+// label "launch <game> playset <id> (<name>)", or "launch <game> without
+// mods" without a playset) and starts the executable
 // through the injected process starter with the plan's argv vector, working
 // folder and environment (never a shell). If the process cannot be started,
 // the transaction's backups are restored so the previous configuration is
@@ -86,24 +91,26 @@ public:
     LaunchService(const ServiceContext& context, AcquisitionCoordinator* coordinator) noexcept
         : m_ctx(context), m_coordinator(coordinator) {}
 
-    LaunchCheck check(const GameKey& game, std::int64_t playsetId,
+    // `playsetId` std::nullopt: no playset, the game starts without mods.
+    LaunchCheck check(const GameKey& game, std::optional<std::int64_t> playsetId,
                       const LaunchCheckOptions& options = {});
     // Always checks with the default options (write probes included).
-    Result<LaunchOutcome> launch(const GameKey& game, std::int64_t playsetId);
+    Result<LaunchOutcome> launch(const GameKey& game, std::optional<std::int64_t> playsetId);
 
     // Configuration transactions interrupted by a crash (any game).
     Result<std::vector<platform::TransactionRecord>> interruptedTransactions();
     Result<platform::TransactionRecord> recoverInterrupted(std::string_view transactionId);
-    // Newest committed launch transaction of `game` (the configuration from
-    // before that launch can be restored).
+    // Newest committed launch transaction of `game`, with or without a playset
+    // (the configuration from before that launch can be restored).
     Result<std::optional<platform::TransactionRecord>>
     lastRestorableTransaction(const GameKey& game);
     // User-initiated "restore pre-launch configuration".
     Result<platform::TransactionRecord> restoreTransaction(std::string_view transactionId);
 
-    // "launch <game> playset <id> (<name>)"
-    static std::string transactionLabel(const GameKey& game, std::int64_t playsetId,
-                                        std::string_view playsetName);
+    // "launch <game> playset <id> (<name>)", or "launch <game> without mods"
+    // without a playset.
+    static std::string transactionLabel(const GameKey& game, std::optional<std::int64_t> playsetId,
+                                        std::string_view playsetName = {});
     // Finished transactions kept for restore (older ones are pruned after launches).
     static constexpr std::size_t kKeptTransactions = 20;
 

@@ -306,14 +306,21 @@ Properties:
 
 - `canPlay` (bool);
 - `blockers` (string list, shown next to Play). It always says why Play is
-  unavailable: game not installed or not located, no active playset,
-  enabled entries not ready, executable missing, folders not writable, a
-  running game or Paradox launcher, an interrupted configuration change,
-  read-only session;
-- `warnings` (string list);
+  unavailable: game not installed or not located, enabled entries not ready,
+  executable missing, folders not writable, a running game or Paradox
+  launcher, an interrupted configuration change, read-only session. Having no
+  active playset is not a blocker: Play then starts the game without mods
+  (owner's decision, 2026-11-06). A selected playset that cannot be loaded,
+  or an active playset that cannot be read, still blocks: Play never falls
+  back to a launch without mods;
+- `warnings` (string list), for example "No playset is selected, so the game
+  starts without mods.";
 - `busy` (bool), `state` ("idle" | "validating" | "applying" | "starting" |
   "started" | "failed");
 - `lastError`, `lastErrorDetail`;
+- `startedWithPlayset` (bool): whether the last started launch used a
+  playset, so the "started" text says what is running even when the
+  selection changes afterwards;
 - `hasInterruptedTransaction` (bool), `canRestoreBackup` (bool).
 
 The verdict is refreshed whenever the playset, the inventory or the

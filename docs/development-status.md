@@ -31,6 +31,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Qt-free services (games, playsets, sharing, acquisition, launch) | `src/services`, [`architecture-services.md`](architecture-services.md) | done, tested | |
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
+| Play without a playset (for 0.1.1) | `src/services/launch_service`, `src/app/core/view_data`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/vanilla-launch`. Owner's decision of 2026-11-06: spec section 7 says "validate the installation, active playset, ..."; no playset now means a launch without mods instead of a blocker. Every other check still runs; the empty mod list is written as one journaled transaction labelled `launch <game> without mods`, which Restore and Recover handle like any launch. Tested with fakes only; **not run against a real game** (a live run needs the owner's approval) | |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
@@ -40,6 +41,49 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
+
+## Test status (2026-11-06, Play without a playset, `agent/vanilla-launch`)
+
+Local runs only; nothing of this has run on GitHub, and the application was not
+started against the real games (in read-only verification mode Play is blocked
+anyway).
+
+- `debug` preset: **0 warnings**, **507/507 tests pass**, by label: core 50,
+  sharing 54, persistence 71, platform 51, providers 61, games 52, services
+  80, application 93.
+- `core-clang-cl` (LLVM 22, UBSan, warnings as errors): 0 warnings, 414/414.
+- New tests: in `launch_service_tests.cpp`, a launch without a playset through
+  the real Stellaris adapter (one warning, `enabled_mods` emptied with
+  `disabled_dlcs` and an unknown key kept, one transaction labelled
+  `launch stellaris without mods`, a history row without a playset, Restore
+  finding both label forms) and every other blocker still applying; in
+  `runner_tests.cpp`, Play without a playset through the Backend; in
+  `qml_tests.cpp`, the Play button enabled with its tool tip, accessible
+  description and warning line. Matching the old label prefix in
+  `lastRestorableTransaction()`, or the old `hasPlayset` condition in
+  `PlaySection.qml`, makes them fail. The new and changed launch tests passed
+  10 times each (90 runs).
+- After the adversarial review: a selected playset whose mods cannot be
+  loaded no longer turns into a launch without mods (the Backend and the
+  launch check keep the selected id; `runtime_tests.cpp` and
+  `runner_tests.cpp` damage an inventory row and check that Play stays
+  blocked, also after later refreshes), and an active playset that cannot be
+  read blocks instead of counting as none. Launch verdicts computed for
+  another playset are dropped, the "started" text follows what the launch
+  used (`LaunchController::startedWithPlayset`; `qml_tests.cpp` launches,
+  then creates a playset), and an interrupted change is offered for recovery
+  even when the check stops early (no adapter, installation unreadable).
+  Reverting each fix makes its test fail, except the dropping of stale
+  verdicts, which depends on reply timing and has no test; the new tests
+  passed 10 times each (70 runs). The Play section's state line no longer uses the deprecated
+  injected `text` parameter in `onTextChanged` (a QML warning on every launch,
+  seen once the QML test pressed Play).
+- Fake-backend QML tests (`ui/dev/preview.sh --test`, offscreen): 23/23.
+- `scripts/check-format.sh`: 238 files OK. `clang-tidy` 22.1.8 on the nine
+  changed `.cpp` files: no findings. QML lint (`ui/dev/preview.sh --lint`, and
+  `qmllint` on the changed dev files): clean, apart from two earlier
+  `missing-property` warnings in `tst_ui.qml` (`activeFocusItem.text`, lines this
+  change does not touch).
 
 ## Test status (2026-11-06, updater lockdown merged)
 
