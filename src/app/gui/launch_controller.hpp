@@ -10,7 +10,9 @@
 //
 // play() moves through validating -> applying -> starting -> started (or
 // failed); the configuration is written by LaunchService as one file
-// transaction and the game executable is started directly.
+// transaction and the game executable is started directly. A launch parks the
+// game's Workshop downloads (and resumes them if it fails), so the downloads
+// view is refreshed after every outcome.
 
 #include "app/core/view_data.hpp"
 

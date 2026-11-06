@@ -319,6 +319,12 @@ Properties:
 The verdict is refreshed whenever the playset, the inventory or the
 downloads change, after a launch, and when the window is activated.
 
+`play()` closes the game's Steam helper session and parks its Workshop
+downloads before the configuration is written (their `JobsModel` rows say
+"Waiting to resume"); if the game cannot be started after that, the downloads
+resume. After every launch outcome, success or failure, `Backend.acquisition`
+and the mod rows are refreshed at once.
+
 Invokables:
 
 - `play()`;
