@@ -35,6 +35,20 @@ publicly. Nothing is sent anywhere automatically; there is no telemetry.
 
 ## Steam is not running, not signed in, or the game is not owned
 
+**Play** needs the running Steam client for a Steam copy of the game (one
+found in a Steam library, or located by hand inside one). Without it, Play
+stays unavailable and says, for example, "Steam is not running. Start Steam
+and sign in, then launch Stellaris." Start Steam; Play becomes available
+within a few seconds, without restarting the manager or clicking anything.
+A copy from another store that you located by hand starts without Steam. The
+manager only sees whether Steam runs (`steam.exe`, or the process Steam
+registered for itself), not whether you are signed in: if Steam runs but
+nobody is signed in, the game itself decides what happens. With several
+Windows users signed in on the same PC, another user's running Steam counts
+as running too. When the manager cannot list running programs, Play is not
+blocked, and a note next to it says that neither a running game nor Steam
+could be checked.
+
 Workshop acquisition uses your running Steam client (ADR 0003). Jobs then wait
 in *needs user action* with one of these explanations:
 
@@ -202,7 +216,7 @@ pre-launch configuration** if you do not want to keep it.
 
 Play is blocked while the game or a conflicting configuration writer (such as
 the Paradox launcher) runs, so neither overwrites the other. Close it (check
-Task Manager) and press Play again.
+Task Manager); Play becomes available again within a few seconds.
 
 ## "Already running for this profile"
 

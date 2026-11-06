@@ -154,10 +154,14 @@ validation; a new provider means a new provider module and a new `source` key
    read-only sessions); running processes (`platform::listProcesses()`) are
    compared with the adapter's `processNames()`, so a running game or a
    conflicting configuration writer (for example the Paradox launcher)
-   blocks; an interrupted configuration transaction of this game blocks,
-   interrupted transactions of other games are warnings. Blockers are shown
-   next to Play. Without an active playset there are no entries to check: the
-   game starts without mods, with a warning, and every other check still runs.
+   blocks, and so does a Steam installation without a running Steam client
+   (the same process list, plus the pid Steam registered; a copy from another
+   store located by hand starts without Steam); an interrupted configuration
+   transaction of this game blocks, interrupted transactions of other games
+   are warnings. Blockers are shown next to Play; while Steam, the game or the
+   launcher blocks, the application checks the processes again every few
+   seconds. Without an active playset there are no entries to check: the game
+   starts without mods, with a warning, and every other check still runs.
 2. `GameAdapter::buildLaunchPlan()` returns the executable, working directory,
    argument vector, environment additions and the minimal `ConfigWrite`s,
    generated from the existing files so unrelated settings survive. The plan

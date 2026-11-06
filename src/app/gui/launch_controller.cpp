@@ -19,7 +19,16 @@ LaunchController::LaunchController(Backend* backend, QObject* parent)
     : QObject(parent), m_backend(backend) {}
 
 void LaunchController::apply(LaunchData data) {
+    // What the last Play press reported is over once its cause has gone on its
+    // own: the game it started was seen running and has exited, or what
+    // refused it (Steam closed, the game or launcher running, ...) is resolved.
+    // A failure that left Play available stays until the next press.
+    const bool exited =
+        m_state == QLatin1String("started") && m_data.runningInstance && !data.runningInstance;
+    const bool resolved = m_state == QLatin1String("failed") && !m_data.canPlay && data.canPlay;
     m_data = std::move(data);
+    if (exited || resolved)
+        setState(QStringLiteral("idle"), false);
     emit changed();
 }
 

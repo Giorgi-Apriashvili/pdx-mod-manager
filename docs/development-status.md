@@ -32,6 +32,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
 | Play without a playset (for 0.1.1) | `src/services/launch_service`, `src/app/core/view_data`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/vanilla-launch`. Owner's decision of 2026-11-06: spec section 7 says "validate the installation, active playset, ..."; no playset now means a launch without mods instead of a blocker. Every other check still runs; the empty mod list is written as one journaled transaction labelled `launch <game> without mods`, which Restore and Recover handle like any launch. Tested with fakes only; **not run against a real game** (a live run needs the owner's approval) | |
+| Play requires the Steam client for Steam installations (for 0.1.1) | `src/services/launch_service`, `src/platform/steam`, `src/app/gui/backend`, `src/app/core/view_data`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`app.md`](app.md), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/require-steam`. Owner's decision of 2026-11-06: games could be started directly with Steam closed; Play now requires the Steam client for Steam installations (`DistributionSource::Steam`: found through Steam's app manifest, or located by hand inside a Steam library). A copy from another store located by hand is not blocked. The check uses the process list the running-instance check already reads (`steam.exe`, or the pid in `HKCU\Software\Valve\Steam\ActiveProcess` without a readable name); an unreadable list is a warning. While Steam, the game or the Paradox launcher blocks, the Backend re-checks every 3 s without the write probes, so Play follows on its own. Tested with fakes only; **not run against a real game or Steam** (a live run needs the owner's approval). Limitations: whether Steam runs is detected, whether it is signed in is not; the process list covers every Windows session, so another signed-in user's Steam counts as running | |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
@@ -41,6 +42,60 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
+
+## Test status (2026-11-06, Play requires Steam, `agent/require-steam`)
+
+Local runs only, with fakes; nothing of this has run on GitHub, and no game
+was started and Steam was neither started nor stopped.
+
+- `debug` preset: **0 warnings**, **517/517 tests pass**, by label: core 50,
+  sharing 54, persistence 71, platform 51, providers 61, games 52, services
+  84, application 99 (after the review fixes below).
+- `core-clang-cl` (LLVM 22, UBSan, warnings as errors): 0 warnings, 418/418.
+- Review fixes: the installation's blockers (folders, a running game or
+  launcher, Steam) now come before the playset's one-per-mod blockers, so
+  the Play section does not hide them behind "...and N more"; an unreadable
+  process list gives one warning for both checks, first in the list, so it
+  shows next to Play; a folder located by hand with a trailing separator is
+  classified like one without (it was `Manual` inside a Steam library); the
+  "started" state line and a refusal's "Could not start the game" banner go
+  back to idle once the game has exited or the refusal is resolved. New
+  tests: the blocker order and refusal codes, the single warning, the
+  trailing separator, the state clearing (and a start failure that keeps its
+  banner), and a playset chosen while a re-check waits on the worker. Each
+  fails against the code before its fix, and the last one when a dropped
+  re-check does not clear its in-flight flag; the eight new and changed
+  tests passed 10 times each, eight in parallel.
+- New tests: in `launch_service_tests.cpp`, a Steam installation blocked
+  with the exact text and `steamNotRunning`, with and without a playset,
+  `launch()` refusing with `ProviderUnavailable` without a plan, a
+  transaction or a process, and going ahead once `steam.exe` is listed; the
+  registered pid counting only for a process without a name; through the
+  real Stellaris adapter, a copy located outside a Steam library launching
+  with Steam closed (no Steam environment) and one located inside a library
+  blocked; an unset or failing process lister giving a warning and no
+  blocker. In `runtime_tests.cpp`, the flags in `LaunchData`; in
+  `runner_tests.cpp`, Play becoming available on its own after `steam.exe`
+  appears in the fake process list, the game exits, the Paradox launcher
+  closes, or Steam starts while the game runs, with the re-checks stopping
+  afterwards, and no re-checks in read-only sessions; in `qml_tests.cpp`,
+  the Play section's blocker, tool tip and accessible description, and the
+  button enabling on its own. The test fixtures list a running Steam client
+  (the existing tests that expect Play keep passing for that reason, not
+  through a weaker check). Disabling the Steam rule fails the services,
+  runtime, runner and QML tests; turning the re-checks off fails the runner
+  and QML tests; re-checks that never stop fail the runner test. The 13 new
+  and changed tests passed 10 times each, eight in parallel (130 runs).
+- Fake-backend QML tests (`ui/dev/preview.sh --test`, offscreen): 23/23.
+- `scripts/check-format.sh`: 238 files OK. `clang-tidy` 22.1.8 on the five
+  changed `.cpp` files and the four changed test files: no findings. QML lint
+  (`ui/dev/preview.sh --lint`, and `qmllint` on the changed dev fake): clean.
+  `scripts/check-update-contract.sh`: 54 source checks OK.
+- Read-only `--screenshot` of Stellaris with a new scratch profile while
+  Steam was running (pid 37408, the same as `ActiveProcess`): the Play
+  section shows only the read-only blocker, so the production process list
+  and registry reading find the real client. The case with Steam closed was
+  not run (validation step 6, item 7, needs the owner).
 
 ## Test status (2026-11-06, Play without a playset, `agent/vanilla-launch`)
 
@@ -220,6 +275,7 @@ Done on 2026-10-30 ([results](validation.md#6-results)): EU4 steps 1-6, 8,
 | What | Why open |
 | --- | --- |
 | EU4 step 7 | run for Stellaris; same code path |
+| Play with Steam closed (0.1.1; step 6, item 7) | new on 2026-11-06; tested with fakes only |
 | Steam's own offline mode | the Web API was made unreachable instead |
 | EU4 mods with `dependencies` and override precedence | not covered by the probes |
 

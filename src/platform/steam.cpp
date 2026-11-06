@@ -606,11 +606,15 @@ bool isSteamRunning(const std::vector<RunningProcess>& processes, std::int64_t r
     return false;
 }
 
-bool isSteamRunning() {
-    std::int64_t registeredPid = 0;
+std::int64_t registeredSteamPid() {
     if (auto pid =
             readRegistryDword(HKEY_CURRENT_USER, L"Software\\Valve\\Steam\\ActiveProcess", L"pid"))
-        registeredPid = static_cast<std::int64_t>(*pid);
+        return static_cast<std::int64_t>(*pid);
+    return 0;
+}
+
+bool isSteamRunning() {
+    const std::int64_t registeredPid = registeredSteamPid();
     Result<std::vector<RunningProcess>> processes = listProcesses();
     if (!processes)
         return registeredPid != 0;

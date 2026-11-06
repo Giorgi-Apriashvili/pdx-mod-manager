@@ -49,6 +49,12 @@ inline constexpr const char* kGame = "stellaris";
 inline constexpr const char* kAppId = "281990";
 inline constexpr const char* kExeName = "fakegame.exe";
 inline constexpr const char* kLauncherName = "Paradox Launcher.exe";
+inline constexpr std::int64_t kSteamPid = 3100;
+
+// The Steam client as a process list shows it.
+inline platform::RunningProcess steamClient() {
+    return {kSteamPid, "steam.exe", {}};
+}
 
 inline fs::path u8(std::string_view utf8) {
     return platform::pathFromUtf8(utf8);
@@ -497,7 +503,10 @@ struct World {
 
     std::vector<platform::ProcessSpec> started;
     std::optional<Error> startFailure;
-    std::vector<platform::RunningProcess> processes;
+    // The installation is a Steam one, and the Steam client runs unless a
+    // test removes it.
+    std::vector<platform::RunningProcess> processes{steamClient()};
+    std::int64_t registeredSteamPid = 0; // ServiceContext::steamPid
     int fingerprintCalls = 0;
 
     World() {
@@ -522,6 +531,7 @@ struct World {
         ctx.listProcesses = [this]() -> Result<std::vector<platform::RunningProcess>> {
             return processes;
         };
+        ctx.steamPid = [this] { return registeredSteamPid; };
         ctx.fingerprint = [this](const fs::path& folder) {
             ++fingerprintCalls;
             return providers::fingerprintDirectory(folder);

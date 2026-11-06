@@ -101,6 +101,10 @@ struct LaunchData {
     QStringList warnings;
     bool interrupted = false;
     bool canRestoreBackup = false;
+    // Blocked by processes that come and go on their own (LaunchCheck):
+    // Backend re-checks while either is set.
+    bool steamNotRunning = false;
+    bool runningInstance = false;
 };
 
 struct InventoryRowData {

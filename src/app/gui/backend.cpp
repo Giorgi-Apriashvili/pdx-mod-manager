@@ -72,6 +72,10 @@ Backend::Backend(ServiceRunner& runner, BackendOptions options, QObject* parent)
     m_trailingLaunchRefresh.setSingleShot(true);
     m_trailingLaunchRefresh.setInterval(static_cast<int>(kLaunchRefreshThrottleMs));
     connect(&m_trailingLaunchRefresh, &QTimer::timeout, this, &Backend::refreshLaunch);
+    m_launchRecheck.setSingleShot(true);
+    m_launchRecheck.setInterval(m_options.launchRecheckMs);
+    connect(&m_launchRecheck, &QTimer::timeout, this, &Backend::recheckLaunch);
+    connect(m_launcher, &LaunchController::changed, this, &Backend::followLaunchBlockers);
     connect(&m_runner, &ServiceRunner::processStarting, m_launcher,
             &LaunchController::processStarting);
     if (auto* app = qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
@@ -740,6 +744,47 @@ void Backend::refreshLaunch() {
         [this, game, playsetId](LaunchData data) {
             if (game == m_game && playsetId == m_playsetId)
                 m_launcher->apply(std::move(data));
+        });
+}
+
+// Steam, the game and the Paradox launcher start and stop without telling the
+// application. While one of them blocks Play, the processes are checked again
+// (one check at a time), and when that changes the verdict the launch check
+// runs in full. Read-only sessions never play, so they never re-check.
+void Backend::followLaunchBlockers() {
+    const LaunchData& shown = m_launcher->data();
+    const bool waiting = !m_options.readOnly && !m_game.isEmpty() &&
+                         (shown.steamNotRunning || shown.runningInstance);
+    if (!waiting)
+        m_launchRecheck.stop();
+    else if (!m_launchRecheck.isActive() && !m_launchRecheckInFlight)
+        m_launchRecheck.start();
+}
+
+void Backend::recheckLaunch() {
+    if (m_game.isEmpty() || m_options.readOnly)
+        return;
+    m_launchRecheckInFlight = true;
+    const QString game = m_game;
+    const std::int64_t playsetId = m_playsetId;
+    // Checked like a read-only session, without the write probes: re-checking
+    // must not keep creating files in the game's folders.
+    QueryOptions options = queryOptions();
+    options.readOnly = true;
+    m_runner.call(
+        this,
+        [game, playsetId, options](AppRuntime& runtime) {
+            return queries::launchData(runtime, game, playsetId, options);
+        },
+        [this, game, playsetId](const LaunchData& data) {
+            m_launchRecheckInFlight = false;
+            const LaunchData& shown = m_launcher->data();
+            if (game == m_game && playsetId == m_playsetId &&
+                (data.steamNotRunning != shown.steamNotRunning ||
+                 data.runningInstance != shown.runningInstance))
+                refreshLaunch(); // its verdict decides whether to go on
+            else
+                followLaunchBlockers();
         });
 }
 

@@ -71,6 +71,19 @@ written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
   for the same refresh (`Backend::refreshAcquisition()`) after every outcome,
   so the downloads and the playset rows show the parked or resumed jobs at
   once.
+- **Processes come and go without an event.** The launch verdict is also
+  refreshed when the window is activated (at most every 5 s) and 4 s and 15 s
+  after a launch. While it is blocked because Steam is not running, or the
+  game or the Paradox launcher is (`LaunchData::steamNotRunning`,
+  `runningInstance`), the Backend checks again every
+  `BackendOptions::launchRecheckMs` (3 s): one check at a time on the worker,
+  without the write probes (as in a read-only session, so nothing is created
+  in the game's folders every few seconds). When that check changes either
+  flag, the full launch check runs and its verdict is shown, so Play becomes
+  available on its own once Steam has started or the game has closed. The
+  re-checks stop when neither flag is set, when another game is selected, and
+  never run in read-only sessions. Pressing Play still checks again on the
+  worker.
 
 ### Steam helper host
 
@@ -333,7 +346,11 @@ platform:
   without a playset (a launch without mods through a recording process
   starter, and the Play button enabled with its accessible description), and
   Play kept blocked when the selected playset cannot be loaded or the active
-  one cannot be read;
+  one cannot be read; Play blocked while the fake process list has no Steam
+  client, and available on its own once `steam.exe` appears or the game or
+  the Paradox launcher goes away, after which the re-checks stop (none at all
+  in read-only sessions), also in the Play section's text and accessible
+  description;
 - a 2,000-entry playset with a time budget for each GUI-thread operation;
 - the real QML module against the real Backend, without QML warnings, with a
   playset and a mod named like rich text with a remote image: nothing tries

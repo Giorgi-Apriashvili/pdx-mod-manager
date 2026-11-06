@@ -753,6 +753,70 @@ TEST_CASE("Play is available without a playset and says the game starts without 
     CHECK(QmlWarnings::list().isEmpty());
 }
 
+TEST_CASE("Play says Steam is not running and becomes available once it runs", "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    auto steam = std::make_shared<std::atomic<bool>>(false);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    const auto hermetic = options.runtime.configureContext;
+    options.runtime.configureContext = [hermetic, steam](services::ServiceContext& context) {
+        hermetic(context);
+        context.listProcesses = [steam] {
+            std::vector<platform::RunningProcess> processes{{7, "explorer.exe", {}}};
+            if (*steam)
+                processes.push_back(steamClient());
+            return Result<std::vector<platform::RunningProcess>>(std::move(processes));
+        };
+    };
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        BackendOptions backendOptions;
+        backendOptions.launchRecheckMs = 50;
+        Backend backend(runner, backendOptions);
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+
+        auto* play = window->findChild<QQuickItem*>(QStringLiteral("playButton"));
+        REQUIRE(play);
+        const auto evaluate = [&](const char* expression) {
+            return QQmlExpression(qmlContext(play), play, QString::fromLatin1(expression))
+                .evaluate();
+        };
+        const QString blocker =
+            QStringLiteral("Steam is not running. Start Steam and sign in, then launch Stellaris.");
+        CHECK_FALSE(play->isEnabled());
+        CHECK(evaluate("root.blockerLines.join('|')").toString() == blocker);
+        CHECK(evaluate("toolTipText").toString() == blocker);
+        CHECK(evaluate("Accessible.description").toString() == "Blocked: " + blocker);
+
+        // Steam starts; nothing else happens in the window.
+        *steam = true;
+        REQUIRE(waitUntil([&] { return play->isEnabled(); }));
+        CHECK(evaluate("root.blockerLines.length").toInt() == 0);
+        CHECK(evaluate("Accessible.description").toString() == "Starts the game without mods");
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
 TEST_CASE("The Updates section works with the keyboard", "[app][qml][a11y][update]") {
     qputenv("QT_QUICK_BACKEND", "software");
     UpdatesHarness h;

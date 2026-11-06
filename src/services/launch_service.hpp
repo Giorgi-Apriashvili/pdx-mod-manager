@@ -10,19 +10,37 @@
 // (disabled entries never block), the user-data and mod folders writable
 // (probed unless LaunchCheckOptions::probeWriteAccess is off), no running
 // instance of the game or conflicting configuration writer (Paradox launcher),
-// and no interrupted configuration transaction of THIS game awaiting recovery
-// (one with its launch label or a target in its user-data folder). Other
-// interrupted transactions are warnings: they cannot make this game's files
-// inconsistent, and one that cannot be recovered must not keep every game
-// from launching. Without a playset (std::nullopt) only the playset checks
-// are skipped and a warning says the game starts without mods; a playset id
-// that no longer exists still blocks.
+// the Steam client running for a Steam installation (the owner's decision of
+// 2026-11-06: one with DistributionSource::Steam, which detection gives to
+// Steam's own installations and to folders located inside a Steam library; a
+// copy from another store starts without Steam), and no interrupted
+// configuration transaction of THIS game awaiting recovery (one with its
+// launch label or a target in its user-data folder). Other interrupted
+// transactions are warnings: they cannot make this game's files inconsistent,
+// and one that cannot be recovered must not keep every game from launching.
+// Without a playset (std::nullopt) only the playset checks are skipped and a
+// warning says the game starts without mods; a playset id that no longer
+// exists still blocks. The installation's blockers (folders, processes,
+// Steam) come before the playset's, which list every enabled entry that is
+// not ready.
 //
-// launch() re-checks, builds the adapter's LaunchPlan for the enabled mods in
-// playset order (no mods without a playset) and validates it. Only then does
-// it ask the coordinator to close the game's Steam helper session, wait until
-// the helper has exited and park its acquisition jobs, so a launch refused
-// while preparing leaves acquisition alone. It applies
+// The process checks share one process list (ServiceContext::listProcesses).
+// Steam counts as running when steam.exe is listed, or the pid Steam
+// registered (ServiceContext::steamPid) is listed without a readable name;
+// whether it is signed in is not checked, and the list covers every Windows
+// session, so another user's Steam client counts too. When the list cannot
+// be read, one warning says that neither a running instance nor Steam could
+// be checked.
+//
+// launch() re-checks and refuses what check() blocks, with the error code of
+// the weightiest reason among the blockers (Interrupted, then
+// ConflictingProcess, then ProviderUnavailable for Steam not running,
+// otherwise ValidationFailed); the message names the first blocker and the
+// detail lists them all. It then builds the adapter's LaunchPlan for the
+// enabled mods in playset order (no mods without a playset) and validates it.
+// Only then does it ask the coordinator to close the game's Steam helper
+// session, wait until the helper has exited and park its acquisition jobs, so
+// a launch refused while preparing leaves acquisition alone. It applies
 // plan.configWrites as ONE file transaction (backups, rollback, crash journal;
 // label "launch <game> playset <id> (<name>)", or "launch <game> without
 // mods" without a playset) and starts the executable
@@ -64,6 +82,7 @@ struct LaunchCheck {
     bool interruptedTransaction = false; // a change of any game awaits recovery (offer Recover)
     bool interruptedBlocks = false;      // ... and one of them is this game's (a blocker)
     bool runningInstance = false;        // game or conflicting writer running
+    bool steamNotRunning = false;        // a Steam installation, and no Steam client running
 };
 
 struct LaunchCheckOptions {

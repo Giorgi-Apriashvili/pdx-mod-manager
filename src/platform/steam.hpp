@@ -166,6 +166,11 @@ Result<AppWorkshopManifest> readAppWorkshopManifest(const fs::path& acfPath);
 bool isSteamRunning();
 bool isSteamRunning(const std::vector<RunningProcess>& processes, std::int64_t registeredPid = 0);
 
+// The pid in HKCU\Software\Valve\Steam\ActiveProcess (read only), or 0 when
+// none is recorded. Steam may leave a stale pid behind, so it means nothing
+// without a process list (see isSteamRunning()).
+std::int64_t registeredSteamPid();
+
 // "steam_api64.dll".
 const char* steamApiLibraryName() noexcept;
 

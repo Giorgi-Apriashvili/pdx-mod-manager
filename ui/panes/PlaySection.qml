@@ -12,7 +12,7 @@ Rectangle {
     // Without a playset Play starts the game without mods; a warning says so.
     readonly property bool hasPlayset: Backend.playsets.activeId >= 0
     // The backend always explains why Play is unavailable (game not located,
-    // mods not ready, game or launcher running, ...).
+    // mods not ready, game or launcher running, Steam not running, ...).
     readonly property list<string> blockerLines: {
         const lines = Theme.lines(launcher.blockers)
         if (lines.length > 0 || Backend.games.currentName.length > 0)

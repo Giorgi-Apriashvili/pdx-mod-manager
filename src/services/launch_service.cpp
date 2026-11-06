@@ -7,6 +7,7 @@
 #include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "platform/fs.hpp"
+#include "platform/steam.hpp"
 #include "services/acquisition_coordinator.hpp"
 #include "services/internal/util.hpp"
 
@@ -109,6 +110,17 @@ void checkWritable(const fs::path& directory, const char* what, std::set<fs::pat
     }
 }
 
+// Whether a launch needs the Steam client (the owner's decision of
+// 2026-11-06). Detection marks an installation Steam when Steam's own app
+// manifest lists it, or when a folder located by hand lies in
+// <library>/steamapps/common/; both also get the app id, and the launch plan
+// starts them in Steam's app context. Any other folder located by hand (a
+// copy from another store) is Manual and starts without Steam; detection
+// never writes Unknown.
+bool needsSteamClient(const GameInstallation& installation) {
+    return installation.distribution == DistributionSource::Steam;
+}
+
 // Interrupted transactions of any game offer Recover; this game's block
 // (`userData` empty: attributed by their launch label alone), others warn.
 void checkInterrupted(const ServiceContext& ctx, const GameKey& game, const std::string& gameName,
@@ -171,6 +183,62 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
         if (!adapter.capabilities(install).directLaunch)
             check.blockers.push_back("Direct launch is not available for this installation of " +
                                      gameName + ".");
+
+        // The installation's blockers come before the playset's (one per mod
+        // that is not ready): the Play section shows only the first few, and
+        // a single action such as starting Steam must not hide behind them.
+        std::set<fs::path> checked;
+        if (install.userDataPath.empty()) {
+            check.blockers.push_back("The " + gameName +
+                                     " user data folder is unknown. Locate the game again.");
+        } else if (options.probeWriteAccess) {
+            checkWritable(install.userDataPath, "user data folder", checked, check);
+            checkWritable(install.userDataPath / "mod", "mod folder", checked, check);
+        }
+
+        const games::ProcessNames names = adapter.processNames(install);
+        const bool viaSteam = needsSteamClient(install);
+        // One warning for both process checks, for the same reason.
+        if (!ctx.listProcesses) {
+            check.warnings.push_back("Running instances of " + gameName + " could not be checked" +
+                                     (viaSteam ? ", nor whether Steam is running." : "."));
+        } else if (auto processes = ctx.listProcesses(); !processes) {
+            check.warnings.push_back("Could not check whether " + gameName + " is already running" +
+                                     (viaSteam ? " or whether Steam is running" : "") + ": " +
+                                     processes.error().message);
+        } else {
+            std::set<std::string> reported;
+            for (const platform::RunningProcess& process : processes.value()) {
+                for (const std::string& name : names.game) {
+                    if (platform::executableNameMatches(process.executableName, name) &&
+                        reported.insert(name).second) {
+                        check.runningInstance = true;
+                        check.blockers.push_back(gameName + " is already running (" +
+                                                 process.executableName + ", process " +
+                                                 std::to_string(process.pid) +
+                                                 "). Close it before launching.");
+                    }
+                }
+                for (const std::string& name : names.conflictingWriters) {
+                    if (platform::executableNameMatches(process.executableName, name) &&
+                        reported.insert(name).second) {
+                        check.runningInstance = true;
+                        check.blockers.push_back(
+                            process.executableName +
+                            " (Paradox launcher) is running and may rewrite the mod "
+                            "configuration. Close it before launching.");
+                    }
+                }
+            }
+            // The same list; the registered pid counts only for a process
+            // whose name could not be read.
+            if (viaSteam && !platform::steam::isSteamRunning(processes.value(),
+                                                             ctx.steamPid ? ctx.steamPid() : 0)) {
+                check.steamNotRunning = true;
+                check.blockers.push_back(
+                    "Steam is not running. Start Steam and sign in, then launch " + gameName + ".");
+            }
+        }
     }
 
     persistence::PlaysetRepository playsets(ctx.database);
@@ -227,50 +295,6 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                 for (const PlaysetEntry& entry : entries) {
                     if (entry.enabled)
                         prepared.orderedEnabled.push_back(byIdentity.at(entry.identity));
-                }
-            }
-        }
-    }
-
-    if (check.installation) {
-        const GameInstallation& install = *check.installation;
-        std::set<fs::path> checked;
-        if (install.userDataPath.empty()) {
-            check.blockers.push_back("The " + gameName +
-                                     " user data folder is unknown. Locate the game again.");
-        } else if (options.probeWriteAccess) {
-            checkWritable(install.userDataPath, "user data folder", checked, check);
-            checkWritable(install.userDataPath / "mod", "mod folder", checked, check);
-        }
-
-        const games::ProcessNames names = adapter.processNames(install);
-        if (!ctx.listProcesses) {
-            check.warnings.push_back("Running instances of " + gameName + " could not be checked.");
-        } else if (auto processes = ctx.listProcesses(); !processes) {
-            check.warnings.push_back("Could not check whether " + gameName +
-                                     " is already running: " + processes.error().message);
-        } else {
-            std::set<std::string> reported;
-            for (const platform::RunningProcess& process : processes.value()) {
-                for (const std::string& name : names.game) {
-                    if (platform::executableNameMatches(process.executableName, name) &&
-                        reported.insert(name).second) {
-                        check.runningInstance = true;
-                        check.blockers.push_back(gameName + " is already running (" +
-                                                 process.executableName + ", process " +
-                                                 std::to_string(process.pid) +
-                                                 "). Close it before launching.");
-                    }
-                }
-                for (const std::string& name : names.conflictingWriters) {
-                    if (platform::executableNameMatches(process.executableName, name) &&
-                        reported.insert(name).second) {
-                        check.runningInstance = true;
-                        check.blockers.push_back(
-                            process.executableName +
-                            " (Paradox launcher) is running and may rewrite the mod "
-                            "configuration. Close it before launching.");
-                    }
                 }
             }
         }
@@ -346,6 +370,7 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game,
             detail += (detail.empty() ? "" : "\n") + blocker;
         const ErrorCode code = check.interruptedBlocks ? ErrorCode::Interrupted
                                : check.runningInstance ? ErrorCode::ConflictingProcess
+                               : check.steamNotRunning ? ErrorCode::ProviderUnavailable
                                                        : ErrorCode::ValidationFailed;
         return makeError(code, gameName + " cannot be launched yet: " + check.blockers.front(),
                          detail);

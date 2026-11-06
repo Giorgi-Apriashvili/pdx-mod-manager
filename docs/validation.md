@@ -252,6 +252,20 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
    `enabled_mods` back. Record `dlc_load.json` before the launch, after it
    and after the restore. `pmm-app --profile <new dir> --game <key>
    --live-test "wait-ready,play,restore"` runs the same sequence.
+7. Steam closed (0.1.1; not run yet, needs the owner's approval): with the
+   game not running, exit Steam (**Steam > Exit**) and wait until
+   `tasklist /FI "IMAGENAME eq steam.exe"` lists nothing, then switch back to
+   the manager. Expected: **Play** is unavailable and says "Steam is not
+   running. Start Steam and sign in, then launch Stellaris." (or EU4's
+   name); pressing it starts
+   nothing and writes nothing (`dlc_load.json` unchanged). Then start Steam
+   and sign in without touching the manager. Expected: Play becomes available
+   within about 3 s after `steam.exe` appears, without a click; pressing it
+   starts the game as in item 1. Only the process is checked, so Play may
+   become available while Steam is still signing in; if it does, press it
+   then once and record what the game does. Record the blocker text, the
+   time until Play became available, and what the game did.
+   `--live-test "play-fails"` with Steam closed checks the first half.
 
 ### Step 7: blocking and unavailable entries (B)
 

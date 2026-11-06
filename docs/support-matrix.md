@@ -91,6 +91,7 @@ published release to the next.
 | Workshop: subscribe and download | **Verified (2026-10-30, 4.5.2)**: an item not subscribed before was subscribed, downloaded and verified through the application; the identity check rejected an item of another game without contacting Steam ([evidence](evidence/live-validation-2026-10-30.md)) | Unsupported: requires the game on a Steam account |
 | Workshop: manual fallback (open in Steam, rescan) | Implemented, unverified | Unsupported |
 | Direct launch without the Paradox launcher | **Verified (2026-10-30, 4.5.2)**: started directly, no launcher process; write failure and start failure handled and restored ([evidence](evidence/live-validation-2026-10-30.md)) | Implemented, unverified |
+| Play only while the Steam client runs (from 0.1.1) | Implemented, unverified: tested with fakes only (2026-11-06); checks that Steam runs, not that it is signed in ([validation](validation.md) step 6, item 7) | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
 | In-game verification of enabled mods and order | **Verified (2026-10-30, 4.5.2)** with probe mods: enabled mods loaded, disabled not; the later mod in `enabled_mods` wins a shared file, and moving mods in the app moves the winner ([evidence](evidence/live-validation-2026-10-30.md)) | Unverified |
 
 ## Europa Universalis IV (Steam app 236850)
@@ -114,6 +115,7 @@ name sorts first wins ([evidence](evidence/live-validation-2026-10-30.md); [EU4 
 | Workshop: subscribe and download | **Verified (2026-10-30, 1.37.5)**: an item not subscribed before was subscribed, downloaded and verified through the application; a pending job survived a restart without a duplicate; with the Web API unreachable nothing was subscribed ([evidence](evidence/live-validation-2026-10-30.md)) | Unsupported: requires the game on a Steam account |
 | Workshop: manual fallback | Implemented, unverified | Unsupported |
 | Direct launch without the Paradox launcher | **Verified (2026-10-30, 1.37.5)**: started directly, no launcher process, no restart through Steam despite the missing `steam_appid.txt` ([evidence](evidence/live-validation-2026-10-30.md)) | Implemented, unverified |
+| Play only while the Steam client runs (from 0.1.1) | Implemented, unverified: tested with fakes only (2026-11-06); checks that Steam runs, not that it is signed in ([validation](validation.md) step 6, item 7) | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
 | In-game verification of enabled mods and order | **Verified (2026-10-30, 1.37.5)** with probe mods: enabled mods loaded, disabled not; **the playset order does not decide file overrides** (the mod whose name sorts first wins) ([evidence](evidence/live-validation-2026-10-30.md)) | Unverified |
 
 ## Other combinations
