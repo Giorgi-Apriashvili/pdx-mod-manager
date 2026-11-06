@@ -9,8 +9,8 @@ anyone else, and it publishes nothing for pull requests.
 and no update between two published releases has happened yet. A pre-release is not
 offered by the updater, so the first real test of the update needs two normal
 releases. Treat the first release as the test of this page. The checks added on
-2026-11-06 (the update contract, the repository id, the extended smoke test) have
-not run on GitHub yet either.
+2026-11-06 (the update contract, the repository id, the extended smoke test)
+passed in a dry run on the same day ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)).
 
 Every release must keep the [update contract](#the-update-contract): copies that are
 already installed find and install it only through the values frozen in 0.1.0.

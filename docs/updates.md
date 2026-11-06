@@ -170,8 +170,8 @@ the installer with these exact arguments, waiting for the real `pmm-app`, with a
 stand-in program for the relaunch, and the client against a local stub and a real
 GitHub asset. Since 2026-11-06 the installer smoke test on the GitHub runner also
 runs an update run with these arguments against a held mutex and checks that it
-starts the installed `pmm-app.exe`; that test has not run on GitHub yet. The button
-pressed in a real installed copy has not been run.
+starts the installed `pmm-app.exe`; it passed on 2026-11-06. The button pressed in a
+real installed copy has not been run.
 
 ## Compatibility contract (frozen since 0.1.0)
 

@@ -65,17 +65,17 @@ and an update from one published release to the next.
 | --- | --- | --- | --- | --- |
 | Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 402 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 65 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
 | Windows (CI, `windows-2025`) | MSVC from the runner image | **Verified** 2026-10-30, CI green | **Verified** 2026-10-30, CI green | Unverified |
-| Windows (CI, `windows-2025`) | MSVC with ASan; clang-cl with UBSan (LLVM from the runner image) | Jobs written, not run on GitHub yet | Not built in these jobs | Not built in these jobs |
+| Windows (CI, `windows-2025`) | MSVC with ASan; clang-cl with UBSan (LLVM from the runner image) | **Verified** 2026-11-06, CI green | Not built in these jobs | Not built in these jobs |
 
 ## Installing and updating
 
 | Capability | Windows 11 |
 | --- | --- |
 | Per-user installer: install, upgrade, failed upgrade, uninstall | **Verified** 2026-10-30, silent runs in a scratch folder ([evidence](evidence/installer-2026-10-30.md)); wizard not clicked through |
-| Installer: no downgrade over a newer version, one Start Menu shortcut, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, a folder with a non-ASCII name | Implemented 2026-11-06, unverified: compiled without warnings; the extended smoke test runs these on the GitHub runner and has not run yet |
+| Installer: no downgrade over a newer version, one Start Menu shortcut, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, a folder with a non-ASCII name | **Verified** 2026-11-06 by the extended smoke test on a clean GitHub runner ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) |
 | "Check for updates" and the daily check (on by default, once a day, a banner for a new version) | Implemented, unverified against a published release (none exists yet); tested against a local stub. One real request by repository id, 2026-11-06: HTTP 404 without a redirect, as expected with nothing published |
 | "Update and restart" (download, verify, installer, relaunch) | Implemented, unverified end to end. Parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch. The relaunch of the real `pmm-app.exe` is in the smoke test from 2026-11-06, not run yet. Not available in `--profile` and `--no-steam` sessions |
-| Update contract (the values every released copy relies on) | Checked from 2026-11-06 by `scripts/check-update-contract.sh` in CI and by the `Release` workflow ([contract](updates.md#compatibility-contract-frozen-since-010)); passes locally, not run on GitHub yet |
+| Update contract (the values every released copy relies on) | Checked from 2026-11-06 by `scripts/check-update-contract.sh` in CI and by the `Release` workflow ([contract](updates.md#compatibility-contract-frozen-since-010)); passed on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) |
 | `Release` workflow | Dry run **verified** 2026-10-30 (full CI, package, installer smoke test); publish step not run. The contract checks added 2026-11-06 have not run |
 
 ## Stellaris (Steam app 281990)
