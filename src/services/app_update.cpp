@@ -116,6 +116,31 @@ bool isReleaseId(std::string_view id) {
     return !id.empty() && id.size() <= 20 && std::all_of(id.begin(), id.end(), isDigit);
 }
 
+// One DNS label as a URL parser writes it: lowercase, no leading or trailing
+// hyphen.
+bool isHostLabel(std::string_view label) {
+    if (label.empty() || label.size() > 63 || label.front() == '-' || label.back() == '-')
+        return false;
+    return std::all_of(label.begin(), label.end(),
+                       [](char c) { return isDigit(c) || (c >= 'a' && c <= 'z') || c == '-'; });
+}
+
+// One or more labels, then `suffix`: the suffix starts at a label boundary.
+bool isBelowSuffix(std::string_view host, std::string_view suffix) {
+    if (suffix.size() < 2 || suffix.front() != '.' || host.size() <= suffix.size() ||
+        !host.ends_with(suffix))
+        return false;
+    std::string_view labels = host.substr(0, host.size() - suffix.size());
+    for (;;) {
+        const std::size_t dot = labels.find('.');
+        if (!isHostLabel(labels.substr(0, dot)))
+            return false;
+        if (dot == std::string_view::npos)
+            return true;
+        labels.remove_prefix(dot + 1);
+    }
+}
+
 std::optional<std::uint32_t> parseComponent(std::string_view text) {
     if (text.empty() || !std::all_of(text.begin(), text.end(), isDigit) ||
         (text.size() > 1 && text.front() == '0'))
@@ -343,8 +368,11 @@ bool isAllowedRedirectTarget(std::string_view url, const UpdateEndpoints& endpoi
     const std::string port = endpoints.port >= 0 ? std::to_string(endpoints.port) : std::string();
     if (parts->port != port)
         return false;
-    return std::find(endpoints.redirectHosts.begin(), endpoints.redirectHosts.end(), parts->host) !=
-           endpoints.redirectHosts.end();
+    const std::string_view host = parts->host;
+    return std::find(endpoints.redirectHosts.begin(), endpoints.redirectHosts.end(), host) !=
+               endpoints.redirectHosts.end() ||
+           std::any_of(endpoints.redirectHostSuffixes.begin(), endpoints.redirectHostSuffixes.end(),
+                       [host](const std::string& suffix) { return isBelowSuffix(host, suffix); });
 }
 
 Result<std::optional<ReleaseInfo>> parseLatestRelease(std::string_view json,

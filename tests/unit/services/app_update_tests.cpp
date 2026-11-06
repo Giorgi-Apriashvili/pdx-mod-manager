@@ -175,31 +175,58 @@ TEST_CASE("Asset URLs outside the release's folder are refused", "[services][upd
     CHECK_FALSE(isAllowedAssetUrl(bad, kRepo, kVersion));
 }
 
-TEST_CASE("Redirect targets are https on the listed hosts only", "[services][update]") {
-    CHECK(isAllowedRedirectTarget("https://github.com/x/y"));
-    CHECK(isAllowedRedirectTarget("https://release-assets.githubusercontent.com/"
-                                  "github-production-release-asset/1/2?sig=a%2Fb"));
-    CHECK(isAllowedRedirectTarget("https://objects.githubusercontent.com/x"));
+TEST_CASE("Redirect targets are https on GitHub's download hosts only", "[services][update]") {
+    const std::string good = GENERATE(
+        as<std::string>{}, "https://github.com/x/y",
+        "https://release-assets.githubusercontent.com/github-production-release-asset/1/"
+        "2?sig=a%2Fb",
+        "https://objects.githubusercontent.com/x", "https://objects-origin.githubusercontent.com/x",
+        // Any host of GitHub's download domain, at any depth.
+        "https://x.githubusercontent.com/x", "https://a.b-c.githubusercontent.com/x",
+        "https://0.githubusercontent.com/x");
+    INFO(good);
+    CHECK(isAllowedRedirectTarget(good));
+}
 
+TEST_CASE("Other redirect targets are refused", "[services][update]") {
     const std::string bad = GENERATE(
         as<std::string>{}, "", "/relative", "github.com/x", "//github.com/x", "https://github.com",
         "https:/github.com/x", "https//github.com/x", "http://github.com/x", "ftp://github.com/x",
         "HTTPS://github.com/x", "file:///c:/x",
         // Not on the list, or only looking like it.
-        "https://api.github.com/x", "https://evil.example/x", "https://github.com.evil.example/x",
-        "https://evil-github.com/x", "https://github.community/x",
-        "https://githubusercontent.com/x", "https://evil.githubusercontent.com/x",
-        "https://objects.githubusercontent.com.evil.example/x", "https://GitHub.com/x",
-        "https://github.com./x", "https://xn--github-5ya.com/x",
+        "https://api.github.com/x", "https://gist.github.com/x", "https://evil.example/x",
+        "https://github.com.evil.example/x", "https://evil-github.com/x",
+        "https://github.community/x", "https://GitHub.com/x", "https://github.com./x",
+        "https://xn--github-5ya.com/x",
+        // The download domain: only hosts below it, on a label boundary.
+        "https://githubusercontent.com/x", "https://.githubusercontent.com/x",
+        "https://githubusercontent.com.evil.example/x",
+        "https://x.githubusercontent.com.evil.example/x",
+        "https://objects.githubusercontent.com.evil.example/x",
+        "https://evilgithubusercontent.com/x", "https://x.evilgithubusercontent.com/x",
+        "https://x-githubusercontent.com/x", "https://x.githubusercontent.co/x",
+        "https://x.githubusercontent.comx/x", "https://x.githubusercontent.com./x",
+        "https://x..githubusercontent.com/x", "https://-x.githubusercontent.com/x",
+        "https://x-.githubusercontent.com/x", "https://X.githubusercontent.com/x",
+        "https://x.GitHubUserContent.com/x", "https://x_y.githubusercontent.com/x",
+        "https://" + std::string(64, 'a') + ".githubusercontent.com/x",
+        "http://x.githubusercontent.com/x", "https://x.githubusercontent.com",
         // Authority tricks.
         "https://github.com@evil.example/x", "https://evil.example@github.com/x",
         "https://user:pw@github.com/x", "https://github.com:443/x", "https://github.com:8443/x",
         "https://github.com:/x", "https://github.com%2f@evil.example/x",
         "https://github.com\\@evil.example/x", "https://[::1]/x",
         "https://github.com#@evil.example/", "https://github.com?@evil.example/",
+        "https://x.githubusercontent.com:443/x", "https://x.githubusercontent.com:/x",
+        "https://user@x.githubusercontent.com/x", "https://user:pw@x.githubusercontent.com/x",
+        "https://x.githubusercontent.com@evil.example/x",
+        "https://evil.example@x.githubusercontent.com/x",
+        "https://x.githubusercontent.com%2f@evil.example/x",
+        "https://x.githubusercontent.com\\@evil.example/x", "https://x%2egithubusercontent.com/x",
         // Characters that parsers disagree about.
         "https://github.com/x y", "https://github.com/x\ty", " https://github.com/x",
-        "https://github.com/x#fragment", "https://github.com/\xc3\xa9");
+        "https://github.com/x#fragment", "https://github.com/\xc3\xa9",
+        "https://x.githubusercontent.com/x#fragment");
     INFO(bad);
     CHECK_FALSE(isAllowedRedirectTarget(bad));
 }
@@ -210,6 +237,7 @@ TEST_CASE("Test endpoints replace the hosts, the scheme and the port", "[service
     stub.apiHost = "127.0.0.1";
     stub.downloadHost = "127.0.0.1";
     stub.redirectHosts = {"127.0.0.1"};
+    stub.redirectHostSuffixes = {".stub.test"};
     stub.port = 8123;
     CHECK(latestReleaseApiUrl(stub) ==
           "http://127.0.0.1:8123/repositories/1439071956/releases/latest");
@@ -217,11 +245,20 @@ TEST_CASE("Test endpoints replace the hosts, the scheme and the port", "[service
         "http://127.0.0.1:8123/Giorgi-Apriashvili/pdx-mod-manager/releases/download/v1.2.3/a.exe",
         kRepo, kVersion, stub));
     CHECK(isAllowedRedirectTarget("http://127.0.0.1:8123/x", stub));
+    CHECK(isAllowedRedirectTarget("http://a.stub.test:8123/x", stub));
+    CHECK_FALSE(isAllowedRedirectTarget("http://stub.test:8123/x", stub));
+    CHECK_FALSE(isAllowedRedirectTarget("http://a.stub.test/x", stub));
     CHECK_FALSE(isAllowedRedirectTarget("http://127.0.0.1:8124/x", stub));
     CHECK_FALSE(isAllowedRedirectTarget("http://127.0.0.1/x", stub));
     CHECK_FALSE(isAllowedRedirectTarget("http://localhost:8123/x", stub));
     CHECK_FALSE(isAllowedRedirectTarget("https://127.0.0.1:8123/x", stub));
     CHECK_FALSE(isAllowedRedirectTarget("https://github.com/x", stub));
+    CHECK_FALSE(isAllowedRedirectTarget("https://objects.githubusercontent.com/x", stub));
+
+    // A suffix without its leading dot would not stop at a label boundary.
+    stub.redirectHostSuffixes = {"stub.test"};
+    CHECK_FALSE(isAllowedRedirectTarget("http://evilstub.test:8123/x", stub));
+    CHECK_FALSE(isAllowedRedirectTarget("http://a.stub.test:8123/x", stub));
 }
 
 TEST_CASE("A valid release gives the version and the two exact assets", "[services][update]") {

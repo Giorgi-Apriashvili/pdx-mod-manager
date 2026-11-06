@@ -76,6 +76,7 @@ public:
         out.apiHost = "127.0.0.1";
         out.downloadHost = "127.0.0.1";
         out.redirectHosts = {"127.0.0.1"};
+        out.redirectHostSuffixes.clear();
         out.port = port();
         return out;
     }

@@ -48,9 +48,11 @@ struct UpdateEndpoints {
     std::string scheme = "https";
     std::string apiHost = "api.github.com";
     std::string downloadHost = "github.com";
-    // Download hops only; the API request follows no redirect.
-    std::vector<std::string> redirectHosts = {"github.com", "release-assets.githubusercontent.com",
-                                              "objects.githubusercontent.com"};
+    // Download hops only; the API request follows no redirect. A host is
+    // allowed when it is listed, or when it is one or more DNS labels followed
+    // by one of the suffixes (each starting with a dot).
+    std::vector<std::string> redirectHosts = {"github.com"};
+    std::vector<std::string> redirectHostSuffixes = {".githubusercontent.com"};
     int port = -1; // -1: URLs must not name a port
 };
 
@@ -77,7 +79,7 @@ std::vector<std::string> updateInstallerArguments();
 // GitHub's name grammar.
 bool isAllowedAssetUrl(std::string_view url, std::string_view repository, const AppVersion& version,
                        const UpdateEndpoints& endpoints = {});
-// An absolute URL with the expected scheme on one of the redirect hosts: no
+// An absolute URL with the expected scheme on an allowed redirect host: no
 // user information, other port, backslash, control or non-ASCII character.
 bool isAllowedRedirectTarget(std::string_view url, const UpdateEndpoints& endpoints = {});
 
