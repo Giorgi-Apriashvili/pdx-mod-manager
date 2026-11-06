@@ -42,6 +42,9 @@ struct BackendOptions {
     // Backend.updates. Read-only sessions have it off even without a reason here.
     // The daily check is scheduled when the start-up refresh has finished.
     UpdateControllerOptions updates;
+    // While Play is blocked because Steam is not running, or the game or the
+    // Paradox launcher is, the processes are checked again at this interval.
+    int launchRecheckMs = 3000;
 };
 
 class Backend : public QObject {
@@ -146,6 +149,8 @@ private:
     QString pickInitialGame() const;
     void finishInitialRefresh();
     void askUpdateBlocker(const std::function<void(const QString&)>& answer);
+    void followLaunchBlockers();
+    void recheckLaunch();
 
     ServiceRunner& m_runner;
     BackendOptions m_options;
@@ -174,6 +179,8 @@ private:
     bool m_acquisitionPendingLaunch = false;
     QElapsedTimer m_sinceLaunchRefresh;
     QTimer m_trailingLaunchRefresh;
+    QTimer m_launchRecheck;
+    bool m_launchRecheckInFlight = false;
 };
 
 } // namespace pmm::app

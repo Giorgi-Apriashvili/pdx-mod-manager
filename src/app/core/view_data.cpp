@@ -364,6 +364,8 @@ LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t pla
         data.blockers = qlist(check.blockers);
         data.warnings = qlist(check.warnings);
         data.interrupted = check.interruptedTransaction;
+        data.steamNotRunning = check.steamNotRunning;
+        data.runningInstance = check.runningInstance;
     }
     if (options.readOnly) {
         // Launching and restoring a backup would write game configuration.

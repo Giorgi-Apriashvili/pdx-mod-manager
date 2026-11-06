@@ -4,10 +4,13 @@
 // LaunchService::check() on the services worker and are refreshed whenever
 // the playset, the inventory or the downloads change, and when the window is
 // activated (a game or the Paradox launcher may have been started meanwhile).
+// While Steam is not running, or a game or launcher is, Backend also checks
+// the processes again every few seconds, so Play follows them on its own.
 // The blockers always say why Play is unavailable: game not installed or not
-// located, enabled mods not ready, a running game or launcher, an interrupted
-// configuration change. Without an active playset Play starts the game
-// without mods, and a warning says so.
+// located, enabled mods not ready, a running game or launcher, Steam not
+// running for a Steam installation, an interrupted configuration change.
+// Without an active playset Play starts the game without mods, and a warning
+// says so.
 //
 // play() moves through validating -> applying -> starting -> started (or
 // failed); the configuration is written by LaunchService as one file
@@ -53,6 +56,8 @@ public:
     bool startedWithPlayset() const { return m_startedWithPlayset; }
     bool hasInterruptedTransaction() const { return m_data.interrupted; }
     bool canRestoreBackup() const { return m_data.canRestoreBackup; }
+    // The last verdict applied (C++ only).
+    const LaunchData& data() const { return m_data; }
 
     Q_INVOKABLE void play();
     Q_INVOKABLE bool recoverInterrupted();

@@ -204,6 +204,8 @@ TEST_CASE("Read-only launch data keeps every blocker except the write probes", "
     const LaunchData blocked = queries::launchData(*runtime, game, id, normal);
     const LaunchData blockedReadOnly = queries::launchData(*runtime, game, id, readOnly);
     CHECK_FALSE(blocked.canPlay);
+    CHECK(blocked.runningInstance);
+    CHECK_FALSE(blocked.steamNotRunning);
     CHECK(joined(blocked).contains(QStringLiteral("already running")));
     REQUIRE(blockedReadOnly.blockers.size() == blocked.blockers.size() + 1);
     for (qsizetype i = 0; i < blocked.blockers.size(); ++i)
@@ -223,6 +225,50 @@ TEST_CASE("Read-only launch data keeps every blocker except the write probes", "
               .contains(QStringLiteral("mod folder")));
     CHECK_FALSE(joined(queries::launchData(*runtime, game, kNoPlayset, readOnly))
                     .contains(QStringLiteral("mod folder")));
+}
+
+TEST_CASE("Launch data says when Play waits for the Steam client", "[app][runtime]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    RuntimeOptions options = hermeticOptions(temp.path() / "profile", adapter);
+    auto steam = std::make_shared<bool>(false);
+    options.configureContext = [base = options.configureContext,
+                                steam](services::ServiceContext& context) {
+        base(context);
+        context.listProcesses = [steam] {
+            std::vector<platform::RunningProcess> processes{{7, "explorer.exe", {}}};
+            if (*steam)
+                processes.push_back(steamClient());
+            return Result<std::vector<platform::RunningProcess>>(std::move(processes));
+        };
+    };
+    auto runtime = require(AppRuntime::create(options));
+    runtime->games().refreshAll();
+    const QString game = QString::fromLatin1(kGame);
+    constexpr std::int64_t kNoPlayset = -1;
+    const QueryOptions normal;
+    QueryOptions readOnly;
+    readOnly.readOnly = true;
+
+    const LaunchData closed = queries::launchData(*runtime, game, kNoPlayset, normal);
+    CHECK_FALSE(closed.canPlay);
+    CHECK(closed.steamNotRunning);
+    CHECK_FALSE(closed.runningInstance);
+    CHECK(closed.blockers ==
+          QStringList{QStringLiteral(
+              "Steam is not running. Start Steam and sign in, then launch Stellaris.")});
+    // A read-only session reports it as well, before its own note.
+    const LaunchData verifying = queries::launchData(*runtime, game, kNoPlayset, readOnly);
+    CHECK(verifying.steamNotRunning);
+    REQUIRE(verifying.blockers.size() == 2);
+    CHECK(verifying.blockers.front() == closed.blockers.front());
+
+    *steam = true;
+    const LaunchData open = queries::launchData(*runtime, game, kNoPlayset, normal);
+    CHECK(open.canPlay);
+    CHECK_FALSE(open.steamNotRunning);
+    CHECK(open.blockers.isEmpty());
 }
 
 TEST_CASE("An active playset that cannot be read blocks Play instead of a launch without mods",

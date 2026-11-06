@@ -1,8 +1,9 @@
 // ServiceRunner marshalling and shutdown, and the Backend driving the real
 // services through it: edits are persisted and undoable, playset management,
-// the share-code round trip, start-up failures, Play without a playset and the
-// downloads view after a launch (the real pmm-steam-helper with the fake Steam
-// API library).
+// the share-code round trip, start-up failures, Play without a playset, Play
+// following Steam, the game and the launcher on its own, and the downloads
+// view after a launch (the real pmm-steam-helper with the fake Steam API
+// library).
 
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
@@ -24,6 +25,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,6 +77,33 @@ std::vector<std::int64_t> createPlaysets(ServiceRunner& runner,
         }
         return out;
     });
+}
+
+// A process list the test changes while the Backend runs; counts the listings.
+struct FakeProcesses {
+    std::mutex mutex;
+    std::vector<platform::RunningProcess> list;
+    std::atomic<int> listed{0};
+
+    void set(std::vector<platform::RunningProcess> processes) {
+        const std::lock_guard lock(mutex);
+        list = std::move(processes);
+    }
+};
+
+RunnerOptions runnerOptions(const fs::path& profile, const FakeAdapter& adapter,
+                            const std::shared_ptr<FakeProcesses>& processes) {
+    RunnerOptions options = runnerOptions(profile, adapter);
+    options.runtime.configureContext = [hermetic = options.runtime.configureContext,
+                                        processes](services::ServiceContext& context) {
+        hermetic(context);
+        context.listProcesses = [processes] {
+            ++processes->listed;
+            const std::lock_guard lock(processes->mutex);
+            return Result<std::vector<platform::RunningProcess>>(processes->list);
+        };
+    };
+    return options;
 }
 
 std::int64_t storedActivePlayset(ServiceRunner& runner) {
@@ -332,6 +361,97 @@ TEST_CASE("Launch blockers explain a running game, with or without a playset", "
         [&] { return !backend.launcher()->warnings().join('\n').contains("No playset"); }));
     CHECK(backend.launcher()->blockers().join('\n').contains("already running"));
     CHECK_FALSE(backend.launcher()->canPlay());
+    runner.shutdown();
+}
+
+TEST_CASE("Play follows Steam, the game and the Paradox launcher without a click",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("3001", "Only");
+    FakeAdapter adapter(world);
+    auto processes = std::make_shared<FakeProcesses>();
+    const platform::RunningProcess game{4242, kExeName, {}};
+    const platform::RunningProcess launcher{99, "Paradox Launcher.exe", {}};
+    QString blocker;
+    bool gameStays = false; // Steam starts first, the game exits later
+    SECTION("Steam starts") {
+        processes->set({{7, "explorer.exe", {}}});
+        blocker = "Steam is not running. Start Steam and sign in, then launch Stellaris.";
+    }
+    SECTION("the game exits") {
+        processes->set({steamClient(), game});
+        blocker = "already running";
+    }
+    SECTION("the Paradox launcher is closed") {
+        processes->set({steamClient(), launcher});
+        blocker = "Paradox launcher";
+    }
+    SECTION("Steam starts while the game runs") {
+        processes->set({game});
+        blocker = "Steam is not running";
+        gameStays = true;
+    }
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter, processes));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    BackendOptions options;
+    options.launchRecheckMs = 50;
+    Backend backend(runner, options);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    CHECK_FALSE(backend.launcher()->canPlay());
+    CHECK(backend.launcher()->blockers().join('\n').contains(blocker));
+
+    // Nothing changes: the processes are checked again and again, Play stays blocked.
+    const int listed = processes->listed;
+    REQUIRE(waitUntil([&] { return processes->listed >= listed + 3; }));
+    CHECK_FALSE(backend.launcher()->canPlay());
+    CHECK(backend.launcher()->blockers().join('\n').contains(blocker));
+
+    if (gameStays) {
+        processes->set({game, steamClient()});
+        // Steam's blocker goes; the running game's stays, and is checked further.
+        REQUIRE(waitUntil([&] { return !backend.launcher()->data().steamNotRunning; }));
+        CHECK(backend.launcher()->blockers().join('\n').contains("already running"));
+        CHECK_FALSE(backend.launcher()->blockers().join('\n').contains("Steam"));
+        CHECK_FALSE(backend.launcher()->canPlay());
+        const int running = processes->listed;
+        REQUIRE(waitUntil([&] { return processes->listed >= running + 3; }));
+    }
+    processes->set({steamClient()});
+    // Play becomes available on its own...
+    REQUIRE(waitUntil([&] { return backend.launcher()->canPlay(); }));
+    CHECK(backend.launcher()->blockers().isEmpty());
+    // ... and nothing is checked any more.
+    const int settled = processes->listed;
+    CHECK_FALSE(
+        waitUntil([&] { return processes->listed != settled; }, std::chrono::milliseconds(600)));
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Read-only sessions do not re-check the processes", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    auto processes = std::make_shared<FakeProcesses>();
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter, processes));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    BackendOptions options;
+    options.readOnly = true;
+    options.launchRecheckMs = 50;
+    Backend backend(runner, options);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    // Steam is not running, and Play is blocked anyway.
+    CHECK(backend.launcher()->data().steamNotRunning);
+    CHECK(backend.launcher()->blockers().join('\n').contains("Read-only verification mode"));
+    const int listed = processes->listed;
+    CHECK_FALSE(
+        waitUntil([&] { return processes->listed != listed; }, std::chrono::milliseconds(600)));
+    backend.shutdown();
     runner.shutdown();
 }
 

@@ -1,18 +1,20 @@
 import QtQuick
 
-// Stand-in for LaunchController; blockers follow the fake mod list. Without a
-// playset nothing blocks: the game starts without mods.
+// Stand-in for LaunchController; blockers follow the fake mod list and
+// steamRunning (set it to false to preview the Steam blocker). Without a
+// playset nothing else blocks: the game starts without mods.
 QtObject {
     id: launcher
 
     property FakeNotificationCenter notifications
     property FakeModListModel mods
     property FakePlaysetsModel playsets
+    property bool steamRunning: true
     readonly property bool canPlay: blockers.length === 0 && !busy
-    readonly property list<string> blockers: mods && mods.blockingCount > 0
+    readonly property list<string> blockers: (mods && mods.blockingCount > 0
         ? [mods.blockingCount + (mods.blockingCount === 1 ? " enabled mod is" : " enabled mods are")
            + " not ready (missing, downloading or broken). Disable them or wait for downloads."]
-        : []
+        : []).concat(steamRunning ? [] : ["Steam is not running. Start Steam and sign in, then launch Stellaris."])
     readonly property list<string> warnings: playsets && playsets.activeId < 0
         ? ["No playset is selected, so the game starts without mods."]
         : mods && mods.warningCount > 0 ? [mods.warningCount + " mods report compatibility warnings."] : []
