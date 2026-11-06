@@ -132,7 +132,8 @@ copies of the original files. Do not edit them by hand.
 "The backup of ... is missing or unreadable" or "... is damaged, so nothing
 was restored" means the change cannot be undone automatically: nothing was
 changed by the attempt, and the transaction keeps blocking launches of that
-game. The application has no action yet to discard such a record (planned).
+game. The application has no action yet to discard such a record (planned for
+after 0.1.0).
 Until then:
 
 1. Close the manager.

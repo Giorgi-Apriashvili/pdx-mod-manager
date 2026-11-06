@@ -1,4 +1,4 @@
-# Development status (handoff, 2026-10-30)
+# Development status (handoff, 2026-11-06)
 
 Paradox Mod Manager is a Windows-only application
 ([ADR 0009](adr/0009-windows-only.md)). Version 0.1.0 is feature-complete for the
@@ -30,6 +30,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | EU4 and Stellaris adapters | `src/games`, [`games/`](games/), [`load-order.md`](load-order.md) | done; detection, inventory, current configuration and launch plan verified read-only | [real scan](evidence/real-scan-2026-10-29.md) |
 | Qt-free services (games, playsets, sharing, acquisition, launch) | `src/services`, [`architecture-services.md`](architecture-services.md) | done, tested | |
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
+| Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
@@ -38,6 +39,23 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | dry run passed on GitHub on 2026-10-30 (validation, full CI, package, installer smoke test); **the publish step has not run**, only locally against a stub `gh` | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
+
+## Test status (2026-11-06, after the launch fixes)
+
+Local runs only; CI has not run on this state yet.
+
+- `debug` preset, fresh configure and clean build: **0 warnings**, **473/473
+  tests pass**, by label: core 50, sharing 54, persistence 71, platform 51,
+  providers 61, games 52, services 70, application 69.
+- `core-sanitize` (MSVC, ASan) 404/404 and `core-clang-cl` (LLVM 22, UBSan)
+  404/404, 0 warnings.
+- `scripts/check-format.sh`: 237 files OK. `clang-tidy` on the changed C++
+  files: no findings.
+- The new and changed launch tests passed 20 times in a row each. Removing the
+  coordinator's wait, the host's wait or the refresh after a launch makes them
+  fail.
+- Read-only `--screenshot` of Stellaris with a new scratch profile: the window
+  renders as before (no playset, downloads off, Play blocked by read-only mode).
 
 ## Test status (2026-10-30, `main`)
 
@@ -102,14 +120,6 @@ Services and application:
   the 7-day retention removes them, the details panel shows the "cancelled"
   text instead of "Not installed", and jobs left by earlier `--no-steam`
   imports are not cleaned up.
-- Wait for the helper to exit before starting the game: add
-  `WorkshopSessionHost::waitUntilClosed()`, override it in
-  `QtWorkshopSessionHost` (`waitForRetired()`), call it in
-  `AcquisitionCoordinator::closeSessionsForLaunch` (launch path only), and let
-  the fake Steam in the services tests record the order. Whether a still-exiting
-  helper affects EU4 or Stellaris is unproven.
-- `LaunchController::launch` should report `LaunchOutcome::acquisition` on
-  success, so the downloads view refreshes at once.
 - A configuration transaction whose **Recover** fails (missing or damaged
   backup, `IntegrityCheckFailed`) keeps blocking that game's launches; other
   games only show a warning. Planned: `recover()` skips targets already back
@@ -117,6 +127,7 @@ Services and application:
   `Abandoned` state; `LaunchService::discardInterrupted(txid)`; a "Discard
   this record" action next to Play, offered only after Recover failed, behind
   a confirmation that names the files; then [`troubleshooting.md`](troubleshooting.md).
+  Deferred to after 0.1.0 by the owner's decision of 2026-11-06.
 - On Windows, two descriptor files whose names differ only in unpaired
   surrogates map to the same local mod id and make the inventory save fail;
   the adapter scan should merge them or mark them Broken.
@@ -168,9 +179,9 @@ Packaging ([`packaging.md`](packaging.md)):
    "Format check", "Sanitizers (Windows MSVC, ASan, Qt-free libraries)" and
    "Warnings (Windows clang-cl, Qt-free libraries)".
 3. Optional: warn when two enabled EU4 mods contain the same file.
-4. Implement the services and application items above (import options,
-   helper exit wait, launch refresh), then the discard flow for unrecoverable
-   transactions, each with tests.
+4. Implement the import options item above, with tests. Done 2026-11-06: the
+   helper exit wait and the launch refresh. The discard flow for unrecoverable
+   transactions is deferred to after 0.1.0 (owner's decision, 2026-11-06).
 5. With the user's approval, the remaining live pieces (table above). Record
    results in [`validation.md`](validation.md) and
    [`support-matrix.md`](support-matrix.md).

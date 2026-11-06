@@ -171,6 +171,14 @@ change what codes look like or which codes are accepted say so explicitly.
 
 ### Fixed
 
+- A launch could start the game while its Steam helper was still exiting, so Steam
+  might still have counted the game as running (never observed). The game now starts
+  only after the helper has exited: the launch waits up to 3 s, then kills the helper,
+  logs a warning and waits up to 1 s more, and goes ahead either way.
+- After pressing Play, the downloads list and the playset's mod rows kept showing
+  the jobs as before (downloading or failed) until the next download event, although
+  the launch had parked them, or resumed them after the game failed to start. Both
+  now refresh after every launch outcome.
 - Play's blockers could keep showing an acquisition job as queued after it
   had ended (for example Unavailable) when the last update fell inside the
   5 s launch-refresh throttle; a trailing refresh now follows every
@@ -214,5 +222,8 @@ the entries above stay under Unreleased.
 - CI passing.
 - The Windows ZIP and installer built by CI and checked against
   [`docs/packaging.md`](docs/packaging.md).
-- The open launch-related items in
-  [`docs/development-status.md`](docs/development-status.md) resolved.
+- The launch-related items in
+  [`docs/development-status.md`](docs/development-status.md): the Steam helper exit
+  wait and the downloads refresh after a launch are done (2026-11-06); the discard
+  flow for unrecoverable configuration transactions is deferred to after 0.1.0 (the
+  owner's decision of 2026-11-06).

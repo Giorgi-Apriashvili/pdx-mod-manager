@@ -74,8 +74,9 @@ struct LaunchOutcome {
     LaunchPlan plan;
     std::vector<std::string> warnings;
     std::int64_t historyId = 0;
-    // What parking the game's acquisition jobs for the launch changed; report
-    // it so that job views refresh.
+    // What parking the game's acquisition jobs for the launch changed. The
+    // application does not need it: it refreshes its job views after every
+    // launch outcome, which also covers jobs resumed after a failed launch.
     CoordinatorUpdate acquisition;
 };
 

@@ -162,7 +162,8 @@ validation; a new provider means a new provider module and a new `source` key
    generated from the existing files so unrelated settings survive. The plan
    is validated.
 3. Only then is the game's Steam helper session closed (Steam counts it as the
-   game running) and its acquisition jobs parked.
+   game running), its helper's exit awaited (a helper still running after 3 s
+   is killed) and its acquisition jobs parked.
 4. `FileTransactionManager::apply()` writes the configuration as one
    journaled unit with backups (ADR 0005).
 5. `platform::startDetached()` starts the real game executable with

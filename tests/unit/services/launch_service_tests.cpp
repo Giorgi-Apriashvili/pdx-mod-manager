@@ -553,7 +553,7 @@ TEST_CASE("Launching closes the game's Steam helper session before starting the 
     // The background job is parked, not lost: the next start resumes it.
     CHECK(r.coordinator.liveJobs(kGame).empty());
     CHECK(r.coordinator.snapshot(kGame).jobs.size() == 1);
-    CHECK(outcome.acquisition.changed); // so that the job views refresh
+    CHECK(outcome.acquisition.changed); // parking is reported
 }
 
 TEST_CASE("Launching waits for the closed Steam helper to exit before starting the game",

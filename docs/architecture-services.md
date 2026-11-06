@@ -383,12 +383,12 @@ overwrites it the next time it is used. After a crash, a transaction left
 notice on start-up and offers Recover next to Play when
 `interruptedTransactions()` is not empty. A transaction whose backups are
 missing or damaged cannot be recovered and keeps blocking its game; a discard
-action is planned ([development status](development-status.md)).
+action is planned for after 0.1.0 ([development status](development-status.md)).
 
 The game starts only after its helper has exited or been killed, so Steam no
-longer sees a process with the game's app id. Whether a still-exiting helper would have
-mattered to EU4 or Stellaris was never verified; the wait removes the
-question.
+longer sees a process with the game's app id. Whether a still-exiting helper
+would have mattered to EU4 or Stellaris was never verified; the wait removes
+the question.
 
 ## Errors and logging
 

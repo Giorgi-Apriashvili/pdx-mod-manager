@@ -334,6 +334,10 @@ platform:
   nothing is delivered; a stuck helper (the real one with its threads
   suspended) is killed after a short grace period, and only the given game's
   helper is waited for;
+- the Backend after a launch, with the same helper and fake library: the
+  downloads list and the mod rows show the parked job when the game started,
+  and the resumed job when it could not be started, without waiting for a
+  coordinator event;
 - `QtWorkshopMetadataHost` against a local HTTP stub;
 - `UpdateClient` and `UpdateController` against a local stub, and the Settings
   section with the keyboard ([`updates.md`](updates.md));
