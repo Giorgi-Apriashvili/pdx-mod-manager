@@ -40,6 +40,7 @@ struct BackendOptions {
     bool readOnly = false;
     QString initialGame; // overrides the last selected game
     // Backend.updates. Read-only sessions have it off even without a reason here.
+    // The daily check is scheduled when the start-up refresh has finished.
     UpdateControllerOptions updates;
 };
 

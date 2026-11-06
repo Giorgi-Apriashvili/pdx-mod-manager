@@ -167,12 +167,43 @@ AppDialog {
                         onClicked: Backend.updates.check()
                     }
                 }
+                AppCheckBox {
+                    id: autoCheck
+                    objectName: "updateAutoCheck"
+                    Layout.fillWidth: true
+                    text: qsTr("Check for updates automatically")
+                    enabled: Backend.updates.disabledReason.length === 0
+                    checked: Backend.settings.checkUpdatesAutomatically
+                    onToggled: Backend.settings.checkUpdatesAutomatically = checked
+                    Accessible.description: autoCheckHint.text
+                }
+                Text {
+                    id: autoCheckHint
+                    objectName: "updateAutoCheckHint"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: autoCheck.indicator.width + autoCheck.spacing + autoCheck.leftPadding
+                    text: qsTr("Contacts GitHub once a day, at the first start of the day, to see whether "
+                               + "a newer version exists. Nothing is downloaded until you choose to update.")
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.textMuted
+                    wrapMode: Text.Wrap
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
+                }
                 MessageLine {
                     Layout.fillWidth: true
                     objectName: "updateDisabledReason"
                     visible: Backend.updates.disabledReason.length > 0
                     level: "info"
                     text: Backend.updates.disabledReason
+                }
+                MessageLine {
+                    Layout.fillWidth: true
+                    objectName: "updateInstallUnavailable"
+                    visible: Backend.updates.disabledReason.length === 0
+                             && Backend.updates.installUnavailableReason.length > 0
+                    level: "info"
+                    text: Backend.updates.installUnavailableReason
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -255,9 +286,8 @@ AppDialog {
                 }
                 Text {
                     Layout.fillWidth: true
-                    text: qsTr("Checking contacts GitHub only when you ask, and sends nothing about you. "
-                               + "The installer is verified against the checksum published with the "
-                               + "release before it runs.")
+                    text: qsTr("A check sends nothing about you. The installer is verified against the "
+                               + "checksum published with the release before it runs.")
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.textMuted
                     wrapMode: Text.Wrap

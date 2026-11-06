@@ -2,6 +2,7 @@ import QtQuick
 
 // Stand-in for UpdateController: pretends a newer version exists, downloads it
 // on a timer and stops at "installing". It never touches the network.
+// checkDaily() plays the daily check, which the main window's banner offers.
 QtObject {
     id: updates
 
@@ -15,14 +16,22 @@ QtObject {
     readonly property bool canCheck: disabledReason.length === 0 && state !== "checking"
                                      && state !== "downloading" && state !== "installing"
     property string disabledReason: ""
+    property string installUnavailableReason: ""
+    property bool checkedAutomatically: false
 
     function check() {
         if (!canCheck)
             return
+        checkedAutomatically = false
         latestVersion = ""
         errorMessage = ""
         state = "checking"
         checkTimer.restart()
+    }
+
+    function checkDaily() {
+        check()
+        checkedAutomatically = true
     }
 
     function startUpdate() {

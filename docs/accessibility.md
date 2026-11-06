@@ -20,7 +20,8 @@ what is still missing.
 
 ### Focus order
 
-- **Tab / Shift+Tab** move left to right and top to bottom: the games column
+- **Tab / Shift+Tab** move left to right and top to bottom: the buttons of the
+  update banner above the columns while it is shown, the games column
   (selectable games, Rescan, Locate installation, Settings), the mods column
   (playset, search, status filter, sort, toolbar, banner actions, the mod
   list), then the actions column (Import / Export code, playset actions,
@@ -38,6 +39,10 @@ what is still missing.
 - In Settings → Updates, the button that was just pressed may disappear or
   become disabled ("Check for updates" while checking). Focus then moves to the
   section's main button, or back to "Check for updates", and stays in the section.
+  "Check for updates automatically" is a check box (Space toggles it); its
+  explanation below it is also its description.
+- The update banner that the daily check shows never takes focus. Its "Not
+  now" link hides it for the session and returns focus to the mod list.
 
 ### Shortcuts
 
@@ -137,6 +142,8 @@ through the `Accessible` attached properties.
 | Download job | list item, progress bar, button | "*name*, Downloading 45 %"; "*name*: Downloading 45 %" (value); "Retry download of *name*" |
 | History entry | list item, button | "*playset*, *reason*, *time*"; "Restore *playset* (*reason*, *time*)" |
 | Banner | group | "Warning. *title*. *text*" (actions inside the group) |
+| Update banner | group, button, link | "Paradox Mod Manager 1.2.3 is available." (and why this session cannot install); "Update and restart" or "Open release page"; "Not now" |
+| Update check box in Settings | check box | "Check for updates automatically" (what it contacts, and when) |
 | Problems and warnings | static text | "Problem: …", "Warning: …" |
 | Section headers, dialog titles, empty-state titles, selected mod name | heading | the text |
 | Dialogs | dialog / window | the title |
@@ -162,7 +169,12 @@ Changes that happen without a focus change are spoken with
 - launch progress ("Checking installation and mods…", "Starting
   Stellaris…", "Launch failed.");
 - each step of an update in Settings ("Version 1.2.3 is available.", errors),
-  not every percent of the download.
+  not every percent of the download;
+- the update banner when it appears and at each step of the update it started,
+  politely (its errors interrupt); the progress is not part of its text.
+
+Banners that are announced interrupt for errors and warnings and are polite
+otherwise.
 
 Notifications disappear after 5 s (warnings 9 s, errors 15 s) unless the
 pointer is over them or their Dismiss button has keyboard focus. Dismissing
@@ -230,18 +242,21 @@ outlines and checked fills. Disabled controls are exempt and stay faded.
 
 Automated:
 
-- `ui/dev/preview.sh --test` (fake backend, 22 tests): besides the editing
+- `ui/dev/preview.sh --test` (fake backend, 23 tests): besides the editing
   tests, Tab visits the actions, games and mods columns in that order and
   returns to the list; F6 / Shift+F6; Enter opens Settings from its button,
   Tab stays inside the dialog and Esc returns focus to the button; Esc on the
   remove confirmation keeps the rows and focuses the list; Alt+Up/Down
   reorder and undo; Shift+F10 opens the context menu on "Enable" and Esc
   returns to the same row; Ctrl+Space; F1 list paging; the accessible name of
-  the current row.
+  the current row; the update banner leaves focus in the list, Tab reaches "Not
+  now" and Enter there hides the banner and returns focus to the list.
 - `ctest --preset debug -R Pmm.Ui` (real Backend, offscreen window, key events
   through `QTest`): Tab order, F6, Alt+Up/Down and Ctrl+Up/Down with undo, Esc
   on the confirmation, the context menu and the shortcuts list with focus
-  return, without QML warnings.
+  return, without QML warnings. The `[qml][update]` cases: the Updates section
+  and its check box with the keyboard at the smallest window size, the update
+  banner's names, Tab order, Enter and "Not now".
 - `python3 ui/dev/check_contrast.py`: 138 colour pairs.
 
 UI Automation inspection on 2026-10-29 (Windows `System.Windows.Automation`

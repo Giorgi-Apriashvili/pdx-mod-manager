@@ -5,7 +5,10 @@
 // theme, window geometry, pane and column widths. effectiveDark follows the
 // OS colour scheme (QStyleHints::colorScheme) while the theme is "system".
 // lastGameKey mirrors the services' "app.lastGameKey" (set by selecting a game).
+// The daily update check (docs/updates.md) keeps its switch and the date of its
+// last answer under "app.updates.*"; both are written as soon as they change.
 
+#include <QDate>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -34,6 +37,8 @@ class AppSettings : public QObject {
     Q_PROPERTY(
         QList<int> columnWidths READ columnWidths WRITE setColumnWidths NOTIFY columnWidthsChanged)
     Q_PROPERTY(QString lastGameKey READ lastGameKey NOTIFY lastGameKeyChanged)
+    Q_PROPERTY(bool checkUpdatesAutomatically READ checkUpdatesAutomatically WRITE
+                   setCheckUpdatesAutomatically NOTIFY checkUpdatesAutomaticallyChanged)
 
 public:
     explicit AppSettings(ServiceRunner* runner, QObject* parent = nullptr);
@@ -63,6 +68,12 @@ public:
     void setColumnWidths(const QList<int>& widths);
     QString lastGameKey() const { return m_lastGameKey; }
     void setLastGameKey(const QString& key);
+    bool checkUpdatesAutomatically() const { return m_checkUpdates; }
+    void setCheckUpdatesAutomatically(bool value);
+    // The local date on which the daily update check last got an answer from
+    // GitHub; null before the first one.
+    QDate lastUpdateCheck() const { return m_lastUpdateCheck; }
+    void recordUpdateCheck(const QDate& date);
 
     // Writes every setting (also done when the application quits).
     Q_INVOKABLE void save();
@@ -76,8 +87,11 @@ signals:
     void paneWidthsChanged();
     void columnWidthsChanged();
     void lastGameKeyChanged();
+    void checkUpdatesAutomaticallyChanged();
 
 private:
+    void store(std::map<std::string, std::string> values) const;
+
     ServiceRunner* m_runner;
     QString m_theme = QStringLiteral("system");
     int m_x = 0;
@@ -89,6 +103,8 @@ private:
     int m_right = 0;
     QList<int> m_columns;
     QString m_lastGameKey;
+    bool m_checkUpdates = true;
+    QDate m_lastUpdateCheck;
 };
 
 } // namespace pmm::app

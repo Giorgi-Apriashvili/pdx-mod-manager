@@ -14,6 +14,7 @@ QtObject {
     property int rightPaneWidth: 0
     property list<int> columnWidths: []
     readonly property string lastGameKey: "stellaris"
+    property bool checkUpdatesAutomatically: true
 
     function save() {
         console.log("[fake] settings.save()", theme, windowWidth + "x" + windowHeight,

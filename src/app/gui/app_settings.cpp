@@ -21,6 +21,8 @@ constexpr const char* kMaximized = "ui.window.maximized";
 constexpr const char* kLeft = "ui.pane.left";
 constexpr const char* kRight = "ui.pane.right";
 constexpr const char* kColumns = "ui.columns";
+constexpr const char* kCheckUpdates = "app.updates.checkAutomatically";
+constexpr const char* kLastUpdateCheck = "app.updates.lastAutomaticCheck";
 
 int toInt(const std::map<std::string, std::string>& values, const char* key, int fallback) {
     const auto it = values.find(key);
@@ -44,8 +46,18 @@ AppSettings::AppSettings(ServiceRunner* runner, QObject* parent)
 }
 
 std::vector<std::string> AppSettings::storageKeys() {
-    return {kTheme,     kX,    kY,     kWidth,   kHeight,
-            kMaximized, kLeft, kRight, kColumns, services::settings_key::LastGame};
+    return {kTheme,
+            kX,
+            kY,
+            kWidth,
+            kHeight,
+            kMaximized,
+            kLeft,
+            kRight,
+            kColumns,
+            services::settings_key::LastGame,
+            kCheckUpdates,
+            kLastUpdateCheck};
 }
 
 void AppSettings::load(const std::map<std::string, std::string>& values) {
@@ -69,6 +81,15 @@ void AppSettings::load(const std::map<std::string, std::string>& values) {
     }
     if (const auto it = values.find(services::settings_key::LastGame); it != values.end())
         m_lastGameKey = qs(it->second);
+    // On unless turned off.
+    const bool checkUpdates = !values.count(kCheckUpdates) || values.at(kCheckUpdates) != "false";
+    if (checkUpdates != m_checkUpdates) {
+        m_checkUpdates = checkUpdates;
+        emit checkUpdatesAutomaticallyChanged();
+    }
+    const auto lastCheck = values.find(kLastUpdateCheck);
+    m_lastUpdateCheck =
+        lastCheck != values.end() ? QDate::fromString(qs(lastCheck->second), Qt::ISODate) : QDate();
     emit geometryChanged();
     emit paneWidthsChanged();
     emit columnWidthsChanged();
@@ -135,6 +156,21 @@ void AppSettings::setLastGameKey(const QString& key) {
     emit lastGameKeyChanged();
 }
 
+// Both are written at once: a session that ends without saving must neither
+// check twice on one day nor contact GitHub after the check was turned off.
+void AppSettings::setCheckUpdatesAutomatically(bool value) {
+    if (m_checkUpdates == value)
+        return;
+    m_checkUpdates = value;
+    emit checkUpdatesAutomaticallyChanged();
+    store({{kCheckUpdates, value ? "true" : "false"}});
+}
+
+void AppSettings::recordUpdateCheck(const QDate& date) {
+    m_lastUpdateCheck = date;
+    store({{kLastUpdateCheck, utf8(date.toString(Qt::ISODate))}});
+}
+
 std::map<std::string, std::string> AppSettings::values() const {
     QStringList columns;
     for (int width : m_columns)
@@ -147,13 +183,19 @@ std::map<std::string, std::string> AppSettings::values() const {
             {kMaximized, m_maximized ? "true" : "false"},
             {kLeft, std::to_string(m_left)},
             {kRight, std::to_string(m_right)},
-            {kColumns, utf8(columns.join(QLatin1Char(',')))}};
+            {kColumns, utf8(columns.join(QLatin1Char(',')))},
+            {kCheckUpdates, m_checkUpdates ? "true" : "false"},
+            {kLastUpdateCheck, utf8(m_lastUpdateCheck.toString(Qt::ISODate))}};
 }
 
 void AppSettings::save() {
+    store(values());
+}
+
+void AppSettings::store(std::map<std::string, std::string> values) const {
     if (!m_runner || !m_runner->isRunning())
         return;
-    m_runner->post([values = values()](AppRuntime& runtime) {
+    m_runner->post([values = std::move(values)](AppRuntime& runtime) {
         persistence::SettingsRepository settings(runtime.database());
         const Status saved = runtime.database().transaction([&]() -> Status {
             for (const auto& [key, value] : values)

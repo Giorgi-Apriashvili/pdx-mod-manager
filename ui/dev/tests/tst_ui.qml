@@ -7,7 +7,8 @@ import Pmm.Backend
 // 2,000 rows, keyboard editing with undo/redo, the reorder rules while
 // searching, delete confirmation, drag-and-drop, column-width persistence,
 // theme switching, the import flow, and keyboard accessibility (Tab order, F6,
-// Escape and focus return, Alt+Up/Down, context menu, accessible names).
+// Escape and focus return, Alt+Up/Down, context menu, accessible names, the
+// Updates section and the update banner).
 // Run: ui/dev/preview.sh --test
 Item {
     width: 120
@@ -394,6 +395,34 @@ Item {
             Backend.updates.state = "idle"
             press(Qt.Key_Escape)
             tryVerify(() => !dialog.visible)
+        }
+
+        function test_a11_updateBanner() {
+            requireFocus()
+            const list = named("modList")
+            const banner = named("updateBanner")
+            verify(!banner.visible)
+            Backend.updates.checkDaily()
+            tryCompare(Backend.updates, "state", "available")
+            verify(banner.visible)
+            compare(banner.Accessible.name, "Paradox Mod Manager 0.2.0 is available.")
+            // Non-modal: the list keeps the keyboard. Tab reaches the banner's buttons.
+            verify(list.activeFocus)
+            const action = findChild(banner, "updateBannerAction")
+            const dismiss = findChild(banner, "updateBannerDismiss")
+            compare(action.text, "Update and restart")
+            compare(dismiss.Accessible.name, "Not now")
+            for (let i = 0; i < 80 && !dismiss.activeFocus; ++i)
+                press(Qt.Key_Tab)
+            verify(dismiss.activeFocus)
+            press(Qt.Key_Return)
+            verify(!banner.visible)
+            tryVerify(() => list.activeFocus)
+            compare(Backend.updates.state, "available") // Settings still offers it
+
+            Backend.updates.state = "idle"
+            Backend.updates.checkedAutomatically = false
+            banner.dismissed = false
         }
 
         name: "PmmUi"

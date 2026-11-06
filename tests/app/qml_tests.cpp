@@ -10,11 +10,15 @@
 #include "app/gui/backend.hpp"
 #include "app/gui/network_guard.hpp"
 #include "core/log.hpp"
+#include "persistence/settings_repository.hpp"
 #include "test_support.hpp"
 #include "update_stub.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
+#include <QDate>
+#include <QDir>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QQmlApplicationEngine>
@@ -445,7 +449,8 @@ TEST_CASE("Pmm.Ui keyboard paths work against the real backend", "[app][qml][a11
 namespace {
 
 // The window on a hermetic profile, at its minimum size, with Settings open and
-// the updates on a local stub.
+// the updates on a local stub. start() leaves Settings closed; `daily` turns the
+// daily check on, due 50 ms after the start-up refresh.
 struct UpdatesHarness {
     TempDir temp;
     FakeWorld world{temp.path() / "world"};
@@ -454,6 +459,9 @@ struct UpdatesHarness {
     int starts = 0;
     int quits = 0;
     int pages = 0;
+    bool daily = false;
+    bool installed = true;
+    QString installUnavailableReason;
     std::unique_ptr<ServiceRunner> runner;
     std::unique_ptr<Backend> backend;
     std::unique_ptr<BackendRegistration> registration;
@@ -461,6 +469,16 @@ struct UpdatesHarness {
     QQuickWindow* window = nullptr;
 
     void open(bool readOnly) {
+        start(readOnly);
+        openSettings();
+    }
+
+    void openSettings() const {
+        QMetaObject::invokeMethod(window, "openSettings");
+        REQUIRE(waitUntil([&] { return item("settingsDialog")->property("opened").toBool(); }));
+    }
+
+    void start(bool readOnly) {
         RunnerOptions runnerOptions;
         runnerOptions.runtime = hermeticOptions(temp.path() / "profile", adapter);
         runnerOptions.steam = false;
@@ -471,7 +489,6 @@ struct UpdatesHarness {
         BackendOptions options;
         options.readOnly = readOnly;
         options.updates.currentVersion = QStringLiteral("0.1.0");
-        options.updates.installed = true;
         options.updates.client.endpoints = stub.endpoints();
         options.updates.startProcess = [this](const platform::ProcessSpec&) {
             ++starts;
@@ -479,6 +496,11 @@ struct UpdatesHarness {
         };
         options.updates.requestQuit = [this] { ++quits; };
         options.updates.openUrl = [this](const QUrl&) { ++pages; };
+        options.updates.installed = installed;
+        options.updates.installUnavailableReason = installUnavailableReason;
+        options.updates.dailyCheck = daily;
+        options.updates.dailyCheckDelay = std::chrono::milliseconds(50);
+        options.updates.today = [] { return QDate(2026, 11, 6); };
         backend = std::make_unique<Backend>(*runner, options);
         backend->initialize(start);
         registration = registerBackend(*backend);
@@ -491,8 +513,6 @@ struct UpdatesHarness {
         window->resize(window->minimumSize());
         window->requestActivate();
         REQUIRE(QTest::qWaitForWindowActive(window));
-        QMetaObject::invokeMethod(window, "openSettings");
-        REQUIRE(waitUntil([&] { return item("settingsDialog")->property("opened").toBool(); }));
     }
 
     void close() {
@@ -516,18 +536,33 @@ struct UpdatesHarness {
         QCoreApplication::processEvents();
     }
     // The way a keyboard user gets there; false if Tab never reaches it.
-    bool tabTo(const char* name) const {
-        for (int i = 0; i < 16; ++i) {
+    bool tabTo(const char* name, int limit = 16) const {
+        for (int i = 0; i < limit; ++i) {
             if (hasActiveFocus(item(name)))
                 return true;
             key(Qt::Key_Tab);
         }
         return hasActiveFocus(item(name));
     }
-    QString accessibleName(const char* name) const {
+    QVariant evaluate(const char* name, const QString& expression) const {
         QObject* object = item(name);
-        QQmlExpression expression(qmlContext(object), object, QStringLiteral("Accessible.name"));
-        return expression.evaluate().toString();
+        return QQmlExpression(qmlContext(object), object, expression).evaluate();
+    }
+    QString accessibleName(const char* name) const {
+        return evaluate(name, QStringLiteral("Accessible.name")).toString();
+    }
+    // The window's own layout (ids of Main.qml).
+    QVariant evaluateInWindow(const QString& expression) const {
+        return QQmlExpression(qmlContext(window), window, expression).evaluate();
+    }
+    // With PMM_UI_CAPTURE_DIR set, the window is saved there for a look at the
+    // layout. Nothing is written otherwise.
+    void capture(const QString& name) const {
+        const QString dir = qEnvironmentVariable("PMM_UI_CAPTURE_DIR");
+        if (dir.isEmpty())
+            return;
+        waitUntil([] { return false; }, std::chrono::milliseconds(300));
+        CHECK(window->grabWindow().save(QDir(dir).filePath(name + QStringLiteral(".png"))));
     }
     bool waitForState(const char* state) const {
         return waitUntil([&] { return backend->updates()->state() == QLatin1String(state); });
@@ -712,8 +747,184 @@ TEST_CASE("The Updates section explains why it is off", "[app][qml][update]") {
     CHECK(h.item("updateDisabledReason")->property("text").toString().contains("read-only"));
     CHECK_FALSE(h.item("updateCheckButton")->property("enabled").toBool());
     CHECK_FALSE(h.tabTo("updateCheckButton"));
+    CHECK_FALSE(h.item("updateAutoCheck")->property("enabled").toBool());
+    CHECK_FALSE(h.tabTo("updateAutoCheck"));
+    CHECK_FALSE(h.visible("updateInstallUnavailable"));
     h.checkFits();
     CHECK(h.stub.connections() == 0);
+
+    h.close();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("The daily check can be turned off with the keyboard", "[app][qml][a11y][update]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    UpdatesHarness h;
+    QmlWarnings warnings;
+    h.open(false);
+
+    QObject* toggle = h.item("updateAutoCheck");
+    CHECK(h.visible("updateAutoCheck"));
+    CHECK(toggle->property("enabled").toBool());
+    CHECK(toggle->property("checked").toBool()); // on by default
+    CHECK(h.accessibleName("updateAutoCheck") == "Check for updates automatically");
+    const QString hint = h.text("updateAutoCheckHint");
+    CHECK(hint.contains("GitHub once a day"));
+    CHECK(h.accessibleName("updateAutoCheckHint") == hint);
+    CHECK(h.evaluate("updateAutoCheck", QStringLiteral("Accessible.description")).toString() ==
+          hint);
+    CHECK_FALSE(h.visible("updateInstallUnavailable"));
+    h.checkFits();
+    h.capture(QStringLiteral("settings-updates-minimum"));
+
+    const auto stored = [&] {
+        return h.runner->callBlocking([](AppRuntime& runtime) {
+            persistence::SettingsRepository settings(runtime.database());
+            auto value = settings.get("app.updates.checkAutomatically");
+            return value && value.value() ? *value.value() : std::string();
+        });
+    };
+    REQUIRE(h.tabTo("updateAutoCheck"));
+    h.key(Qt::Key_Space);
+    CHECK_FALSE(toggle->property("checked").toBool());
+    CHECK_FALSE(h.backend->settings()->checkUpdatesAutomatically());
+    CHECK(stored() == "false"); // without closing the dialog or quitting
+    h.key(Qt::Key_Space);
+    CHECK(h.backend->settings()->checkUpdatesAutomatically());
+    CHECK(stored() == "true");
+    CHECK(h.stub.connections() == 0);
+
+    h.close();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("The daily check's banner offers the update and waits for the click",
+          "[app][qml][a11y][update]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    UpdatesHarness h;
+    h.world.addWorkshopMod("1001", "Alpha");
+    h.world.addLocalMod("beta", "Beta");
+    h.stub.serveRelease("1.2.3", QByteArray("installer"));
+    h.daily = true;
+    QmlWarnings warnings;
+    h.start(false);
+    h.backend->playsets()->create(QStringLiteral("Daily"));
+    REQUIRE(waitUntil([&] { return h.backend->activePlaysetId() >= 0; }));
+    h.backend->mods()->addMods({"steam-workshop:1001", "local:beta"});
+    QObject* list = h.item("modList");
+    QMetaObject::invokeMethod(h.window, "selectMod", Q_ARG(int, 0));
+
+    REQUIRE(h.waitForState("available"));
+    REQUIRE(waitUntil([&] { return h.visible("updateBanner"); }));
+    CHECK(h.accessibleName("updateBanner") == "Paradox Mod Manager 1.2.3 is available.");
+    CHECK(h.text("updateBannerAction") == "Update and restart");
+    CHECK(h.accessibleName("updateBannerAction") == "Update and restart");
+    CHECK(h.text("updateBannerDismiss") == "Not now");
+    CHECK(h.accessibleName("updateBannerDismiss") == "Not now");
+    CHECK_FALSE(h.visible("updateBannerProgress"));
+    // Above the columns, which move down for it; the keyboard stays where it was.
+    const qreal bannerBottom = h.evaluate("updateBanner", QStringLiteral("y + height")).toReal();
+    CHECK(h.evaluateInWindow(QStringLiteral("split.y")).toReal() > bannerBottom);
+    CHECK(hasActiveFocus(list));
+    h.capture(QStringLiteral("update-banner-minimum"));
+    h.window->resize(1400, 860);
+    h.capture(QStringLiteral("update-banner"));
+    h.backend->settings()->setTheme(QStringLiteral("dark"));
+    h.capture(QStringLiteral("update-banner-dark"));
+    h.window->resize(h.window->minimumSize());
+
+    // Nothing was downloaded or started for the offer.
+    waitUntil([] { return false; }, std::chrono::milliseconds(300));
+    CHECK(h.stub.requests().size() == 1);
+    CHECK(h.stub.requestsFor(ReleaseStub::installerPath("1.2.3")) == 0);
+    CHECK(h.starts == 0);
+
+    // The banner's buttons are in the Tab order; Enter starts the update.
+    REQUIRE(h.tabTo("updateBannerAction", 80));
+    h.key(Qt::Key_Return);
+    REQUIRE(h.waitForState("installing"));
+    CHECK(h.starts == 1);
+    CHECK(h.quits == 1);
+    CHECK(h.visible("updateBanner"));
+    CHECK(h.accessibleName("updateBanner")
+              .endsWith("Starting the installer. The application will close and restart."));
+
+    h.close();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("Not now hides the update banner for the session", "[app][qml][a11y][update]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    UpdatesHarness h;
+    h.stub.serveRelease("1.2.3", QByteArray("installer"));
+    h.daily = true;
+    QmlWarnings warnings;
+    h.start(false);
+    REQUIRE(waitUntil([&] { return h.visible("updateBanner"); }));
+
+    REQUIRE(h.tabTo("updateBannerDismiss", 80));
+    h.key(Qt::Key_Return);
+    CHECK_FALSE(h.visible("updateBanner"));
+    CHECK(h.evaluateInWindow(QStringLiteral("split.y")).toReal() == 0);
+    CHECK(waitUntil([&] { return hasActiveFocus(h.item("modList")); }));
+
+    // Settings still offers it; the banner stays hidden after that.
+    h.openSettings();
+    CHECK(h.text("updateAction") == "Update and restart");
+    h.key(Qt::Key_Escape);
+    REQUIRE(waitUntil([&] { return !h.item("settingsDialog")->property("visible").toBool(); }));
+    waitUntil([] { return false; }, std::chrono::milliseconds(300));
+    CHECK_FALSE(h.visible("updateBanner"));
+    CHECK(h.backend->updates()->state() == "available");
+    CHECK(h.stub.requestsFor(ReleaseStub::installerPath("1.2.3")) == 0);
+    CHECK(h.starts == 0);
+
+    h.close();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("Copies and sessions that cannot install offer the release page", "[app][qml][update]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    const QString reason =
+        QStringLiteral("Restart Paradox Mod Manager without --profile or --no-steam to update.");
+    UpdatesHarness h;
+    h.stub.serveRelease("1.2.3", QByteArray("installer"));
+    h.daily = true;
+    const bool session = GENERATE(true, false);
+    INFO((session ? "--profile session of an installed copy" : "ZIP copy"));
+    if (session)
+        h.installUnavailableReason = reason;
+    else
+        h.installed = false;
+    QmlWarnings warnings;
+    h.start(false);
+    REQUIRE(waitUntil([&] { return h.visible("updateBanner"); }));
+    CHECK(h.accessibleName("updateBanner") ==
+          (session ? "Paradox Mod Manager 1.2.3 is available. " + reason
+                   : QStringLiteral("Paradox Mod Manager 1.2.3 is available.")));
+    CHECK(h.text("updateBannerAction") == "Open release page");
+    if (session)
+        h.capture(QStringLiteral("update-banner-session"));
+
+    QMetaObject::invokeMethod(h.item("updateBannerAction"), "clicked");
+    CHECK(h.pages == 1);
+    waitUntil([] { return false; }, std::chrono::milliseconds(200));
+    CHECK(h.stub.requests().size() == 1);
+    CHECK(h.starts == 0);
+
+    h.openSettings();
+    CHECK(h.text("updateAction") == "Open release page");
+    CHECK(h.visible("updateInstallUnavailable") == session);
+    if (session) {
+        CHECK(h.text("updateInstallUnavailable") == reason);
+        h.window->resize(1400, 860);
+        h.capture(QStringLiteral("settings-updates-session"));
+    }
+    h.checkFits();
 
     h.close();
     INFO(warnings.list().join('\n').toStdString());
