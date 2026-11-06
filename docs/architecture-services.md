@@ -51,10 +51,14 @@ The acquisition coordinator also receives two host interfaces, which the Qt
 layer implements:
 
 - `WorkshopSessionHost`: `open(game, appId, steamApiLibrary)`, `send(game,
-  HelperCommand)`, `close(game)`. It runs one `pmm-steam-helper` process per game
-  (QProcess) and writes `encodeCommand()` lines to its stdin. Each decoded stdout
-  line goes to `onHelperEvent()` and the process exit goes to `onHelperExited()`.
-  No event may arrive after `close()` returns.
+  HelperCommand)`, `close(game)`, `waitUntilClosed(game)`. It runs one
+  `pmm-steam-helper` process per game (QProcess) and writes `encodeCommand()`
+  lines to its stdin. Each decoded stdout line goes to `onHelperEvent()` and the
+  process exit goes to `onHelperExited()`. No event may arrive after `close()`
+  returns. `waitUntilClosed(game)` blocks until the helpers closed for that game
+  have exited, at most the host's grace period plus a short kill wait (a helper
+  still running then is killed and a warning logged), and delivers nothing. The
+  default implementation returns at once, so other hosts need not provide it.
 - `WorkshopMetadataHost`: `request(game, ids)` performs the key-less Web API
   `GetPublishedFileDetails` call (QNetworkAccessManager). It parses the reply with
   `providers::parsePublishedFileDetailsResponse()` and passes it to
@@ -91,8 +95,10 @@ obscurely.
   `AcquisitionCoordinator` keeps the job contexts and helper sessions in memory.
 - Every call is synchronous and short: a database transaction, a folder scan,
   a fingerprint, a file transaction. Waiting (helper start-up, Steam callbacks,
-  downloads, HTTP) happens as events. The QProcess and network objects live on
-  the worker thread, so their signals arrive there and become coordinator calls.
+  downloads, HTTP) happens as events. A launch, though, blocks until the game's
+  closed helper has exited (with the Qt host at most 3 s, then a kill and up to
+  1 s more). The QProcess and network objects live on the worker thread, so
+  their signals arrive there and become coordinator calls.
 - `Database` is internally serialised and could be used from the GUI thread.
   The GUI still goes through the worker so that it never sees a half-finished
   service operation.
@@ -332,7 +338,12 @@ are left out, because usable installed content wins over job state.
 
 While a helper session is open, Steam treats the game as running. Before a
 launch, `closeSessionsForLaunch(game)` therefore saves progress, closes the
-session and parks the game's unfinished jobs. The next `start(game)` reconciles
+session, waits until the game's closed helper has exited
+(`waitUntilClosed(game)`, also when the session had already closed while idle,
+since that helper may still be exiting) and parks the game's unfinished jobs.
+Only this call waits: idle closes, retries, cancelling and `shutdown()` do not.
+The host delivers nothing while it waits, and anything that did arrive would
+only be queued, like any re-entrant callback. The next `start(game)` reconciles
 them with Steam. `start()` resumes only unfinished jobs, so a failed job whose
 automatic retry is due is parked as the queued run that the retry would have
 started (attempt counted, retry text cleared) instead of staying "failed" with
@@ -349,6 +360,8 @@ every game on exit.
    validate plan (absolute existing executable, absolute config targets)
        failure -> Error recorded; helper sessions and jobs untouched
    coordinator.closeSessionsForLaunch(game)   (parked update returned in LaunchOutcome)
+       close the helper session, wait until the helper has exited (a stuck one is
+       killed after the grace period, with a warning; the launch goes on), park jobs
    FileTransactionManager::apply("launch <game> playset <id> (<name>)", configWrites)
        journal, durable backups, atomic replace, rollback on failure
        failure -> Error, game not started, parked jobs resumed, previous configuration
@@ -372,9 +385,10 @@ notice on start-up and offers Recover next to Play when
 missing or damaged cannot be recovered and keeps blocking its game; a discard
 action is planned ([development status](development-status.md)).
 
-The helper is closed, but its exit is not awaited before the game starts
-(`WorkshopSessionHost` has no wait yet); whether a still-exiting helper
-matters to the games is unverified.
+The game starts only after its helper has exited or been killed, so Steam no
+longer sees a process with the game's app id. Whether a still-exiting helper would have
+mattered to EU4 or Stellaris was never verified; the wait removes the
+question.
 
 ## Errors and logging
 
@@ -395,7 +409,8 @@ every service against:
 - temporary folders whose names contain spaces and non-ASCII characters;
 - a fake Stellaris adapter that scans plain folders;
 - a simulated Steam helper that subscribes, downloads, fails, refuses sessions
-  and crashes on demand;
+  and crashes on demand, and records its open, close and wait calls in order
+  (a launch test appends the process start to prove close, wait, start);
 - a fake process starter and lister.
 
 Fixtures in `tests/fixtures/services` are sanitised descriptors and a

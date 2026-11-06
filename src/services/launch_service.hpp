@@ -16,8 +16,9 @@
 //
 // launch() re-checks, builds the adapter's LaunchPlan for the enabled mods in
 // playset order and validates it. Only then does it ask the coordinator to
-// close the game's Steam helper session and park its acquisition jobs, so a
-// launch refused while preparing leaves acquisition alone. It applies
+// close the game's Steam helper session, wait until the helper has exited and
+// park its acquisition jobs, so a launch refused while preparing leaves
+// acquisition alone. It applies
 // plan.configWrites as ONE file transaction (backups, rollback, crash journal;
 // label "launch <game> playset <id> (<name>)") and starts the executable
 // through the injected process starter with the plan's argv vector, working

@@ -299,6 +299,9 @@ public:
     int opens = 0;
     int closes = 0;
     bool isOpen = false;
+    // "open", "close" and "wait" (waitUntilClosed) in call order; tests may
+    // append their own markers, e.g. "start" from a process starter.
+    std::vector<std::string> sequence;
     std::vector<std::string> openedAppIds;
     std::vector<fs::path> openedLibraries;
     std::vector<providers::HelperCommand> sent;
@@ -306,6 +309,7 @@ public:
 
     bool open(const GameKey&, const std::string& appId, const fs::path& library) override {
         ++opens;
+        sequence.emplace_back("open");
         openedAppIds.push_back(appId);
         openedLibraries.push_back(library);
         if (!openSucceeds)
@@ -347,8 +351,19 @@ public:
 
     void close(const GameKey&) override {
         ++closes;
+        sequence.emplace_back("close");
         isOpen = false;
         pending.clear();
+    }
+
+    void waitUntilClosed(const GameKey& gameKey) override {
+        CHECK(gameKey == kGame);
+        CHECK_FALSE(isOpen); // never waits for a session that is still open
+        sequence.emplace_back("wait");
+    }
+
+    std::size_t count(std::string_view call) const {
+        return static_cast<std::size_t>(std::count(sequence.begin(), sequence.end(), call));
     }
 
     // Delivers queued events (and an exit) until none are left.

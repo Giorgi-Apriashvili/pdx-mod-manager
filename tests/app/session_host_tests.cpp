@@ -10,6 +10,7 @@
 #include "app/core/service_runner.hpp"
 #include "app/core/session_host.hpp"
 #include "app/gui/backend.hpp"
+#include "core/log.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "services/playset_view.hpp"
@@ -17,12 +18,19 @@
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <windows.h>
+// Needs <windows.h> first.
+#include <tlhelp32.h>
 
+#include <QElapsedTimer>
 #include <QSignalSpy>
 
 #include <atomic>
+#include <map>
+#include <mutex>
 #include <optional>
 #include <set>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -67,6 +75,112 @@ void collect(QtWorkshopSessionHost& host, Collected& collected) {
         [&collected](const GameKey&, int exitCode) { collected.exitCode = exitCode; });
 }
 
+// Process ids of the running pmm-steam-helper processes this test program started.
+std::set<DWORD> helperChildren() {
+    std::set<DWORD> pids;
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE)
+        return pids;
+    const std::wstring name = u8(PMM_STEAM_HELPER_PATH).filename().wstring();
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof entry;
+    for (BOOL more = Process32FirstW(snapshot, &entry); more;
+         more = Process32NextW(snapshot, &entry)) {
+        if (entry.th32ParentProcessID == GetCurrentProcessId() &&
+            _wcsicmp(entry.szExeFile, name.c_str()) == 0)
+            pids.insert(entry.th32ProcessID);
+    }
+    CloseHandle(snapshot);
+    return pids;
+}
+
+// One helper process, held open from the moment it runs, so that its exit
+// can be checked without the process id being reused meanwhile.
+class HelperProcess {
+public:
+    // The helper started since `before` was taken; invalid unless exactly one.
+    explicit HelperProcess(const std::set<DWORD>& before) {
+        std::vector<DWORD> started;
+        for (const DWORD pid : helperChildren()) {
+            if (before.count(pid) == 0)
+                started.push_back(pid);
+        }
+        if (started.size() != 1)
+            return;
+        m_pid = started.front();
+        m_handle = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, m_pid);
+    }
+    ~HelperProcess() {
+        if (m_handle)
+            CloseHandle(m_handle);
+    }
+    HelperProcess(const HelperProcess&) = delete;
+    HelperProcess& operator=(const HelperProcess&) = delete;
+
+    bool valid() const noexcept { return m_handle != nullptr; }
+    bool running() const { return m_handle && WaitForSingleObject(m_handle, 0) == WAIT_TIMEOUT; }
+
+    // Suspends every thread: the process stays alive, keeps its app id and
+    // acts on nothing, not even Quit or the end of its input.
+    bool suspend() const {
+        const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (snapshot == INVALID_HANDLE_VALUE)
+            return false;
+        int suspended = 0;
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof entry;
+        for (BOOL more = Thread32First(snapshot, &entry); more;
+             more = Thread32Next(snapshot, &entry)) {
+            if (entry.th32OwnerProcessID != m_pid)
+                continue;
+            const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID);
+            if (!thread)
+                continue;
+            if (SuspendThread(thread) != static_cast<DWORD>(-1))
+                ++suspended;
+            CloseHandle(thread);
+        }
+        CloseHandle(snapshot);
+        return suspended > 0;
+    }
+
+private:
+    DWORD m_pid = 0;
+    HANDLE m_handle = nullptr;
+};
+
+class LogCapture {
+public:
+    LogCapture() {
+        setLogSink([this](const LogRecord& record) {
+            std::lock_guard lock(m_mutex);
+            m_records.push_back(record);
+        });
+    }
+    ~LogCapture() { setLogSink({}); }
+    LogCapture(const LogCapture&) = delete;
+    LogCapture& operator=(const LogCapture&) = delete;
+
+    // Records with `message` whose "game" field is `game`.
+    std::size_t count(const std::string& message, const std::string& game) {
+        std::lock_guard lock(m_mutex);
+        std::size_t n = 0;
+        for (const LogRecord& record : m_records) {
+            if (record.message != message)
+                continue;
+            for (const auto& [key, value] : record.fields)
+                n += key == "game" && value == game ? 1 : 0;
+        }
+        return n;
+    }
+
+private:
+    std::mutex m_mutex;
+    std::vector<LogRecord> m_records;
+};
+
+constexpr const char* kKilledWarning = "steam helper did not exit; terminating it";
+
 } // namespace
 
 TEST_CASE("session host talks to the real helper and stops delivering after close",
@@ -101,6 +215,96 @@ TEST_CASE("session host talks to the real helper and stops delivering after clos
     CHECK(collected.events.size() == seen);
     CHECK_FALSE(collected.exitCode.has_value());
     host.closeAll();
+}
+
+TEST_CASE("waiting after close returns once the helper has exited, and nothing is delivered",
+          "[app][helper]") {
+    TempDir temp;
+    const fs::path library = installFakeLibrary(temp.path() / "game");
+    QtWorkshopSessionHost host(qs(PMM_STEAM_HELPER_PATH));
+    Collected collected;
+    collect(host, collected);
+    LogCapture logs;
+
+    const std::set<DWORD> before = helperChildren();
+    REQUIRE(host.open("stellaris", "281990", library));
+    const HelperProcess helper(before);
+    REQUIRE(helper.valid());
+    REQUIRE(waitUntil([&] { return collected.last<providers::ReadyEvent>() != nullptr; }));
+
+    // Answers the closed session would otherwise deliver.
+    host.send("stellaris", providers::StateCommand{{"111111111"}});
+    host.send("stellaris", providers::PingCommand{});
+    const std::size_t seen = collected.events.size();
+    host.close("stellaris");
+    host.waitUntilClosed("stellaris");
+    CHECK_FALSE(helper.running());
+    CHECK(logs.count(kKilledWarning, "stellaris") == 0); // it honoured Quit
+    CHECK(collected.events.size() == seen);
+
+    waitUntil([] { return false; }, std::chrono::milliseconds(500));
+    CHECK(collected.events.size() == seen);
+    CHECK_FALSE(collected.exitCode.has_value());
+    host.waitUntilClosed("stellaris"); // nothing left to wait for
+}
+
+TEST_CASE("waiting kills a closed helper that does not exit within the grace period, per game",
+          "[app][helper]") {
+    // The real helper always honours Quit. A stuck one (blocked in a Steam
+    // call, say) is the real helper process with every thread suspended: it
+    // keeps running with its app id and reads nothing, so only a kill ends it.
+    TempDir temp;
+    const fs::path library = installFakeLibrary(temp.path() / "game");
+    QtWorkshopSessionHost host(qs(PMM_STEAM_HELPER_PATH));
+    constexpr std::chrono::milliseconds grace(500);
+    host.setQuitGracePeriod(grace);
+    std::map<GameKey, std::size_t> events;
+    std::vector<GameKey> exits;
+    std::map<GameKey, bool> ready;
+    host.setSinks(
+        [&](const GameKey& game, const providers::HelperEvent& event) {
+            ++events[game];
+            if (std::holds_alternative<providers::ReadyEvent>(event))
+                ready[game] = std::get<providers::ReadyEvent>(event).ok;
+        },
+        [&](const GameKey& game, int) { exits.push_back(game); });
+    LogCapture logs;
+
+    std::set<DWORD> before = helperChildren();
+    REQUIRE(host.open("stellaris", "281990", library));
+    const HelperProcess stellaris(before);
+    before = helperChildren();
+    REQUIRE(host.open("eu4", "236850", library));
+    const HelperProcess eu4(before);
+    REQUIRE(stellaris.valid());
+    REQUIRE(eu4.valid());
+    REQUIRE(waitUntil([&] { return ready["stellaris"] && ready["eu4"]; }));
+    REQUIRE(eu4.suspend());
+
+    const std::map<GameKey, std::size_t> seen = events;
+    host.close("eu4");
+    host.close("stellaris");
+    // Only this game's helper is waited for; the stuck one of the other game
+    // is left alone.
+    host.waitUntilClosed("stellaris");
+    CHECK_FALSE(stellaris.running());
+    CHECK(eu4.running());
+
+    QElapsedTimer timer;
+    timer.start();
+    host.waitUntilClosed("eu4");
+    const qint64 waited = timer.elapsed();
+    CHECK_FALSE(eu4.running());
+    CHECK(logs.count(kKilledWarning, "eu4") == 1);
+    INFO("waited " << waited << " ms");
+    CHECK(waited >= grace.count() - 100); // the grace period first, then the kill
+    CHECK(waited < grace.count() + 5000);
+
+    // Nothing of either session is delivered, during the waits or later.
+    CHECK(events == seen);
+    waitUntil([] { return false; }, std::chrono::milliseconds(800));
+    CHECK(events == seen);
+    CHECK(exits.empty());
 }
 
 TEST_CASE("session host reports a refused session and the helper's exit code", "[app][helper]") {

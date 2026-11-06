@@ -103,7 +103,7 @@ bool QtWorkshopSessionHost::open(const GameKey& gameKey, const std::string& appI
         logWarning(kComponent, "steam helper could not be started",
                    {{"game", gameKey}, {"error", utf8(process->errorString())}});
         m_sessions.erase(gameKey);
-        retire(process, false);
+        retire(gameKey, process, false);
         return false;
     }
     logInfo(kComponent, "steam helper started",
@@ -128,7 +128,11 @@ void QtWorkshopSessionHost::close(const GameKey& gameKey) {
     QProcess* process = it->second->process;
     m_sessions.erase(it);
     logInfo(kComponent, "closing steam helper", {{"game", gameKey}});
-    retire(process, true);
+    retire(gameKey, process, true);
+}
+
+void QtWorkshopSessionHost::waitUntilClosed(const GameKey& gameKey) {
+    waitForRetired(&gameKey);
 }
 
 bool QtWorkshopSessionHost::isOpen(const GameKey& gameKey) const {
@@ -201,7 +205,7 @@ void QtWorkshopSessionHost::finished(const GameKey& gameKey, std::uint64_t seria
         m_exits(gameKey, exitCode);
 }
 
-void QtWorkshopSessionHost::retire(QProcess* process, bool sendQuit) {
+void QtWorkshopSessionHost::retire(const GameKey& gameKey, QProcess* process, bool sendQuit) {
     QObject::disconnect(process, nullptr, nullptr, nullptr);
     if (process->state() == QProcess::NotRunning) {
         process->deleteLater();
@@ -212,9 +216,9 @@ void QtWorkshopSessionHost::retire(QProcess* process, bool sendQuit) {
         process->write(line.data(), static_cast<qint64>(line.size()));
         process->closeWriteChannel();
     }
-    m_retired.push_back(process);
+    m_retired.push_back(Retired{gameKey, process});
     connect(process, &QProcess::finished, this, [this, process] {
-        m_retired.erase(std::remove(m_retired.begin(), m_retired.end(), process), m_retired.end());
+        std::erase_if(m_retired, [process](const Retired& r) { return r.process == process; });
         process->deleteLater();
     });
     QTimer::singleShot(m_grace, process, [process] {
@@ -223,15 +227,21 @@ void QtWorkshopSessionHost::retire(QProcess* process, bool sendQuit) {
     });
 }
 
-void QtWorkshopSessionHost::waitForRetired() {
-    const std::vector<QProcess*> retired = m_retired;
-    for (QProcess* process : retired) {
-        if (std::find(m_retired.begin(), m_retired.end(), process) == m_retired.end())
+void QtWorkshopSessionHost::waitForRetired(const GameKey* game) {
+    // waitForFinished() runs no event loop, and the only connection left on a
+    // retired process (`finished`) just drops it from m_retired.
+    const std::vector<Retired> retired = m_retired;
+    for (const Retired& entry : retired) {
+        if (game && entry.game != *game)
+            continue;
+        QProcess* process = entry.process;
+        if (std::none_of(m_retired.begin(), m_retired.end(),
+                         [process](const Retired& r) { return r.process == process; }))
             continue; // finished meanwhile (and scheduled for deletion)
         if (process->state() == QProcess::NotRunning ||
             process->waitForFinished(static_cast<int>(m_grace.count())))
             continue;
-        logWarning(kComponent, "steam helper did not exit; terminating it");
+        logWarning(kComponent, "steam helper did not exit; terminating it", {{"game", entry.game}});
         process->kill();
         process->waitForFinished(1000);
     }

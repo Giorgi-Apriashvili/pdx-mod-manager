@@ -4,7 +4,8 @@
 // persisted acquisition jobs (spec section 6).
 //
 // The coordinator owns one AcquisitionContext per job it works on and one
-// helper session per game. It never blocks: the helper process and the Web
+// helper session per game. It never blocks (except closeSessionsForLaunch(),
+// which waits for the closed helper to exit): the helper process and the Web
 // API are reached through the host interfaces below, implemented by the Qt
 // layer (QProcess, QNetworkAccessManager) and by fakes in tests, and their
 // answers come back as onHelperEvent() / onHelperExited() / onMetadata()
@@ -78,6 +79,12 @@ public:
     // Ends the session (QuitCommand, then terminate after a grace period).
     // After close() returns, no event or exit of that session may be delivered.
     virtual void close(const GameKey& gameKey) = 0;
+    // Blocks until the helper processes closed for `gameKey` have exited,
+    // bounded by the host's grace period plus a short kill wait: a helper
+    // still running then is killed (and a warning logged). Never delivers
+    // events or exits. Meant for the launch path: Steam should no longer see
+    // the game's app id when the game starts. The default returns at once.
+    virtual void waitUntilClosed(const GameKey& /*gameKey*/) {}
 };
 
 // Performs Web API GetPublishedFileDetails requests (providers/web_metadata.hpp).
@@ -184,10 +191,11 @@ public:
     Result<FallbackOutcome> openFallback(std::int64_t jobId);
 
     // Before launching `game`: persists progress, closes its helper session
-    // (Steam would otherwise consider the game already running) and parks its
-    // unfinished jobs; the next start(game) reconciles them with Steam. A
-    // failed job whose automatic retry is due is parked as the queued run the
-    // retry would have started.
+    // (Steam would otherwise consider the game already running), waits until
+    // the closed helper has exited (WorkshopSessionHost::waitUntilClosed) and
+    // parks its unfinished jobs; the next start(game) reconciles them with
+    // Steam. A failed job whose automatic retry is due is parked as the
+    // queued run the retry would have started.
     CoordinatorUpdate closeSessionsForLaunch(const GameKey& game);
     // On application exit: persists progress, saves failed jobs whose
     // automatic retry is due as queued (start(game) resumes them after the
