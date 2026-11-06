@@ -49,15 +49,15 @@ UpdateController::UpdateController(UpdateControllerOptions options, QObject* par
       m_currentVersion(m_options.currentVersion),
       m_current(services::parseAppVersion(utf8(m_currentVersion))), m_client(m_options.client) {
     m_installed = m_options.installed ? *m_options.installed : detectInstalled(m_options.appDir);
-    // Which update path this copy has, for a report about an update that did not arrive.
-    logInfo(kComponent, "update mode",
-            {{"mode", utf8(mode())},
-             {"installed", m_installed ? "true" : "false"},
-             {"dailyCheck", m_options.dailyCheck ? "true" : "false"}});
     if (enabled() && !m_current) {
         // Development builds with an unusual version number have nothing to compare.
         m_options.disabledReason = tr("This build has no release version to compare.");
     }
+    // Which update path this copy has, for a report about an update that did not arrive.
+    logInfo(kComponent, "update mode",
+            {{"mode", utf8(mode())},
+             {"installed", m_installed ? "true" : "false"},
+             {"dailyCheck", m_options.dailyCheck && enabled() ? "true" : "false"}});
     m_dailyTimer.setSingleShot(true);
     connect(&m_dailyTimer, &QTimer::timeout, this, &UpdateController::runDailyCheck);
     connect(&m_client, &UpdateClient::checkFinished, this, &UpdateController::onCheckFinished);
