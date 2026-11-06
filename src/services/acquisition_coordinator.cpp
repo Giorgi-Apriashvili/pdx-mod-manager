@@ -1061,6 +1061,10 @@ void AcquisitionCoordinator::park(Runtime& runtime) {
 CoordinatorUpdate AcquisitionCoordinator::closeSessionsForLaunch(const GameKey& game) {
     return run([&] {
         closeSession(game);
+        // Also when the session closed earlier (idle): its helper may still be
+        // exiting. The host delivers nothing while it waits, and run() would
+        // queue anything that did arrive.
+        m_sessions.waitUntilClosed(game);
         for (auto it = m_jobs.begin(); it != m_jobs.end();) {
             Runtime& runtime = it->second;
             if (runtime.game != game) {

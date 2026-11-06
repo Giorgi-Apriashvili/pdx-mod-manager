@@ -86,8 +86,13 @@ written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
   `open()`, `send()` or `close()`, and nothing of a session arrives after
   `close()`.
 - `close()` sends `QuitCommand`, closes stdin and kills the process if it is
-  still running after 3 s. A new session for the same game first waits for
-  the previous helper to exit.
+  still running after 3 s. A new session first waits for the closed helpers
+  to exit.
+- Before a launch, the coordinator calls `waitUntilClosed(game)`: it waits up
+  to 3 s for that game's closed helper (other games' helpers keep exiting on
+  their own), then kills it, logs a warning and waits up to 1 s more. It runs
+  no event loop, so nothing is delivered meanwhile, and the launch goes ahead
+  either way.
 
 ### Web API host
 
@@ -319,7 +324,10 @@ platform:
 - the QML engine's network access refusing everything but local resources;
 - `QtWorkshopSessionHost` with the real `pmm-steam-helper` and the fake Steam
   API library, including subscribe, download and install through the
-  coordinator;
+  coordinator, and `waitUntilClosed()`: the helper is gone afterwards and
+  nothing is delivered; a stuck helper (the real one with its threads
+  suspended) is killed after a short grace period, and only the given game's
+  helper is waited for;
 - `QtWorkshopMetadataHost` against a local HTTP stub;
 - `UpdateClient` and `UpdateController` against a local stub, and the Settings
   section with the keyboard ([`updates.md`](updates.md));

@@ -551,6 +551,7 @@ TEST_CASE("Launch preparation parks jobs and closes the helper session",
     r.c().closeSessionsForLaunch(kGame);
     CHECK_FALSE(r.c().sessionOpen(kGame));
     CHECK(r.steam.closes == 1);
+    CHECK(r.steam.sequence == std::vector<std::string>{"open", "close", "wait"});
     CHECK(r.c().liveJobs(kGame).empty());
     CHECK(r.job(kItem).state == AcquisitionState::Downloading); // persisted for later
     CHECK(r.snapshotJob(r.c().snapshot(kGame), kItem).stateText == "Waiting to resume");
@@ -558,6 +559,60 @@ TEST_CASE("Launch preparation parks jobs and closes the helper session",
     r.c().start(kGame);
     r.settle();
     CHECK(r.job(kItem).state == AcquisitionState::Installed);
+}
+
+TEST_CASE("Only launch preparation waits for a closed helper to exit", "[services][acquisition]") {
+    Rig r;
+    SECTION("the session goes idle after an install") {
+        r.acquire({workshopEntry(kItem, "Idle Example")});
+        r.settle();
+        REQUIRE(r.job(kItem).state == AcquisitionState::Installed);
+        CHECK(r.steam.sequence == std::vector<std::string>{"open", "close"});
+    }
+    SECTION("automatic retries and the user's Retry start sessions over") {
+        r.steam.items[kItem].subscribeResult = 16; // Timeout, retryable
+        r.acquire({workshopEntry(kItem, "Flaky Example")});
+        r.settle();
+        REQUIRE(r.job(kItem).attempts == 3);
+        r.steam.items[kItem].subscribeResult = 1;
+        r.c().retryAllFailed(kGame);
+        r.settle();
+        REQUIRE(r.job(kItem).state == AcquisitionState::Installed);
+        CHECK(r.steam.closes == 4);
+        CHECK(r.steam.count("wait") == 0);
+    }
+    SECTION("a refused session is closed and Retry opens another") {
+        r.steam.ready.ok = false;
+        r.steam.ready.error = providers::HelperFailure::SteamNotRunning;
+        r.acquire({workshopEntry(kItem, "Refused Example")});
+        r.steam.pump(r.c());
+        r.steam.ready = providers::ReadyEvent{};
+        r.steam.ready.ok = true;
+        r.steam.ready.loggedOn = true;
+        r.steam.ready.ownsApp = true;
+        r.steam.ready.appId = kAppId;
+        REQUIRE(r.c().retry(r.job(kItem).id));
+        r.settle();
+        REQUIRE(r.job(kItem).state == AcquisitionState::Installed);
+        CHECK(r.steam.closes == 2);
+        CHECK(r.steam.count("wait") == 0);
+    }
+    SECTION("downloads are cancelled") {
+        r.steam.items[kItem].steps = 4;
+        r.acquire({workshopEntry(kItem, "Cancelled Example")});
+        r.steam.pump(r.c());
+        REQUIRE(r.c().sessionOpen(kGame));
+        r.c().cancelAll(kGame);
+        CHECK(r.steam.sequence == std::vector<std::string>{"open", "close"});
+    }
+    SECTION("the application shuts down") {
+        r.steam.items[kItem].steps = 4;
+        r.acquire({workshopEntry(kItem, "Shutdown Example")});
+        r.steam.pump(r.c());
+        REQUIRE(r.c().sessionOpen(kGame));
+        r.c().shutdown();
+        CHECK(r.steam.sequence == std::vector<std::string>{"open", "close"});
+    }
 }
 
 TEST_CASE("A failed job waiting for its automatic retry resumes after a launch or a restart",

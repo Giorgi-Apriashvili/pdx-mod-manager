@@ -556,6 +556,35 @@ TEST_CASE("Launching closes the game's Steam helper session before starting the 
     CHECK(outcome.acquisition.changed); // so that the job views refresh
 }
 
+TEST_CASE("Launching waits for the closed Steam helper to exit before starting the game",
+          "[services][launch]") {
+    AcquiringRig r;
+    const auto starter = r.w.ctx.startProcess;
+    r.w.ctx.startProcess = [&](const platform::ProcessSpec& spec) {
+        r.steam.sequence.emplace_back("start");
+        return starter(spec);
+    };
+    LaunchService launcher(r.w.ctx, &r.coordinator);
+    SECTION("the session is open") {
+        REQUIRE(r.steam.sequence == std::vector<std::string>{"open"});
+        require(launcher.launch(kGame, r.playsetId));
+        CHECK(r.steam.sequence == std::vector<std::string>{"open", "close", "wait", "start"});
+    }
+    SECTION("the session was closed moments ago and its helper may still be exiting") {
+        r.coordinator.cancelAll(kGame);
+        REQUIRE_FALSE(r.coordinator.sessionOpen(kGame));
+        REQUIRE(r.steam.sequence == std::vector<std::string>{"open", "close"});
+        require(launcher.launch(kGame, r.playsetId));
+        CHECK(r.steam.sequence == std::vector<std::string>{"open", "close", "wait", "start"});
+    }
+    SECTION("the game cannot be started: acquisition resumes without another wait") {
+        r.w.startFailure = makeError(ErrorCode::ProcessStartFailed, "Access is denied.");
+        REQUIRE_FALSE(launcher.launch(kGame, r.playsetId));
+        CHECK(r.steam.sequence ==
+              std::vector<std::string>{"open", "close", "wait", "start", "open"});
+    }
+}
+
 TEST_CASE("A launch whose plan fails leaves Workshop acquisition untouched", "[services][launch]") {
     AcquiringRig r;
     LaunchService launcher(r.w.ctx, &r.coordinator);
@@ -568,6 +597,7 @@ TEST_CASE("A launch whose plan fails leaves Workshop acquisition untouched", "[s
     CHECK_THAT(failed.error().message, ContainsSubstring("Files of 1 mod are missing"));
     CHECK(r.w.started.empty());
     CHECK(r.steam.closes == 0);
+    CHECK(r.steam.count("wait") == 0);
     CHECK(r.steam.isOpen);
     CHECK(r.coordinator.sessionOpen(kGame));
     CHECK(r.coordinator.hasActiveWork(kGame));
