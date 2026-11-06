@@ -19,6 +19,7 @@
 #include <windows.h>
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QTimer>
@@ -28,6 +29,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace pmm;
@@ -149,7 +151,39 @@ struct ClientFixture {
         REQUIRE(finished);
         return *result;
     }
+
+    QString installerFile() const {
+        return QDir(options.updatesDir).filePath(qs(ReleaseStub::installerName(kNew)));
+    }
+    QStringList updateFiles() const {
+        return QDir(options.updatesDir).entryList(QDir::Files | QDir::Hidden);
+    }
 };
+
+// Holds a file open the way a running program or a virus scanner does: it
+// cannot be deleted or replaced until released.
+class FileLock {
+public:
+    explicit FileLock(const QString& path)
+        : m_handle(CreateFileW(reinterpret_cast<const wchar_t*>(path.utf16()), GENERIC_READ,
+                               FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL,
+                               nullptr)) {}
+    ~FileLock() { release(); }
+    FileLock(const FileLock&) = delete;
+    FileLock& operator=(const FileLock&) = delete;
+
+    bool held() const { return m_handle != INVALID_HANDLE_VALUE; }
+    void release() {
+        if (held())
+            CloseHandle(std::exchange(m_handle, INVALID_HANDLE_VALUE));
+    }
+
+private:
+    HANDLE m_handle = INVALID_HANDLE_VALUE;
+};
+
+const std::string kSaveFailed =
+    "The installer could not be saved (the file is in use or the disk is full). Try again.";
 
 } // namespace
 
@@ -414,6 +448,74 @@ TEST_CASE("A reply that names two repositories is refused", "[app][update]") {
     REQUIRE_FALSE(result.ok());
     CHECK(result.error().code == ErrorCode::ValidationFailed);
     CHECK(f.stub.requests().size() == 1);
+}
+
+TEST_CASE("A locked installer name is tried again until it is free", "[app][update]") {
+    ClientFixture f;
+    f.stub.serveRelease(kNew, kInstallerBytes);
+    const UpdateCheckResult checked = f.check();
+    REQUIRE(checked.ok());
+    REQUIRE(checked.value());
+    // An earlier installer of the same name, still open (exiting, or scanned).
+    REQUIRE(QDir().mkpath(f.options.updatesDir));
+    FileLock lock(f.installerFile());
+    REQUIRE(lock.held());
+    // Freed a moment after the last byte arrived, so the first attempt fails.
+    QObject::connect(&f.get(), &UpdateClient::downloadProgress, &f.get(),
+                     [&](qint64 received, qint64 total) {
+                         if (total > 0 && received == total)
+                             QTimer::singleShot(300ms, &f.get(), [&] { lock.release(); });
+                     });
+    const UpdateDownloadResult downloaded = f.download(*checked.value());
+    REQUIRE(downloaded.ok());
+    CHECK(QFileInfo(downloaded.value().path).absoluteFilePath() ==
+          QFileInfo(f.installerFile()).absoluteFilePath());
+    QFile file(f.installerFile());
+    REQUIRE(file.open(QIODevice::ReadOnly));
+    CHECK(file.readAll() == kInstallerBytes);
+    CHECK(f.updateFiles() == QStringList{qs(ReleaseStub::installerName(kNew))});
+}
+
+TEST_CASE("An installer name that stays locked fails after about a second", "[app][update]") {
+    ClientFixture f;
+    f.stub.serveRelease(kNew, kInstallerBytes);
+    const UpdateCheckResult checked = f.check();
+    REQUIRE(checked.ok());
+    REQUIRE(checked.value());
+    REQUIRE(QDir().mkpath(f.options.updatesDir));
+    FileLock lock(f.installerFile());
+    REQUIRE(lock.held());
+    const QStringList onlyTheLocked{qs(ReleaseStub::installerName(kNew))};
+
+    SECTION("it says so") {
+        QElapsedTimer elapsed;
+        elapsed.start();
+        const UpdateDownloadResult downloaded = f.download(*checked.value());
+        REQUIRE_FALSE(downloaded.ok());
+        CHECK(elapsed.elapsed() >= 900);
+        CHECK(downloaded.error().code == ErrorCode::IoError);
+        CHECK(downloaded.error().message == kSaveFailed);
+        CHECK_FALSE(f.client->busy());
+    }
+    SECTION("cancelling meanwhile stops the attempts") {
+        bool finished = false;
+        QObject::connect(&f.get(), &UpdateClient::downloadFinished, &f.get(),
+                         [&] { finished = true; });
+        QObject::connect(&f.get(), &UpdateClient::downloadProgress, &f.get(),
+                         [&](qint64 received, qint64 total) {
+                             if (total > 0 && received == total)
+                                 QTimer::singleShot(100ms, &f.get(), [&] { f.client->cancel(); });
+                         });
+        f.client->download(*checked.value());
+        REQUIRE(waitUntil([&] { return !f.client->busy(); }));
+        lock.release(); // a further attempt would succeed now
+        settle(1500ms);
+        CHECK_FALSE(finished);
+    }
+    // The verified copy went with the failure; the locked file is untouched.
+    CHECK(f.updateFiles() == onlyTheLocked);
+    lock.release();
+    CHECK(QFileInfo(f.installerFile()).size() == 0);
 }
 
 TEST_CASE("A verified download reaches ready with the right file", "[app][update]") {

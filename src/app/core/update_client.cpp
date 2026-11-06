@@ -3,13 +3,15 @@
 #include "app/core/qt_util.hpp"
 #include "core/log.hpp"
 
+#include <windows.h>
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QSaveFile>
+#include <QRandomGenerator>
 
 #include <span>
 #include <utility>
@@ -17,9 +19,26 @@
 namespace pmm::app {
 namespace {
 
+using namespace std::chrono_literals;
+
 constexpr const char* kComponent = "app.update";
 constexpr qint64 kChunkBytes = qint64{64} * 1024;
 constexpr qint64 kReadBufferBytes = qint64{1024} * 1024;
+// Giving the verified file its final name: the first attempt and four more,
+// about a second in all.
+constexpr int kSaveAttempts = 5;
+constexpr std::chrono::milliseconds kSaveRetryInterval = 250ms;
+
+Error saveError(std::string detail) {
+    return makeError(ErrorCode::IoError,
+                     "The installer could not be saved (the file is in use or the disk is full). "
+                     "Try again.",
+                     std::move(detail));
+}
+
+const wchar_t* wide(const QString& text) {
+    return reinterpret_cast<const wchar_t*>(text.utf16());
+}
 
 int httpStatus(const QNetworkReply* reply) {
     return reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -44,6 +63,10 @@ UpdateClient::UpdateClient(UpdateClientOptions options, QObject* parent)
     : QObject(parent), m_options(std::move(options)) {
     m_timer.setSingleShot(true);
     connect(&m_timer, &QTimer::timeout, this, &UpdateClient::onTimeout);
+    m_saveTimer.setSingleShot(true);
+    m_saveTimer.setTimerType(Qt::PreciseTimer);
+    m_saveTimer.setInterval(kSaveRetryInterval);
+    connect(&m_saveTimer, &QTimer::timeout, this, &UpdateClient::saveInstaller);
 }
 
 UpdateClient::~UpdateClient() {
@@ -156,8 +179,9 @@ void UpdateClient::stopReply() {
 }
 
 void UpdateClient::cleanUpPartialFile() {
+    m_saveTimer.stop();
     if (m_file) {
-        m_file->cancelWriting();
+        m_file->remove(); // one still in use goes with the next cleanup
         m_file.reset();
     }
 }
@@ -237,10 +261,7 @@ bool UpdateClient::acceptBody(const QByteArray& chunk) {
     }
     m_hash.update(bytesOf(chunk));
     if (m_file->write(chunk) != chunk.size()) {
-        abortWith(makeError(ErrorCode::IoError,
-                            "The installer could not be saved. Check the free disk space and try "
-                            "again.",
-                            utf8(m_file->errorString())));
+        abortWith(saveError(utf8(m_file->errorString())));
         return false;
     }
     return true;
@@ -349,12 +370,15 @@ void UpdateClient::finishBody() {
         }
         m_expectedDigest = std::move(digest).value();
         m_hash = Sha256();
-        m_file = std::make_unique<QSaveFile>(QDir(m_options.updatesDir).filePath(qs(name)));
-        if (!m_file->open(QIODevice::WriteOnly)) {
-            fail(makeError(ErrorCode::IoError,
-                           "The installer could not be saved. Check the free disk space and try "
-                           "again.",
-                           utf8(m_file->errorString())));
+        // A name of its own: the contract name appears only once verified.
+        const QString partial = qs(name) + QLatin1Char('.') +
+                                QString::number(QRandomGenerator::global()->generate64(), 16) +
+                                QStringLiteral(".part");
+        m_file = std::make_unique<QFile>(QDir(m_options.updatesDir).filePath(partial));
+        if (!m_file->open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
+            const std::string detail = utf8(m_file->errorString());
+            m_file.reset(); // not ours to remove
+            fail(saveError(detail));
             return;
         }
         startPhase(Phase::Installer, QUrl(qs(m_installerAsset.url)));
@@ -371,24 +395,46 @@ void UpdateClient::finishBody() {
                            "release page."));
             return;
         }
-        const QString path = m_file->fileName();
-        if (!m_file->commit()) {
-            fail(makeError(ErrorCode::IoError,
-                           "The installer could not be saved. Check the free disk space and try "
-                           "again.",
-                           utf8(m_file->errorString())));
+        if (!m_file->flush()) {
+            fail(saveError(utf8(m_file->errorString())));
             return;
         }
-        m_file.reset();
-        m_phase = Phase::Idle;
+        m_file->close();
         m_timer.stop();
-        logInfo(kComponent, "installer downloaded and verified", {{"sha256", m_expectedDigest}});
-        emit downloadFinished(DownloadedInstaller{path, m_expectedDigest});
+        m_saveAttempts = 0;
+        saveInstaller();
         return;
     }
     case Phase::Idle:
         return;
     }
+}
+
+// Renames the verified file over the contract name, atomically. A name still
+// held open by someone else gets a few more attempts before this fails.
+void UpdateClient::saveInstaller() {
+    if (m_phase != Phase::Installer || !m_file)
+        return;
+    const QString path = QDir(m_options.updatesDir).filePath(qs(m_installerAsset.name));
+    const QString from = QDir::toNativeSeparators(m_file->fileName());
+    const QString to = QDir::toNativeSeparators(path);
+    const bool moved =
+        MoveFileExW(wide(from), wide(to), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    const DWORD code = moved ? ERROR_SUCCESS : GetLastError();
+    if (moved) {
+        m_file.reset();
+        m_phase = Phase::Idle;
+        logInfo(kComponent, "installer downloaded and verified", {{"sha256", m_expectedDigest}});
+        emit downloadFinished(DownloadedInstaller{path, m_expectedDigest});
+        return;
+    }
+    const std::string error = "MoveFileExW error " + std::to_string(code);
+    if (++m_saveAttempts < kSaveAttempts) {
+        logDebug(kComponent, "the installer's name is in use, trying again", {{"error", error}});
+        m_saveTimer.start();
+        return;
+    }
+    fail(saveError(error));
 }
 
 void UpdateClient::fail(Error error) {
