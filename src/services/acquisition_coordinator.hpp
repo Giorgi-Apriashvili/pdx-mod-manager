@@ -78,6 +78,12 @@ public:
     // Ends the session (QuitCommand, then terminate after a grace period).
     // After close() returns, no event or exit of that session may be delivered.
     virtual void close(const GameKey& gameKey) = 0;
+    // Blocks until the helper processes closed for `gameKey` have exited,
+    // bounded by the host's grace period plus a short kill wait: a helper
+    // still running then is killed (and a warning logged). Never delivers
+    // events or exits. Meant for the launch path: Steam should no longer see
+    // the game's app id when the game starts. The default returns at once.
+    virtual void waitUntilClosed(const GameKey& /*gameKey*/) {}
 };
 
 // Performs Web API GetPublishedFileDetails requests (providers/web_metadata.hpp).

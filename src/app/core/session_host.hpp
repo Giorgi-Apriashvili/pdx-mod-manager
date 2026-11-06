@@ -12,7 +12,8 @@
 // session it belongs to, so nothing is ever delivered re-entrantly from
 // open()/send()/close(), and nothing of a session arrives after close():
 // close() forgets the session, sends QuitCommand and lets the process exit on
-// its own, killing it after the grace period.
+// its own, killing it after the grace period. open() and waitUntilClosed()
+// (before a launch) wait for that exit.
 //
 // Lives on, and must only be used from, the thread that runs the coordinator.
 
@@ -55,6 +56,10 @@ public:
               const std::filesystem::path& steamApiLibrary) override;
     void send(const GameKey& gameKey, const providers::HelperCommand& command) override;
     void close(const GameKey& gameKey) override;
+    // Waits for this game's closed helpers only (other games' keep exiting on
+    // their own): up to the grace period each, then kills it and waits up to
+    // 1 s more. Runs no event loop, so nothing is delivered meanwhile.
+    void waitUntilClosed(const GameKey& gameKey) override;
 
     bool isOpen(const GameKey& gameKey) const;
     // Closes every session and waits (bounded) until the processes are gone.
@@ -67,20 +72,25 @@ private:
         providers::LineSplitter out;
         providers::LineSplitter err;
     };
+    struct Retired {
+        GameKey game;
+        QProcess* process = nullptr;
+    };
 
     Session* find(const GameKey& gameKey, std::uint64_t serial);
     void readOutput(const GameKey& gameKey, std::uint64_t serial);
     void readErrors(const GameKey& gameKey, std::uint64_t serial);
     void finished(const GameKey& gameKey, std::uint64_t serial, int exitCode);
-    void retire(QProcess* process, bool sendQuit);
-    void waitForRetired();
+    void retire(const GameKey& gameKey, QProcess* process, bool sendQuit);
+    // Every game's closed helpers, or only those of `game` when given.
+    void waitForRetired(const GameKey* game = nullptr);
 
     QString m_helper;
     EventSink m_events;
     ExitSink m_exits;
     std::chrono::milliseconds m_grace{3000};
     std::map<GameKey, std::unique_ptr<Session>> m_sessions;
-    std::vector<QProcess*> m_retired; // closed, waiting to exit
+    std::vector<Retired> m_retired; // closed, waiting to exit
     std::uint64_t m_nextSerial = 1;
 };
 
