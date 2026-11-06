@@ -5,8 +5,9 @@
 // the playset, the inventory or the downloads change, and when the window is
 // activated (a game or the Paradox launcher may have been started meanwhile).
 // The blockers always say why Play is unavailable: game not installed or not
-// located, no active playset, enabled mods not ready, a running game or
-// launcher, an interrupted configuration change.
+// located, enabled mods not ready, a running game or launcher, an interrupted
+// configuration change. Without an active playset Play starts the game
+// without mods, and a warning says so.
 //
 // play() moves through validating -> applying -> starting -> started (or
 // failed); the configuration is written by LaunchService as one file

@@ -56,6 +56,8 @@ void LaunchController::play() {
     }
     const QString game = m_backend->currentGame();
     const std::int64_t playsetId = m_backend->activePlaysetId();
+    // Without an active playset the game starts without mods.
+    const std::optional<std::int64_t> playset = queries::launchPlayset(playsetId);
     const QueryOptions options = m_backend->queryOptions();
     m_lastError.clear();
     m_lastErrorDetail.clear();
@@ -71,10 +73,10 @@ void LaunchController::play() {
     QPointer<LaunchController> self(this); // dereferenced on the GUI thread only
     runner->call(
         this,
-        [runner, self, game, playsetId, options](AppRuntime& runtime) {
+        [runner, self, game, playsetId, playset, options](AppRuntime& runtime) {
             Outcome outcome;
             const GameKey key = utf8(game);
-            const services::LaunchCheck check = runtime.launcher().check(key, playsetId);
+            const services::LaunchCheck check = runtime.launcher().check(key, playset);
             if (!check.canLaunch) {
                 std::string text;
                 for (const std::string& blocker : check.blockers)
@@ -90,7 +92,7 @@ void LaunchController::play() {
                             controller->setState(QStringLiteral("applying"), true);
                     },
                     Qt::QueuedConnection);
-                auto launched = runtime.launcher().launch(key, playsetId);
+                auto launched = runtime.launcher().launch(key, playset);
                 if (!launched) {
                     outcome.error = launched.error();
                 } else {
@@ -101,7 +103,7 @@ void LaunchController::play() {
             outcome.launch = queries::launchData(runtime, game, playsetId, options);
             return outcome;
         },
-        [this, game](Outcome outcome) {
+        [this, game, withPlayset = playset.has_value()](Outcome outcome) {
             if (game == m_backend->currentGame()) {
                 apply(std::move(outcome.launch));
                 // Parking the game's downloads for the launch, and resuming them
@@ -120,12 +122,14 @@ void LaunchController::play() {
                 return;
             }
             setState(QStringLiteral("started"), false);
+            const QString started =
+                withPlayset ? tr("The game was started directly with this playset, without the "
+                                 "Paradox launcher.")
+                            : tr("The game was started directly, without mods and without the "
+                                 "Paradox launcher.");
             m_backend->notifications()->info(
                 tr("%1 started").arg(gameName),
-                outcome.warnings.isEmpty()
-                    ? tr("The game was started directly with this playset, without the Paradox "
-                         "launcher.")
-                    : outcome.warnings.join(QLatin1Char('\n')));
+                outcome.warnings.isEmpty() ? started : outcome.warnings.join(QLatin1Char('\n')));
             emit launched(static_cast<int>(outcome.pid));
             // The running game appears as a blocker once its process shows up.
             QTimer::singleShot(4000, this, [this] { m_backend->refreshLaunch(); });

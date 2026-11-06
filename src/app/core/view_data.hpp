@@ -178,6 +178,11 @@ PlaysetListData playsetList(AppRuntime& runtime, const QString& game);
 // Missing playset -> playsetId -1 (and error set when it could not be read).
 PlaysetStateData playsetState(AppRuntime& runtime, std::int64_t playsetId,
                               QString* error = nullptr);
+// The playset a launch uses: none for -1 (no active playset), and the game
+// then starts without mods.
+inline std::optional<std::int64_t> launchPlayset(std::int64_t playsetId) {
+    return playsetId >= 0 ? std::optional<std::int64_t>(playsetId) : std::nullopt;
+}
 LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t playsetId,
                       const QueryOptions& options);
 std::vector<InventoryRowData> inventoryRows(AppRuntime& runtime, const QString& game);

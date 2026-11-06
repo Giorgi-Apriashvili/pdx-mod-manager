@@ -198,6 +198,12 @@ Item {
             // The fake playset has enabled mods that are not ready.
             verify(Backend.launcher.blockers.length > 0)
             verify(!named("playButton").enabled)
+            // Without a playset the game starts without mods: Play is not blocked.
+            Backend.playsets.activate(-1)
+            tryCompare(Backend.mods, "count", 0)
+            compare(Backend.launcher.blockers.length, 0)
+            compare(Backend.launcher.warnings[0], "No playset is selected, so the game starts without mods.")
+            verify(named("playButton").enabled)
         }
 
         function test_9_importCreatesPlayset() {

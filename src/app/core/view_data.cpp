@@ -4,7 +4,6 @@
 #include "core/dependencies.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/playset_repository.hpp"
-#include "platform/process.hpp"
 #include "providers/fallback.hpp"
 #include "services/playset_view.hpp"
 
@@ -13,17 +12,9 @@
 
 #include <algorithm>
 #include <map>
-#include <set>
-#include <system_error>
 
 namespace pmm::app::queries {
 namespace {
-
-namespace fs = std::filesystem;
-
-constexpr std::string_view kNoPlaysetBlocker =
-    "No active playset. Create a playset, import a share code or use the game's current "
-    "configuration.";
 
 QString sourceLabel(const std::string& source) {
     if (source == source::SteamWorkshop)
@@ -140,45 +131,6 @@ ModRowData modRow(const services::PlaysetRow& row,
             data.workshopUrl = qs(url.value());
     }
     return data;
-}
-
-// Blockers that do not depend on a playset: installation and executable
-// missing, the game or the Paradox launcher running. Reads only.
-void installationBlockers(AppRuntime& runtime, const GameKey& key, LaunchData& data) {
-    const std::string gameName = services::gameDisplayName(key);
-    auto installation = runtime.games().installation(key);
-    if (!installation || !installation.value()) {
-        data.blockers.push_back(qs(gameName + " has not been found. Rescan, or locate the game "
-                                              "folder."));
-    } else {
-        const GameInstallation& install = *installation.value();
-        std::error_code ec;
-        if (install.executablePath.empty() || !fs::is_regular_file(install.executablePath, ec))
-            data.blockers.push_back(qs("The " + gameName + " executable was not found."));
-        const games::GameAdapter* adapter = runtime.context().adapterFor(key);
-        if (adapter && runtime.context().listProcesses) {
-            if (auto processes = runtime.context().listProcesses()) {
-                const games::ProcessNames names = adapter->processNames(install);
-                std::set<std::string> reported;
-                for (const platform::RunningProcess& process : processes.value()) {
-                    for (const std::string& name : names.game) {
-                        if (platform::executableNameMatches(process.executableName, name) &&
-                            reported.insert(name).second)
-                            data.blockers.push_back(
-                                qs(gameName + " is already running. Close it before launching."));
-                    }
-                    for (const std::string& name : names.conflictingWriters) {
-                        if (platform::executableNameMatches(process.executableName, name) &&
-                            reported.insert(name).second)
-                            data.blockers.push_back(
-                                qs("The Paradox launcher is running (" + process.executableName +
-                                   "). Close it before launching, so it does not overwrite the mod "
-                                   "configuration."));
-                    }
-                }
-            }
-        }
-    }
 }
 
 } // namespace
@@ -386,22 +338,16 @@ LaunchData launchData(AppRuntime& runtime, const QString& game, std::int64_t pla
                       const QueryOptions& options) {
     const GameKey key = utf8(game);
     LaunchData data;
-    if (playsetId < 0) {
-        installationBlockers(runtime, key, data);
-        data.blockers.push_back(qs(kNoPlaysetBlocker));
-        if (auto interrupted = runtime.launcher().interruptedTransactions())
-            data.interrupted = !interrupted.value().empty();
-    } else {
-        // Read-only mode runs the same check without its write probes in the
-        // game's user-data folder.
-        services::LaunchCheckOptions checkOptions;
-        checkOptions.probeWriteAccess = !options.readOnly;
-        const services::LaunchCheck check = runtime.launcher().check(key, playsetId, checkOptions);
-        data.canPlay = check.canLaunch;
-        data.blockers = qlist(check.blockers);
-        data.warnings = qlist(check.warnings);
-        data.interrupted = check.interruptedTransaction;
-    }
+    // Read-only mode runs the same check without its write probes in the
+    // game's user-data folder. Without a playset the game starts without mods.
+    services::LaunchCheckOptions checkOptions;
+    checkOptions.probeWriteAccess = !options.readOnly;
+    const services::LaunchCheck check =
+        runtime.launcher().check(key, launchPlayset(playsetId), checkOptions);
+    data.canPlay = check.canLaunch;
+    data.blockers = qlist(check.blockers);
+    data.warnings = qlist(check.warnings);
+    data.interrupted = check.interruptedTransaction;
     if (options.readOnly) {
         // Launching and restoring a backup would write game configuration.
         data.canPlay = false;

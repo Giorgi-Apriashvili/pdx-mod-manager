@@ -69,6 +69,7 @@ QtObject {
     readonly property FakeLaunchController launcher: FakeLaunchController {
         notifications: backend.notifications
         mods: backend.mods
+        playsets: backend.playsets
     }
 
     Component.onCompleted: games.select(settings.lastGameKey)

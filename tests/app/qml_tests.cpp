@@ -674,6 +674,68 @@ TEST_CASE("Rows in the Add mods dialog show their selection at once", "[app][qml
     CHECK(warnings.list().isEmpty());
 }
 
+TEST_CASE("Play is available without a playset and says the game starts without mods",
+          "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        REQUIRE(backend.playsets()->activeId() == -1);
+        REQUIRE(backend.launcher()->canPlay());
+
+        auto* play = window->findChild<QQuickItem*>(QStringLiteral("playButton"));
+        REQUIRE(play);
+        // In the Play section's context, where `root` is the section.
+        const auto evaluate = [&](const char* expression) {
+            return QQmlExpression(qmlContext(play), play, QString::fromLatin1(expression))
+                .evaluate();
+        };
+        CHECK(play->isEnabled());
+        CHECK(evaluate("Accessible.description").toString() == "Starts the game without mods");
+        CHECK(evaluate("toolTipText").toString().contains("without mods"));
+        CHECK(evaluate("root.warningLines.join('|')").toString() ==
+              "No playset is selected, so the game starts without mods.");
+        CHECK(evaluate("root.stateText('started')").toString() ==
+              "Stellaris is running without mods.");
+
+        // With a playset, Play applies it (an empty one also starts without mods).
+        backend.playsets()->create(QStringLiteral("Campaign"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        REQUIRE(waitUntil([&] {
+            return evaluate("Accessible.description").toString() ==
+                   "Starts the game with this playset";
+        }));
+        CHECK(play->isEnabled());
+        CHECK(evaluate("root.stateText('started')").toString() ==
+              "Stellaris is running with this playset.");
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
 TEST_CASE("The Updates section works with the keyboard", "[app][qml][a11y][update]") {
     qputenv("QT_QUICK_BACKEND", "software");
     UpdatesHarness h;
