@@ -1,3 +1,4 @@
+#include "games/stellaris.hpp"
 #include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "services/acquisition_coordinator.hpp"
@@ -222,8 +223,135 @@ TEST_CASE("Only enabled entries block a launch", "[services][launch]") {
         CHECK(contains(launcher.check(kGame, other).blockers, "belongs to"));
         const std::int64_t gone = makePlayset(w, {});
         require(repo.remove(gone));
-        CHECK(contains(launcher.check(kGame, gone).blockers, "no longer exists"));
+        const LaunchCheck deleted = launcher.check(kGame, gone);
+        CHECK_FALSE(deleted.canLaunch);
+        CHECK(contains(deleted.blockers, "no longer exists"));
+        // Not taken for a launch without a playset.
+        CHECK_FALSE(contains(deleted.warnings, "No playset is selected"));
+        CHECK_FALSE(launcher.launch(kGame, gone));
+        CHECK(w.started.empty());
     }
+}
+
+TEST_CASE("Without a playset the game starts without mods, journaled like any launch",
+          "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    // The real dlc_load.json adapter, so the file written is the one the game reads.
+    const games::StellarisAdapter stellaris;
+    w.ctx.adapters = {&stellaris};
+    LaunchService launcher(w.ctx, nullptr);
+
+    // An earlier launch with a playset (its journal has that label form) left
+    // a mod enabled, the DLC choices and a key the manager does not know.
+    writeText(configFile(w), "{\"enabled_mods\":[],\"disabled_dlcs\":[]}");
+    const std::string previous = "{\"enabled_mods\":[\"mod/ugc_2000000003.mod\"],"
+                                 "\"disabled_dlcs\":[\"Example DLC\"],\"other\":{\"keep\":[1,2]}}";
+    const platform::TransactionRecord earlier =
+        require(w.transactions.apply(LaunchService::transactionLabel(kGame, 7, "Old"),
+                                     {platform::FileWrite{configFile(w), previous}}));
+
+    const LaunchCheck check = launcher.check(kGame, std::nullopt);
+    CHECK(check.canLaunch);
+    CHECK(check.blockers.empty());
+    CHECK(check.warnings ==
+          std::vector<std::string>{"No playset is selected, so the game starts without mods."});
+    CHECK(check.readiness.canLaunch);
+    CHECK(check.readiness.enabledCount == 0);
+    CHECK(w.started.empty());
+    CHECK(readText(configFile(w)) == previous);
+
+    const LaunchOutcome outcome = require(launcher.launch(kGame, std::nullopt));
+    CHECK(outcome.pid == 4242);
+    REQUIRE(w.started.size() == 1);
+    CHECK(w.started[0].executable == w.executable);
+    CHECK(contains(outcome.warnings, "starts without mods"));
+
+    // No mod enabled; everything else is kept.
+    CHECK(readText(configFile(w)) ==
+          "{\"enabled_mods\":[],\"disabled_dlcs\":[\"Example DLC\"],\"other\":{\"keep\":[1,2]}}");
+
+    // One committed transaction holding a verified backup.
+    REQUIRE_FALSE(outcome.transactionId.empty());
+    CHECK(require(w.transactions.list()).size() == 2); // the earlier launch's and this one
+    const platform::TransactionRecord record = require(w.transactions.load(outcome.transactionId));
+    CHECK(record.state == platform::TransactionState::Committed);
+    CHECK(record.label == "launch stellaris without mods");
+    CHECK(record.label == LaunchService::transactionLabel(kGame, std::nullopt));
+    REQUIRE(record.entries.size() == 1);
+    CHECK(record.entries[0].target == configFile(w));
+    CHECK(readText(record.directory / record.entries[0].backupFile) == previous);
+
+    const std::vector<persistence::LaunchRecord> history = launches(w);
+    REQUIRE(history.size() == 1);
+    CHECK(history[0].outcome == "started");
+    CHECK_FALSE(history[0].playsetId);
+    CHECK(history[0].transactionId == outcome.transactionId);
+
+    // "Restore pre-launch configuration" finds both label forms, newest first.
+    auto restorable = require(launcher.lastRestorableTransaction(kGame));
+    REQUIRE(restorable);
+    CHECK(restorable->id == outcome.transactionId);
+    CHECK_FALSE(require(launcher.lastRestorableTransaction("eu4")));
+    require(launcher.restoreTransaction(outcome.transactionId));
+    CHECK(readText(configFile(w)) == previous);
+    restorable = require(launcher.lastRestorableTransaction(kGame));
+    REQUIRE(restorable);
+    CHECK(restorable->id == earlier.id);
+}
+
+TEST_CASE("Without a playset every other check still blocks", "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    const std::string previous = installPreviousConfiguration(w);
+    w.refresh();
+    LaunchService launcher(w.ctx, nullptr);
+    ErrorCode expected = ErrorCode::ValidationFailed;
+
+    SECTION("the game is already running") {
+        w.processes = {{1234, kExeName, w.executable}};
+        const LaunchCheck check = launcher.check(kGame, std::nullopt);
+        CHECK(check.runningInstance);
+        CHECK(contains(check.blockers, "already running"));
+        expected = ErrorCode::ConflictingProcess;
+    }
+    SECTION("the Paradox launcher is running") {
+        w.processes = {{99, kLauncherName, {}}};
+        CHECK(contains(launcher.check(kGame, std::nullopt).blockers, "Paradox launcher"));
+        expected = ErrorCode::ConflictingProcess;
+    }
+    SECTION("this game's launch without mods was interrupted") {
+        // Attributed by its label alone: the target is outside the game's folders.
+        interruptChange(w, LaunchService::transactionLabel(kGame, std::nullopt),
+                        w.root / "elsewhere" / "settings.txt");
+        const LaunchCheck check = launcher.check(kGame, std::nullopt);
+        CHECK(check.interruptedBlocks);
+        CHECK(contains(check.blockers, "launch stellaris without mods"));
+        expected = ErrorCode::Interrupted;
+    }
+    SECTION("the mod folder is not writable") {
+        fs::remove_all(w.userData / "mod");
+        writeText(w.userData / "mod", "not a folder");
+        CHECK(contains(launcher.check(kGame, std::nullopt).blockers, "mod folder"));
+        LaunchCheckOptions readOnly;
+        readOnly.probeWriteAccess = false;
+        CHECK(launcher.check(kGame, std::nullopt, readOnly).canLaunch);
+    }
+    SECTION("the game is not installed") {
+        w.adapter.discovered.clear();
+        w.refresh();
+        CHECK(contains(launcher.check(kGame, std::nullopt).blockers, "has not been found"));
+    }
+    const LaunchCheck check = launcher.check(kGame, std::nullopt);
+    CHECK_FALSE(check.canLaunch);
+    CHECK(contains(check.warnings, "No playset is selected"));
+    const auto refused = launcher.launch(kGame, std::nullopt);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == expected);
+    CHECK(w.started.empty());
+    CHECK(w.adapter.launchRequests.empty());
+    CHECK(readText(configFile(w)) == previous);
 }
 
 TEST_CASE("A running game or Paradox launcher refuses the launch", "[services][launch]") {
@@ -485,6 +613,15 @@ TEST_CASE("Only an interrupted change of this game's files blocks its launch",
                    ContainsSubstring("previous configuration is unchanged"));
         CHECK(w.started.empty());
         CHECK(readText(configFile(w)) == previous);
+    }
+    SECTION("another game's launch without mods: a warning naming that game") {
+        interruptChange(w, LaunchService::transactionLabel("eu4", std::nullopt),
+                        eu4Data / "dlc_load.json");
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK_FALSE(check.interruptedBlocks);
+        CHECK(contains(check.warnings, "configuration change of Europa Universalis IV"));
+        CHECK(contains(check.warnings, "launch eu4 without mods"));
     }
     SECTION("an unattributable change outside this game's folders: a warning") {
         interruptChange(w, "settings import", w.root / "elsewhere" / "settings.txt");

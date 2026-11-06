@@ -110,7 +110,8 @@ void checkWritable(const fs::path& directory, const char* what, std::set<fs::pat
 }
 
 Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
-                 const GameKey& game, std::int64_t playsetId, const LaunchCheckOptions& options) {
+                 const GameKey& game, std::optional<std::int64_t> playsetId,
+                 const LaunchCheckOptions& options) {
     Prepared prepared;
     LaunchCheck& check = prepared.check;
     const std::string gameName = gameDisplayName(game);
@@ -147,8 +148,11 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
     }
 
     persistence::PlaysetRepository playsets(ctx.database);
-    auto playset = playsets.get(playsetId);
-    if (!playset) {
+    if (!playsetId) {
+        // No entries to check: the game starts without mods.
+        check.readiness = evaluateLaunch({}, {});
+        check.warnings.push_back("No playset is selected, so the game starts without mods.");
+    } else if (auto playset = playsets.get(*playsetId); !playset) {
         check.blockers.push_back(playset.error().code == ErrorCode::NotFound
                                      ? "The selected playset no longer exists. Choose a playset."
                                      : "The playset could not be read: " + playset.error().message);
@@ -270,9 +274,9 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
     return prepared;
 }
 
-std::int64_t recordLaunch(const ServiceContext& ctx, const GameKey& game, std::int64_t playsetId,
-                          std::optional<std::int64_t> pid, std::string outcome, std::string detail,
-                          std::string transactionId) {
+std::int64_t recordLaunch(const ServiceContext& ctx, const GameKey& game,
+                          std::optional<std::int64_t> playsetId, std::optional<std::int64_t> pid,
+                          std::string outcome, std::string detail, std::string transactionId) {
     persistence::LaunchHistoryRepository history(ctx.database);
     persistence::LaunchRecord record;
     record.game = game;
@@ -309,18 +313,22 @@ Status validatePlan(const LaunchPlan& plan, const GameKey& game) {
 
 } // namespace
 
-std::string LaunchService::transactionLabel(const GameKey& game, std::int64_t playsetId,
+std::string LaunchService::transactionLabel(const GameKey& game,
+                                            std::optional<std::int64_t> playsetId,
                                             std::string_view playsetName) {
-    return "launch " + game + " playset " + std::to_string(playsetId) + " (" +
+    if (!playsetId)
+        return "launch " + game + " without mods";
+    return "launch " + game + " playset " + std::to_string(*playsetId) + " (" +
            std::string(playsetName) + ")";
 }
 
-LaunchCheck LaunchService::check(const GameKey& game, std::int64_t playsetId,
+LaunchCheck LaunchService::check(const GameKey& game, std::optional<std::int64_t> playsetId,
                                  const LaunchCheckOptions& options) {
     return prepare(m_ctx, m_coordinator, game, playsetId, options).check;
 }
 
-Result<LaunchOutcome> LaunchService::launch(const GameKey& game, std::int64_t playsetId) {
+Result<LaunchOutcome> LaunchService::launch(const GameKey& game,
+                                            std::optional<std::int64_t> playsetId) {
     const std::string gameName = gameDisplayName(game);
     Prepared prepared = prepare(m_ctx, m_coordinator, game, playsetId, LaunchCheckOptions{});
     const LaunchCheck& check = prepared.check;
@@ -465,9 +473,9 @@ LaunchService::lastRestorableTransaction(const GameKey& game) {
     auto committed = m_ctx.transactions.listCommitted();
     if (!committed)
         return std::move(committed).error();
-    const std::string prefix = "launch " + game + " playset ";
+    // Both label forms: journals of earlier versions only have the playset one.
     for (auto it = committed.value().rbegin(); it != committed.value().rend(); ++it) {
-        if (it->label.rfind(prefix, 0) == 0)
+        if (launchLabelGame(it->label) == game)
             return std::optional<platform::TransactionRecord>(*it);
     }
     return std::optional<platform::TransactionRecord>();
