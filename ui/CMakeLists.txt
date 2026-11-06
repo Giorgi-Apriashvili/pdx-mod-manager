@@ -60,6 +60,7 @@ qt_add_qml_module(pmm_ui
     panes/PlaysetSection.qml
     panes/SidePane.qml
     panes/ToastHost.qml
+    panes/UpdateBanner.qml
     dialogs/AddModsDialog.qml
     dialogs/ConfirmDialog.qml
     dialogs/ExportDialog.qml

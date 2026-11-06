@@ -201,9 +201,21 @@ ApplicationWindow {
         onTriggered: window.storeGeometry()
     }
 
+    // A newer version found by the daily check; first in the Tab order.
+    UpdateBanner {
+        id: updateBanner
+        objectName: "updateBanner"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 6
+        onFocusReleased: modsPane.focusList()
+    }
+
     SplitView {
         id: split
         anchors.fill: parent
+        anchors.topMargin: updateBanner.visible ? updateBanner.height + 12 : 0
         orientation: Qt.Horizontal
 
         onResizingChanged: {

@@ -14,6 +14,7 @@ Rectangle {
     property bool closable: false
     property bool actionsBelow: false
     // Spoken when the banner appears or its message changes (errors by default).
+    // Errors and warnings interrupt, the rest is polite.
     property bool announced: level === "error"
     default property alias actions: actionRow.data
 
@@ -21,7 +22,8 @@ Rectangle {
 
     function announce() {
         if (announced && visible && (title.length > 0 || text.length > 0))
-            Accessible.announce(Accessible.name, Accessible.Assertive)
+            Accessible.announce(Accessible.name, level === "error" || level === "warning"
+                                ? Accessible.Assertive : Accessible.Polite)
     }
 
     implicitHeight: layout.implicitHeight + 10
@@ -33,8 +35,12 @@ Rectangle {
     // A named group: the message is read when focus enters one of its actions.
     // (AlertMessage would surface as a separate window in UI Automation.)
     Accessible.role: Accessible.Grouping
-    Accessible.name: [level === "error" ? qsTr("Error") : level === "warning" ? qsTr("Warning") : "",
-                      title, text].filter(s => s.length > 0).join(". ")
+    // "Warning. Title. Text", without doubling a full stop the title has already.
+    Accessible.name: {
+        const parts = [level === "error" ? qsTr("Error") : level === "warning" ? qsTr("Warning") : "",
+                       title, text].filter(s => s.length > 0)
+        return parts.map((s, i) => i < parts.length - 1 && !/[.!?…]$/.test(s) ? s + "." : s).join(" ")
+    }
 
     onVisibleChanged: Qt.callLater(announce)
     Accessible.onNameChanged: Qt.callLater(announce)
