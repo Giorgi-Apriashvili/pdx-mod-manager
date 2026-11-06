@@ -34,11 +34,34 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
-| Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through | [installer](evidence/installer-2026-10-30.md) |
-| Update check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
-| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | dry run passed on GitHub on 2026-10-30 (validation, full CI, package, installer smoke test); **the publish step has not run**, only locally against a stub `gh` | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
+| Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; compiled without warnings, **not run** (the smoke test runs them on GitHub) | [installer](evidence/installer-2026-10-30.md) |
+| Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists. 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
+| Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (79 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes locally on a copy with the updater's id change applied; **not run on GitHub yet** | |
+| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | dry run passed on GitHub on 2026-10-30 (validation, full CI, package, installer smoke test); **the publish step has not run**, only locally against a stub `gh`. The contract checks and the extended smoke test of 2026-11-06 have not run on GitHub | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
+
+## Test status (2026-11-06, update contract and installer)
+
+Local only; nothing of this has run on GitHub yet.
+
+- `installer.iss` compiles with Inno Setup 6.7.3 without warnings (against a
+  stand-in stage); no setup was run on the development machine.
+- `scripts/check-update-contract.sh`: on this branch alone it reports exactly the
+  three values the updater's change brings (`PMM_GITHUB_REPOSITORY_ID` in CMake, the
+  request by `/repositories/` and the id in the code that builds it). On a copy with
+  that change applied: 54 source checks OK, and `scripts/test-update-contract.sh`
+  passes 79 cases (each mutation of a contract value is found for its own reason;
+  bad versions, published releases through a stub `gh`, and bad release assets are
+  refused).
+- `smoke-test-installer.ps1`: PowerShell's parser finds no errors; the mutex helper
+  and the process lookup were exercised on their own with another mutex name. The
+  script itself was not run (it starts setups and the application).
+- `prune-qt-deployment.cmake` fails on a fake deployment without
+  `plugins/tls/qschannelbackend.dll` and passes with it.
+- `actionlint` 1.7.12 on both workflows: no findings.
+- One unauthenticated `GET https://api.github.com/repositories/1439071956/releases/latest`:
+  HTTP 404 without a redirect, as expected while nothing is published.
 
 ## Test status (2026-11-06, after the launch fixes)
 
@@ -158,9 +181,14 @@ Packaging ([`packaging.md`](packaging.md)):
 
 - The `Release` workflow's publish step has not run, and no update between two
   published releases has happened; the update button in a real
-  installed copy and the real application's relaunch have not been run. The
+  installed copy has not been run. The real application's relaunch after an update
+  run, the installer changes of 2026-11-06 and the contract checks of the workflow
+  run for the first time on GitHub with the next dry run. The
   installer's wizard has not been clicked through, so its license page and header
   image have only been checked outside it.
+- The package job's check that `pmm-app.exe` contains the repository id needs the
+  id compiled in as text (a string define, as `PMM_GITHUB_REPOSITORY_ID` is passed);
+  an id formatted from a number at run time would fail it.
 - `ilammy/msvc-dev-cmd` and `jurplel/install-qt-action` are pinned to mutable tags in
   the job that builds the shipped, unsigned installer; pinning them to commit SHAs
   would narrow a supply-chain path to every user who updates.
@@ -192,8 +220,13 @@ Packaging ([`packaging.md`](packaging.md)):
    `d427f3c` on 2026-11-06, the 2026-10-30 dry run built and smoke tested both
    packages (before the launch fixes, so the procedure in
    [`releasing.md`](releasing.md) runs a new one), and the launch items are done or
-   deferred. Click through the installer wizard once, then the first release, and
-   a second release to try the update button for real.
+   deferred. The updater is locked down for 0.1.0 (owner's decision, 2026-11-06:
+   unsigned, a daily check that is on by default, no rehearsal of an update between
+   two releases): the values every copy relies on are frozen in
+   [`../packaging/update-contract.txt`](../packaging/update-contract.txt) and checked in
+   CI and in the workflow. The next dry run is the first run of the extended smoke
+   test and of the contract checks on GitHub. Click through the installer wizard
+   once, then the first release, and a second release to try the update for real.
 
 ## Working rules
 

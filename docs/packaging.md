@@ -11,7 +11,7 @@ Status (2026-10-30):
 | Package | Status |
 | --- | --- |
 | ZIP with `pmm-app`, the helper, Qt and the C++ runtime | **Verified**: built with the `release` preset, inspected, and run from an extracted copy without Qt or Visual Studio on `PATH` against the real Stellaris and EU4 installations ([evidence](evidence/packaging-2026-10-29.md)) |
-| Per-user installer (Inno Setup) | **Verified** with real installs in a scratch folder: fresh install, update run, running-application handling, uninstall ([evidence](evidence/installer-2026-10-30.md)); the interactive wizard pages have not been looked at |
+| Per-user installer (Inno Setup) | **Verified** with real installs in a scratch folder: fresh install, update run, running-application handling, uninstall ([evidence](evidence/installer-2026-10-30.md)); the interactive wizard pages have not been looked at. The changes of 2026-11-06 (no downgrade, one Start Menu shortcut, the desktop shortcut in update runs, the restart after a failed update run, the uninstall message) compile without warnings with Inno Setup 6.7.3 but have not been run; the extended smoke test runs them on GitHub |
 
 The [`Release` workflow](../.github/workflows/release.yml) is unverified: it cannot
 run before it is on GitHub. Publishing is described in [`releasing.md`](releasing.md).
@@ -178,11 +178,30 @@ Inno Setup 6.5.2 is the oldest version that can compile it (PNG wizard images).
 
 - **Per-user, no administrator rights**: `PrivilegesRequired=lowest`, never a UAC
   prompt, default folder `%LOCALAPPDATA%\Programs\ParadoxModManager`, uninstall
-  entry in `HKCU`. Start Menu shortcut, optional desktop shortcut (a task, off by
-  default), [license page](#license-page), the usual "launch" checkbox on the last page.
+  entry in `HKCU`. One Start Menu shortcut directly in the program list
+  (`{autoprograms}\Paradox Mod Manager`, left out with `/NOICONS`), optional desktop
+  shortcut (a task, off by default), [license page](#license-page), the usual
+  "launch" checkbox on the last page. Builds before 0.1.0 put the shortcut into a
+  Start Menu folder of its own; `[InstallDelete]` removes that shortcut, and the
+  folder if it is then empty.
+- **The update contract** with installed copies is frozen since 0.1.0: `AppId`, the
+  per-user installation, `bin\pmm-app.exe`, `..\unins000.exe`, the mutex, the update
+  arguments and the TLS plugin ([`updates.md`](updates.md#compatibility-contract-frozen-since-010),
+  [`packaging/update-contract.txt`](../packaging/update-contract.txt)).
+  `prune-qt-deployment.cmake` fails the installation, and so the ZIP and the
+  installer, when `plugins\tls\qschannelbackend.dll` is missing.
+- **No downgrade**: when this `AppId`'s uninstall entry in `HKCU` has a
+  `DisplayVersion` newer than the setup (compared with Inno Setup's
+  `StrToVersion` and `ComparePackedVersion`), the setup refuses in `InitializeSetup`
+  with "Version <installed> of Paradox Mod Manager is already installed, which is
+  newer than this setup (<this>). Setup will not replace it." The message is
+  suppressible, so a silent run, an update run included, ends with exit code 1 and
+  changes nothing. An equal version installs again (a repair); a version that
+  cannot be read or compared does not stop the setup.
 - **Upgrades** install over the existing folder. `AppId` is fixed and must never
   change; it is what links a new version to the installed one. The folder page is
-  skipped and earlier choices (folder, tasks) are kept. `bin\`, `plugins\` and
+  skipped and earlier choices (folder, tasks) are kept, except that an update run
+  does not bring back a desktop shortcut the user deleted. `bin\`, `plugins\` and
   `qml\` are replaced whole, so files a new Qt no longer ships do not stay behind:
   just before copying they are moved to `pmm-upgrade-backup\` in the install folder,
   which is deleted when the upgrade has finished. If Setup fails or is cancelled
@@ -195,7 +214,10 @@ Inno Setup 6.5.2 is the oldest version that can compile it (PNG wizard images).
   or with `/DIR=`, leaves its own `bin`, `plugins` and `qml` alone, and so does the
   uninstaller.
 - **User data** lives outside the install folder (see [`app.md`](app.md), "Files and
-  folders"). Neither an upgrade nor the uninstaller touches it.
+  folders"). Neither an upgrade nor the uninstaller touches it. The uninstaller's
+  last message says so: playsets, settings and backups stay in
+  `%APPDATA%\ParadoxModManager`, the logs and the cache in
+  `%LOCALAPPDATA%\ParadoxModManager`.
 - **A running application** is detected through the mutex
   `Local\ParadoxModManagerRunning` that `pmm-app` holds (`AppMutex`). Interactive
   runs and the uninstaller show Inno Setup's "close it, then OK" prompt.
@@ -206,23 +228,39 @@ Inno Setup 6.5.2 is the oldest version that can compile it (PNG wizard images).
   `/SILENT /SP- /NORESTART /PMMUPDATE=1` and quits. `InitializeSetup` then waits
   about 60 s for the mutex to go away; Inno Setup runs it before its own `AppMutex`
   check, so no prompt appears in the normal case. After the timeout a Retry/Cancel
-  message says what happened and that the current version is unchanged. The
+  message says what happened, that the current version is unchanged, and to end
+  "Paradox Mod Manager (pmm-app.exe)" in Task Manager if no window is visible. The
   installer shows only its progress window and starts `bin\pmm-app.exe` when it is
-  done, which only an update run does. If the update fails after the program files
-  were moved, a message says the update was not installed and the current version
-  is still in place; the application is not started in that case. An installed copy
+  done, without arguments and as the user who started it, which only an update run
+  does. If an update run is cancelled or fails after the application quit, the
+  previous program files are put back (a message says so when they had been moved)
+  and the previous version is started again, also as that user. If they cannot be
+  put back, a message names the running setup file to run again. An installed copy
   is recognised by `..\unins000.exe` next to the folder of `pmm-app.exe`.
 - Every run writes a log to `%TEMP%\Setup Log <date> #<n>.txt` (`SetupLogging`),
   the first place to look when an update did not arrive.
 
 [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) is the
 check the release workflow runs on a built setup, also for pull requests that touch
-the packaging. It covers the first install, a first install into a folder with
-another program's files, two failed upgrades (a file locked outside and inside the
-replaced folders), a working upgrade and the uninstall. It never starts the
-application, so the update run itself is not part of it. It refuses to run if the
-application is installed, because the test would take over the installation's
-uninstall registration.
+the packaging. It covers the first install (expected files including
+`plugins\tls\qschannelbackend.dll`, the single Start Menu shortcut and its target, the
+desktop shortcut), a first install into a folder with another program's files, one
+into a folder with a non-ASCII name, the refusal to replace a newer installed
+version (a raised `DisplayVersion`, as a plain silent run and as an update run: exit
+code 1, the message in the log, nothing touched), two failed upgrades (a file locked
+outside and inside the replaced folders), a failed update run that starts the
+previous version again, a working upgrade from an older version that removes the
+Start Menu folder of earlier builds and brings back the desktop shortcut, the update
+run exactly as the application starts it (the four arguments, while another process
+holds the mutex for 5 s: exit code 0, the log lines, `bin\pmm-app.exe` started and
+then stopped, a deleted desktop shortcut not brought back) and the uninstall. The
+started application opens its window on the runner's desktop (the package has only
+Qt's `windows` platform plugin). Because the test uses the real standard profile,
+uninstall registration, mutex and shortcuts of the user who runs it, the script
+runs only on a GitHub runner or with `-DisposableMachine`, and refuses
+if the application is installed or running or one of its shortcuts exists. The
+cases added on 2026-11-06 have been parsed and their helpers exercised, but not run:
+they run on the next workflow run on GitHub.
 
 ### License page
 
