@@ -11,10 +11,109 @@ namespace {
 
 using Json = nlohmann::json;
 
-constexpr std::string_view kRepository = PMM_GITHUB_REPOSITORY;
-
-bool isDigit(char c) {
+constexpr bool isDigit(char c) {
     return c >= '0' && c <= '9';
+}
+
+constexpr bool isRepositoryId(std::string_view id) {
+    return !id.empty() && id.size() <= 20 && id.front() != '0' &&
+           std::all_of(id.begin(), id.end(), isDigit);
+}
+
+constexpr std::string_view kRepository = PMM_GITHUB_REPOSITORY;
+constexpr std::string_view kRepositoryId = PMM_GITHUB_REPOSITORY_ID;
+static_assert(isRepositoryId(kRepositoryId), "PMM_GITHUB_REPOSITORY_ID is not a repository id");
+
+// Where release pages are: opened in the browser and never fetched, so test
+// endpoints do not replace it.
+constexpr std::string_view kWebOrigin = "https://github.com";
+
+bool isAsciiAlnum(char c) {
+    return isDigit(c) || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+char asciiLower(char c) {
+    return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+}
+
+bool equalsIgnoringCase(std::string_view a, std::string_view b) {
+    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+                      [](char x, char y) { return asciiLower(x) == asciiLower(y); });
+}
+
+// GitHub's login grammar: letters, digits and single hyphens, neither first nor
+// last, at most 39 characters.
+bool isOwnerName(std::string_view name) {
+    if (name.empty() || name.size() > 39 || name.front() == '-' || name.back() == '-' ||
+        name.find("--") != std::string_view::npos)
+        return false;
+    return std::all_of(name.begin(), name.end(),
+                       [](char c) { return isAsciiAlnum(c) || c == '-'; });
+}
+
+// GitHub's repository names: letters, digits, '.', '_' and '-', at most 100
+// characters, not only dots.
+bool isRepositoryName(std::string_view name) {
+    if (name.empty() || name.size() > 100 || name.find_first_not_of('.') == std::string_view::npos)
+        return false;
+    return std::all_of(name.begin(), name.end(),
+                       [](char c) { return isAsciiAlnum(c) || c == '.' || c == '_' || c == '-'; });
+}
+
+struct Repository {
+    std::string_view owner;
+    std::string_view name;
+};
+
+bool sameRepository(const Repository& a, const Repository& b) {
+    return equalsIgnoringCase(a.owner, b.owner) && equalsIgnoringCase(a.name, b.name);
+}
+
+std::optional<Repository> splitRepository(std::string_view slug) {
+    const std::size_t slash = slug.find('/');
+    if (slash == std::string_view::npos)
+        return std::nullopt;
+    const Repository repository{slug.substr(0, slash), slug.substr(slash + 1)};
+    if (!isOwnerName(repository.owner) || !isRepositoryName(repository.name))
+        return std::nullopt;
+    return repository;
+}
+
+// The '/'-separated segments of `url` after `prefix`, empty ones included.
+std::optional<std::vector<std::string_view>> segmentsAfter(std::string_view url,
+                                                           std::string_view prefix) {
+    if (!url.starts_with(prefix))
+        return std::nullopt;
+    std::vector<std::string_view> segments;
+    std::string_view rest = url.substr(prefix.size());
+    for (;;) {
+        const std::size_t slash = rest.find('/');
+        segments.push_back(rest.substr(0, slash));
+        if (slash == std::string_view::npos)
+            return segments;
+        rest.remove_prefix(slash + 1);
+    }
+}
+
+struct RepositoryPath {
+    Repository repository;
+    std::vector<std::string_view> rest; // the segments after <owner>/<name>
+};
+
+// <prefix><owner>/<name>/<rest...>
+std::optional<RepositoryPath> repositoryPath(std::string_view url, std::string_view prefix) {
+    auto segments = segmentsAfter(url, prefix);
+    if (!segments || segments->size() < 2)
+        return std::nullopt;
+    RepositoryPath path{{(*segments)[0], (*segments)[1]}, {}};
+    if (!isOwnerName(path.repository.owner) || !isRepositoryName(path.repository.name))
+        return std::nullopt;
+    path.rest.assign(segments->begin() + 2, segments->end());
+    return path;
+}
+
+bool isReleaseId(std::string_view id) {
+    return !id.empty() && id.size() <= 20 && std::all_of(id.begin(), id.end(), isDigit);
 }
 
 std::optional<std::uint32_t> parseComponent(std::string_view text) {
@@ -83,9 +182,10 @@ std::string origin(const UpdateEndpoints& endpoints, std::string_view host) {
     return out;
 }
 
-std::string assetUrlPrefix(const AppVersion& version, const UpdateEndpoints& endpoints) {
+std::string assetUrlPrefix(std::string_view repository, const AppVersion& version,
+                           const UpdateEndpoints& endpoints) {
     std::string out = origin(endpoints, endpoints.downloadHost) + "/";
-    out += kRepository;
+    out += repository;
     out += "/releases/download/v" + version.toString() + "/";
     return out;
 }
@@ -95,8 +195,43 @@ Error malformedRelease(std::string detail) {
                      "GitHub's answer about the latest release is not valid.", std::move(detail));
 }
 
+Error untrustedRelease(std::string detail) {
+    return makeError(ErrorCode::ValidationFailed,
+                     "The latest release points to an address this application does not trust, "
+                     "so it was ignored.",
+                     std::move(detail));
+}
+
+// The one repository the reply's url and html_url both name, spelled as in
+// html_url.
+Result<std::string> releaseRepository(const Json& root, const AppVersion& version,
+                                      const UpdateEndpoints& endpoints) {
+    const auto api = root.find("url");
+    const auto page = root.find("html_url");
+    if (api == root.end() || !api->is_string() || page == root.end() || !page->is_string())
+        return malformedRelease("url or html_url missing or not a string");
+    const std::string tag = "v" + version.toString();
+    const auto fromApi = repositoryPath(api->get_ref<const std::string&>(),
+                                        origin(endpoints, endpoints.apiHost) + "/repos/");
+    if (!fromApi || fromApi->rest.size() != 2 || fromApi->rest[0] != "releases" ||
+        !isReleaseId(fromApi->rest[1]))
+        return untrustedRelease("url is not the API address of a release");
+    const auto fromPage =
+        repositoryPath(page->get_ref<const std::string&>(), std::string(kWebOrigin) + "/");
+    if (!fromPage ||
+        fromPage->rest != std::vector<std::string_view>{"releases", "tag", std::string_view(tag)})
+        return untrustedRelease("html_url is not the page of release " + tag);
+    if (!sameRepository(fromApi->repository, fromPage->repository))
+        return untrustedRelease("url and html_url name different repositories");
+    std::string out(fromPage->repository.owner);
+    out += '/';
+    out += fromPage->repository.name;
+    return out;
+}
+
 // The exact contract name in the assets list, once, with its exact URL.
 Result<std::optional<ReleaseAsset>> pickAsset(const Json& assets, const std::string& name,
+                                              const std::string& repository,
                                               const AppVersion& version,
                                               const UpdateEndpoints& endpoints) {
     std::optional<ReleaseAsset> found;
@@ -110,8 +245,8 @@ Result<std::optional<ReleaseAsset>> pickAsset(const Json& assets, const std::str
         if (url == asset.end() || !url->is_string())
             return malformedRelease("asset without a download URL: " + name);
         const auto& text = url->get_ref<const std::string&>();
-        if (text != assetUrlPrefix(version, endpoints) + name ||
-            !isAllowedAssetUrl(text, version, endpoints))
+        if (text != assetUrlPrefix(repository, version, endpoints) + name ||
+            !isAllowedAssetUrl(text, repository, version, endpoints))
             return makeError(ErrorCode::ValidationFailed,
                              "The latest release points to a download address this application "
                              "does not trust, so it was ignored.",
@@ -152,19 +287,34 @@ std::string_view updateRepository() noexcept {
     return kRepository;
 }
 
+std::string_view updateRepositoryId() noexcept {
+    return kRepositoryId;
+}
+
 std::string latestReleaseApiUrl(const UpdateEndpoints& endpoints) {
-    std::string out = origin(endpoints, endpoints.apiHost) + "/repos/";
-    out += kRepository;
+    std::string out = origin(endpoints, endpoints.apiHost) + "/repositories/";
+    out += kRepositoryId;
     out += "/releases/latest";
     return out;
 }
 
 std::string releasePageUrl(const std::optional<AppVersion>& version) {
-    std::string out = "https://github.com/";
+    std::string out(kWebOrigin);
+    out += '/';
     out += kRepository;
     out += "/releases";
     if (version)
         out += "/tag/v" + version->toString();
+    return out;
+}
+
+std::string releasePageUrl(const ReleaseInfo& release) {
+    if (!splitRepository(release.repository)) // not from parseLatestRelease
+        return releasePageUrl(release.version);
+    std::string out(kWebOrigin);
+    out += '/';
+    out += release.repository;
+    out += "/releases/tag/v" + release.version.toString();
     return out;
 }
 
@@ -176,10 +326,12 @@ std::vector<std::string> updateInstallerArguments() {
     return {"/SILENT", "/SP-", "/NORESTART", "/PMMUPDATE=1"};
 }
 
-bool isAllowedAssetUrl(std::string_view url, const AppVersion& version,
+bool isAllowedAssetUrl(std::string_view url, std::string_view repository, const AppVersion& version,
                        const UpdateEndpoints& endpoints) {
-    const std::string prefix = assetUrlPrefix(version, endpoints);
-    if (url.size() <= prefix.size() || url.compare(0, prefix.size(), prefix) != 0)
+    if (!splitRepository(repository))
+        return false;
+    const std::string prefix = assetUrlPrefix(repository, version, endpoints);
+    if (url.size() <= prefix.size() || !url.starts_with(prefix))
         return false;
     return isPlainFileName(url.substr(prefix.size()));
 }
@@ -233,12 +385,19 @@ Result<std::optional<ReleaseInfo>> parseLatestRelease(std::string_view json,
             return malformedRelease("an asset is not an object with a name");
     }
 
+    auto repository = releaseRepository(root, *version, endpoints);
+    if (!repository)
+        return std::move(repository).error();
+
     ReleaseInfo release;
     release.version = *version;
-    auto installer = pickAsset(*assets, installerAssetName(*version), *version, endpoints);
+    release.repository = std::move(repository).value();
+    auto installer =
+        pickAsset(*assets, installerAssetName(*version), release.repository, *version, endpoints);
     if (!installer)
         return std::move(installer).error();
-    auto checksums = pickAsset(*assets, std::string(kChecksumAssetName), *version, endpoints);
+    auto checksums = pickAsset(*assets, std::string(kChecksumAssetName), release.repository,
+                               *version, endpoints);
     if (!checksums)
         return std::move(checksums).error();
     release.installer = std::move(installer).value();

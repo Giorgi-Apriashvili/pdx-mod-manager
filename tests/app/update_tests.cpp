@@ -25,6 +25,8 @@
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -103,6 +105,52 @@ void settle(std::chrono::milliseconds time = 100ms) {
     waitUntil([] { return false; }, time);
 }
 
+// The client alone on the stub, for what the controller only passes through.
+struct ClientFixture {
+    TempDir temp;
+    ReleaseStub stub;
+    UpdateClientOptions options;
+    std::unique_ptr<UpdateClient> client;
+
+    ClientFixture() {
+        options.endpoints = stub.endpoints();
+        options.updatesDir = QDir(qpath(temp.path())).filePath(QStringLiteral("updates"));
+        options.userAgent = QStringLiteral("ParadoxModManager/0.1.0");
+        options.checkTimeout = 10s;
+        options.stallTimeout = 10s;
+    }
+
+    UpdateClient& get() {
+        if (!client)
+            client = std::make_unique<UpdateClient>(options);
+        return *client;
+    }
+
+    UpdateCheckResult check() {
+        std::optional<UpdateCheckResult> result;
+        const auto connection =
+            QObject::connect(&get(), &UpdateClient::checkFinished,
+                             [&](const UpdateCheckResult& finished) { result = finished; });
+        client->check();
+        const bool finished = waitUntil([&] { return result.has_value(); }, 15s);
+        QObject::disconnect(connection);
+        REQUIRE(finished);
+        return *result;
+    }
+
+    UpdateDownloadResult download(const services::ReleaseInfo& release) {
+        std::optional<UpdateDownloadResult> result;
+        const auto connection =
+            QObject::connect(&get(), &UpdateClient::downloadFinished,
+                             [&](const UpdateDownloadResult& finished) { result = finished; });
+        client->download(release);
+        const bool finished = waitUntil([&] { return result.has_value(); }, 15s);
+        QObject::disconnect(connection);
+        REQUIRE(finished);
+        return *result;
+    }
+};
+
 } // namespace
 
 TEST_CASE("Nothing touches the network until the user asks", "[app][update]") {
@@ -152,8 +200,9 @@ TEST_CASE("A check finds a newer release", "[app][update]") {
     CHECK(controller.canCheck());
 
     REQUIRE(f.stub.requests().size() == 1);
+    // By the repository's id, the frozen contract of every released copy.
+    CHECK(f.stub.requests()[0].startsWith("GET /repositories/1439071956/releases/latest HTTP/1.1"));
     const QByteArray request = f.stub.requests()[0].toLower();
-    CHECK(request.startsWith("get " + ReleaseStub::apiPath().toLower().toUtf8() + " http/1.1"));
     CHECK(request.contains("user-agent: paradoxmodmanager/0.1.0\r\n"));
     CHECK(request.contains("accept: application/vnd.github+json\r\n"));
     CHECK_FALSE(request.contains("authorization"));
@@ -257,7 +306,27 @@ TEST_CASE("A failed check reports the problem and can be retried", "[app][update
     }
 }
 
-TEST_CASE("Redirects are checked on every hop", "[app][update]") {
+TEST_CASE("The check follows no redirect, not even to an allowed address", "[app][update]") {
+    ClientFixture f;
+    f.stub.serveRelease(kNew, kInstallerBytes);
+    // Where GitHub's API sends a request for a renamed repository's old name.
+    const QString moved = "/repos/" + ReleaseStub::repo() + "/releases/latest";
+    f.stub.routes[moved] = f.stub.routes[ReleaseStub::apiPath()];
+    auto& route = f.stub.routes[ReleaseStub::apiPath()];
+    route.status = GENERATE(301, 302, 303, 307, 308);
+    const bool absolute = GENERATE(true, false);
+    route.location = absolute ? f.stub.absolute(moved) : moved.toUtf8();
+    INFO("HTTP " << route.status << " to " << route.location.toStdString());
+    const UpdateCheckResult result = f.check();
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.error().code == ErrorCode::ValidationFailed);
+    CHECK_THAT(result.error().message, Catch::Matchers::ContainsSubstring("redirect"));
+    CHECK(f.stub.requestsFor(moved) == 0);
+    CHECK(f.stub.requests().size() == 1);
+    CHECK_FALSE(f.client->busy());
+}
+
+TEST_CASE("Download redirects are checked on every hop", "[app][update]") {
     Fixture f;
     f.stub.serveRelease(kNew, kInstallerBytes);
     const QString target = QStringLiteral("/forbidden");
@@ -278,45 +347,73 @@ TEST_CASE("Redirects are checked on every hop", "[app][update]") {
                   .toUtf8();
     INFO(url.toStdString());
 
-    SECTION("from the API") {
-        auto& route = f.stub.routes[ReleaseStub::apiPath()];
-        route.status = 302;
-        route.location = url;
-        UpdateController& controller = f.make();
-        controller.check();
-        REQUIRE(f.waitForState(QStringLiteral("failed")));
-        CHECK_THAT(controller.errorMessage().toStdString(),
-                   Catch::Matchers::ContainsSubstring("does not trust"));
-    }
-    SECTION("from an asset, after allowed hops") {
-        const QString first = QStringLiteral("/first");
-        f.stub.routes[first].status = 301;
-        f.stub.routes[first].location = url;
-        auto& route = f.stub.routes[ReleaseStub::installerPath(kNew)];
-        route.status = 302;
-        route.body.clear();
-        route.location = first.toUtf8(); // relative, resolved and allowed
-        f.reachAvailable();
-        f.controller->startUpdate();
-        REQUIRE(f.waitForState(QStringLiteral("failed")));
-        CHECK(f.stub.requestsFor(first) == 1);
-        CHECK(f.starts.empty());
-        CHECK(f.updateFiles().isEmpty());
-    }
+    const QString first = QStringLiteral("/first");
+    f.stub.routes[first].status = 301;
+    f.stub.routes[first].location = url;
+    auto& route = f.stub.routes[ReleaseStub::installerPath(kNew)];
+    route.status = 302;
+    route.body.clear();
+    route.location = first.toUtf8(); // relative, resolved and allowed
+    f.reachAvailable();
+    f.controller->startUpdate();
+    REQUIRE(f.waitForState(QStringLiteral("failed")));
+    CHECK_THAT(f.controller->errorMessage().toStdString(),
+               Catch::Matchers::ContainsSubstring("does not trust"));
+    CHECK(f.stub.requestsFor(first) == 1);
     CHECK(f.stub.requestsFor(target) == 0);
+    CHECK(f.starts.empty());
+    CHECK(f.updateFiles().isEmpty());
 }
 
 TEST_CASE("Redirect chains are bounded", "[app][update]") {
     Fixture f;
-    auto& route = f.stub.routes[ReleaseStub::apiPath()];
+    f.stub.serveRelease(kNew, kInstallerBytes);
+    auto& route = f.stub.routes[ReleaseStub::checksumPath(kNew)];
     route.status = 302;
-    route.location = ReleaseStub::apiPath().toUtf8();
-    UpdateController& controller = f.make();
-    controller.check();
+    route.body.clear();
+    route.location = ReleaseStub::checksumPath(kNew).toUtf8();
+    f.reachAvailable();
+    f.controller->startUpdate();
     REQUIRE(f.waitForState(QStringLiteral("failed")));
-    CHECK_THAT(controller.errorMessage().toStdString(),
+    CHECK_THAT(f.controller->errorMessage().toStdString(),
                Catch::Matchers::ContainsSubstring("too many"));
-    CHECK(f.stub.requestsFor(ReleaseStub::apiPath()) == services::kMaxUpdateRedirects + 1);
+    CHECK(f.stub.requestsFor(ReleaseStub::checksumPath(kNew)) == services::kMaxUpdateRedirects + 1);
+    CHECK(f.stub.requestsFor(ReleaseStub::installerPath(kNew)) == 0);
+}
+
+TEST_CASE("A renamed repository's release is checked and downloaded", "[app][update]") {
+    ClientFixture f;
+    // The id still finds it; the reply names it as it is called now.
+    const QString renamed = QStringLiteral("Someone-Else/renamed-manager");
+    f.stub.serveRelease(kNew, kInstallerBytes, renamed);
+    const UpdateCheckResult checked = f.check();
+    REQUIRE(checked.ok());
+    REQUIRE(checked.value());
+    const services::ReleaseInfo& release = *checked.value();
+    CHECK(release.repository == utf8(renamed));
+    CHECK(services::releasePageUrl(release) ==
+          "https://github.com/Someone-Else/renamed-manager/releases/tag/v1.2.3");
+
+    const UpdateDownloadResult downloaded = f.download(release);
+    REQUIRE(downloaded.ok());
+    QFile file(downloaded.value().path);
+    REQUIRE(file.open(QIODevice::ReadOnly));
+    CHECK(file.readAll() == kInstallerBytes);
+    CHECK(f.stub.requestsFor(ReleaseStub::checksumPath(kNew, renamed)) == 1);
+    CHECK(f.stub.requestsFor(ReleaseStub::installerPath(kNew, renamed)) == 1);
+    CHECK(f.stub.requestsFor(ReleaseStub::installerPath(kNew)) == 0);
+}
+
+TEST_CASE("A reply that names two repositories is refused", "[app][update]") {
+    ClientFixture f;
+    f.stub.serveRelease(kNew, kInstallerBytes);
+    auto json = f.stub.releaseJson(kNew);
+    json["html_url"] = "https://github.com/Someone-Else/pdx-mod-manager/releases/tag/v1.2.3";
+    f.stub.routes[ReleaseStub::apiPath()].body = QByteArray::fromStdString(json.dump());
+    const UpdateCheckResult result = f.check();
+    REQUIRE_FALSE(result.ok());
+    CHECK(result.error().code == ErrorCode::ValidationFailed);
+    CHECK(f.stub.requests().size() == 1);
 }
 
 TEST_CASE("A verified download reaches ready with the right file", "[app][update]") {
@@ -835,7 +932,8 @@ TEST_CASE("The real API answers through the client", "[.live-update]") {
     if (!result->ok())
         FAIL("error: " << result->error().message << " | " << result->error().detail);
     if (result->value())
-        WARN("latest release: " << result->value()->version.toString());
+        WARN("latest release: " << result->value()->version.toString() << " in "
+                                << result->value()->repository);
     else
         WARN("no release has been published yet (404)");
 }

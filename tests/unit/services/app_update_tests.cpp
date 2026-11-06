@@ -21,8 +21,8 @@ using namespace pmm::services;
 
 namespace {
 
-const std::string kBase =
-    "https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/download/v1.2.3/";
+const std::string kRepo = "Giorgi-Apriashvili/pdx-mod-manager";
+const std::string kBase = "https://github.com/" + kRepo + "/releases/download/v1.2.3/";
 const std::string kInstallerName = "ParadoxModManager-1.2.3-windows-x86_64-setup.exe";
 const AppVersion kVersion{1, 2, 3};
 const std::string kDigest(64, 'a');
@@ -31,17 +31,35 @@ nlohmann::json assetJson(const std::string& name, const std::string& url) {
     return {{"name", name}, {"browser_download_url", url}, {"size", 123}};
 }
 
-nlohmann::json validRelease() {
-    return {{"tag_name", "v1.2.3"},
+// As GitHub answers for a release of `repository`.
+nlohmann::json validRelease(const std::string& repository = kRepo) {
+    const std::string base = "https://github.com/" + repository + "/releases/download/v1.2.3/";
+    return {{"url", "https://api.github.com/repos/" + repository + "/releases/261946542"},
+            {"html_url", "https://github.com/" + repository + "/releases/tag/v1.2.3"},
+            {"tag_name", "v1.2.3"},
             {"draft", false},
             {"prerelease", false},
             {"body", "<img src=\"https://evil.example/x.png\"> notes are never read"},
-            {"html_url", "https://evil.example/not-the-release-page"},
             {"assets",
              nlohmann::json::array(
-                 {assetJson("ParadoxModManager-1.2.3-linux-x86_64.tar.gz", kBase + "linux.tar.gz"),
-                  assetJson(kInstallerName, kBase + kInstallerName),
-                  assetJson("SHA256SUMS.txt", kBase + "SHA256SUMS.txt")})}};
+                 {assetJson("ParadoxModManager-1.2.3-linux-x86_64.tar.gz", base + "linux.tar.gz"),
+                  assetJson(kInstallerName, base + kInstallerName),
+                  assetJson("SHA256SUMS.txt", base + "SHA256SUMS.txt")})}};
+}
+
+// The value of set(<name> <value>) in the root CMakeLists.txt.
+std::string rootCMakeValue(const std::string& name) {
+    std::ifstream file(std::filesystem::path(PMM_FIXTURES_DIR) / ".." / ".." / "CMakeLists.txt");
+    REQUIRE(file);
+    const std::string prefix = "set(" + name + " ";
+    for (std::string line; std::getline(file, line);) {
+        if (line.ends_with('\r'))
+            line.pop_back();
+        if (line.starts_with(prefix) && line.ends_with(')'))
+            return line.substr(prefix.size(), line.size() - prefix.size() - 1);
+    }
+    FAIL("no " << prefix << "...) in CMakeLists.txt");
+    return {};
 }
 
 Result<std::optional<ReleaseInfo>> parse(const nlohmann::json& json) {
@@ -87,10 +105,18 @@ TEST_CASE("Release tags are exactly v<x.y.z>", "[services][update]") {
     CHECK_FALSE(parseReleaseTag(bad));
 }
 
+TEST_CASE("The check asks for the repository by its frozen id", "[services][update]") {
+    // Every released copy asks exactly this; changing it strands them all.
+    CHECK(rootCMakeValue("PMM_GITHUB_REPOSITORY_ID") == "1439071956");
+    CHECK(updateRepositoryId() == rootCMakeValue("PMM_GITHUB_REPOSITORY_ID"));
+    CHECK(latestReleaseApiUrl() ==
+          "https://api.github.com/repositories/1439071956/releases/latest");
+    // No name in it: whoever registers an old name gets no say.
+    CHECK(latestReleaseApiUrl().find(updateRepository()) == std::string::npos);
+}
+
 TEST_CASE("The fixed addresses come from the repository slug", "[services][update]") {
     CHECK(updateRepository() == "Giorgi-Apriashvili/pdx-mod-manager");
-    CHECK(latestReleaseApiUrl() ==
-          "https://api.github.com/repos/Giorgi-Apriashvili/pdx-mod-manager/releases/latest");
     CHECK(releasePageUrl(kVersion) ==
           "https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v1.2.3");
     CHECK(releasePageUrl(std::nullopt) ==
@@ -101,8 +127,26 @@ TEST_CASE("The fixed addresses come from the repository slug", "[services][updat
 }
 
 TEST_CASE("Asset URLs must be in the release's own folder", "[services][update]") {
-    CHECK(isAllowedAssetUrl(kBase + kInstallerName, kVersion));
-    CHECK(isAllowedAssetUrl(kBase + "SHA256SUMS.txt", kVersion));
+    CHECK(isAllowedAssetUrl(kBase + kInstallerName, kRepo, kVersion));
+    CHECK(isAllowedAssetUrl(kBase + "SHA256SUMS.txt", kRepo, kVersion));
+    // The repository the reply named, which a rename may have changed.
+    CHECK(isAllowedAssetUrl(
+        "https://github.com/New-Owner/renamed.app_2/releases/download/v1.2.3/a.exe",
+        "New-Owner/renamed.app_2", kVersion));
+    CHECK_FALSE(isAllowedAssetUrl(kBase + kInstallerName, "New-Owner/renamed.app_2", kVersion));
+
+    // A repository that is not one: the URL cannot be in it.
+    const std::string repository = GENERATE(
+        as<std::string>{}, "", "Giorgi-Apriashvili", "/pdx-mod-manager", "Giorgi-Apriashvili/",
+        "Giorgi-Apriashvili/pdx-mod-manager/releases", "../pdx-mod-manager",
+        "Giorgi-Apriashvili/..", "Giorgi-Apriashvili/.", "-x/pdx-mod-manager");
+    INFO(repository);
+    CHECK_FALSE(
+        isAllowedAssetUrl("https://github.com/" + repository + "/releases/download/v1.2.3/a.exe",
+                          repository, kVersion));
+}
+
+TEST_CASE("Asset URLs outside the release's folder are refused", "[services][update]") {
 
     const std::string bad = GENERATE_COPY(
         as<std::string>{}, "", kBase,
@@ -128,7 +172,7 @@ TEST_CASE("Asset URLs must be in the release's own folder", "[services][update]"
         kBase + "%2e%2e/a.exe", kBase + "a/b.exe", kBase + "a\\b.exe", kBase + "a.exe?x=1",
         kBase + "a.exe#x", kBase + "a b.exe", kBase + "a.exe\n");
     INFO(bad);
-    CHECK_FALSE(isAllowedAssetUrl(bad, kVersion));
+    CHECK_FALSE(isAllowedAssetUrl(bad, kRepo, kVersion));
 }
 
 TEST_CASE("Redirect targets are https on the listed hosts only", "[services][update]") {
@@ -168,10 +212,10 @@ TEST_CASE("Test endpoints replace the hosts, the scheme and the port", "[service
     stub.redirectHosts = {"127.0.0.1"};
     stub.port = 8123;
     CHECK(latestReleaseApiUrl(stub) ==
-          "http://127.0.0.1:8123/repos/Giorgi-Apriashvili/pdx-mod-manager/releases/latest");
+          "http://127.0.0.1:8123/repositories/1439071956/releases/latest");
     CHECK(isAllowedAssetUrl(
         "http://127.0.0.1:8123/Giorgi-Apriashvili/pdx-mod-manager/releases/download/v1.2.3/a.exe",
-        kVersion, stub));
+        kRepo, kVersion, stub));
     CHECK(isAllowedRedirectTarget("http://127.0.0.1:8123/x", stub));
     CHECK_FALSE(isAllowedRedirectTarget("http://127.0.0.1:8124/x", stub));
     CHECK_FALSE(isAllowedRedirectTarget("http://127.0.0.1/x", stub));
@@ -192,6 +236,199 @@ TEST_CASE("A valid release gives the version and the two exact assets", "[servic
     REQUIRE(info.checksums);
     CHECK(info.checksums->name == "SHA256SUMS.txt");
     CHECK(info.checksums->url == kBase + "SHA256SUMS.txt");
+    CHECK(info.repository == kRepo);
+    CHECK(releasePageUrl(info) == "https://github.com/" + kRepo + "/releases/tag/v1.2.3");
+}
+
+TEST_CASE("A renamed or transferred repository is followed", "[services][update]") {
+    // The id still finds it; its reply names it as it is called now.
+    const std::string renamed = "Someone-Else/renamed.manager_2";
+    const auto release = parse(validRelease(renamed));
+    REQUIRE(release.ok());
+    REQUIRE(release.value());
+    const ReleaseInfo& info = *release.value();
+    CHECK(info.repository == renamed);
+    REQUIRE(info.installer);
+    CHECK(info.installer->url ==
+          "https://github.com/" + renamed + "/releases/download/v1.2.3/" + kInstallerName);
+    REQUIRE(info.checksums);
+    CHECK(info.checksums->url ==
+          "https://github.com/" + renamed + "/releases/download/v1.2.3/SHA256SUMS.txt");
+    CHECK(releasePageUrl(info) == "https://github.com/" + renamed + "/releases/tag/v1.2.3");
+
+    // Assets left behind in the old name's folder are not that release's.
+    auto json = validRelease(renamed);
+    json["assets"][1]["browser_download_url"] = kBase + kInstallerName;
+    const auto stale = parse(json);
+    REQUIRE_FALSE(stale.ok());
+    CHECK(stale.error().code == ErrorCode::ValidationFailed);
+}
+
+TEST_CASE("The release page is built, never copied from the reply", "[services][update]") {
+    ReleaseInfo info;
+    info.version = kVersion;
+    info.repository = "Other-Owner/other-name";
+    CHECK(releasePageUrl(info) == "https://github.com/Other-Owner/other-name/releases/tag/v1.2.3");
+    // Without a validated repository it cannot be built from one.
+    const std::string bad = GENERATE(as<std::string>{}, "", "x", "a/b/c", "evil.example/x/y",
+                                     "../x", "a/b?c", "a/b#c", "a/..");
+    INFO(bad);
+    info.repository = bad;
+    CHECK(releasePageUrl(info) ==
+          "https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v1.2.3");
+}
+
+TEST_CASE("The reply's url and html_url must name one repository", "[services][update]") {
+    const std::string api = "https://api.github.com/repos/";
+    const std::string page = "https://github.com/";
+    const auto parseWith = [](const std::string& url, const std::string& htmlUrl) {
+        auto json = validRelease();
+        json["url"] = url;
+        json["html_url"] = htmlUrl;
+        return parse(json);
+    };
+    const std::string goodApi = api + kRepo + "/releases/261946542";
+    const std::string goodPage = page + kRepo + "/releases/tag/v1.2.3";
+
+    SECTION("names compare without case, and html_url spells the result") {
+        const std::string upper = "GIORGI-APRIASHVILI/PDX-MOD-MANAGER";
+        const std::string lower = "giorgi-apriashvili/pdx-mod-manager";
+        for (const std::string& other : {upper, lower}) {
+            const auto release = parseWith(api + other + "/releases/261946542", goodPage);
+            REQUIRE(release.ok());
+            REQUIRE(release.value());
+            CHECK(release.value()->repository == kRepo);
+            CHECK(release.value()->installer);
+        }
+        // The assets must then be spelled as html_url spells the repository.
+        const auto release = parseWith(goodApi, page + upper + "/releases/tag/v1.2.3");
+        REQUIRE_FALSE(release.ok());
+        CHECK(release.error().code == ErrorCode::ValidationFailed);
+        auto json = validRelease(upper);
+        json["url"] = goodApi;
+        const auto respelled = parse(json);
+        REQUIRE(respelled.ok());
+        REQUIRE(respelled.value());
+        CHECK(respelled.value()->repository == upper);
+        CHECK(respelled.value()->installer);
+    }
+    SECTION("anything else is refused") {
+        const auto [url, htmlUrl] = GENERATE_COPY(table<std::string, std::string>({
+            // Two different repositories.
+            {api + "Giorgi-Apriashvili/other/releases/1", goodPage},
+            {api + "Someone-Else/pdx-mod-manager/releases/1", goodPage},
+            {goodApi, page + "Someone-Else/pdx-mod-manager/releases/tag/v1.2.3"},
+            {api + "pdx-mod-manager/Giorgi-Apriashvili/releases/1", goodPage},
+            {api + "Giorgi-Apriashvili/pdx-mod-manage/releases/1", goodPage},
+            {api + "Giorgi-Apriashvili/pdx-mod-manager-/releases/1", goodPage},
+            // Lookalike, other or decorated hosts.
+            {"https://api.github.com.evil.example/repos/" + kRepo + "/releases/1", goodPage},
+            {"https://evil-api.github.com/repos/" + kRepo + "/releases/1", goodPage},
+            {"https://github.com/repos/" + kRepo + "/releases/1", goodPage},
+            {"https://uploads.github.com/repos/" + kRepo + "/releases/1", goodPage},
+            {goodApi, "https://github.com.evil.example/" + kRepo + "/releases/tag/v1.2.3"},
+            {goodApi, "https://www.github.com/" + kRepo + "/releases/tag/v1.2.3"},
+            {goodApi, "https://api.github.com/" + kRepo + "/releases/tag/v1.2.3"},
+            {goodApi, "https://evil.example/" + kRepo + "/releases/tag/v1.2.3"},
+            {"https://API.GITHUB.COM/repos/" + kRepo + "/releases/1", goodPage},
+            {goodApi, "https://GitHub.com/" + kRepo + "/releases/tag/v1.2.3"},
+            // Scheme, port, user information.
+            {"http://api.github.com/repos/" + kRepo + "/releases/1", goodPage},
+            {goodApi, "http://github.com/" + kRepo + "/releases/tag/v1.2.3"},
+            {"HTTPS://api.github.com/repos/" + kRepo + "/releases/1", goodPage},
+            {"https://api.github.com:443/repos/" + kRepo + "/releases/1", goodPage},
+            {goodApi, "https://github.com:443/" + kRepo + "/releases/tag/v1.2.3"},
+            {"https://user@api.github.com/repos/" + kRepo + "/releases/1", goodPage},
+            {goodApi, "https://user:pw@github.com/" + kRepo + "/releases/tag/v1.2.3"},
+            {"https://api.github.com@evil.example/repos/" + kRepo + "/releases/1", goodPage},
+            {goodApi, "https://github.com@evil.example/" + kRepo + "/releases/tag/v1.2.3"},
+            // Path tricks in url.
+            {api + kRepo + "/releases/", goodPage},
+            {api + kRepo + "/releases", goodPage},
+            {api + kRepo + "/releases/1/", goodPage},
+            {api + kRepo + "/releases/1/assets", goodPage},
+            {api + kRepo + "/releases/abc", goodPage},
+            {api + kRepo + "/releases/-1", goodPage},
+            {api + kRepo + "/releases/1?x=1", goodPage},
+            {api + kRepo + "/releases/1#x", goodPage},
+            {api + kRepo + "/releases/latest", goodPage},
+            {api + kRepo + "/releases/tags/v1.2.3", goodPage},
+            {api + kRepo + "/releases/" + std::string(21, '1'), goodPage},
+            {api + "/" + kRepo + "/releases/1", goodPage},
+            {api + "Giorgi-Apriashvili//pdx-mod-manager/releases/1", goodPage},
+            {api + "Giorgi-Apriashvili/../" + kRepo + "/releases/1", goodPage},
+            {api + kRepo + "/../pdx-mod-manager/releases/1", goodPage},
+            {api + "Giorgi-Apriashvili%2Fpdx-mod-manager/releases/1", goodPage},
+            {api + "Giorgi-Apriashvili/pdx-mod-manager%20/releases/1", goodPage},
+            {api + "Giorgi-Apriashvili\\pdx-mod-manager/releases/1", goodPage},
+            {"https://api.github.com/repositories/1439071956/releases/1", goodPage},
+            {"https://api.github.com/repos/" + kRepo, goodPage},
+            {" " + goodApi, goodPage},
+            {goodApi + " ", goodPage},
+            {goodApi + "\n", goodPage},
+            // Path tricks in html_url, or another release's page.
+            {goodApi, page + kRepo + "/releases/tag/v1.2.4"},
+            {goodApi, page + kRepo + "/releases/tag/1.2.3"},
+            {goodApi, page + kRepo + "/releases/tag/v1.2.3/"},
+            {goodApi, page + kRepo + "/releases/tag/v1.2.3?x=1"},
+            {goodApi, page + kRepo + "/releases/tag/v1.2.3#x"},
+            {goodApi, page + kRepo + "/releases/tag/v01.2.3"},
+            {goodApi, page + kRepo + "/releases/tag/v1.2.3-rc1"},
+            {goodApi, page + kRepo + "/releases/latest"},
+            {goodApi, page + kRepo + "/releases"},
+            {goodApi, page + kRepo + "/tree/v1.2.3"},
+            {goodApi, page + kRepo + "/releases/download/v1.2.3"},
+            {goodApi, page + kRepo + "/releases/tag/../tag/v1.2.3"},
+            {goodApi, page + "Giorgi-Apriashvili/./pdx-mod-manager/releases/tag/v1.2.3"},
+            {goodApi, page + "/" + kRepo + "/releases/tag/v1.2.3"},
+            // Names outside GitHub's grammar, alike on both sides.
+            {api + "-Giorgi/x/releases/1", page + "-Giorgi/x/releases/tag/v1.2.3"},
+            {api + "Giorgi-/x/releases/1", page + "Giorgi-/x/releases/tag/v1.2.3"},
+            {api + "Gi--orgi/x/releases/1", page + "Gi--orgi/x/releases/tag/v1.2.3"},
+            {api + "Gi_orgi/x/releases/1", page + "Gi_orgi/x/releases/tag/v1.2.3"},
+            {api + "Gi.orgi/x/releases/1", page + "Gi.orgi/x/releases/tag/v1.2.3"},
+            {api + std::string(40, 'a') + "/x/releases/1",
+             page + std::string(40, 'a') + "/x/releases/tag/v1.2.3"},
+            {api + "a/" + std::string(101, 'x') + "/releases/1",
+             page + "a/" + std::string(101, 'x') + "/releases/tag/v1.2.3"},
+            {api + "a/./releases/1", page + "a/./releases/tag/v1.2.3"},
+            {api + "a/../releases/1", page + "a/../releases/tag/v1.2.3"},
+            {api + "a/.../releases/1", page + "a/.../releases/tag/v1.2.3"},
+            {api + "a/b c/releases/1", page + "a/b c/releases/tag/v1.2.3"},
+            {api + "a/b+c/releases/1", page + "a/b+c/releases/tag/v1.2.3"},
+            {api + "a/\xc3\xa9/releases/1", page + "a/\xc3\xa9/releases/tag/v1.2.3"},
+            {api + "a/b;c/releases/1", page + "a/b;c/releases/tag/v1.2.3"},
+            {api + "/x/releases/1", page + "/x/releases/tag/v1.2.3"},
+            {api + "a//releases/1", page + "a//releases/tag/v1.2.3"},
+            {"", goodPage},
+            {goodApi, ""},
+        }));
+        INFO("url: " << url << "\nhtml_url: " << htmlUrl);
+        const auto release = parseWith(url, htmlUrl);
+        REQUIRE_FALSE(release.ok());
+        CHECK(release.error().code == ErrorCode::ValidationFailed);
+    }
+    SECTION("missing or of the wrong type") {
+        using Corrupt = std::function<void(nlohmann::json&)>;
+        const auto corrupt = GENERATE(
+            as<Corrupt>{}, +[](nlohmann::json& j) { j.erase("url"); },
+            +[](nlohmann::json& j) { j.erase("html_url"); },
+            +[](nlohmann::json& j) {
+                j.erase("url");
+                j.erase("html_url");
+            },
+            +[](nlohmann::json& j) { j["url"] = nullptr; },
+            +[](nlohmann::json& j) { j["url"] = 261946542; },
+            +[](nlohmann::json& j) { j["html_url"] = nlohmann::json::array({"x"}); },
+            +[](nlohmann::json& j) { j["html_url"] = nlohmann::json::object(); },
+            +[](nlohmann::json& j) { j["html_url"] = false; });
+        auto json = validRelease();
+        corrupt(json);
+        INFO(json.dump());
+        const auto release = parse(json);
+        REQUIRE_FALSE(release.ok());
+        CHECK(release.error().code == ErrorCode::ParseError);
+    }
 }
 
 TEST_CASE("Draft and prerelease items are ignored", "[services][update]") {

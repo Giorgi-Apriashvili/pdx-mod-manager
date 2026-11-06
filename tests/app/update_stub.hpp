@@ -80,10 +80,14 @@ public:
         return out;
     }
 
+    // The slug the release lives in unless a test moves it (a renamed repository).
     static QString repo() { return qs(services::updateRepository()); }
-    static QString apiPath() { return "/repos/" + repo() + "/releases/latest"; }
-    static QString assetPath(const std::string& version, const std::string& name) {
-        return "/" + repo() + "/releases/download/v" + qs(version) + "/" + qs(name);
+    static QString apiPath() {
+        return "/repositories/" + qs(services::updateRepositoryId()) + "/releases/latest";
+    }
+    static QString assetPath(const std::string& version, const std::string& name,
+                             const QString& repository = repo()) {
+        return "/" + repository + "/releases/download/v" + qs(version) + "/" + qs(name);
     }
     QByteArray absolute(const QString& path, const QString& host = "127.0.0.1") const {
         return QStringLiteral("http://%1:%2%3").arg(host).arg(port()).arg(path).toUtf8();
@@ -92,40 +96,46 @@ public:
     static std::string installerName(const std::string& version) {
         return "ParadoxModManager-" + version + "-windows-x86_64-setup.exe";
     }
-    static QString installerPath(const std::string& version) {
-        return assetPath(version, installerName(version));
+    static QString installerPath(const std::string& version, const QString& repository = repo()) {
+        return assetPath(version, installerName(version), repository);
     }
-    static QString checksumPath(const std::string& version) {
-        return assetPath(version, "SHA256SUMS.txt");
+    static QString checksumPath(const std::string& version, const QString& repository = repo()) {
+        return assetPath(version, "SHA256SUMS.txt", repository);
     }
 
-    // The reply of the releases/latest endpoint for a release with both assets.
-    nlohmann::json releaseJson(const std::string& version) const {
+    // The reply of the releases/latest endpoint for a release with both assets,
+    // shaped like GitHub's: url and html_url name the repository it lives in.
+    nlohmann::json releaseJson(const std::string& version,
+                               const QString& repository = repo()) const {
         const auto asset = [&](const QString& path, const std::string& name) {
             return nlohmann::json{{"name", name},
                                   {"browser_download_url", utf8(QString::fromUtf8(absolute(path)))},
                                   {"size", 1}};
         };
+        const QString api = QString::fromUtf8(absolute("/repos/" + repository + "/releases/1234"));
         return {
+            {"url", utf8(api)},
+            {"html_url", "https://github.com/" + utf8(repository) + "/releases/tag/v" + version},
             {"tag_name", "v" + version},
             {"draft", false},
             {"prerelease", false},
-            {"html_url", "https://evil.example/release"},
             {"body", "<img src=\"https://evil.example/notes.png\">"},
-            {"assets", nlohmann::json::array({asset(installerPath(version), installerName(version)),
-                                              asset(checksumPath(version), "SHA256SUMS.txt")})}};
+            {"assets", nlohmann::json::array(
+                           {asset(installerPath(version, repository), installerName(version)),
+                            asset(checksumPath(version, repository), "SHA256SUMS.txt")})}};
     }
 
     // Serves a complete release: the API reply, the checksum file and the
     // installer. Tests then replace the route they are about.
-    void serveRelease(const std::string& version, const QByteArray& installer) {
-        routes[apiPath()].body = QByteArray::fromStdString(releaseJson(version).dump());
+    void serveRelease(const std::string& version, const QByteArray& installer,
+                      const QString& repository = repo()) {
+        routes[apiPath()].body = QByteArray::fromStdString(releaseJson(version, repository).dump());
         const std::span<const std::uint8_t> bytes(
             reinterpret_cast<const std::uint8_t*>(installer.constData()),
             static_cast<std::size_t>(installer.size()));
-        routes[checksumPath(version)].body =
+        routes[checksumPath(version, repository)].body =
             QByteArray::fromStdString(sha256Hex(bytes) + "  " + installerName(version) + "\n");
-        routes[installerPath(version)].body = installer;
+        routes[installerPath(version, repository)].body = installer;
     }
 
 private:

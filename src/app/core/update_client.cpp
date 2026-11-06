@@ -262,6 +262,15 @@ void UpdateClient::onFinished() {
         return;
     }
     const int status = httpStatus(reply);
+    // The repository is asked for by its id, so the API has no reason to send
+    // the check anywhere else.
+    if (isRedirectStatus(status) && m_phase == Phase::Check) {
+        fail(makeError(ErrorCode::ValidationFailed,
+                       "GitHub answered the update check with a redirect, which this application "
+                       "does not follow, so the check was stopped.",
+                       "HTTP " + std::to_string(status)));
+        return;
+    }
     if (isRedirectStatus(status)) {
         followRedirect(reply);
         return;

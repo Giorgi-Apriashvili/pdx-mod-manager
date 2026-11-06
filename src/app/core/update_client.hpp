@@ -4,8 +4,9 @@
 // QNetworkAccessManager: asks GitHub for the latest release and downloads the
 // installer with its checksum file. Nothing here runs until check() or
 // download() is called. It sends a User-Agent and nothing else about the user:
-// no token, no cookies. Every redirect hop is checked against the allow-list of
-// services::UpdateEndpoints before it is followed; the installer is written to a
+// no token, no cookies. The check asks for the repository by its id and follows
+// no redirect; every hop of a download is checked against the allow-list of
+// services::UpdateEndpoints before it is followed. The installer is written to a
 // temporary file, hashed while streaming and only gets its final name once the
 // digest matches, so an unverified file can never be started.
 //

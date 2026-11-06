@@ -16,6 +16,7 @@ target_link_libraries(pmm_services
   PUBLIC pmm_core pmm_platform pmm_sharing pmm_persistence pmm_games pmm_providers
   PRIVATE nlohmann_json::nlohmann_json)
 target_compile_definitions(pmm_services PRIVATE
-  PMM_GITHUB_REPOSITORY="${PMM_GITHUB_REPOSITORY}")
+  PMM_GITHUB_REPOSITORY="${PMM_GITHUB_REPOSITORY}"
+  PMM_GITHUB_REPOSITORY_ID="${PMM_GITHUB_REPOSITORY_ID}")
 pmm_configure_target(pmm_services)
 add_library(PMM::services ALIAS pmm_services)
