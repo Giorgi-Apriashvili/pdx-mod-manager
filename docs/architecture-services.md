@@ -36,16 +36,18 @@ composition root (the Qt application or a test):
 | `paths` | `AppPaths::standard()` (or `fromProfileDir()`) | data, journal, logs, cache folders |
 | `clock` | `nowUnixMs` | timestamps and timeouts |
 | `startProcess` | `platform::startDetached` | starting the game (argv vector, never a shell) |
-| `listProcesses` | `platform::listProcesses` | running-instance checks |
+| `listProcesses` | `platform::listProcesses` | running-instance and Steam client checks |
+| `steamPid` | `platform::steam::registeredSteamPid` | the pid Steam registered under `HKCU\Software\Valve\Steam\ActiveProcess` (read only) |
 | `fingerprint` | `providers::fingerprintDirectory` | local-mod fingerprints for share codes |
 
-`useSystemDefaults(context)` fills in the last four. The services never call
-`games::adapters()`, `DiscoveryEnvironment::current()`, the system clock or OS
-process APIs themselves, so tests run them against temporary folders, an
-in-memory database, fake adapters, a fake Steam helper and a fake process
-starter. `AppPaths::fromProfileDir(dir)` puts every application file under one
-folder. This gives a clean, isolated profile for tests and for the "import into
-a clean application profile" acceptance procedure.
+`useSystemDefaults(context)` fills in the last five. The services never call
+`games::adapters()`, `DiscoveryEnvironment::current()`, the system clock, OS
+process APIs or the registry themselves, so tests run them against temporary
+folders, an in-memory database, fake adapters, a fake Steam helper, a fake
+process starter and a fake process list. `AppPaths::fromProfileDir(dir)` puts
+every application file under one folder. This gives a clean, isolated profile
+for tests and for the "import into a clean application profile" acceptance
+procedure.
 
 The acquisition coordinator also receives two host interfaces, which the Qt
 layer implements:
@@ -240,6 +242,21 @@ It never unsubscribes or deletes anything.
     app's read-only verification mode does so that it reports every other
     blocker without writing into game folders);
   - no game instance and no Paradox launcher is running;
+  - for a Steam installation, the Steam client is running (the owner's
+    decision of 2026-11-06; until then a Steam copy could be started with
+    Steam closed). A Steam installation is one with
+    `DistributionSource::Steam`: detection gives it to installations found
+    through Steam's app manifest and to folders located by hand inside
+    `<library>/steamapps/common/`, which also get the app id and are started
+    in Steam's app context. A copy from another store located by hand is
+    `Manual` and is never blocked. Steam counts as running when the process
+    list the running-instance check reads (one list for both) has
+    `steam.exe`, or the pid Steam registered (`ServiceContext::steamPid`)
+    with no readable name. The blocker reads `Steam is not running. Start
+    Steam and sign in, then launch <game name>.` and sets
+    `LaunchCheck::steamNotRunning`; whether Steam is signed in is not
+    checked. When the processes cannot be listed (no lister, or it fails),
+    both process checks become warnings instead;
   - no interrupted configuration transaction of this game is waiting for
     recovery (one with its launch label or a target in its user-data folder).
     Interrupted transactions of other games are warnings that name their
@@ -361,8 +378,9 @@ every game on exit.
 
 ```text
  launch(game, playset or std::nullopt)
-   check() again                       -> blockers: Error (ConflictingProcess,
-                                          Interrupted or ValidationFailed); nothing written
+   check() again                       -> blockers: Error (Interrupted, ConflictingProcess,
+                                          ProviderUnavailable when Steam is not running,
+                                          or ValidationFailed); nothing written
    adapter.buildLaunchPlan(installation, enabled InstalledMods in playset order;
                            none without a playset)
    validate plan (absolute existing executable, absolute config targets)
