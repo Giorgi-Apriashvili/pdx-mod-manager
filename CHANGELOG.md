@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+### Changed
+
+- **Play without a playset.** When no playset is selected, **Play** now starts the game without mods instead of staying unavailable, and a note next to it says so. The game's mod list is emptied through the same journaled write as any launch, so your DLC choices are kept and **Restore pre-launch configuration** brings the previous mods back.
+
 ## [0.1.0] - 2026-11-06
 
 This is the first release of Paradox Mod Manager, a small Windows program that keeps named playsets of mods for Stellaris and Europa Universalis IV, shares them as copyable codes, downloads missing Steam Workshop mods through your own Steam client and starts the game directly with your mods, without the Paradox launcher. It needs no account, collects no telemetry and goes online only for Workshop downloads you ask for and to check for updates. Download the setup, not the ZIP: from this version on, an installed copy updates itself, while the ZIP does not.
