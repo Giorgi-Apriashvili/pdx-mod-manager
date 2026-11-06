@@ -192,6 +192,16 @@ TEST_CASE("Manual Stellaris locations are inspected", "[games][stellaris]") {
         CHECK(inst->manuallyConfigured);
         CHECK(samePath(inst->userDataPath, f.userData()));
     }
+    SECTION("inside a Steam library, chosen with a trailing separator") {
+        fs::path chosen = f.install();
+        chosen += fs::path::preferred_separator;
+        auto inst = f.adapter.inspectInstallation(chosen, {}, env);
+        REQUIRE(inst.ok());
+        CHECK(inst->distribution == DistributionSource::Steam);
+        CHECK(inst->steamAppId == "281990");
+        CHECK(samePath(inst->steamLibraryPath, f.path("Steam")));
+        CHECK(samePath(inst->installPath, f.install()));
+    }
     SECTION("outside any Steam library, with a chosen user data folder") {
         const fs::path manual = f.path("Games/Stellaris Manual");
         fs::create_directories(manual);

@@ -578,6 +578,11 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
     std::error_code ec;
     const fs::path absolute = fs::absolute(installPath, ec);
     inst.installPath = (ec ? installPath : absolute).lexically_normal();
+    // lexically_normal() keeps a trailing separator ("...\Stellaris\"); its
+    // parent_path() would be the folder itself, and inspectInstallation()
+    // would not see that it lies in <library>/steamapps/common/.
+    if (!inst.installPath.has_filename() && inst.installPath.has_relative_path())
+        inst.installPath = inst.installPath.parent_path();
     inst.manuallyConfigured = mode == Mode::Manual;
 
     std::optional<LauncherSettings> settings;
