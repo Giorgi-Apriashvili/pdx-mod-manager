@@ -4,8 +4,8 @@
 // version numbers, the GitHub "latest release" reply, the checksum file and the
 // allow-list of addresses. Everything fed in here came from the network and is
 // treated as hostile: sizes are bounded, wrong types are errors and nothing but
-// the version and the two expected assets is ever taken from a reply. The
-// network itself lives in app::UpdateClient.
+// the version, the repository's validated name and the two expected assets is
+// ever taken from a reply. The network itself lives in app::UpdateClient.
 
 #include "core/result.hpp"
 
@@ -48,16 +48,26 @@ struct UpdateEndpoints {
     std::string scheme = "https";
     std::string apiHost = "api.github.com";
     std::string downloadHost = "github.com";
-    std::vector<std::string> redirectHosts = {"github.com", "release-assets.githubusercontent.com",
-                                              "objects.githubusercontent.com"};
+    // Download hops only; the API request follows no redirect. A host is
+    // allowed when it is listed, or when it is one or more DNS labels followed
+    // by one of the suffixes (each starting with a dot).
+    std::vector<std::string> redirectHosts = {"github.com"};
+    std::vector<std::string> redirectHostSuffixes = {".githubusercontent.com"};
     int port = -1; // -1: URLs must not name a port
 };
 
-// The repository slug from CMake ("owner/name"; root CMakeLists.txt).
+// The repository slug from CMake ("owner/name"; root CMakeLists.txt). Only
+// documentation now: the check asks for the id, and a reply's own owner and
+// name decide where its assets may be.
 std::string_view updateRepository() noexcept;
+// The repository's numeric GitHub id (PMM_GITHUB_REPOSITORY_ID in the root
+// CMakeLists.txt), which survives renames and transfers.
+std::string_view updateRepositoryId() noexcept;
+// <scheme>://<apiHost>/repositories/<id>/releases/latest.
 std::string latestReleaseApiUrl(const UpdateEndpoints& endpoints = {});
-// Built from the fixed repository and a parsed version, never from a reply:
-// the release's page, or the list of releases without a version.
+// From the slug and a parsed version: the release's page, or the list of
+// releases without a version. For when no reply named the repository (none
+// was published yet); a parsed release has releasePageUrl(ReleaseInfo).
 std::string releasePageUrl(const std::optional<AppVersion>& version);
 std::string installerAssetName(const AppVersion& version);
 // The arguments of an update run; the installer's side of this contract is
@@ -65,10 +75,11 @@ std::string installerAssetName(const AppVersion& version);
 std::vector<std::string> updateInstallerArguments();
 
 // Exactly <scheme>://<downloadHost>/<repository>/releases/download/v<version>/
-// followed by one plain file name.
-bool isAllowedAssetUrl(std::string_view url, const AppVersion& version,
+// followed by one plain file name, for a repository "<owner>/<name>" in
+// GitHub's name grammar.
+bool isAllowedAssetUrl(std::string_view url, std::string_view repository, const AppVersion& version,
                        const UpdateEndpoints& endpoints = {});
-// An absolute URL with the expected scheme on one of the redirect hosts: no
+// An absolute URL with the expected scheme on an allowed redirect host: no
 // user information, other port, backslash, control or non-ASCII character.
 bool isAllowedRedirectTarget(std::string_view url, const UpdateEndpoints& endpoints = {});
 
@@ -82,12 +93,24 @@ struct ReleaseInfo {
     // Each is present only under its exact contract name with an allowed URL.
     std::optional<ReleaseAsset> installer;
     std::optional<ReleaseAsset> checksums;
+    // "<owner>/<name>" as the reply's html_url spells it, once the reply's url
+    // and html_url were found to name this one repository. May differ from
+    // updateRepository() after a rename or a transfer.
+    std::string repository;
 };
+
+// https://github.com/<repository>/releases/tag/v<version>, built from the
+// validated repository and version of a parsed release, never copied from it.
+std::string releasePageUrl(const ReleaseInfo& release);
 
 // A reply of the releases/latest endpoint. Empty for a release flagged as draft
 // or prerelease, which is ignored. An error for anything malformed: oversized,
-// not JSON, wrong or missing fields, a tag that is not exactly v<x.y.z>, or an
-// expected asset whose URL is not allowed or that is listed twice.
+// not JSON, wrong or missing fields, a tag that is not exactly v<x.y.z>, a url
+// that is not <scheme>://<apiHost>/repos/<owner>/<name>/releases/<id>, an
+// html_url that is not https://github.com/<owner>/<name>/releases/tag/<tag>,
+// the two naming different repositories (compared without case, like GitHub
+// does), or an expected asset whose URL is not in that repository's release
+// or that is listed twice.
 Result<std::optional<ReleaseInfo>> parseLatestRelease(std::string_view json,
                                                       const UpdateEndpoints& endpoints = {});
 

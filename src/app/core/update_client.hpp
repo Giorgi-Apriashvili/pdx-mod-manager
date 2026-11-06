@@ -4,10 +4,13 @@
 // QNetworkAccessManager: asks GitHub for the latest release and downloads the
 // installer with its checksum file. Nothing here runs until check() or
 // download() is called. It sends a User-Agent and nothing else about the user:
-// no token, no cookies. Every redirect hop is checked against the allow-list of
-// services::UpdateEndpoints before it is followed; the installer is written to a
+// no token, no cookies. The check asks for the repository by its id and follows
+// no redirect; every hop of a download is checked against the allow-list of
+// services::UpdateEndpoints before it is followed. The installer is written to a
 // temporary file, hashed while streaming and only gets its final name once the
-// digest matches, so an unverified file can never be started.
+// digest matches, so an unverified file can never be started. That last rename
+// is retried for about a second while the name is in use (a virus scanner, an
+// installer still exiting).
 //
 // One operation at a time. Lives on, and must only be used from, one thread (the
 // GUI thread: all work is asynchronous and the file writes are small).
@@ -27,9 +30,9 @@
 #include <optional>
 #include <string>
 
+class QFile;
 class QNetworkAccessManager;
 class QNetworkReply;
-class QSaveFile;
 
 namespace pmm::app {
 
@@ -91,6 +94,7 @@ private:
     bool acceptBody(const QByteArray& chunk);
     void finishBody();
     void abortWith(Error error);
+    void saveInstaller();
     void fail(Error error);
     void cleanUpPartialFile();
 
@@ -101,10 +105,12 @@ private:
     int m_redirects = 0;
     std::optional<Error> m_abortError; // why m_reply was aborted
     QTimer m_timer;
+    QTimer m_saveTimer; // the next attempt at the final name
+    int m_saveAttempts = 0;
     QByteArray m_body; // check and checksum replies
     services::ReleaseAsset m_installerAsset;
     std::string m_expectedDigest;
-    std::unique_ptr<QSaveFile> m_file;
+    std::unique_ptr<QFile> m_file; // the partial download, removed unless it got the final name
     Sha256 m_hash;
     qint64 m_received = 0;
     qint64 m_total = 0;
