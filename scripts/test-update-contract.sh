@@ -126,6 +126,10 @@ mutate 'a version grammar with leading zeros' \
   's/^version_regex = .*/version_regex = ^[0-9]+\\.[0-9]+\\.[0-9]+$/' "$contract_file"
 
 fresh_copy
+printf '%s\n' '// No Authorization header and no token are ever sent.' >> "$copy/src/app/core/update_client.cpp"
+expect 0 'a comment about credentials is not a drift' bash "$copy/scripts/check-update-contract.sh"
+
+fresh_copy
 sed -i -e '/^app_id = /d' "$copy/packaging/update-contract.txt"
 because "no single value for 'app_id'"
 expect 2 'a value missing from the contract stops the check' bash "$copy/scripts/check-update-contract.sh"

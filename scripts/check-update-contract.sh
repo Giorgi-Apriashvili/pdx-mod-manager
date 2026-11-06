@@ -226,7 +226,9 @@ check_sources() {
   has_regex "the code that builds the request gets the id" \
     "PMM_GITHUB_REPOSITORY_ID|(^|[^0-9])$id([^0-9]|$)" "${update[@]}"
   has "the client requests that URL" "latestReleaseApiUrl(" "${client[@]}"
-  lacks "the client sends no credentials" "authorization|bearer" "${client[@]}"
+  # Code, not comments: a header name in quotes or Qt's enum value.
+  lacks "the client sends no credentials" \
+    '"(proxy-)?authorization"|"(bearer|token|basic) |WellKnownHeader::(Proxy)?Authorization' "${client[@]}"
   has "drafts are recognised" '"draft"' "${update[@]}"
   has "pre-releases are recognised" '"prerelease"' "${update[@]}"
 
