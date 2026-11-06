@@ -10,13 +10,23 @@
 // (disabled entries never block), the user-data and mod folders writable
 // (probed unless LaunchCheckOptions::probeWriteAccess is off), no running
 // instance of the game or conflicting configuration writer (Paradox launcher),
-// and no interrupted configuration transaction of THIS game awaiting recovery
-// (one with its launch label or a target in its user-data folder). Other
-// interrupted transactions are warnings: they cannot make this game's files
-// inconsistent, and one that cannot be recovered must not keep every game
-// from launching. Without a playset (std::nullopt) only the playset checks
-// are skipped and a warning says the game starts without mods; a playset id
-// that no longer exists still blocks.
+// the Steam client running for a Steam installation (the owner's decision of
+// 2026-11-06: one with DistributionSource::Steam, which detection gives to
+// Steam's own installations and to folders located inside a Steam library; a
+// copy from another store starts without Steam), and no interrupted
+// configuration transaction of THIS game awaiting recovery (one with its
+// launch label or a target in its user-data folder). Other interrupted
+// transactions are warnings: they cannot make this game's files inconsistent,
+// and one that cannot be recovered must not keep every game from launching.
+// Without a playset (std::nullopt) only the playset checks are skipped and a
+// warning says the game starts without mods; a playset id that no longer
+// exists still blocks.
+//
+// The process checks share one process list (ServiceContext::listProcesses).
+// Steam counts as running when steam.exe is listed, or the pid Steam
+// registered (ServiceContext::steamPid) is listed without a readable name;
+// whether it is signed in is not checked. When the list cannot be read, the
+// running-instance and Steam checks become warnings.
 //
 // launch() re-checks, builds the adapter's LaunchPlan for the enabled mods in
 // playset order (no mods without a playset) and validates it. Only then does
@@ -64,6 +74,7 @@ struct LaunchCheck {
     bool interruptedTransaction = false; // a change of any game awaits recovery (offer Recover)
     bool interruptedBlocks = false;      // ... and one of them is this game's (a blocker)
     bool runningInstance = false;        // game or conflicting writer running
+    bool steamNotRunning = false;        // a Steam installation, and no Steam client running
 };
 
 struct LaunchCheckOptions {

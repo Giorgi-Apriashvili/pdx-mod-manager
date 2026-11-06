@@ -3,8 +3,9 @@
 // Dependencies shared by every service, injected by the composition root (the
 // Qt application) and by tests. Services never reach for globals:
 // they do not use the adapter registry, the real discovery environment, the
-// system clock or OS process APIs unless the composition root wires them in
-// (useSystemDefaults() does that for the clock, processes and fingerprints).
+// system clock, OS process APIs or the registry unless the composition root
+// wires them in (useSystemDefaults() does that for the clock, processes, the
+// Steam client's registered pid and fingerprints).
 //
 // Threading model: the application owns one ServiceContext and calls every
 // service from ONE dedicated worker thread. Services are synchronous and not
@@ -34,6 +35,8 @@ using Clock = std::function<std::int64_t()>; // unix milliseconds
 using ProcessStarter =
     std::function<Result<platform::StartedProcess>(const platform::ProcessSpec&)>;
 using ProcessLister = std::function<Result<std::vector<platform::RunningProcess>>()>;
+// The process id the Steam client registered for itself (0: none recorded).
+using SteamPidReader = std::function<std::int64_t()>;
 // Content fingerprint of a local mod folder ("sha256:<hex>").
 using Fingerprinter = std::function<Result<std::string>(const std::filesystem::path&)>;
 
@@ -48,7 +51,8 @@ struct ServiceContext {
     AppPaths paths;
     Clock clock;                 // unset: nowUnixMs()
     ProcessStarter startProcess; // unset: launching fails with an explanation
-    ProcessLister listProcesses; // unset: running-instance checks become warnings
+    ProcessLister listProcesses; // unset: running-instance and Steam checks become warnings
+    SteamPidReader steamPid;     // unset: the Steam client is recognised by name only
     Fingerprinter fingerprint;   // unset: exports carry no local fingerprints
 
     // nullptr when no adapter for `gameKey` was injected.
@@ -57,8 +61,9 @@ struct ServiceContext {
 };
 
 // Wires the production implementations: nowUnixMs, platform::startDetached,
-// platform::listProcesses and providers::fingerprintDirectory. Adapters,
-// environment and paths stay the caller's responsibility.
+// platform::listProcesses, platform::steam::registeredSteamPid and
+// providers::fingerprintDirectory. Adapters, environment and paths stay the
+// caller's responsibility.
 void useSystemDefaults(ServiceContext& context);
 
 // Keys in the settings table owned by the services layer.

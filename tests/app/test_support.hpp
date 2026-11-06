@@ -42,6 +42,12 @@ inline fs::path u8(std::string_view utf8) {
     return platform::pathFromUtf8(utf8);
 }
 
+// The Steam client as a process list shows it. The FakeWorld's game is a
+// Steam installation, so Play needs it.
+inline platform::RunningProcess steamClient() {
+    return {3100, "steam.exe", {}};
+}
+
 template <class T> T require(Result<T> result) {
     if (!result.ok())
         FAIL("unexpected error: " << result.error().message << " | " << result.error().detail);
@@ -230,8 +236,9 @@ private:
     const FakeWorld& m_world;
 };
 
-// Runtime options for a hermetic profile: fake adapter, no real discovery,
-// no process listing (launch checks then only warn), no log sink.
+// Runtime options for a hermetic profile: fake adapter, no real discovery, a
+// process list with nothing but the Steam client, no registered Steam pid
+// (the registry is not read), no log sink.
 inline RuntimeOptions hermeticOptions(const fs::path& profile, const FakeAdapter& adapter) {
     RuntimeOptions options;
     options.profileDir = profile;
@@ -248,8 +255,9 @@ inline RuntimeOptions hermeticOptions(const fs::path& profile, const FakeAdapter
         };
         context.listProcesses = [] {
             return Result<std::vector<platform::RunningProcess>>(
-                std::vector<platform::RunningProcess>{});
+                std::vector<platform::RunningProcess>{steamClient()});
         };
+        context.steamPid = [] { return std::int64_t{0}; };
     };
     return options;
 }

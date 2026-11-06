@@ -160,7 +160,7 @@ TEST_CASE("Read-only launch data keeps every blocker except the write probes", "
                                 running](services::ServiceContext& context) {
         base(context);
         context.listProcesses = [running] {
-            std::vector<platform::RunningProcess> processes;
+            std::vector<platform::RunningProcess> processes{steamClient()};
             if (*running)
                 processes.push_back({1234, kExeName, {}});
             return Result<std::vector<platform::RunningProcess>>(std::move(processes));

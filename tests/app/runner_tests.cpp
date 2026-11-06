@@ -310,7 +310,7 @@ TEST_CASE("Launch blockers explain a running game, with or without a playset", "
             game.pid = 4242;
             game.executableName = kExeName;
             return Result<std::vector<platform::RunningProcess>>(
-                std::vector<platform::RunningProcess>{game});
+                std::vector<platform::RunningProcess>{steamClient(), game});
         };
     };
     ServiceRunner runner(options);

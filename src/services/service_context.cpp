@@ -2,6 +2,7 @@
 
 #include "core/catalog.hpp"
 #include "core/log.hpp"
+#include "platform/steam.hpp"
 #include "providers/local_fingerprint.hpp"
 
 namespace pmm::services {
@@ -24,6 +25,7 @@ void useSystemDefaults(ServiceContext& context) {
         return platform::startDetached(spec);
     };
     context.listProcesses = [] { return platform::listProcesses(); };
+    context.steamPid = [] { return platform::steam::registeredSteamPid(); };
     context.fingerprint = [](const std::filesystem::path& root) {
         return providers::fingerprintDirectory(root);
     };

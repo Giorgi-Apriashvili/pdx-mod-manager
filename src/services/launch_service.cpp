@@ -7,6 +7,7 @@
 #include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "platform/fs.hpp"
+#include "platform/steam.hpp"
 #include "services/acquisition_coordinator.hpp"
 #include "services/internal/util.hpp"
 
@@ -107,6 +108,17 @@ void checkWritable(const fs::path& directory, const char* what, std::set<fs::pat
                                  ") is not writable, so the mod configuration cannot be written. "
                                  "Check the folder's permissions (or read-only flag) and retry.");
     }
+}
+
+// Whether a launch needs the Steam client (the owner's decision of
+// 2026-11-06). Detection marks an installation Steam when Steam's own app
+// manifest lists it, or when a folder located by hand lies in
+// <library>/steamapps/common/; both also get the app id, and the launch plan
+// starts them in Steam's app context. Any other folder located by hand (a
+// copy from another store) is Manual and starts without Steam; detection
+// never writes Unknown.
+bool needsSteamClient(const GameInstallation& installation) {
+    return installation.distribution == DistributionSource::Steam;
 }
 
 // Interrupted transactions of any game offer Recover; this game's block
@@ -244,11 +256,17 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
         }
 
         const games::ProcessNames names = adapter.processNames(install);
+        const bool viaSteam = needsSteamClient(install);
         if (!ctx.listProcesses) {
             check.warnings.push_back("Running instances of " + gameName + " could not be checked.");
+            if (viaSteam)
+                check.warnings.push_back("Whether Steam is running could not be checked.");
         } else if (auto processes = ctx.listProcesses(); !processes) {
             check.warnings.push_back("Could not check whether " + gameName +
                                      " is already running: " + processes.error().message);
+            if (viaSteam)
+                check.warnings.push_back("Could not check whether Steam is running: " +
+                                         processes.error().message);
         } else {
             std::set<std::string> reported;
             for (const platform::RunningProcess& process : processes.value()) {
@@ -272,6 +290,14 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                             "configuration. Close it before launching.");
                     }
                 }
+            }
+            // The same list; the registered pid counts only for a process
+            // whose name could not be read.
+            if (viaSteam && !platform::steam::isSteamRunning(processes.value(),
+                                                             ctx.steamPid ? ctx.steamPid() : 0)) {
+                check.steamNotRunning = true;
+                check.blockers.push_back(
+                    "Steam is not running. Start Steam and sign in, then launch " + gameName + ".");
             }
         }
     }
@@ -346,6 +372,7 @@ Result<LaunchOutcome> LaunchService::launch(const GameKey& game,
             detail += (detail.empty() ? "" : "\n") + blocker;
         const ErrorCode code = check.interruptedBlocks ? ErrorCode::Interrupted
                                : check.runningInstance ? ErrorCode::ConflictingProcess
+                               : check.steamNotRunning ? ErrorCode::ProviderUnavailable
                                                        : ErrorCode::ValidationFailed;
         return makeError(code, gameName + " cannot be launched yet: " + check.blockers.front(),
                          detail);

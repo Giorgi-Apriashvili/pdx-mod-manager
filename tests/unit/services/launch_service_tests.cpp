@@ -310,14 +310,14 @@ TEST_CASE("Without a playset every other check still blocks", "[services][launch
     ErrorCode expected = ErrorCode::ValidationFailed;
 
     SECTION("the game is already running") {
-        w.processes = {{1234, kExeName, w.executable}};
+        w.processes.push_back({1234, kExeName, w.executable});
         const LaunchCheck check = launcher.check(kGame, std::nullopt);
         CHECK(check.runningInstance);
         CHECK(contains(check.blockers, "already running"));
         expected = ErrorCode::ConflictingProcess;
     }
     SECTION("the Paradox launcher is running") {
-        w.processes = {{99, kLauncherName, {}}};
+        w.processes.push_back({99, kLauncherName, {}});
         CHECK(contains(launcher.check(kGame, std::nullopt).blockers, "Paradox launcher"));
         expected = ErrorCode::ConflictingProcess;
     }
@@ -362,7 +362,8 @@ TEST_CASE("A running game or Paradox launcher refuses the launch", "[services][l
     LaunchService launcher(w.ctx, nullptr);
 
     SECTION("the game is already running") {
-        w.processes = {{1234, kExeName, w.executable}, {7, "explorer.exe", {}}};
+        w.processes.insert(w.processes.end(),
+                           {{1234, kExeName, w.executable}, {7, "explorer.exe", {}}});
         const LaunchCheck check = launcher.check(kGame, id);
         CHECK_FALSE(check.canLaunch);
         CHECK(check.runningInstance);
@@ -370,7 +371,7 @@ TEST_CASE("A running game or Paradox launcher refuses the launch", "[services][l
         CHECK(contains(check.blockers, "1234"));
     }
     SECTION("the Paradox launcher could rewrite the configuration") {
-        w.processes = {{99, kLauncherName, {}}};
+        w.processes.push_back({99, kLauncherName, {}});
         const LaunchCheck check = launcher.check(kGame, id);
         CHECK_FALSE(check.canLaunch);
         CHECK(check.runningInstance);
@@ -406,7 +407,7 @@ TEST_CASE("Read-only checks skip only the write probes", "[services][launch]") {
     CHECK(unprobed.readiness.canLaunch);
 
     // Every other blocker is still reported.
-    w.processes = {{1234, kExeName, w.executable}};
+    w.processes.push_back({1234, kExeName, w.executable});
     const LaunchCheck running = launcher.check(kGame, id, readOnly);
     CHECK_FALSE(running.canLaunch);
     CHECK(running.runningInstance);
@@ -414,7 +415,7 @@ TEST_CASE("Read-only checks skip only the write probes", "[services][launch]") {
     CHECK_FALSE(contains(running.blockers, "mod folder"));
 
     // launch() always probes.
-    w.processes.clear();
+    w.processes = {steamClient()};
     CHECK_FALSE(launcher.launch(kGame, id));
     CHECK(w.started.empty());
 }
@@ -425,20 +426,140 @@ TEST_CASE("Process checks that cannot run only warn", "[services][launch]") {
     w.refresh();
     const std::int64_t id = makePlayset(w, {workshopEntry("2000000001", "UI Overhaul")});
     std::string expected;
+    std::string steam;
     SECTION("the lister fails") {
         w.ctx.listProcesses = []() -> Result<std::vector<platform::RunningProcess>> {
             return makeError(ErrorCode::PermissionDenied, "Process list denied.");
         };
         expected = "Process list denied";
+        steam = "Could not check whether Steam is running: Process list denied.";
     }
     SECTION("no lister is configured") {
         w.ctx.listProcesses = nullptr;
         expected = "could not be checked";
+        steam = "Whether Steam is running could not be checked.";
     }
     LaunchService launcher(w.ctx, nullptr);
-    const LaunchCheck check = launcher.check(kGame, id);
-    CHECK(check.canLaunch);
-    CHECK(contains(check.warnings, expected));
+    for (const std::optional<std::int64_t> playset :
+         {std::optional<std::int64_t>(id), std::optional<std::int64_t>()}) {
+        const LaunchCheck check = launcher.check(kGame, playset);
+        CHECK(check.canLaunch);
+        CHECK(contains(check.warnings, expected));
+        // Neither can Steam be checked: a warning too, not a blocker.
+        CHECK(contains(check.warnings, steam));
+        CHECK_FALSE(check.steamNotRunning);
+    }
+}
+
+TEST_CASE("A Steam installation launches only while the Steam client runs", "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    const std::string previous = installPreviousConfiguration(w);
+    w.refresh();
+    std::optional<std::int64_t> playset;
+    SECTION("with a playset") {
+        playset = makePlayset(w, mixedEntries());
+    }
+    SECTION("without a playset") {}
+    LaunchService launcher(w.ctx, nullptr);
+    w.processes = {{7, "explorer.exe", {}}};
+
+    const LaunchCheck check = launcher.check(kGame, playset);
+    CHECK_FALSE(check.canLaunch);
+    CHECK(check.steamNotRunning);
+    CHECK_FALSE(check.runningInstance);
+    CHECK(check.blockers ==
+          std::vector<std::string>{
+              "Steam is not running. Start Steam and sign in, then launch Stellaris."});
+    CHECK_FALSE(contains(check.warnings, "Steam"));
+
+    // Refused before anything is prepared, written or started.
+    const auto refused = launcher.launch(kGame, playset);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == ErrorCode::ProviderUnavailable);
+    CHECK_THAT(refused.error().message, ContainsSubstring("Steam is not running"));
+    CHECK(w.started.empty());
+    CHECK(w.adapter.launchRequests.empty());
+    CHECK(require(w.transactions.list()).empty());
+    CHECK(readText(configFile(w)) == previous);
+
+    // Once Steam runs, the same launch goes ahead.
+    w.processes.push_back(steamClient());
+    const LaunchCheck running = launcher.check(kGame, playset);
+    CHECK(running.canLaunch);
+    CHECK_FALSE(running.steamNotRunning);
+    CHECK(require(launcher.launch(kGame, playset)).pid == 4242);
+    CHECK(w.started.size() == 1);
+}
+
+TEST_CASE("Steam's registered pid counts only for a process without a readable name",
+          "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    LaunchService launcher(w.ctx, nullptr);
+    w.registeredSteamPid = kSteamPid;
+
+    // A listed process without a name: the registered pid says it is Steam.
+    w.processes = {{kSteamPid, "", {}}};
+    CHECK(launcher.check(kGame, std::nullopt).canLaunch);
+    CHECK_FALSE(launcher.check(kGame, std::nullopt).steamNotRunning);
+
+    // A stale pid that another program has taken, or that nothing has.
+    w.processes = {{kSteamPid, "notepad.exe", {}}};
+    CHECK(launcher.check(kGame, std::nullopt).steamNotRunning);
+    w.processes = {{7, "explorer.exe", {}}};
+    CHECK(launcher.check(kGame, std::nullopt).steamNotRunning);
+
+    // No registered pid: a process without a name is not Steam.
+    w.registeredSteamPid = 0;
+    w.processes = {{kSteamPid, "", {}}};
+    CHECK(launcher.check(kGame, std::nullopt).steamNotRunning);
+}
+
+TEST_CASE("Only Steam installations need the Steam client", "[services][launch]") {
+    World w;
+    w.processes = {{7, "explorer.exe", {}}}; // Steam is closed
+    // The real adapter decides what a folder located by hand is.
+    const games::StellarisAdapter stellaris;
+    w.ctx.adapters = {&stellaris};
+    GameService games(w.ctx);
+    LaunchService launcher(w.ctx, nullptr);
+
+    SECTION("a copy from another store, located by hand") {
+        const fs::path store = w.root / u8("Other Störe") / "Stellaris";
+        writeText(store / "stellaris.exe", "placeholder, never executed");
+        const GameState state = require(games.setManualLocation(kGame, store, w.userData));
+        REQUIRE(state.installation);
+        REQUIRE(state.installation->distribution == DistributionSource::Manual);
+
+        const LaunchCheck check = launcher.check(kGame, std::nullopt);
+        CHECK(check.canLaunch);
+        CHECK_FALSE(check.steamNotRunning);
+        CHECK_FALSE(contains(check.blockers, "Steam"));
+        CHECK_FALSE(contains(check.warnings, "Steam"));
+        require(launcher.launch(kGame, std::nullopt));
+        REQUIRE(w.started.size() == 1);
+        CHECK(w.started[0].executable == store / "stellaris.exe");
+        CHECK(w.started[0].environment.empty()); // not in Steam's app context
+    }
+    SECTION("a folder inside a Steam library, located by hand") {
+        writeText(w.install / "stellaris.exe", "placeholder, never executed");
+        const GameState state = require(games.setManualLocation(kGame, w.install, w.userData));
+        REQUIRE(state.installation);
+        REQUIRE(state.installation->distribution == DistributionSource::Steam);
+
+        const LaunchCheck check = launcher.check(kGame, std::nullopt);
+        CHECK_FALSE(check.canLaunch);
+        CHECK(check.steamNotRunning);
+        CHECK(check.blockers ==
+              std::vector<std::string>{
+                  "Steam is not running. Start Steam and sign in, then launch Stellaris."});
+        const auto refused = launcher.launch(kGame, std::nullopt);
+        REQUIRE_FALSE(refused);
+        CHECK(refused.error().code == ErrorCode::ProviderUnavailable);
+        CHECK(w.started.empty());
+    }
 }
 
 TEST_CASE("A process start failure restores the previous configuration", "[services][launch]") {
