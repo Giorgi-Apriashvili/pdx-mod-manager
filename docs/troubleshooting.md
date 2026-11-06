@@ -43,9 +43,11 @@ within a few seconds, without restarting the manager or clicking anything.
 A copy from another store that you located by hand starts without Steam. The
 manager only sees whether Steam runs (`steam.exe`, or the process Steam
 registered for itself), not whether you are signed in: if Steam runs but
-nobody is signed in, the game itself decides what happens. When the manager
-cannot list running programs, Play is not blocked, and a note says that
-Steam could not be checked.
+nobody is signed in, the game itself decides what happens. With several
+Windows users signed in on the same PC, another user's running Steam counts
+as running too. When the manager cannot list running programs, Play is not
+blocked, and a note next to it says that neither a running game nor Steam
+could be checked.
 
 Workshop acquisition uses your running Steam client (ADR 0003). Jobs then wait
 in *needs user action* with one of these explanations:

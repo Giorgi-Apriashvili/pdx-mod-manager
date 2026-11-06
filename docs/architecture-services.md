@@ -255,8 +255,10 @@ It never unsubscribes or deletes anything.
     with no readable name. The blocker reads `Steam is not running. Start
     Steam and sign in, then launch <game name>.` and sets
     `LaunchCheck::steamNotRunning`; whether Steam is signed in is not
-    checked. When the processes cannot be listed (no lister, or it fails),
-    both process checks become warnings instead;
+    checked, and the list covers every Windows session, so another user's
+    Steam client counts too. When the processes cannot be listed (no lister,
+    or it fails), one warning says that neither a running instance nor Steam
+    could be checked;
   - no interrupted configuration transaction of this game is waiting for
     recovery (one with its launch label or a target in its user-data folder).
     Interrupted transactions of other games are warnings that name their
@@ -264,7 +266,17 @@ It never unsubscribes or deletes anything.
     when the check stops early because the game has no adapter or its
     installation cannot be read), and `interruptedBlocks` says whether one of
     them blocks.
-- `launch()`: see the launch flow below.
+
+  The installation's blockers (executable, folders, a running game or
+  launcher, Steam) come before the playset's, which name every enabled entry
+  that is not ready: the Play section shows only the first four, and a single
+  action such as starting Steam must not hide behind them. The process
+  warning likewise comes before the playset's warnings.
+- `launch()`: see the launch flow below. A refusal carries the code of the
+  weightiest reason among the blockers (`Interrupted`, then
+  `ConflictingProcess`, then `ProviderUnavailable`, otherwise
+  `ValidationFailed`); its message names the first blocker and its detail
+  lists them all.
 - Recovery functions: `interruptedTransactions()`, `recoverInterrupted(txid)`,
   `lastRestorableTransaction(game)` (the newest committed launch of the game,
   with either label form) and `restoreTransaction(txid)` (the user's "restore

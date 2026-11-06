@@ -18,7 +18,7 @@ is one line, and its links are full URLs.
 ### Changed
 
 - **Play without a playset.** When no playset is selected, **Play** now starts the game without mods instead of staying unavailable, and a note next to it says so. The game's mod list is emptied through the same journaled write as any launch, so your DLC choices are kept and **Restore pre-launch configuration** brings the previous mods back.
-- **Play needs Steam for Steam copies.** Until now a Steam copy of the game could be started with Steam closed. **Play** now stays unavailable until the Steam client is running, and the note next to it says "Steam is not running. Start Steam and sign in, then launch …"; once Steam has started, Play becomes available within a few seconds on its own, as it does when the game or the Paradox launcher is closed. A copy from another store that you located by hand starts without Steam, as before. Only whether Steam runs is checked, not whether it is signed in.
+- **Play needs Steam for Steam copies.** Until now a Steam copy of the game could be started with Steam closed. **Play** now stays unavailable until the Steam client is running, and the note next to it says "Steam is not running. Start Steam and sign in, then launch …"; once Steam has started, Play becomes available within a few seconds on its own, and it now does the same after the game or the Paradox launcher closes. A copy from another store that you located by hand starts without Steam, as before. Only whether Steam runs is checked, not whether it is signed in.
 
 ## [0.1.0] - 2026-11-06
 

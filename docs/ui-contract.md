@@ -319,7 +319,9 @@ Properties:
 - `warnings` (string list), for example "No playset is selected, so the game
   starts without mods.";
 - `busy` (bool), `state` ("idle" | "validating" | "applying" | "starting" |
-  "started" | "failed");
+  "started" | "failed"). "started" goes back to "idle" once the game was seen
+  running and has exited, and "failed" once Play, blocked after the failure
+  (Steam not running, for example), is available again;
 - `lastError`, `lastErrorDetail`;
 - `startedWithPlayset` (bool): whether the last started launch used a
   playset, so the "started" text says what is running even when the
@@ -331,7 +333,9 @@ downloads change, after a launch, and when the window is activated. While
 Steam is not running, or the game or the Paradox launcher is, the processes
 are checked again every few seconds, so Play becomes available on its own
 once Steam has started or the game or launcher has closed
-([`app.md`](app.md)); the QML needs nothing for this.
+([`app.md`](app.md)); the QML needs nothing for this. The blockers of the
+installation (folders, a running game or launcher, Steam) come before those
+of the playset's mods, so they stay visible when many mods are not ready.
 
 `play()` closes the game's Steam helper session and parks its Workshop
 downloads before the configuration is written (their `JobsModel` rows say
