@@ -5,12 +5,10 @@ How a version gets from `main` to GitHub Releases. The work is done by the
 procedure for the repository owner. The workflow refuses to run a release for
 anyone else, and it publishes nothing for pull requests.
 
-**A dry run has passed on GitHub (2026-10-30), but the publish step has not run**,
-and no update between two published releases has happened yet. A pre-release is not
-offered by the updater, so the first real test of the update needs two normal
-releases. Treat the first release as the test of this page. The checks added on
-2026-11-06 (the update contract, the repository id, the extended smoke test)
-passed in a dry run on the same day ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)).
+**0.1.0 was published with this procedure on 2026-11-06** ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)), after a
+dry run of the same checks ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). No update between two published releases
+has happened yet. A pre-release is not offered by the updater, so the first real
+test of the update is the next normal release (step 4 below).
 
 Every release must keep the [update contract](#the-update-contract): copies that are
 already installed find and install it only through the values frozen in 0.1.0.
@@ -34,9 +32,7 @@ earlier release. The version comes from `project(VERSION)` in the root
 2. **Update `CHANGELOG.md`**: move the entries under `## [Unreleased]` to a new
    section `## [x.y.z] - YYYY-MM-DD`. That section becomes the release notes:
    [`changelog-section.sh`](../scripts/changelog-section.sh) takes everything below
-   the heading, so the heading's date is not part of the notes. For 0.1.0 the notes
-   are drafted as `## [0.1.0] - unreleased`: fold in anything added under
-   Unreleased since, and replace `unreleased` with the date. Write each paragraph
+   the heading, so the heading's date is not part of the notes. Write each paragraph
    and list item of a section on one line and use full `https://` links: GitHub
    shows a line break inside a paragraph of release notes as a line break, and a
    relative link does not resolve on the release page. A version without a section

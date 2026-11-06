@@ -34,10 +34,10 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
-| Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; compiled without warnings, **not run** (the smoke test runs them on GitHub) | [installer](evidence/installer-2026-10-30.md) |
-| Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: no published release exists. 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
+| Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; wizard not clicked through. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; verified by the extended smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | [installer](evidence/installer-2026-10-30.md) |
+| Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has happened**: 0.1.0 is the first published release. 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
 | Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; passed on GitHub in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | |
-| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | dry run passed on GitHub on 2026-10-30 (validation, full CI, package, installer smoke test); **the publish step has not run**, only locally against a stub `gh`. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
+| `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
 
@@ -95,6 +95,7 @@ has run on GitHub yet.
   (by the review): HTTP 404 without a redirect, as expected while nothing is
   published. A wrong id would also answer 404, so this does not prove the id; the
   Release workflow compares it with `GITHUB_REPOSITORY_ID` before anything is built.
+  After 0.1.0 was published, the same request answers HTTP 200 with `v0.1.0`.
 
 **Verified on GitHub (dry run of 2026-11-06, [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)):** the installer changes
 of 2026-11-06 and the extended smoke test (57 of 57 checks: downgrade guard, update
@@ -102,8 +103,19 @@ run waiting for the mutex and starting `bin\pmm-app.exe`, a non-ASCII folder, on
 Start Menu shortcut and the earlier folder removed, the desktop shortcut rule),
 the repository id in `pmm-app.exe`, and the version check.
 
+**Published:** 0.1.0 on 2026-11-06 ([release](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.0), [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)), checked afterwards
+by the procedure in [`releasing.md`](releasing.md#verifying-a-release) and as an
+installed copy reads it: the request by repository id answers HTTP 200 without a
+redirect, with `v0.1.0` and this repository in `url` and `html_url`, and the real
+update client reads it (one check, no download); both downloads redirect once, from
+`github.com` to `release-assets.githubusercontent.com`, which the client's rule
+accepts; the setup's SHA-256 equals its line in `SHA256SUMS.txt` (LF, no BOM); the
+assets pass `check-update-contract.sh assets`; the tag points at `f13e899`; the
+notes equal the changelog section plus the fixed note, and their links answer
+HTTP 200.
+
 **Not verified:** a real update between two published releases has never run,
-and neither has the update button in a real installed copy or the publish step.
+and neither has the update button in a real installed copy.
 
 ## Test status (2026-11-06, after the launch fixes)
 
@@ -221,11 +233,9 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 Packaging ([`packaging.md`](packaging.md)):
 
-- The `Release` workflow's publish step has not run, and no update between two
-  published releases has happened; the update button in a real
-  installed copy has not been run. The real application's relaunch after an update
-  run, the installer changes of 2026-11-06 and the contract checks of the workflow
-  run for the first time on GitHub with the next dry run. The
+- 0.1.0 is published, but no update between two published releases has happened,
+  and the update button in a real installed copy has not been run. The next
+  release is the first test of both ([`releasing.md`](releasing.md), step 4). The
   installer's wizard has not been clicked through, so its license page and header
   image have only been checked outside it.
 - The package job's check that `pmm-app.exe` contains the repository id needs the
@@ -268,21 +278,13 @@ Packaging ([`packaging.md`](packaging.md)):
 5. With the user's approval, the remaining live pieces (table above). Record
    results in [`validation.md`](validation.md) and
    [`support-matrix.md`](support-matrix.md).
-6. Release 0.1.0. Its notes are drafted in [`../CHANGELOG.md`](../CHANGELOG.md)
-   (`## [0.1.0] - unreleased`; set the date when releasing). The checklist they
-   replace is met: the live validation is recorded, CI passed on `main` at
-   `d427f3c` on 2026-11-06, the 2026-10-30 dry run built and smoke tested both
-   packages (before the launch fixes, so the procedure in
-   [`releasing.md`](releasing.md) runs a new one), and the launch items are done or
-   deferred. The updater is locked down for 0.1.0 (owner's decision, 2026-11-06:
-   unsigned, a daily check that is on by default, no rehearsal of an update between
-   two releases): the values every copy relies on are frozen in
-   [`../packaging/update-contract.txt`](../packaging/update-contract.txt) and checked in
-   CI and in the workflow; the three updater branches land together through
-   `agent/updater-lockdown`, never one by one. The next dry run is the first run of
-   the extended smoke test and of the contract checks on GitHub. Click through the
-   installer wizard once, then the first release, and a second release to try the
-   update for real.
+6. Done 2026-11-06: [0.1.0](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.0) released from `f13e899` ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)), with
+   the notes of [`../CHANGELOG.md`](../CHANGELOG.md). The updater is locked down for
+   it (owner's decision, 2026-11-06: unsigned, a daily check that is on by default,
+   no rehearsal of an update between two releases): the values every copy relies on
+   are frozen in [`../packaging/update-contract.txt`](../packaging/update-contract.txt)
+   and checked in CI and in the workflow. Next: the second release, which is the
+   first real update ([`releasing.md`](releasing.md), step 4).
 
 ## Working rules
 

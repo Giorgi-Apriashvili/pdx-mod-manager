@@ -344,8 +344,8 @@ and exercised with real installs in a scratch folder, including the update run,
 the wait for a held mutex (also the real `pmm-app`'s), the timeout, failed upgrades
 and uninstall, with a stand-in program for every relaunch:
 [evidence/installer-2026-10-30.md](evidence/installer-2026-10-30.md). The `Release`
-workflow's dry run has passed on GitHub, including the smoke test on a runner; its
-publish step has not run, and no update between two published releases has happened.
+workflow's dry run has passed on GitHub, including the smoke test on a runner, and it
+published 0.1.0 on 2026-11-06; no update between two published releases has happened.
 
 **Icon and license page, 2026-10-30** (same tools): the ZIP still holds the same 80
 file names, at 22.1 MB, with the setup at 16.6 MB. The icon resources of `pmm-app.exe`
