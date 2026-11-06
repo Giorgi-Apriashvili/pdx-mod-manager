@@ -62,6 +62,7 @@ Backend::Backend(ServiceRunner& runner, BackendOptions options, QObject* parent)
     m_acquisition = new AcquisitionController(this, this);
     m_launcher = new LaunchController(this, this);
     m_updates = new UpdateController(updateOptions(m_options), this);
+    m_updates->setSettings(m_settings);
     if (!m_options.updates.installBlocker) {
         m_updates->setInstallBlocker(
             [this](std::function<void(const QString&)> answer) { askUpdateBlocker(answer); });
@@ -237,6 +238,7 @@ void Backend::finishInitialRefresh() {
     if (m_initialDone)
         return;
     m_initialDone = true;
+    m_updates->scheduleDailyCheck();
     emit initialRefreshFinished();
 }
 

@@ -251,6 +251,10 @@ int main(int argc, char* argv[]) {
     if (line.verification.active())
         backendOptions.updates.disabledReason =
             QStringLiteral("Updates are off during verification runs.");
+    // The installer starts the new version without arguments.
+    backendOptions.updates.installUnavailableReason =
+        UpdateController::sessionInstallBlocker(line.profile.has_value(), line.noSteam);
+    backendOptions.updates.dailyCheck = true;
     backend = std::make_unique<Backend>(runner, backendOptions);
     backend->initialize(start);
     qmlRegisterSingletonInstance("Pmm.Backend", 1, 0, "Backend", backend.get());

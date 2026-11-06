@@ -15,6 +15,7 @@ add_executable(pmm_app_tests
   runtime_tests.cpp
   session_host_tests.cpp
   ui_text_tests.cpp
+  update_auto_tests.cpp
   update_stub.hpp
   update_tests.cpp)
 target_link_libraries(pmm_app_tests PRIVATE

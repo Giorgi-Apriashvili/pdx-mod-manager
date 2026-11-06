@@ -16,6 +16,12 @@ namespace {
 constexpr const char* kComponent = "app.update";
 constexpr qreal kProgressStep = 0.005; // no property update per network chunk
 
+// No HTTP answer at all (offline, name resolution, TLS, no reply in time): the
+// daily check records nothing, so the next start that day tries again.
+bool isNetworkFailure(const Error& error) {
+    return error.code == ErrorCode::Offline || error.code == ErrorCode::Timeout;
+}
+
 UpdateControllerOptions withDefaults(UpdateControllerOptions options) {
     if (options.currentVersion.isEmpty())
         options.currentVersion = QStringLiteral(PMM_APP_VERSION);
@@ -44,11 +50,16 @@ UpdateController::UpdateController(UpdateControllerOptions options, QObject* par
       m_current(services::parseAppVersion(utf8(m_currentVersion))), m_client(m_options.client) {
     m_installed = m_options.installed ? *m_options.installed : detectInstalled(m_options.appDir);
     // Which update path this copy has, for a report about an update that did not arrive.
-    logInfo(kComponent, "update mode", {{"mode", utf8(mode())}});
+    logInfo(kComponent, "update mode",
+            {{"mode", utf8(mode())},
+             {"installed", m_installed ? "true" : "false"},
+             {"dailyCheck", m_options.dailyCheck ? "true" : "false"}});
     if (enabled() && !m_current) {
         // Development builds with an unusual version number have nothing to compare.
         m_options.disabledReason = tr("This build has no release version to compare.");
     }
+    m_dailyTimer.setSingleShot(true);
+    connect(&m_dailyTimer, &QTimer::timeout, this, &UpdateController::runDailyCheck);
     connect(&m_client, &UpdateClient::checkFinished, this, &UpdateController::onCheckFinished);
     connect(&m_client, &UpdateClient::downloadFinished, this,
             &UpdateController::onDownloadFinished);
@@ -98,7 +109,20 @@ QString UpdateController::mode() const {
 
 // A release without the installer or its checksums has only the release page.
 bool UpdateController::canInstall() const {
-    return m_installed && (!m_release || (m_release->installer && m_release->checksums));
+    return m_installed && m_options.installUnavailableReason.isEmpty() &&
+           (!m_release || (m_release->installer && m_release->checksums));
+}
+
+QString UpdateController::installUnavailableReason() const {
+    if (!m_installed || (m_release && (!m_release->installer || !m_release->checksums)))
+        return {};
+    return m_options.installUnavailableReason;
+}
+
+QString UpdateController::sessionInstallBlocker(bool customProfile, bool noSteam) {
+    if (!customProfile && !noSteam)
+        return {};
+    return tr("Restart Paradox Mod Manager without --profile or --no-steam to update.");
 }
 
 bool UpdateController::canCheck() const {
@@ -130,8 +154,14 @@ void UpdateController::setUpdatesDir(const QString& dir) {
 }
 
 void UpdateController::check() {
+    startCheck(false);
+}
+
+void UpdateController::startCheck(bool automatic) {
     if (!canCheck())
         return;
+    m_dailyTimer.stop(); // one check per start is enough
+    m_automatic = automatic;
     m_latest.reset();
     m_release.reset();
     m_installer.reset();
@@ -139,7 +169,44 @@ void UpdateController::check() {
     m_client.check();
 }
 
+QDate UpdateController::today() const {
+    return m_options.today ? m_options.today() : QDate::currentDate();
+}
+
+void UpdateController::scheduleDailyCheck() {
+    if (m_options.dailyCheck && enabled())
+        m_dailyTimer.start(m_options.dailyCheckDelay);
+}
+
+void UpdateController::runDailyCheck() {
+    if (!enabled() || !m_settings || !m_settings->checkUpdatesAutomatically()) {
+        logDebug(kComponent, "the daily update check is off");
+        return;
+    }
+    if (m_settings->lastUpdateCheck() == today()) {
+        logDebug(kComponent, "the daily update check already ran today");
+        return;
+    }
+    if (m_state != State::Idle) // the user checked already
+        return;
+    logInfo(kComponent, "daily update check");
+    startCheck(true);
+}
+
 void UpdateController::onCheckFinished(const UpdateCheckResult& result) {
+    if (m_automatic) {
+        // Any answer from GitHub counts for the day, an error status included.
+        if (result || !isNetworkFailure(result.error())) {
+            if (m_settings)
+                m_settings->recordUpdateCheck(today());
+        } else {
+            logInfo(kComponent, "the daily update check got no answer; the next start tries again");
+        }
+        if (!result) { // logged by the client; nothing is shown
+            setState(State::Idle);
+            return;
+        }
+    }
     if (!result) {
         setState(State::Failed, qs(result.error().message));
         return;
