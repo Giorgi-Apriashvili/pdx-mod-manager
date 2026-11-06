@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -80,15 +81,45 @@ std::vector<std::int64_t> createPlaysets(ServiceRunner& runner,
 }
 
 // A process list the test changes while the Backend runs; counts the listings.
+// While it is held, a listing (and the worker with it) waits for release().
 struct FakeProcesses {
     std::mutex mutex;
+    std::condition_variable released;
     std::vector<platform::RunningProcess> list;
+    bool held = false;
     std::atomic<int> listed{0};
+    std::atomic<bool> waiting{false};
 
     void set(std::vector<platform::RunningProcess> processes) {
         const std::lock_guard lock(mutex);
         list = std::move(processes);
     }
+    void hold() {
+        const std::lock_guard lock(mutex);
+        held = true;
+    }
+    void release() {
+        {
+            const std::lock_guard lock(mutex);
+            held = false;
+        }
+        released.notify_all();
+    }
+    Result<std::vector<platform::RunningProcess>> read() {
+        ++listed;
+        std::unique_lock lock(mutex);
+        waiting = held;
+        released.wait(lock, [this] { return !held; });
+        waiting = false;
+        return list;
+    }
+};
+
+// Releases held listings when a test leaves its scope, so that a failed
+// check does not leave the worker waiting at shutdown.
+struct ReleaseOnExit {
+    std::shared_ptr<FakeProcesses> processes;
+    ~ReleaseOnExit() { processes->release(); }
 };
 
 RunnerOptions runnerOptions(const fs::path& profile, const FakeAdapter& adapter,
@@ -97,11 +128,7 @@ RunnerOptions runnerOptions(const fs::path& profile, const FakeAdapter& adapter,
     options.runtime.configureContext = [hermetic = options.runtime.configureContext,
                                         processes](services::ServiceContext& context) {
         hermetic(context);
-        context.listProcesses = [processes] {
-            ++processes->listed;
-            const std::lock_guard lock(processes->mutex);
-            return Result<std::vector<platform::RunningProcess>>(processes->list);
-        };
+        context.listProcesses = [processes] { return processes->read(); };
     };
     return options;
 }
@@ -427,6 +454,137 @@ TEST_CASE("Play follows Steam, the game and the Paradox launcher without a click
     const int settled = processes->listed;
     CHECK_FALSE(
         waitUntil([&] { return processes->listed != settled; }, std::chrono::milliseconds(600)));
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Re-checks follow a playset chosen while one is under way", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("3001", "Only");
+    FakeAdapter adapter(world);
+    auto processes = std::make_shared<FakeProcesses>();
+    processes->set({{7, "explorer.exe", {}}}); // Steam is closed
+    bool steamStarts = false;
+    SECTION("Steam stays closed") {}
+    SECTION("Steam starts meanwhile") {
+        steamStarts = true;
+    }
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter, processes));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    const std::vector<std::int64_t> playsets = createPlaysets(runner, {"First", "Second"});
+    REQUIRE(playsets.size() == 2);
+    BackendOptions options;
+    options.launchRecheckMs = 50;
+    Backend backend(runner, options);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    REQUIRE(backend.activePlaysetId() == playsets[1]);
+    REQUIRE(backend.launcher()->data().steamNotRunning);
+
+    // A re-check waits on the worker while the other playset is chosen, so
+    // its result is for the playset before.
+    processes->hold();
+    const ReleaseOnExit releaseOnExit{processes};
+    REQUIRE(waitUntil([&] { return processes->waiting.load(); }));
+    backend.activatePlayset(playsets[0]);
+    if (steamStarts)
+        processes->set({{7, "explorer.exe", {}}, steamClient()});
+    processes->release();
+    REQUIRE(waitUntil([&] { return backend.mods()->playsetId() == playsets[0]; }));
+
+    if (!steamStarts) {
+        // Still blocked for the playset now chosen, and checked further.
+        CHECK(backend.launcher()->data().steamNotRunning);
+        const int listed = processes->listed;
+        REQUIRE(waitUntil([&] { return processes->listed >= listed + 3; }));
+        CHECK_FALSE(backend.launcher()->canPlay());
+        processes->set({steamClient()});
+    }
+    REQUIRE(waitUntil([&] { return backend.launcher()->canPlay(); }));
+    CHECK(backend.activePlaysetId() == playsets[0]);
+    // Nothing is checked any more.
+    const int settled = processes->listed;
+    CHECK_FALSE(
+        waitUntil([&] { return processes->listed != settled; }, std::chrono::milliseconds(600)));
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("The last launch outcome clears once its cause has gone", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    auto processes = std::make_shared<FakeProcesses>();
+    processes->set({steamClient()});
+    const platform::RunningProcess game{4242, kExeName, {}};
+    auto failStart = std::make_shared<std::atomic<bool>>(false);
+    RunnerOptions runnerOpts = runnerOptions(temp.path() / "profile", adapter, processes);
+    runnerOpts.runtime.configureContext = [base = runnerOpts.runtime.configureContext, processes,
+                                           game, failStart](services::ServiceContext& context) {
+        base(context);
+        // Nothing is executed; a started game shows up in the process list.
+        context.startProcess =
+            [processes, game,
+             failStart](const platform::ProcessSpec&) -> Result<platform::StartedProcess> {
+            if (*failStart)
+                return makeError(ErrorCode::ProcessStartFailed, "The fake start failed.");
+            processes->set({steamClient(), game});
+            return platform::StartedProcess{game.pid};
+        };
+    };
+    ServiceRunner runner(runnerOpts);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    BackendOptions options;
+    options.launchRecheckMs = 50;
+    Backend backend(runner, options);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    REQUIRE(backend.launcher()->canPlay());
+    LaunchController& launcher = *backend.launcher();
+    const auto rechecked = [&] {
+        const int listed = processes->listed;
+        return waitUntil([&] { return processes->listed >= listed + 3; });
+    };
+
+    SECTION("the started game exits") {
+        launcher.play();
+        REQUIRE(waitUntil([&] { return launcher.state() == QLatin1String("started"); }));
+        // While the game runs, the state line says so.
+        REQUIRE(waitUntil([&] { return launcher.data().runningInstance; }));
+        REQUIRE(rechecked());
+        CHECK(launcher.state() == QLatin1String("started"));
+        processes->set({steamClient()});
+        REQUIRE(waitUntil([&] { return launcher.canPlay(); }));
+        CHECK(launcher.state() == QLatin1String("idle"));
+    }
+    SECTION("the refusal is resolved") {
+        // Steam closes, and nothing has noticed yet: Play is refused when
+        // pressed.
+        processes->set({{7, "explorer.exe", {}}});
+        launcher.play();
+        REQUIRE(waitUntil([&] { return launcher.state() == QLatin1String("failed"); }));
+        CHECK(launcher.lastError().contains("Steam is not running"));
+        CHECK_FALSE(launcher.canPlay());
+        REQUIRE(rechecked());
+        CHECK(launcher.state() == QLatin1String("failed"));
+        processes->set({steamClient()});
+        REQUIRE(waitUntil([&] { return launcher.canPlay(); }));
+        CHECK(launcher.state() == QLatin1String("idle"));
+    }
+    SECTION("a failure that leaves Play available stays") {
+        *failStart = true;
+        launcher.play();
+        REQUIRE(waitUntil([&] { return launcher.state() == QLatin1String("failed"); }));
+        CHECK(launcher.canPlay());
+        QSignalSpy refreshed(&launcher, &LaunchController::changed);
+        backend.refreshLaunch();
+        REQUIRE(waitUntil([&] { return refreshed.count() >= 1; }));
+        CHECK(launcher.state() == QLatin1String("failed"));
+        CHECK(launcher.lastError().contains("fake start failed"));
+    }
     backend.shutdown();
     runner.shutdown();
 }

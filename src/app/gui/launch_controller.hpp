@@ -14,11 +14,13 @@
 //
 // play() moves through validating -> applying -> starting -> started (or
 // failed); the configuration is written by LaunchService as one file
-// transaction and the game executable is started directly. startedWithPlayset
-// says whether the last started launch used a playset (the selection may
-// change while the game runs). A launch parks the game's Workshop downloads
-// (and resumes them if it fails), so the downloads view is refreshed after
-// every outcome.
+// transaction and the game executable is started directly. The state goes
+// back to idle from started once the game was seen running and has exited,
+// and from failed once Play, blocked after the failure, is available again.
+// startedWithPlayset says whether the last started launch used a playset (the
+// selection may change while the game runs). A launch parks the game's
+// Workshop downloads (and resumes them if it fails), so the downloads view is
+// refreshed after every outcome.
 
 #include "app/core/view_data.hpp"
 
