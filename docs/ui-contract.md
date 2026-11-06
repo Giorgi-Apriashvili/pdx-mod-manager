@@ -49,8 +49,8 @@ accepted.
 | `sharing` | `ShareController` | export/import share codes |
 | `acquisition` | `AcquisitionController` | Workshop downloads |
 | `launcher` | `LaunchController` | Play |
-| `updates` | `UpdateController` | "Check for updates" in Settings ([`updates.md`](updates.md)) |
-| `settings` | `AppSettings` | theme, geometry, column widths |
+| `updates` | `UpdateController` | "Check for updates" in Settings, the daily check and its banner ([`updates.md`](updates.md)) |
+| `settings` | `AppSettings` | theme, geometry, column widths, the daily update check's switch |
 | `notifications` | `NotificationCenter` | transient messages |
 | `appVersion` | `string` | semantic version |
 | `protocolVersion` | `int` | share-code protocol version (1) |
@@ -336,8 +336,19 @@ Signals: `launched(pid)`, `launchFailed(message)`, `diagnosticsReady(text)`.
 
 ## `UpdateController` (QObject)
 
-Nothing touches the network until `check()` or `startUpdate()` is called
-([`updates.md`](updates.md)).
+The network is used by `check()`, by `startUpdate()`, and by the daily check
+([`updates.md`](updates.md)). Nothing is downloaded before `startUpdate()`.
+
+The daily check: about 10 s after `Backend.initialRefreshFinished`, the
+controller runs the same single request as `check()` if
+`Backend.settings.checkUpdatesAutomatically` is on, `disabledReason` is empty
+(not read-only, not a verification run, a plain `x.y.z` build), the state is
+still "idle", and no daily check got an answer on the current local date. Any
+HTTP answer (newer, up to date, no release, an HTTP error) records the date; a
+network failure (offline, TLS, no answer in time) records nothing, so the next
+start that day tries again. Its failures go back to "idle" and are only logged.
+Only `main()` turns the daily check on (`UpdateControllerOptions::dailyCheck`);
+the date comes from an injectable clock.
 
 Properties:
 
@@ -348,11 +359,20 @@ Properties:
 - `errorMessage`: why the last step failed ("failed"), or why it is held back
   (a launch or Workshop downloads are busy; the state stays "available" or
   "ready"). Empty otherwise;
-- `mode`: "installer" (an installed copy, with a release that has
-  the installer and its checksum file) or "releasePage" (everything else);
+- `mode`: "installer" (an installed copy, in a session started without
+  `--profile` and `--no-steam`, with a release that has the installer and its
+  checksum file) or "releasePage" (everything else);
 - `canCheck` (bool);
 - `disabledReason` (string): set in read-only and verification sessions, where
-  the whole feature is off and every invokable does nothing. Shown in its place.
+  the whole feature is off and every invokable does nothing. Shown in its place;
+- `installUnavailableReason` (string): "Restart Paradox Mod Manager without
+  --profile or --no-steam to update." in an installed copy started with one of
+  them, because the installer restarts the application without arguments. The
+  check and the release page stay available. Empty for copies that never
+  install (ZIP, development build) and for a release without the installer;
+- `checkedAutomatically` (bool): the last check was the daily one. The main
+  window's banner shows while it is true and the state is "available",
+  "downloading", "ready", "installing" or "failed".
 
 Invokables:
 
@@ -379,7 +399,11 @@ Properties, persisted in the application database's settings table under
 - `windowX`, `windowY`, `windowWidth`, `windowHeight`, `windowMaximized`;
 - `leftPaneWidth`, `rightPaneWidth`;
 - `columnWidths` (list of int);
-- `lastGameKey` (read-only, set by selecting a game).
+- `lastGameKey` (read-only, set by selecting a game);
+- `checkUpdatesAutomatically` (bool, on by default): Settings → "Check for
+  updates automatically". Stored under `app.updates.checkAutomatically` as soon
+  as it changes. The date of the daily check's last answer is C++ only
+  (`lastUpdateCheck()`, `app.updates.lastAutomaticCheck`, also written at once).
 
 They are restored before the window is created. Invokable: `save()` (also
 called when the application quits).

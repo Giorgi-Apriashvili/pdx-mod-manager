@@ -116,10 +116,18 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
 ### Updates
 
 `UpdateClient` and `UpdateController` run on the GUI thread, with their own
-`QNetworkAccessManager`: nothing in them blocks. They only touch the network
-after a click in Settings. `main()` holds the named mutex
-`Local\ParadoxModManagerRunning` for the whole process
-(`RunningInstanceSignal`), which is what an update run's installer waits for.
+`QNetworkAccessManager`: nothing in them blocks. They touch the network after a
+click in Settings, and for the daily check: `Backend` schedules it when the
+start-up refresh has finished, and about 10 s later the same single request as
+the button runs, if "Check for updates automatically" is on and no daily check
+got an answer on the current local date. Read-only and verification sessions
+never run it. A newer version is offered in a banner above the columns; nothing
+is downloaded until "Update and restart" is pressed. Sessions started with
+`--profile` or `--no-steam` offer the release page instead of installing,
+because the installer restarts the application without arguments.
+
+`main()` holds the named mutex `Local\ParadoxModManagerRunning` for the whole
+process (`RunningInstanceSignal`), which is what an update run's installer waits for.
 The log records at start-up whether this copy updates through the installer or the
 release page. What is contacted, verified and protected against is in
 [`updates.md`](updates.md).
@@ -177,6 +185,8 @@ release page. What is contacted, verified and protected against is in
    unfinished jobs of every supported game (restart reconciliation; a helper
    is only started when there is such a job). The context is reloaded and
    `Backend::initialRefreshFinished()` is emitted.
+6. About 10 s later, the daily update check runs if it is due (see
+   [Updates](#updates)).
 
 On quit, the settings are saved. `ServiceRunner::shutdown()` then stops the
 tick, persists acquisition progress, closes every helper session
@@ -187,11 +197,11 @@ and joins the thread.
 
 | Option | Effect |
 | --- | --- |
-| `--profile <dir>` | Keep every application file (database, journal, logs, cache) in `<dir>` instead of the standard per-user locations. Use it for a clean, isolated profile, for example for the "import into a clean profile" acceptance step. |
+| `--profile <dir>` | Keep every application file (database, journal, logs, cache) in `<dir>` instead of the standard per-user locations. Use it for a clean, isolated profile, for example for the "import into a clean profile" acceptance step. An installed copy does not install updates in such a session: it offers the release page and says to restart without `--profile`. |
 | `--verbose` | Write debug-level log records (including redacted helper stderr). |
 | `--game <key>` | Select this game at start-up (`stellaris`, `eu4`). |
-| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing, so a later session with Steam downloads them only after **Download missing**. |
-| `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. "Check for updates" is off too, and says so. |
+| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing, so a later session with Steam downloads them only after **Download missing**. Updates offer the release page instead of installing, as with `--profile`. |
+| `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. "Check for updates" and the daily check are off too, and Settings says so. |
 
 ### Hidden verification switches
 
@@ -287,7 +297,10 @@ cache folder (`ParadoxModManager/Paradox Mod Manager/cache`), even with
 UI settings (theme, window geometry, pane and column widths) are stored in
 the database's settings table under `ui.*`, next to the services' keys
 (`app.lastGameKey`, `game.<key>.activePlaysetId`). The window geometry is
-saved when the window closes and when the application quits.
+saved when the window closes and when the application quits. The daily update
+check keeps its switch and the local date of its last answer under
+`app.updates.checkAutomatically` and `app.updates.lastAutomaticCheck`, written
+as soon as they change.
 
 ## Running from the build tree
 
@@ -340,7 +353,12 @@ platform:
   coordinator event;
 - `QtWorkshopMetadataHost` against a local HTTP stub;
 - `UpdateClient` and `UpdateController` against a local stub, and the Settings
-  section with the keyboard ([`updates.md`](updates.md));
+  section with the keyboard ([`updates.md`](updates.md)); the daily check on an
+  injected calendar (`update_auto_tests.cpp`): once per day, retried after a
+  network failure, recorded after any HTTP answer, never with the setting off
+  or in read-only and verification sessions, stored at once across starts of
+  the real Backend; the banner, "Not now" and the setting with the keyboard; the
+  release page with its reason in `--profile` and `--no-steam` sessions;
 - `AppRuntime` start-up failures, retention and interrupted transactions;
   the profile lock.
 
