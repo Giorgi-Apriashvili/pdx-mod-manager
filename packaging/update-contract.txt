@@ -1,0 +1,55 @@
+# The update contract of Paradox Mod Manager, frozen since 0.1.0.
+#
+# Every released copy has its side of these values compiled in, and its updater
+# is the only way most users get the next version. A later release must keep
+# every value below, or copies that are already out there stop updating, and
+# they cannot be fixed from here. Why each value is what it is:
+# docs/updates.md, "Compatibility contract (frozen since 0.1.0)".
+#
+# Never change a value. scripts/check-update-contract.sh checks the sources
+# against this file (CI, "Format check"), and the Release workflow checks the
+# version and the assets of a release against it before the release exists.
+#
+# Format: "<key> = <value>", one per line; "#" starts a comment line.
+
+# Where every copy asks for the latest release: GitHub's numeric repository id,
+# which survives renames and transfers. Unauthenticated (no token).
+api_url = https://api.github.com/repositories/1439071956/releases/latest
+repository_id = 1439071956
+authentication = none
+# Only what /releases/latest returns is offered: never a draft or a pre-release.
+release_channel = releases/latest
+
+# The release tag and version: v<major>.<minor>.<patch>, decimal, no leading
+# zeros, each part at most 65535 (Windows version resources), strictly higher
+# than every earlier release.
+tag = v<version>
+version_regex = ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$
+version_part_max = 65535
+
+# The two assets the updater uses, found by these exact names.
+installer_asset = ParadoxModManager-<version>-windows-x86_64-setup.exe
+checksum_asset = SHA256SUMS.txt
+# Every asset name, and every name in SHA256SUMS.txt; ".." is never part of one.
+asset_name_regex = ^[A-Za-z0-9._+-]+$
+# Every line of SHA256SUMS.txt: LF line ends, no BOM, no blank or comment lines,
+# each name once.
+checksum_line_regex = ^[0-9a-f]{64}  [A-Za-z0-9._+-]+$
+# The largest files a 0.1.0 copy accepts.
+max_installer_bytes = 536870912
+max_checksum_bytes = 65536
+
+# How the updater starts the verified setup, and what the setup relies on.
+installer_arguments = /SILENT /SP- /NORESTART /PMMUPDATE=1
+running_mutex = Local\ParadoxModManagerRunning
+app_id = {25EA6705-9979-4D3F-AF89-BE3398B30CA0}
+install_scope = per-user
+app_executable = bin\pmm-app.exe
+installed_marker = ..\unins000.exe
+
+# Without Qt's Schannel TLS backend no HTTPS request works, so no update either.
+tls_plugin = plugins\tls\qschannelbackend.dll
+
+# Not frozen: the repository's current name, for documentation and links. A
+# rename changes it here and in HOMEPAGE_URL (root CMakeLists.txt) together.
+repository = Giorgi-Apriashvili/pdx-mod-manager

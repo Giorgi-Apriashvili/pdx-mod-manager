@@ -55,8 +55,9 @@ tested. Results:
   download through the application, restart persistence of a pending job, and
   the failure cases ([evidence](evidence/live-validation-2026-10-30.md)).
 
-Not observed yet: other stores, Steam's own offline mode, the `Release` workflow
-on GitHub, and an update from one published release to the next.
+Not observed yet: other stores, Steam's own offline mode, the `Release` workflow's
+publish step, the installer changes and contract checks of 2026-11-06 on GitHub,
+and an update from one published release to the next.
 
 ## Application build
 
@@ -71,9 +72,11 @@ on GitHub, and an update from one published release to the next.
 | Capability | Windows 11 |
 | --- | --- |
 | Per-user installer: install, upgrade, failed upgrade, uninstall | **Verified** 2026-10-30, silent runs in a scratch folder ([evidence](evidence/installer-2026-10-30.md)); wizard not clicked through |
-| "Check for updates" | Implemented, unverified against a published release (none exists yet); tested against a local stub |
-| "Update and restart" (download, verify, installer, relaunch) | Implemented, unverified end to end. Parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch |
-| `Release` workflow | Dry run **verified** 2026-10-30 (full CI, package, installer smoke test); publish step not run |
+| Installer: no downgrade over a newer version, one Start Menu shortcut, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, a folder with a non-ASCII name | Implemented 2026-11-06, unverified: compiled without warnings; the extended smoke test runs these on the GitHub runner and has not run yet |
+| "Check for updates" and the daily check (on by default, once a day, a banner for a new version) | Implemented, unverified against a published release (none exists yet); tested against a local stub. One real request by repository id, 2026-11-06: HTTP 404 without a redirect, as expected with nothing published |
+| "Update and restart" (download, verify, installer, relaunch) | Implemented, unverified end to end. Parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch. The relaunch of the real `pmm-app.exe` is in the smoke test from 2026-11-06, not run yet. Not available in `--profile` and `--no-steam` sessions |
+| Update contract (the values every released copy relies on) | Checked from 2026-11-06 by `scripts/check-update-contract.sh` in CI and by the `Release` workflow ([contract](updates.md#compatibility-contract-frozen-since-010)); passes locally, not run on GitHub yet |
+| `Release` workflow | Dry run **verified** 2026-10-30 (full CI, package, installer smoke test); publish step not run. The contract checks added 2026-11-06 have not run |
 
 ## Stellaris (Steam app 281990)
 

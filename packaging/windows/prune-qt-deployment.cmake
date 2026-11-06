@@ -11,6 +11,8 @@
 #   They are deployed only because a Qt Quick Dialogs module imports
 #   QtQuick.Controls, whose qmldir lists every style as an optional import.
 #
+# It also fails the installation when something the package must have is missing.
+#
 # Uses the folders of the Qt deployment that ran before it, with Qt's defaults.
 if(NOT QT_DEPLOY_PREFIX)
   set(QT_DEPLOY_PREFIX "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}")
@@ -20,6 +22,9 @@ if(NOT QT_DEPLOY_BIN_DIR)
 endif()
 if(NOT QT_DEPLOY_QML_DIR)
   set(QT_DEPLOY_QML_DIR "qml")
+endif()
+if(NOT QT_DEPLOY_PLUGINS_DIR)
+  set(QT_DEPLOY_PLUGINS_DIR "plugins")
 endif()
 
 set(_pmm_bin "${QT_DEPLOY_PREFIX}/${QT_DEPLOY_BIN_DIR}")
@@ -47,4 +52,10 @@ endforeach()
 
 if(NOT EXISTS "${_pmm_qml}/QtQuick/Controls/Basic/qmldir")
   message(FATAL_ERROR "pmm: the Basic Qt Quick Controls style is missing from ${_pmm_qml}")
+endif()
+# Every HTTPS request goes through Qt's Schannel backend, the update check too
+# (packaging/update-contract.txt): a package without it could never update.
+set(_pmm_tls "${QT_DEPLOY_PREFIX}/${QT_DEPLOY_PLUGINS_DIR}/tls/qschannelbackend.dll")
+if(NOT EXISTS "${_pmm_tls}")
+  message(FATAL_ERROR "pmm: the Schannel TLS plugin is missing: ${_pmm_tls}")
 endif()

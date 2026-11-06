@@ -6,9 +6,14 @@ procedure for the repository owner. The workflow refuses to run a release for
 anyone else, and it publishes nothing for pull requests.
 
 **A dry run has passed on GitHub (2026-10-30), but the publish step has not run**,
-and no update between two published releases has happened yet. A pre-release is not offered by the update button, so
-the first real test of the button needs two normal releases. Treat the first
-release as the test of this page.
+and no update between two published releases has happened yet. A pre-release is not
+offered by the updater, so the first real test of the update needs two normal
+releases. Treat the first release as the test of this page. The checks added on
+2026-11-06 (the update contract, the repository id, the extended smoke test) have
+not run on GitHub yet either.
+
+Every release must keep the [update contract](#the-update-contract): copies that are
+already installed find and install it only through the values frozen in 0.1.0.
 
 What a release contains:
 
@@ -18,9 +23,9 @@ What a release contains:
 | `ParadoxModManager-<version>-windows-x86_64.zip` | Portable package |
 | `SHA256SUMS.txt` | `<lowercase hex>  <file name>` per line, one for every other asset; the application verifies the installer against it |
 
-The tag is `v<major>.<minor>.<patch>`. The version comes from
-`project(VERSION)` in the root `CMakeLists.txt`, and the workflow fails if the
-two differ.
+The tag is `v<major>.<minor>.<patch>`, without leading zeros, and higher than every
+earlier release. The version comes from `project(VERSION)` in the root
+`CMakeLists.txt`, and the workflow fails if the two differ.
 
 ## Procedure
 
@@ -36,13 +41,29 @@ two differ.
    shows a line break inside a paragraph of release notes as a line break, and a
    relative link does not resolve on the release page. A version without a section
    still releases, with GitHub's generated notes and a workflow warning.
-3. **Commit to `main`** and wait for CI to pass.
-4. **Dry run**: GitHub > Actions > Release > Run workflow, branch `main`, the
+3. **Check the update contract**: `bash scripts/check-update-contract.sh` must
+   pass (CI runs it in "Format check" as well). If it fails, the release would not
+   reach installed copies: put the value back, never the contract file
+   ([the update contract](#the-update-contract)).
+4. **Re-test the update path when the release touches the updater, the installer,
+   the packaging or the Qt version** (`src/services/app_update*`,
+   `src/app/core/update_client*`, `src/app/gui/update_controller*`,
+   `src/app/core/running_instance*`, `packaging/**`, `cmake/Packaging.cmake`, the
+   Qt version in the workflows). Before publishing, install the previous release
+   in a disposable Windows user or virtual machine, and run the dry run's setup over
+   it with exactly `/SILENT /SP- /NORESTART /PMMUPDATE=1` while the previous version
+   is running: it must wait for it, install and start the new version. Right after
+   publishing, use "Check for updates" and "Update and restart" in that copy; if
+   that fails, [withdraw the release](#withdrawing-a-bad-release). The smoke test
+   covers the installer's side on every run, but not a released copy finding,
+   verifying and starting the new release, which only a published release can show.
+5. **Commit to `main`** and wait for CI to pass.
+6. **Dry run**: GitHub > Actions > Release > Run workflow, branch `main`, the
    version, *dry run* ticked. See below for what it does.
-5. **Release**: the same with *dry run* off. Tick *prerelease* for a test
-   release; it does not become the "latest" release, so the update button does
+7. **Release**: the same with *dry run* off. Tick *prerelease* for a test
+   release; it does not become the "latest" release, so the updater does
    not offer it.
-6. **Verify** the result (see below).
+8. **Verify** the result (see below).
 
 Pushing a tag `vx.y.z` that points at a commit on `main` does the same as step 5
 without the dialog. Prefer the dialog: it also creates the tag.
@@ -51,17 +72,22 @@ without the dialog. Prefer the dialog: it also creates the tag.
 
 | Job | What it does |
 | --- | --- |
-| Validate release request | The version is `x.y.z` and equals `project(VERSION)`; the run was started by the owner; the commit is on `main`; no release with that tag exists; for a dispatched run, the tag does not exist yet. Warns if `CHANGELOG.md` has no section. |
-| CI | The whole of [`ci.yml`](../.github/workflows/ci.yml): build and test with MSVC, ASan, and clang-cl warnings and UBSan on the Qt-free libraries, format. |
-| Package (Windows) | `release` preset without tests, `cpack`, the installer, followed by [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) (silent installs to a temp folder: expected files, uninstall entry and version, another program's folders left alone, failed upgrades that leave the previous version working, a working upgrade, uninstall leaves nothing). Uploads the packages as workflow artifacts. |
-| Publish GitHub release | Needs all of the above. Generates and verifies `SHA256SUMS.txt`, creates a **draft**, uploads every asset, compares names and sizes, and only then flips the draft to published. The tag is created by that flip. |
+| Validate release request | The version is `x.y.z` without leading zeros and equals `project(VERSION)`; the run was started by the owner; the commit is on `main`; the repository's id is the one installed copies ask (`GITHUB_REPOSITORY_ID`, a warning if its name is no longer the one in `HOMEPAGE_URL`); no release with that tag exists; the version is higher than every published release; for a dispatched run, the tag does not exist yet. Warns if `CHANGELOG.md` has no section. |
+| CI | The whole of [`ci.yml`](../.github/workflows/ci.yml): build and test with MSVC, ASan, and clang-cl warnings and UBSan on the Qt-free libraries, format, the update contract. |
+| Package (Windows) | `release` preset without tests, `cpack`, the installer; checks that `pmm-app.exe` contains the repository id as text, so a build that asks another repository for updates is never published here; then [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) (silent installs to temp folders: expected files including the TLS plugin, uninstall entry and version, another program's folders left alone, a folder with a non-ASCII name, the single Start Menu shortcut and the desktop shortcut, refusal to replace a newer version, failed upgrades that leave the previous version working, a failed update run that starts it again, a working upgrade, the update run with the application's exact arguments while the mutex is held, which starts the real `pmm-app.exe`, uninstall leaves nothing). Uploads the packages as workflow artifacts. |
+| Publish GitHub release | Needs all of the above. Generates and verifies `SHA256SUMS.txt`, checks the assets and the version against the update contract once more, creates a **draft**, uploads every asset, compares names and sizes, and only then flips the draft to published. The tag is created by that flip. |
 
 The publish job is the only one with `contents: write`. Because the release stays
 a draft until it is complete, the `releases/latest` API that the update check
 reads can never see a release with missing assets.
 
-The notes always end with a fixed note: the Windows installer is unsigned, so
-SmartScreen may warn.
+The notes always end with a fixed note: which file to download (the setup, which
+updates itself; the ZIP does not), the daily check and where to turn it off, and
+that the unsigned setup makes the browser and SmartScreen warn.
+
+The smoke test starts the installed application on the runner, and refuses to run
+anywhere else unless it is given `-DisposableMachine`: it uses the real uninstall
+registration, mutex, shortcuts and standard profile of the user who runs it.
 
 **Dry run**: runs everything except the publish job. The packages are artifacts
 of the workflow run (30 days): download them from the run's summary page and try
@@ -79,10 +105,11 @@ drafts with the same tag before creating a new one.
 
 ```sh
 gh release view vx.y.z                                # assets, not a draft
-gh api repos/Giorgi-Apriashvili/pdx-mod-manager/releases/latest --jq .tag_name
+gh api repositories/1439071956/releases/latest --jq .tag_name   # what installed copies see
 
 gh release download vx.y.z --dir check
 (cd check && sha256sum --check SHA256SUMS.txt)
+bash scripts/check-update-contract.sh assets check x.y.z
 ```
 
 Then install from the downloaded setup (SmartScreen: More info > Run
@@ -91,11 +118,40 @@ installed older version, check for updates and use the update button: the
 application closes, the installer's progress window appears, and the new version
 starts by itself.
 
+## The update contract
+
+What every installed copy relies on to find, verify and install a release is frozen
+since 0.1.0: the API address by repository id, the tag and version rules, the two
+asset names, the checksum file's format, the setup's arguments, the mutex, the
+`AppId`, the per-user installation and its layout, and the TLS plugin. The values
+and the reason for each are in
+[`updates.md`](updates.md#compatibility-contract-frozen-since-010); the file
+[`packaging/update-contract.txt`](../packaging/update-contract.txt) holds them, and
+[`scripts/check-update-contract.sh`](../scripts/check-update-contract.sh) checks
+them:
+
+| Where | What |
+| --- | --- |
+| CI, "Format check" | The sources still carry every value; `scripts/test-update-contract.sh` tests the check itself. |
+| Release, validate | The version's grammar; higher than every published release (GitHub's 404 for `releases/latest` is accepted only when nothing but pre-releases exists); the repository id. |
+| Release, package | `pmm-app.exe` contains the repository id. The smoke test runs the installer's side of the contract. |
+| Release, publish, before the draft | Every asset name and `SHA256SUMS.txt` line against the grammar, LF only, no BOM, every name once, the setup and `SHA256SUMS.txt` present, the setup at most 512 MiB and `SHA256SUMS.txt` at most 64 KiB, the digests; the version again. |
+
+By hand, for a folder of release files: `bash scripts/check-update-contract.sh
+assets <folder> <x.y.z>`; for a version: `bash scripts/check-update-contract.sh
+published <x.y.z>` (needs `gh` and `GH_REPO`).
+
+Never edit the contract file to make a check pass. A value that has to change can
+only be added alongside the old one, see
+[`updates.md`](updates.md#compatibility-contract-frozen-since-010).
+
 ## Withdrawing a bad release
 
-Users who already updated keep what they have, so prefer publishing a fixed
-version: bump the patch number and release again. That is also what moves them
-off the bad version, through the update button.
+Roll back by releasing a higher version, never by reusing one. Installed copies
+only take a strictly newer version, so users who already updated keep what they
+have until a higher version exists, and a version number published once is never
+offered to them again. Bump the patch number, fix the problem and release; that
+release moves everyone off the bad one, through the updater.
 
 To stop further downloads right away, either of:
 
@@ -103,12 +159,15 @@ To stop further downloads right away, either of:
 # Keeps the release and its tag visible, but it stops being "latest":
 gh release edit vx.y.z --prerelease
 
-# Removes it; the previous release becomes "latest" again:
-gh release delete vx.y.z --cleanup-tag --yes
+# Removes the release; the previous one becomes "latest" again. Keep the tag:
+# it blocks the version number from being used again.
+gh release delete vx.y.z --yes
 ```
 
-Never reuse a version number for different contents: release the next patch
-number instead. To retract a version permanently, also say so in `CHANGELOG.md`.
+Prefer the first: the workflow compares a new version with every published
+release, pre-releases included, but cannot see a deleted one. Never reuse a version
+number for different contents. To retract a version permanently, also say so in
+`CHANGELOG.md`.
 
 ## Code signing
 
