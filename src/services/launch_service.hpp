@@ -20,19 +20,27 @@
 // and one that cannot be recovered must not keep every game from launching.
 // Without a playset (std::nullopt) only the playset checks are skipped and a
 // warning says the game starts without mods; a playset id that no longer
-// exists still blocks.
+// exists still blocks. The installation's blockers (folders, processes,
+// Steam) come before the playset's, which list every enabled entry that is
+// not ready.
 //
 // The process checks share one process list (ServiceContext::listProcesses).
 // Steam counts as running when steam.exe is listed, or the pid Steam
 // registered (ServiceContext::steamPid) is listed without a readable name;
-// whether it is signed in is not checked. When the list cannot be read, the
-// running-instance and Steam checks become warnings.
+// whether it is signed in is not checked, and the list covers every Windows
+// session, so another user's Steam client counts too. When the list cannot
+// be read, one warning says that neither a running instance nor Steam could
+// be checked.
 //
-// launch() re-checks, builds the adapter's LaunchPlan for the enabled mods in
-// playset order (no mods without a playset) and validates it. Only then does
-// it ask the coordinator to close the game's Steam helper session, wait until
-// the helper has exited and park its acquisition jobs, so a launch refused
-// while preparing leaves acquisition alone. It applies
+// launch() re-checks and refuses what check() blocks, with the error code of
+// the weightiest reason among the blockers (Interrupted, then
+// ConflictingProcess, then ProviderUnavailable for Steam not running,
+// otherwise ValidationFailed); the message names the first blocker and the
+// detail lists them all. It then builds the adapter's LaunchPlan for the
+// enabled mods in playset order (no mods without a playset) and validates it.
+// Only then does it ask the coordinator to close the game's Steam helper
+// session, wait until the helper has exited and park its acquisition jobs, so
+// a launch refused while preparing leaves acquisition alone. It applies
 // plan.configWrites as ONE file transaction (backups, rollback, crash journal;
 // label "launch <game> playset <id> (<name>)", or "launch <game> without
 // mods" without a playset) and starts the executable

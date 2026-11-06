@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -426,27 +427,35 @@ TEST_CASE("Process checks that cannot run only warn", "[services][launch]") {
     w.refresh();
     const std::int64_t id = makePlayset(w, {workshopEntry("2000000001", "UI Overhaul")});
     std::string expected;
-    std::string steam;
     SECTION("the lister fails") {
         w.ctx.listProcesses = []() -> Result<std::vector<platform::RunningProcess>> {
             return makeError(ErrorCode::PermissionDenied, "Process list denied.");
         };
-        expected = "Process list denied";
-        steam = "Could not check whether Steam is running: Process list denied.";
+        expected = "Could not check whether Stellaris is already running or whether Steam is "
+                   "running: Process list denied.";
     }
     SECTION("no lister is configured") {
         w.ctx.listProcesses = nullptr;
-        expected = "could not be checked";
-        steam = "Whether Steam is running could not be checked.";
+        expected =
+            "Running instances of Stellaris could not be checked, nor whether Steam is running.";
     }
     LaunchService launcher(w.ctx, nullptr);
     for (const std::optional<std::int64_t> playset :
          {std::optional<std::int64_t>(id), std::optional<std::int64_t>()}) {
         const LaunchCheck check = launcher.check(kGame, playset);
         CHECK(check.canLaunch);
-        CHECK(contains(check.warnings, expected));
-        // Neither can Steam be checked: a warning too, not a blocker.
-        CHECK(contains(check.warnings, steam));
+        // Neither can Steam be checked: one warning for both, not a blocker,
+        // and the first one, so that the Play section shows it before launch.
+        REQUIRE_FALSE(check.warnings.empty());
+        CHECK(check.warnings.front() == expected);
+        CHECK(std::count_if(check.warnings.begin(), check.warnings.end(),
+                            [](const std::string& warning) {
+                                return warning.find("Steam") != std::string::npos;
+                            }) == 1);
+        if (!playset)
+            CHECK(check.warnings ==
+                  std::vector<std::string>{
+                      expected, "No playset is selected, so the game starts without mods."});
         CHECK_FALSE(check.steamNotRunning);
     }
 }
@@ -490,6 +499,45 @@ TEST_CASE("A Steam installation launches only while the Steam client runs", "[se
     CHECK_FALSE(running.steamNotRunning);
     CHECK(require(launcher.launch(kGame, playset)).pid == 4242);
     CHECK(w.started.size() == 1);
+}
+
+TEST_CASE("A running game and Steam are named before the mods that are not ready",
+          "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    const std::int64_t id = makePlayset(
+        w, {workshopEntry("2000000996", "Gone One"), workshopEntry("2000000997", "Gone Two"),
+            workshopEntry("2000000998", "Gone Three"), workshopEntry("2000000999", "Gone Four")});
+    LaunchService launcher(w.ctx, nullptr);
+    // Steam is closed and the game runs.
+    w.processes = {{7, "explorer.exe", {}}, {1234, kExeName, w.executable}};
+
+    // The Play section shows the first four blockers: one action each, then
+    // the mods.
+    const LaunchCheck check = launcher.check(kGame, id);
+    REQUIRE(check.blockers.size() == 6);
+    CHECK_THAT(check.blockers[0], ContainsSubstring("already running"));
+    CHECK(check.blockers[1] ==
+          "Steam is not running. Start Steam and sign in, then launch Stellaris.");
+    CHECK_THAT(check.blockers[2], ContainsSubstring("Gone One"));
+    CHECK_THAT(check.blockers[5], ContainsSubstring("Gone Four"));
+
+    // The code is the weightiest reason's; the message names the first blocker.
+    const auto running = launcher.launch(kGame, id);
+    REQUIRE_FALSE(running);
+    CHECK(running.error().code == ErrorCode::ConflictingProcess);
+    CHECK_THAT(running.error().message, ContainsSubstring("already running"));
+    CHECK_THAT(running.error().detail, ContainsSubstring("Steam is not running"));
+    CHECK_THAT(running.error().detail, ContainsSubstring("Gone Four"));
+
+    w.processes = {{7, "explorer.exe", {}}};
+    const auto closed = launcher.launch(kGame, id);
+    REQUIRE_FALSE(closed);
+    CHECK(closed.error().code == ErrorCode::ProviderUnavailable);
+    CHECK_THAT(closed.error().message, ContainsSubstring("Steam is not running"));
+    CHECK(w.started.empty());
+    CHECK(require(w.transactions.list()).empty());
 }
 
 TEST_CASE("Steam's registered pid counts only for a process without a readable name",
