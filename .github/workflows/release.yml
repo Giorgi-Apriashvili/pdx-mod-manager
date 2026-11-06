@@ -4,6 +4,8 @@
 #
 # The release is created as a draft, filled, and only then published, so the
 # releases/latest API that the in-app updater reads never sees a partial release.
+# Before the draft, the version and the assets are checked against the update
+# contract (packaging/update-contract.txt) that every released copy relies on.
 name: Release
 
 on:
@@ -97,13 +99,25 @@ jobs:
           esac
           tag="v$version"
 
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Version '$version' is not x.y.z."
+          # x.y.z without leading zeros, as every released copy parses tags.
+          bash scripts/check-update-contract.sh version "$version" ||
+            fail "Version '$version' is not x.y.z (no leading zeros, each part at most 65535)."
           [ "$version" = "$project_version" ] ||
             fail "Version $version does not match project(VERSION) $project_version in CMakeLists.txt."
 
           if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
             [ "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER" ] ||
               fail "Only the repository owner can run a release (triggered by $GITHUB_TRIGGERING_ACTOR)."
+
+            # Released copies ask for updates by repository id, so a release
+            # anywhere else would never reach them.
+            contract_id="$(bash scripts/check-update-contract.sh get repository_id)"
+            [ "$GITHUB_REPOSITORY_ID" = "$contract_id" ] ||
+              fail "This repository has the id $GITHUB_REPOSITORY_ID; the application asks repository $contract_id for updates."
+            contract_name="$(bash scripts/check-update-contract.sh get repository)"
+            if [ "${GITHUB_REPOSITORY,,}" != "${contract_name,,}" ]; then
+              echo "::warning::The repository is now $GITHUB_REPOSITORY; update HOMEPAGE_URL in CMakeLists.txt and 'repository' in packaging/update-contract.txt ($contract_name)."
+            fi
 
             # "identical" or "behind": main contains this commit.
             status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status)"
@@ -115,6 +129,9 @@ jobs:
             if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .html_url > /dev/null 2>&1; then
               fail "Release $tag already exists."
             fi
+            # Higher than every published release; checked again before the draft.
+            bash scripts/check-update-contract.sh published "$version" ||
+              fail "Version $version must be higher than every published release."
           fi
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             existing="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag" \
@@ -195,6 +212,21 @@ jobs:
       - name: Build the installer
         run: cmake --build --preset release --target installer
 
+      # The id is compiled in as text (root CMakeLists.txt): a build that asks
+      # another repository for updates is never published here.
+      - name: Check that pmm-app.exe asks this repository for updates
+        shell: bash
+        run: |
+          id="$(bash scripts/check-update-contract.sh get repository_id)"
+          [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::No repository id in packaging/update-contract.txt."; exit 1; }
+          for exe in build/release/bin/pmm-app.exe build/release/installer-stage/bin/pmm-app.exe; do
+            if ! grep -a -q -E "(^|[^0-9])${id}([^0-9]|\$)" "$exe"; then
+              echo "::error::$exe does not contain the repository id $id."
+              exit 1
+            fi
+            echo "$exe contains the repository id $id."
+          done
+
       - name: Smoke test the installer
         shell: pwsh
         run: >-
@@ -256,6 +288,13 @@ jobs:
           sha256sum --check --strict SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      # What every released copy accepts: names, checksum lines, sizes, and a
+      # version higher than every published release (packaging/update-contract.txt).
+      - name: Check the release against the update contract
+        run: |
+          bash scripts/check-update-contract.sh assets assets "$VERSION"
+          bash scripts/check-update-contract.sh published "$VERSION"
+
       - name: Write the release notes
         run: |
           if ! bash scripts/changelog-section.sh "$VERSION" > notes.md; then
@@ -263,12 +302,14 @@ jobs:
             gh api -X POST "repos/$GH_REPO/releases/generate-notes" \
               -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" --jq .body > notes.md
           fi
-          cat >> notes.md <<EOF
-
-          ---
-
-          The Windows installer is not code signed yet, so SmartScreen may warn when you start it.
-          EOF
+          {
+            echo
+            echo '---'
+            echo
+            echo "**Download ParadoxModManager-$VERSION-windows-x86_64-setup.exe** and run it. An installed copy checks GitHub for a new version once a day (turn this off in Settings > Updates) and updates itself when you click **Update and restart**. The ZIP is a portable copy that does not update itself."
+            echo
+            echo 'The setup is not code signed yet, so your browser may ask whether to keep the file and Windows SmartScreen may warn when you start it: keep it, then choose **More info** > **Run anyway**.'
+          } >> notes.md
           cat notes.md
 
       # A run that failed halfway may have left a draft behind. Drafts have no tag

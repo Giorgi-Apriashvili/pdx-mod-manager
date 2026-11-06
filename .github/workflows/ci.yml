@@ -1,7 +1,8 @@
 # Continuous integration: build and test on Windows with MSVC (with Qt, including
 # the application tests pmm_app_tests), ASan, and clang-cl warnings and UBSan on the
-# Qt-free libraries, a clang-format 22 check and the UI contrast check. Packages and
-# releases are in release.yml, which also runs this workflow first.
+# Qt-free libraries, a clang-format 22 check, the update contract check
+# (packaging/update-contract.txt) and the UI contrast check. Packages and releases
+# are in release.yml, which also runs this workflow first.
 name: CI
 
 on:
@@ -223,6 +224,12 @@ jobs:
           # scripts/check-format.sh only warns about another major version.
           clang-format --version | grep 'version 22\.' > /dev/null || { echo "clang-format 22 expected" >&2; exit 1; }
           bash scripts/check-format.sh
+
+      # Every released copy relies on these values; see docs/updates.md.
+      - name: Check the update contract
+        run: |
+          bash scripts/check-update-contract.sh
+          bash scripts/test-update-contract.sh
 
       - name: Check UI colour contrast
         run: python ui/dev/check_contrast.py
