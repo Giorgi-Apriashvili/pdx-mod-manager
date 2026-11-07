@@ -1,0 +1,29 @@
+# The x64 Visual Studio developer environment (cl.exe, link.exe, INCLUDE, LIB,
+# the ASan runtime on PATH, ...) for the steps after this one: every variable
+# that vcvars64.bat adds or changes goes to GITHUB_ENV. The same as
+# scripts/msvc-env.sh does for a local shell, without a third-party action in
+# the jobs that build the released installer.
+name: MSVC developer environment
+description: Import the x64 Visual Studio developer environment into the following steps.
+runs:
+  using: composite
+  steps:
+    - name: Import vcvars64.bat
+      shell: pwsh
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $vs) { throw 'No Visual Studio with the x64 C++ tools was found.' }
+        $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+        $before = @{}
+        Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        $lines = cmd.exe /d /c "`"$vcvars`" >nul 2>&1 && set"
+        if ($LASTEXITCODE -ne 0) { throw "$vcvars failed with exit code $LASTEXITCODE." }
+        $exported = 0
+        foreach ($line in $lines) {
+          $name, $value = $line -split '=', 2
+          if (-not $name -or $null -eq $value -or $before[$name] -ceq $value) { continue }
+          "$name=$value" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $exported++
+        }
+        Write-Host "Imported $exported variables from $vcvars"

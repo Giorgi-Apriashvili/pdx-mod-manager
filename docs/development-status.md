@@ -354,9 +354,11 @@ Packaging ([`packaging.md`](packaging.md)):
   application again; that needs an installed version newer than the running one.
   "Open release page" falls back to the compiled slug's list of releases while no
   reply in the session has named the repository (no release yet, or no answer).
-- `ilammy/msvc-dev-cmd` and `jurplel/install-qt-action` are pinned to mutable tags in
-  the job that builds the shipped, unsigned installer; pinning them to commit SHAs
-  would narrow a supply-chain path to every user who updates.
+- `jurplel/install-qt-action` is the one third-party action left in the jobs that
+  build the shipped installer; it is pinned to the commit of v4.5.0. Since 2026-11-07
+  the MSVC environment comes from the repository's own
+  `.github/actions/msvc-dev-env` instead of `ilammy/msvc-dev-cmd`, which still
+  targets Node.js 20 and has had no release since January 2024.
 - No code signing; no `longPathAware` manifest (the package folder path must
   stay below about 170 characters); not tried on a machine without the VC++
   Redistributable.

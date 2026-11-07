@@ -46,9 +46,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+        uses: ./.github/actions/msvc-dev-env
 
       - name: Install Ninja
         shell: pwsh
@@ -57,7 +55,7 @@ jobs:
           ninja --version
 
       - name: Install Qt ${{ env.QT_VERSION }}
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: ${{ env.QT_VERSION }}
           arch: win64_msvc2022_64
@@ -106,9 +104,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+        uses: ./.github/actions/msvc-dev-env
 
       - name: Install Ninja
         shell: pwsh
@@ -161,9 +157,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+        uses: ./.github/actions/msvc-dev-env
 
       - name: Install Ninja
         shell: pwsh
