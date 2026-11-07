@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Importing over a playset keeps its name.** **Replace existing playset** renamed the replaced playset to the name proposed for a new one, such as "SP (2)" for "SP"; it now keeps its name.
+
 ## [0.1.1] - 2026-11-07
 
 Two changes to **Play**. Installed copies of 0.1.0 can update to this version from the update banner or **Settings > Updates**.

@@ -340,6 +340,35 @@ TEST_CASE("Backend edits are persisted, undoable and reflected in the models", "
             CHECK(imported[i].enabled == exported[i].enabled);
         }
     }
+    SECTION("replacing a playset with a share code keeps its name") {
+        backend.sharing()->exportCode();
+        REQUIRE(waitUntil([&] { return !backend.sharing()->lastExportCode().isEmpty(); }));
+        const QString code = backend.sharing()->lastExportCode();
+        const std::vector<PlaysetEntry> exported = storedEntries(runner, id);
+        backend.mods()->setEnabled(0, false);
+        REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+
+        backend.sharing()->previewImport(code);
+        REQUIRE(waitUntil(
+            [&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+        // The dialog's name field still holds the name proposed for a new
+        // playset ("Campaign (2)"), and the dialog passed it along.
+        const QString proposed = backend.sharing()->preview().value("proposedName").toString();
+        CHECK(proposed == "Campaign (2)");
+        REQUIRE(backend.sharing()->confirmImport("replace", static_cast<int>(id), proposed));
+        REQUIRE(waitUntil([&] {
+            return !backend.sharing()->busy() && storedEntries(runner, id).front().enabled;
+        }));
+        const std::string stored = runner.callBlocking([id](AppRuntime& runtime) {
+            auto playset = runtime.playsets().playset(id);
+            return playset ? playset.value().name : std::string();
+        });
+        CHECK(stored == "Campaign");
+        CHECK(storedEntries(runner, id).size() == exported.size());
+        CHECK(backend.playsets()->count() == 1);
+        CHECK(backend.activePlaysetId() == id);
+        CHECK(backend.playsets()->activeName() == "Campaign");
+    }
     SECTION("bad share codes are explained") {
         backend.sharing()->previewImport(QStringLiteral("PMM9.abc.def"));
         REQUIRE(waitUntil(

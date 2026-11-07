@@ -4,7 +4,8 @@
 // run on the services worker: exportCode() starts an export and the code
 // arrives in lastExportCode; previewImport() validates without side effects and
 // fills `preview`; confirmImport() applies the previewed code (new playset by
-// default, or an explicit replace) and queues acquisition of missing Workshop
+// default, or an explicit replace, which keeps the replaced playset's name;
+// `name` is only the new playset's) and queues acquisition of missing Workshop
 // entries. A code for another supported game is imported as a new playset of
 // that game, and the window switches to it.
 

@@ -52,8 +52,10 @@ AppDialog {
     function confirm() {
         if (!canConfirm())
             return
-        const targetId = mode === "replace" ? targetCombo.currentValue : -1
-        if (sharing.confirmImport(mode, targetId ?? -1, nameField.text.trim()))
+        const replace = mode === "replace"
+        const targetId = replace ? targetCombo.currentValue : -1
+        // A replaced playset keeps its name; the field is the new playset's.
+        if (sharing.confirmImport(mode, targetId ?? -1, replace ? "" : nameField.text.trim()))
             close()
     }
 

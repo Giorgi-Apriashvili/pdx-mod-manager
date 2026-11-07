@@ -347,6 +347,9 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
         replace ? services::ImportMode::Replace : services::ImportMode::New;
     const std::optional<std::int64_t> target =
         replace ? std::optional<std::int64_t>(targetPlaysetId) : std::nullopt;
+    // `name` is the new playset's: a replaced playset keeps its own name (the
+    // dialog's field still holds the one proposed for a new playset).
+    const std::string newName = replace ? std::string() : utf8(name.trimmed());
     const bool steam = m_backend->steamEnabled();
     ServiceRunner* runner = &m_backend->runner();
     struct Outcome {
@@ -359,7 +362,7 @@ bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, co
     setBusy(true);
     runner->call(
         this,
-        [preview = m_preview, importMode, target, name = utf8(name.trimmed()), steam,
+        [preview = m_preview, importMode, target, name = newName, steam,
          runner](AppRuntime& runtime) {
             Outcome outcome;
             auto applied =
