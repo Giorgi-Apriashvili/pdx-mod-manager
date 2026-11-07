@@ -149,4 +149,14 @@ Result<int> AcquisitionJobRepository::removeFinishedOlderThan(std::int64_t cutof
     return c.changes();
 }
 
+Result<int> AcquisitionJobRepository::removeWithdrawnImportJobs() {
+    auto guard = m_db.access();
+    Connection& c = guard.connection();
+    PMM_DB_TRY_VALUE(stmt, c.prepare("DELETE FROM acquisition_jobs WHERE state = ? AND "
+                                     "error_code = '' AND error_message = '' AND attempts = 0 "
+                                     "AND bytes_downloaded = 0 AND bytes_total = 0"));
+    PMM_TRY(stmt->bind(1, toString(AcquisitionState::Cancelled)).run());
+    return c.changes();
+}
+
 } // namespace pmm::persistence

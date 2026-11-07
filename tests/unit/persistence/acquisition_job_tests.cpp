@@ -179,6 +179,41 @@ TEST_CASE("removeFinishedOlderThan only removes old terminal jobs", "[persistenc
     CHECK(jobIds(remaining) == std::vector<std::int64_t>{oldActive.id, newDone.id});
 }
 
+TEST_CASE("removeWithdrawnImportJobs removes only cancelled jobs without an error or a run",
+          "[persistence][jobs]") {
+    auto db = openMemory();
+    AcquisitionJobRepository jobs(*db);
+    // As an import with downloads off in 0.1.0 and 0.1.1 left it.
+    auto withdrawn = require(jobs.createOrReuse(workshop("1"), {}));
+    withdrawn.state = AcquisitionState::Cancelled;
+    requireOk(jobs.update(withdrawn));
+    // Cancelled by the user before anything was requested from Steam.
+    auto userCancelled = require(jobs.createOrReuse(workshop("2"), {}));
+    userCancelled.state = AcquisitionState::Cancelled;
+    userCancelled.errorCode = "cancelled";
+    userCancelled.errorMessage = "Cancelled before anything was requested from Steam.";
+    requireOk(jobs.update(userCancelled));
+    // Never matched without an error either: a run or bytes, another state.
+    auto attempted = require(jobs.createOrReuse(workshop("3"), {}));
+    attempted.state = AcquisitionState::Cancelled;
+    attempted.attempts = 1;
+    requireOk(jobs.update(attempted));
+    auto withBytes = require(jobs.createOrReuse(workshop("4"), {}));
+    withBytes.state = AcquisitionState::Cancelled;
+    withBytes.bytesTotal = 4000;
+    requireOk(jobs.update(withBytes));
+    auto installed = require(jobs.createOrReuse(workshop("5"), {}));
+    installed.state = AcquisitionState::Installed;
+    requireOk(jobs.update(installed));
+    auto pending = require(jobs.createOrReuse(workshop("6"), {}));
+
+    CHECK(require(jobs.removeWithdrawnImportJobs()) == 1);
+    CHECK(jobIds(require(jobs.listForGame("stellaris"))) ==
+          std::vector<std::int64_t>{userCancelled.id, attempted.id, withBytes.id, installed.id,
+                                    pending.id});
+    CHECK(require(jobs.removeWithdrawnImportJobs()) == 0);
+}
+
 TEST_CASE("Jobs reject incomplete identities", "[persistence][jobs]") {
     auto db = openMemory();
     AcquisitionJobRepository jobs(*db);

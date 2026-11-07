@@ -540,6 +540,32 @@ TEST_CASE("Cancelling stops application work, explains what remains, never claim
     CHECK(r.c().cancelAll(kGame).message == "There was nothing to cancel.");
 }
 
+TEST_CASE("Downloads the user cancelled are not taken for jobs an import withdrew",
+          "[services][acquisition]") {
+    // The start-up clean-up of jobs that imports with downloads off withdrew
+    // (0.1.0, 0.1.1) must keep every cancellation by the user, even of a job
+    // that never ran: same state, no attempt, no byte.
+    Rig r;
+    constexpr const char* kParked = "2000000102";
+    r.steam.items[kItem].steps = 50;
+    const std::int64_t id = r.acquire({workshopEntry(kItem, "Big Example")});
+    r.steam.pump(r.c());
+    REQUIRE(r.job(kItem).state == AcquisitionState::Downloading);
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    require(repo.createOrReuse({kGame, source::SteamWorkshop, kParked}, id));
+
+    REQUIRE(r.c().cancelAll(kGame).cancelled == 2);
+    const AcquisitionJob parked = r.job(kParked);
+    REQUIRE(parked.state == AcquisitionState::Cancelled);
+    CHECK(parked.attempts == 0);
+    CHECK(parked.bytesTotal == 0);
+    CHECK(parked.errorCode == "cancelled");
+    REQUIRE(r.job(kItem).state == AcquisitionState::Cancelled);
+
+    CHECK(require(repo.removeWithdrawnImportJobs()) == 0);
+    CHECK(require(repo.listForGame(kGame)).size() == 2);
+}
+
 TEST_CASE("Launch preparation parks jobs and closes the helper session",
           "[services][acquisition]") {
     Rig r;
