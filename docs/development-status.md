@@ -399,10 +399,10 @@ Packaging ([`packaging.md`](packaging.md)):
 - The package job's check that `pmm-app.exe` contains the repository id needs the
   id compiled in as text (a string define, as `PMM_GITHUB_REPOSITORY_ID` is passed);
   an id formatted from a number at run time would fail it.
-- The repository id 1439071956 has not been confirmed against GitHub from the
-  development machine (a 404 from `releases/latest` does not tell a wrong id from an
-  empty repository). The `Release` workflow's validation compares it with
-  `GITHUB_REPOSITORY_ID` before anything is built, so a wrong id cannot be released.
+- The repository id 1439071956 is confirmed: `releases/latest` by that id answered
+  with `v0.1.0` and `v0.1.1` once they were published, and the owner's installed
+  0.1.0 updated itself through it. The `Release` workflow's validation still compares
+  it with `GITHUB_REPOSITORY_ID` before anything is built.
 - Accepted for 0.1.0 after the lockdown review: `check-update-contract.sh` matches
   text, so a value that survives only in a comment still passes (for example
   `/releases/latest` removed from the code, or the relaunch's `Check:` flipped); the
