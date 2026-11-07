@@ -87,6 +87,7 @@ QtObject {
             missingEnabled: 4,
             missingDisabled: 1,
             localUnmapped: 1,
+            downloads: true,
             warnings: [
                 "1 local mod cannot be downloaded automatically; map it to an installed mod or install it manually.",
                 "The code was exported with game version 4.4.1; you have 4.5.2."

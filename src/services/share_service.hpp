@@ -63,9 +63,10 @@ struct ImportPreview {
 struct ImportOptions {
     // Creates or reuses an acquisition job for every missing Workshop entry.
     // False when Workshop downloads are off: the import then creates and reuses
-    // no job (AppliedImport::jobs is empty, existing jobs are left as they are)
-    // and is otherwise identical, so its missing entries read "Not installed"
-    // and nothing is left for a later session to download on its own.
+    // no job (AppliedImport::jobs is empty) and is otherwise identical. Jobs
+    // from before it keep their state, and a missing entry reads as its mod's
+    // newest job says: "Not installed" without a job, Failed after a failed
+    // one, and an unfinished one resumes in a later session with downloads on.
     bool queueAcquisition = true;
 };
 

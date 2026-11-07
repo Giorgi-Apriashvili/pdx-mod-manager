@@ -455,9 +455,10 @@ AppDialog {
             variant: "accent"
             text: dialog.mode === "replace" ? qsTr("Replace playset") : qsTr("Import as new playset")
             enabled: dialog.canConfirm()
-            toolTipText: (dialog.preview.missing ?? 0) > 0
-                         ? qsTr("Missing Workshop mods (including disabled ones) are queued for download after import")
-                         : ""
+            toolTipText: (dialog.preview.missing ?? 0) === 0 ? ""
+                         : dialog.preview.downloads
+                           ? qsTr("Missing Workshop mods (including disabled ones) are queued for download after import")
+                           : qsTr("Downloads are off in this session, so missing Workshop mods are not queued")
             onClicked: dialog.confirm()
         }
     }
