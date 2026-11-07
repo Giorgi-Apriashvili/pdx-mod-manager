@@ -1,5 +1,6 @@
 #include "providers/helper_protocol.hpp"
 
+#include "core/utf8.hpp"
 #include "providers/internal/path_text.hpp"
 
 #include <nlohmann/json.hpp>
@@ -476,7 +477,7 @@ Status validateHelperArguments(std::string_view appId, const std::filesystem::pa
     if (!isValidSteamAppId(appId)) {
         return makeError(ErrorCode::InvalidArgument,
                          "--app-id must be a Steam AppId (decimal digits only).",
-                         "app-id=\"" + std::string(appId.substr(0, 32)) + "\"");
+                         "app-id=\"" + std::string(utf8Prefix(appId, 32)) + "\"");
     }
     // A name without a UTF-8 form contains U+FFFD here and is refused below.
     const std::string name = internal::displayPath(library.filename());

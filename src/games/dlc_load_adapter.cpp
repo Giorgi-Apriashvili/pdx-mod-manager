@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <map>
 #include <set>
+#include <span>
 #include <system_error>
 #include <utility>
 
@@ -258,6 +259,66 @@ void dropUnstorablePaths(InstalledMod& mod) {
     };
     drop(mod.contentPath, "The mod content");
     drop(mod.descriptorPath, "The descriptor file");
+}
+
+// One Broken entry for descriptor files that give their mods the same
+// identity: names that differ only in unpaired surrogates, which have no UTF-8
+// form and read as U+FFFD (as does a literal U+FFFD), or only in the case of
+// ".mod" in a case-sensitive folder. Playsets and share codes refer to mods by
+// id, so no single file may stand for it, and no other id is made up for one
+// of them. `group` is in file name order.
+InstalledMod sharedIdentityMod(std::span<const InstalledMod> group) {
+    InstalledMod merged;
+    merged.identity = group.front().identity;
+    // A dlc_load.json reference to any of the files resolves to this entry,
+    // by this reference or by the identity of the file it names.
+    merged.descriptorRef = group.front().descriptorRef;
+    std::string files;
+    bool replaced = false;
+    for (std::size_t i = 0; i < group.size(); ++i) {
+        const InstalledMod& mod = group[i];
+        files += i == 0 ? "" : i + 1 == group.size() ? " and " : ", ";
+        files += mod.descriptorRef;
+        if (!mod.descriptor.name.empty())
+            files += " (\"" + mod.descriptor.name + "\")";
+        replaced = replaced || !platform::isUtf8Representable(mod.descriptorPath.filename());
+    }
+    markBroken(merged, "The descriptor files " + files + " all give this mod the id \"" +
+                           merged.identity.id +
+                           "\", so they cannot be told apart. Rename them so that each has a "
+                           "distinct name, then rescan." +
+                           (replaced ? " Characters in file names that are not valid Unicode "
+                                       "are shown as \xEF\xBF\xBD."
+                                     : ""));
+    return merged;
+}
+
+// Sorted by identity, each identity once (see sharedIdentityMod).
+std::vector<InstalledMod> mergeSharedIdentities(std::vector<InstalledMod> mods,
+                                                std::string_view logComponent) {
+    // The native name orders files that read the same as UTF-8.
+    std::sort(mods.begin(), mods.end(), [](const InstalledMod& a, const InstalledMod& b) {
+        if (a.identity != b.identity)
+            return a.identity < b.identity;
+        return a.descriptorPath.native() < b.descriptorPath.native();
+    });
+    std::vector<InstalledMod> out;
+    out.reserve(mods.size());
+    for (std::size_t first = 0; first < mods.size();) {
+        std::size_t end = first + 1;
+        while (end < mods.size() && mods[end].identity == mods[first].identity)
+            ++end;
+        if (end - first == 1) {
+            out.push_back(std::move(mods[first]));
+        } else {
+            out.push_back(sharedIdentityMod(std::span(mods).subspan(first, end - first)));
+            logWarning(
+                logComponent, "Several descriptor files give a mod the same id",
+                {{"mod", toString(out.back().identity)}, {"files", std::to_string(end - first)}});
+        }
+        first = end;
+    }
+    return out;
 }
 
 bool declaredContentExists(const Registration& reg) {
@@ -805,10 +866,9 @@ DlcLoadJsonAdapter::scanMods(const GameInstallation& installation) const {
         if (byWorkshopId.count(id) == 0)
             mods.push_back(workshopMod(game, id, nullptr, &folder, content));
     }
+    mods = mergeSharedIdentities(std::move(mods), m_traits.logComponent);
     for (InstalledMod& mod : mods)
         dropUnstorablePaths(mod);
-    std::sort(mods.begin(), mods.end(),
-              [](const InstalledMod& a, const InstalledMod& b) { return a.identity < b.identity; });
     logInfo(m_traits.logComponent, "Mod scan finished",
             {{"mods", std::to_string(mods.size())},
              {"registered", std::to_string(registrations.size())},
@@ -860,6 +920,15 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
         }
         return nullptr;
     };
+    // The registration that a "mod/<file>" reference names, if the file exists.
+    const auto registrationAt = [&](std::string_view ref) -> std::optional<Registration> {
+        if (!isPlainModReference(ref))
+            return std::nullopt;
+        const fs::path descriptorFile = installation.userDataPath / pathFromUtf8(ref);
+        if (!isRegularFile(descriptorFile))
+            return std::nullopt;
+        return readRegistration(descriptorFile, installation.userDataPath, m_traits.steamAppId);
+    };
 
     std::set<ModIdentity> seen;
     for (const nlohmann::json& value : *enabled) {
@@ -869,6 +938,7 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
         std::replace(ref.begin(), ref.end(), '\\', '/');
         PlaysetEntry entry;
         const InstalledMod* mod = findByRef(ref);
+        const bool byRef = mod != nullptr;
         std::string hint = ref;
         std::string versionHint;
         std::optional<ModIdentity> workshop; // a Workshop item that is not installed
@@ -876,18 +946,15 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
             // Another registration of an inventory mod (e.g. a second .mod for
             // the same Workshop item), or the registration of a Workshop item
             // that is not downloaded: resolve it through its own descriptor.
-            const fs::path descriptorFile = installation.userDataPath / pathFromUtf8(ref);
-            if (isRegularFile(descriptorFile)) {
-                const Registration reg = readRegistration(descriptorFile, installation.userDataPath,
-                                                          m_traits.steamAppId);
-                const ModIdentity identity = identityOf(reg, game);
+            if (const std::optional<Registration> reg = registrationAt(ref)) {
+                const ModIdentity identity = identityOf(*reg, game);
                 mod = findByIdentity(identity);
                 if (identity.source == source::SteamWorkshop)
                     workshop = identity;
-                if (reg.document && !reg.descriptor.name.empty())
-                    hint = reg.descriptor.name;
-                if (reg.document)
-                    versionHint = reg.descriptor.version;
+                if (reg->document && !reg->descriptor.name.empty())
+                    hint = reg->descriptor.name;
+                if (reg->document)
+                    versionHint = reg->descriptor.version;
             } else if (auto id =
                            ugcIdFromFileName(ref.substr(std::string_view(kModFolder).size() + 1))) {
                 // No descriptor at all: the launcher's naming convention.
@@ -900,6 +967,16 @@ DlcLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& installatio
             entry.nameHint = mod->descriptor.name;
             entry.versionHint = mod->descriptor.version;
             entry.fingerprint = mod->fingerprint;
+            // No descriptor names the mod (e.g. several descriptor files give
+            // it one id): the file the game refers to does, else the
+            // reference, so that the entry keeps a name after a rename.
+            if (entry.nameHint.empty() && byRef) {
+                const std::optional<Registration> reg = registrationAt(ref);
+                if (reg && reg->document && !reg->descriptor.name.empty())
+                    hint = reg->descriptor.name;
+            }
+            if (entry.nameHint.empty())
+                entry.nameHint = hint;
         } else if (workshop) {
             entry.identity = *workshop;
             entry.nameHint = hint;

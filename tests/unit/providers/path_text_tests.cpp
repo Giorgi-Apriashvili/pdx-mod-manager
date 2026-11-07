@@ -77,4 +77,12 @@ TEST_CASE("Content checks and helper arguments report paths with unpaired surrog
     REQUIRE_FALSE(missing.ok());
     CHECK(missing.error().code == ErrorCode::NotFound);
     CHECK(isValidUtf8(missing.error().detail));
+
+    // The helper reads an app id with unpaired surrogates with U+FFFD; the
+    // shortened detail does not cut it in half.
+    const std::string digits(31, '1');
+    Status badAppId = validateHelperArguments(digits + "\xEF\xBF\xBD", folder / "steam_api64.dll");
+    REQUIRE_FALSE(badAppId.ok());
+    CHECK(badAppId.error().code == ErrorCode::InvalidArgument);
+    CHECK(badAppId.error().detail == "app-id=\"" + digits + "\"");
 }

@@ -122,6 +122,17 @@ Nothing is ever written below a Steam folder or the game installation.
   is generated at launch.
 - Several registrations of one Workshop item: `ugc_<id>.mod` is used, the
   others are reported as problems.
+- Several descriptor files with one `<file stem>`: Windows allows names with
+  unpaired UTF-16 surrogates, which have no UTF-8 form and read as U+FFFD,
+  as does a literal U+FFFD (in a case-sensitive folder, names can also
+  differ only in the case of `.mod`). They become one `Broken` entry for
+  that id, with one problem that names every file and its mod name and asks
+  to rename them, then rescan. No file stands for the entry (no descriptor,
+  content path or descriptor path; `descriptorRef` is the first file's, in
+  file name order), and no other id is made up for one of them, because
+  playsets and share codes refer to mods by id. `dlc_load.json` references
+  to any of the files resolve to it; an imported entry is named after the
+  mod of the file the reference names, else the reference.
 
 **Not installed**: a registered Workshop item whose content exists in no Steam
 library (for example right after the game was reinstalled, before Steam has
@@ -134,16 +145,18 @@ maps its `dlc_load.json` reference to `{stellaris, steam-workshop, <id>}`
 exists).
 
 **States**: `Broken` when the Workshop content folder has no usable descriptor,
-the registered descriptor cannot be parsed and no usable copy exists, or a
-local mod's folder/archive does not exist (local mods cannot be acquired).
+the registered descriptor cannot be parsed and no usable copy exists, a
+local mod's folder/archive does not exist (local mods cannot be acquired), a
+path has no UTF-8 form (it is then left out, as it cannot be stored), or
+several descriptor files give the mod the same id (above).
 `NeedsUpdate` when `appworkshop_281990.acf` lists a newer manifest than the
 installed one. `Downloading` when the content is on disk but Steam lists the
 subscribed item as not installed (an update in progress). A registration that
 points at a stale folder while the content exists in a library stays `Ready`
 with a problem note, because the launch rewrites it.
 `contentUpdatedAt` comes from the Workshop manifest's `timeupdated`, else the
-folder or file modification time. Results are sorted by identity, and one bad
-mod never fails the scan.
+folder or file modification time. Results are sorted by identity, each
+identity once, and one bad mod never fails the scan.
 
 **Descriptor format** (`games/descriptor.hpp`): `key="value"`, `key=value`,
 `key={ "a" "b" }`, `#` comments, BOM, CRLF, `\"` and `\\` escapes. Unknown
