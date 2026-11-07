@@ -4,7 +4,6 @@
 
 #if defined(PMM_STEAM_HELPER_PATH) && defined(PMM_FAKE_STEAM_API_PATH)
 
-#include "core/utf8.hpp"
 #include "providers/helper_protocol.hpp"
 #include "test_support.hpp"
 
@@ -432,8 +431,7 @@ TEST_CASE("Helper rejects bad arguments and unloadable libraries", "[providers][
         HelperProcess unknown(std::vector<std::wstring>{L"--app-id", L"281990", L"--url\xD800"});
         const auto ready = unknown.next<ReadyEvent>();
         CHECK(ready.error == HelperFailure::InvalidArguments);
-        CHECK(isValidUtf8(ready.message));
-        CHECK(ready.message.find("\"--url\xEF\xBF\xBD\"") != std::string::npos);
+        CHECK(ready.message.rfind("Unexpected argument \"--url\xEF\xBF\xBD\". ", 0) == 0);
         CHECK(unknown.waitExit(10s) == exitCode(HelperExitCode::InvalidArguments));
 
         HelperProcess appId(std::vector<std::wstring>{L"--app-id", L"281990\xDC00", L"--steam-api",
