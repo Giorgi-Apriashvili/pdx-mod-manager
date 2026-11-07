@@ -384,12 +384,29 @@ Services and application:
   Recover again only; `prune()` counts an abandoned record from when it was
   abandoned ([`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup),
   [ADR 0005 amendment](adr/0005-journaled-config-writes.md)).
-- On Windows, two descriptor files whose names differ only in unpaired
-  surrogates map to the same local mod id and make the inventory save fail;
-  the adapter scan should merge them or mark them Broken.
-- `tools/steam-helper/main.cpp` converts paths with `path::u8string()` for
-  diagnostics, which can throw on Windows for unpaired surrogates; use the
-  non-throwing conversion of `src/providers/internal/path_text`.
+- Done 2026-11-07 (owner's go-ahead of 2026-11-07), tested with temporary
+  folders only: descriptor files that give a mod the same local id (on
+  Windows, names that differ only in unpaired surrogates, which read as
+  U+FFFD like a literal U+FFFD) become one `Broken` entry in the scan of
+  `DlcLoadJsonAdapter`, with one problem that names every file and its mod
+  name and asks to rename them, then rescan. No file stands for the entry and
+  no other id is made up, because playsets and share codes refer to mods by
+  id; a playset entry for it reads Broken and keeps Play unavailable, and
+  `dlc_load.json` references to the files, also in an imported current
+  configuration, resolve to it ([stellaris.md](games/stellaris.md#mods),
+  [troubleshooting](troubleshooting.md#several-descriptor-files-give-a-mod-the-same-id)).
+  The save did not actually fail: `GameService::normalizeInventory` kept
+  whichever entry sorted first and dropped the others with only a log line.
+  It stays as a safety net, as does `InventoryRepository::replaceForGame`,
+  which already refused duplicate identities with `InvalidArgument` ("The
+  same mod was found twice in one scan.") instead of a constraint error.
+- Done 2026-11-07: `tools/steam-helper/main.cpp` reads its arguments with
+  `providers::internal::displayPath` instead of `path::u8string()`, so an
+  argument with unpaired surrogates gets an `invalid_arguments` ready event
+  instead of ending the helper (end-to-end test). No other throwing
+  conversion of a path (`u8string()`, `string()`, `generic_string()`,
+  `u8path`, stream output) is left in `src/` or `tools/`; the tests use
+  them on fixed names only.
 - Done 2026-11-07: a mod list edit of several rows is all or nothing. When an
   undo or redo still in flight has taken one of its rows away, nothing changes
   and the warning says so; it used to apply to the rest without telling the

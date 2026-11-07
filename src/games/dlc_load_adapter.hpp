@@ -20,7 +20,9 @@
 //     .../steamapps/workshop/content/<app>/<id>, or a file named
 //     ugc_<id>.mod whose remote_file_id is <id>: {game, steam-workshop, <id>};
 //   - any other registered .mod: {game, local, <file stem>}. The path decides,
-//     so a developer's local copy that carries a remote_file_id stays local;
+//     so a developer's local copy that carries a remote_file_id stays local.
+//     Files whose stems read the same (names with unpaired surrogates read
+//     as U+FFFD) become one Broken entry that names them all;
 //   - Workshop content folders without a registration: steam-workshop, with
 //     descriptorRef "mod/ugc_<id>.mod" (generated at launch).
 // A Workshop registration whose content exists in no Steam library (e.g. the
