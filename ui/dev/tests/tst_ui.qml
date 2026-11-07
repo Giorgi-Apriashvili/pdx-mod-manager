@@ -6,7 +6,8 @@ import Pmm.Backend
 // Smoke tests of the QML layer against the fake backend: virtualization with
 // 2,000 rows, keyboard editing with undo/redo, the reorder rules while
 // searching, delete confirmation, drag-and-drop, column-width persistence,
-// theme switching, the import flow, and keyboard accessibility (Tab order, F6,
+// theme switching, the import flow, discarding an interrupted change that
+// Recover cannot undo, and keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
 // Updates section and the update banner).
 // Run: ui/dev/preview.sh --test
@@ -204,6 +205,42 @@ Item {
             compare(Backend.launcher.blockers.length, 0)
             compare(Backend.launcher.warnings[0], "No playset is selected, so the game starts without mods.")
             verify(named("playButton").enabled)
+        }
+
+        function test_8b_discardInterruptedAfterRecoverFails() {
+            const launcher = Backend.launcher
+            launcher.hasInterruptedTransaction = true
+            launcher.backupMissing = true
+            const banner = named("interruptedBanner")
+            const discard = named("discardInterruptedButton")
+            tryVerify(() => banner.visible)
+            verify(!discard.visible)
+            launcher.recoverInterrupted()
+            verify(launcher.canDiscardInterrupted)
+            tryVerify(() => discard.visible)
+            verify(banner.text.indexOf("missing or damaged") >= 0)
+
+            // The confirmation names the file; Cancel is the default and does nothing.
+            const dialog = named("confirmDialog")
+            // Placed after Recover once the row has laid it out.
+            tryVerify(() => discard.x > 0)
+            mouseClick(discard)
+            tryVerify(() => dialog.opened)
+            verify(dialog.cancelIsDefault)
+            verify(dialog.message.indexOf("dlc_load.json") >= 0)
+            verify(dialog.detail.indexOf("20261107T101500000Z-0000") >= 0)
+            mouseClick(findChild(dialog.footer, "cancelButton"))
+            tryVerify(() => !dialog.visible)
+            verify(launcher.hasInterruptedTransaction)
+            verify(launcher.canDiscardInterrupted)
+
+            mouseClick(discard)
+            tryVerify(() => dialog.opened)
+            mouseClick(findChild(dialog.footer, "confirmButton"))
+            tryVerify(() => !dialog.visible)
+            verify(!launcher.hasInterruptedTransaction)
+            verify(!launcher.canDiscardInterrupted)
+            tryVerify(() => !banner.visible)
         }
 
         function test_9_importCreatesPlayset() {

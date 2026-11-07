@@ -16,6 +16,7 @@ Rectangle {
     signal renameRequested()
     signal deleteRequested()
     signal historyRequested()
+    signal discardInterruptedRequested()
 
     readonly property bool hasGame: Backend.games.currentSupported && Backend.games.currentInstalled
     readonly property bool hasPlayset: Backend.playsets.activeId >= 0
@@ -103,6 +104,7 @@ Rectangle {
 
         PlaySection {
             Layout.fillWidth: true
+            onDiscardRequested: root.discardInterruptedRequested()
         }
     }
 }

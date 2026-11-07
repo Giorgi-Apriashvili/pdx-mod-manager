@@ -11,6 +11,7 @@
 #include "app/gui/network_guard.hpp"
 #include "core/log.hpp"
 #include "persistence/settings_repository.hpp"
+#include "platform/file_transaction.hpp"
 #include "test_support.hpp"
 #include "update_stub.hpp"
 
@@ -808,6 +809,119 @@ TEST_CASE("Play says Steam is not running and becomes available once it runs", "
         REQUIRE(waitUntil([&] { return play->isEnabled(); }));
         CHECK(evaluate("root.blockerLines.length").toInt() == 0);
         CHECK(evaluate("Accessible.description").toString() == "Starts the game without mods");
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE(
+    "A change Recover cannot undo is discarded only after a confirmation that names its files",
+    "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    // A launch that crashed after writing its file, and whose backup is gone.
+    const fs::path target = world.userData / "load_order.txt";
+    writeText(target, "before");
+    platform::TransactionRecord record;
+    {
+        platform::FileTransactionManager journal(profile / "transactions");
+        platform::FileTransactionFaults crash;
+        crash.crashAfterWrites = std::size_t{1};
+        journal.setFaultsForTesting(crash);
+        REQUIRE_FALSE(journal.apply("launch stellaris without mods", {{target, "after"}}).ok());
+        record = require(journal.listIncomplete()).at(0);
+        fs::remove(record.directory / record.entries.at(0).backupFile);
+    }
+    RunnerOptions options;
+    options.runtime = hermeticOptions(profile, adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    const auto stateOf = [&] {
+        return runner.callBlocking([id = record.id](AppRuntime& runtime) {
+            auto loaded = runtime.context().transactions.load(id);
+            return loaded ? loaded.value().state : platform::TransactionState::Prepared;
+        });
+    };
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        auto* banner = window->findChild<QQuickItem*>(QStringLiteral("interruptedBanner"));
+        auto* discard = window->findChild<QQuickItem*>(QStringLiteral("discardInterruptedButton"));
+        auto* play = window->findChild<QQuickItem*>(QStringLiteral("playButton"));
+        QObject* confirm = window->findChild<QObject*>(QStringLiteral("confirmDialog"));
+        REQUIRE(banner);
+        REQUIRE(discard);
+        REQUIRE(play);
+        REQUIRE(confirm);
+        CHECK(banner->isVisible());
+        CHECK_FALSE(play->isEnabled());
+
+        // Offered only once Recover has failed for good.
+        CHECK_FALSE(discard->isVisible());
+        backend.launcher()->recoverInterrupted();
+        REQUIRE(waitUntil([&] { return discard->isVisible(); }));
+        CHECK(banner->property("text").toString().contains("a backup is missing or damaged"));
+        CHECK(discard->property("text").toString() == "Discard this record");
+
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        const auto key = [&](Qt::Key k) {
+            QTest::keyClick(window, k);
+            QCoreApplication::processEvents();
+        };
+        const auto openConfirmation = [&] {
+            REQUIRE(QMetaObject::invokeMethod(discard, "clicked"));
+            REQUIRE(waitUntil([&] { return confirm->property("opened").toBool(); }));
+        };
+
+        // The confirmation names the file and where the backups stay; Cancel
+        // has the focus, so Enter cancels, as Escape does.
+        openConfirmation();
+        CHECK(confirm->property("message").toString().contains(qpath(target)));
+        CHECK(confirm->property("detail").toString().contains(qpath(record.directory)));
+        CHECK(confirm->property("detail").toString().contains("Paradox launcher"));
+        REQUIRE(waitUntil([&] {
+            QQuickItem* item = window->activeFocusItem();
+            return item && item->objectName() == "cancelButton";
+        }));
+        CHECK(window->activeFocusItem()->property("text").toString() == "Cancel");
+        key(Qt::Key_Return);
+        REQUIRE(waitUntil([&] { return !confirm->property("visible").toBool(); }));
+        openConfirmation();
+        key(Qt::Key_Escape);
+        REQUIRE(waitUntil([&] { return !confirm->property("visible").toBool(); }));
+        CHECK(backend.launcher()->canDiscardInterrupted());
+        CHECK(backend.launcher()->hasInterruptedTransaction());
+        CHECK(stateOf() == platform::TransactionState::Applying);
+
+        // Confirming discards it: the banner goes and Play is available.
+        openConfirmation();
+        auto* confirmButton = window->findChild<QQuickItem*>(QStringLiteral("confirmButton"));
+        REQUIRE(confirmButton);
+        CHECK(confirmButton->property("text").toString() == "Discard");
+        REQUIRE(QMetaObject::invokeMethod(confirmButton, "clicked"));
+        REQUIRE(waitUntil([&] { return !banner->isVisible(); }));
+        REQUIRE(waitUntil([&] { return play->isEnabled(); }));
+        CHECK(stateOf() == platform::TransactionState::Abandoned);
+        CHECK(require(platform::readFile(target)) == "after");
 
         window->close();
         backend.shutdown();

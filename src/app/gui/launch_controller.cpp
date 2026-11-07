@@ -13,6 +13,8 @@
 #include <QPointer>
 #include <QTimer>
 
+#include <utility>
+
 namespace pmm::app {
 
 LaunchController::LaunchController(Backend* backend, QObject* parent)
@@ -27,9 +29,28 @@ void LaunchController::apply(LaunchData data) {
         m_state == QLatin1String("started") && m_data.runningInstance && !data.runningInstance;
     const bool resolved = m_state == QLatin1String("failed") && !m_data.canPlay && data.canPlay;
     m_data = std::move(data);
+    // Nothing is left to discard. This also ends the offer when the game
+    // changes: Backend applies an empty verdict then.
+    if (!m_data.interrupted)
+        m_discardable.clear();
     if (exited || resolved)
         setState(QStringLiteral("idle"), false);
     emit changed();
+}
+
+QStringList LaunchController::discardableFiles() const {
+    QStringList files;
+    for (const Unrecoverable& change : m_discardable)
+        files += change.files;
+    files.removeDuplicates();
+    return files;
+}
+
+QStringList LaunchController::discardFolders() const {
+    QStringList folders;
+    for (const Unrecoverable& change : m_discardable)
+        folders.push_back(change.folder);
+    return folders;
 }
 
 void LaunchController::setState(const QString& state, bool busy) {
@@ -163,7 +184,9 @@ bool LaunchController::recoverInterrupted() {
     struct Outcome {
         int recovered = 0;
         QStringList errors;
+        std::vector<Unrecoverable> unrecoverable;
     };
+    const QString game = m_backend->currentGame();
     m_backend->runner().call(
         this,
         [](AppRuntime& runtime) {
@@ -175,22 +198,93 @@ bool LaunchController::recoverInterrupted() {
             }
             for (const platform::TransactionRecord& record : interrupted.value()) {
                 auto recovered = runtime.launcher().recoverInterrupted(record.id);
-                if (recovered)
+                if (recovered) {
                     ++outcome.recovered;
+                    continue;
+                }
+                outcome.errors.push_back(qs(recovered.error().message));
+                // A backup that is missing or damaged does not come back.
+                if (recovered.error().code != ErrorCode::IntegrityCheckFailed)
+                    continue;
+                Unrecoverable change;
+                change.id = qs(record.id);
+                for (const platform::TransactionEntry& entry : record.entries)
+                    change.files.push_back(qpath(entry.target));
+                change.folder = qpath(record.directory);
+                change.error = qs(recovered.error().message);
+                outcome.unrecoverable.push_back(std::move(change));
+            }
+            return outcome;
+        },
+        [this, game](Outcome outcome) {
+            // Offered in the game Recover was pressed in.
+            m_discardable.clear();
+            if (game == m_backend->currentGame())
+                m_discardable = std::move(outcome.unrecoverable);
+            emit changed();
+            if (!outcome.errors.isEmpty()) {
+                QString text = outcome.errors.join(QLatin1Char('\n'));
+                if (!m_discardable.empty())
+                    text += QLatin1Char('\n') +
+                            tr("A missing or damaged backup cannot be put back. To launch again "
+                               "with the files as they are now, discard the record next to Play.");
+                m_backend->notifications()->error(tr("Recovery incomplete"), text);
+            } else {
+                m_backend->notifications()->info(
+                    tr("Configuration recovered"),
+                    tr("The game configuration files were put back as they were before the "
+                       "interrupted launch."));
+            }
+            m_backend->refreshLaunch();
+        });
+    return true;
+}
+
+bool LaunchController::discardInterrupted() {
+    if (m_backend->readOnly()) {
+        m_backend->notifications()->warning(
+            tr("Discarding is disabled"),
+            tr("This session runs in read-only verification mode; restart normally to discard "
+               "the record."));
+        return false;
+    }
+    if (m_discardable.empty())
+        return false;
+    // Taken now, so that a second click cannot discard twice. If discarding
+    // fails, Recover offers it again.
+    const std::vector<Unrecoverable> changes = std::exchange(m_discardable, {});
+    emit changed();
+    struct Outcome {
+        QStringList folders;
+        QStringList errors;
+    };
+    m_backend->runner().call(
+        this,
+        [changes](AppRuntime& runtime) {
+            Outcome outcome;
+            for (const Unrecoverable& change : changes) {
+                // Refused if it was recovered or discarded meanwhile.
+                auto discarded = runtime.launcher().discardInterrupted(
+                    utf8(change.id),
+                    "Discarded by the user after recovery failed: " + utf8(change.error));
+                if (discarded)
+                    outcome.folders.push_back(change.folder);
                 else
-                    outcome.errors.push_back(qs(recovered.error().message));
+                    outcome.errors.push_back(qs(discarded.error().message));
             }
             return outcome;
         },
         [this](const Outcome& outcome) {
             if (!outcome.errors.isEmpty())
-                m_backend->notifications()->error(tr("Recovery incomplete"),
+                m_backend->notifications()->error(tr("Could not discard the interrupted change"),
                                                   outcome.errors.join(QLatin1Char('\n')));
             else
                 m_backend->notifications()->info(
-                    tr("Configuration recovered"),
-                    tr("The game configuration files were put back as they were before the "
-                       "interrupted launch."));
+                    tr("Interrupted change discarded"),
+                    tr("Its files were left as they are now, and it no longer blocks launching; "
+                       "Play writes the game configuration again. Its record and remaining "
+                       "backups stay in %1.")
+                        .arg(outcome.folders.join(QStringLiteral(", "))));
             m_backend->refreshLaunch();
         });
     return true;

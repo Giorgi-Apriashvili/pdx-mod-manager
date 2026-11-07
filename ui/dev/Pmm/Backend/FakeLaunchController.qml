@@ -3,7 +3,8 @@ import QtQuick
 // Stand-in for LaunchController; blockers follow steamRunning (set it to
 // false to preview the Steam blocker, which comes first as in the real one)
 // and the fake mod list. Without a playset nothing else blocks: the game
-// starts without mods.
+// starts without mods. Set hasInterruptedTransaction to preview the Recover
+// banner, and backupMissing as well to make Recover fail and offer Discard.
 QtObject {
     id: launcher
 
@@ -26,7 +27,11 @@ QtObject {
     property string lastErrorDetail
     property bool startedWithPlayset: false
     property bool hasInterruptedTransaction: false
+    property bool backupMissing: false
     property bool canRestoreBackup: true
+    property list<string> discardableFiles: []
+    property list<string> discardFolders: []
+    readonly property bool canDiscardInterrupted: discardableFiles.length > 0
 
     signal launched(int pid)
     signal launchFailed(string message)
@@ -42,8 +47,25 @@ QtObject {
     }
 
     function recoverInterrupted(): bool {
+        if (backupMissing) {
+            discardableFiles = ["C:\\Users\\Player\\Documents\\Paradox Interactive\\Stellaris\\dlc_load.json"]
+            discardFolders = ["C:\\Users\\Player\\AppData\\Roaming\\ParadoxModManager\\transactions\\20261107T101500000Z-0000"]
+            notifications.post("error", "Recovery incomplete", "The backup of \"dlc_load.json\" is missing or unreadable, so nothing was restored.")
+            return true
+        }
         hasInterruptedTransaction = false
         notifications.post("info", "Configuration recovered", "The game configuration was restored to its state before the interrupted launch.")
+        return true
+    }
+
+    function discardInterrupted(): bool {
+        if (!canDiscardInterrupted)
+            return false
+        notifications.post("info", "Interrupted change discarded", "Its files were left as they are now. Its record and remaining backups stay in " + discardFolders.join(", ") + ".")
+        hasInterruptedTransaction = false
+        backupMissing = false
+        discardableFiles = []
+        discardFolders = []
         return true
     }
 
