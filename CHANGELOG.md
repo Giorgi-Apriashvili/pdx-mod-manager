@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-07
+
+A way out of an interrupted change that cannot be recovered, and fixes for imports and mod list edits. Installed copies update to this version from the update banner or **Settings > Updates**.
+
 ### Added
 
 - **Discard an interrupted change that cannot be recovered.** When **Recover** cannot undo an interrupted configuration change because a backup is missing or damaged, the banner next to Play now offers **Discard this record**. After a confirmation that lists the files, the change no longer blocks Play, its files stay as they are, and the next Play writes the game configuration again; until now the game stayed blocked until the change's folder was moved by hand. Recover also no longer needs the backup of a file that is already back to its original contents.
