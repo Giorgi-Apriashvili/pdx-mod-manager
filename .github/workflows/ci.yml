@@ -3,12 +3,13 @@
 # Qt-free libraries, a clang-format 22 check, the update contract check
 # (packaging/update-contract.txt) and the UI contrast check. Packages and releases
 # are in release.yml, which also runs this workflow first.
+#
+# It runs only for a release and when started by hand (Actions > CI > Run
+# workflow): pushes are checked locally with scripts/check.sh, whose --full mode
+# runs the same checks (owner's decision, 2026-11-07).
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_call:
   workflow_dispatch:
 
@@ -19,7 +20,6 @@ permissions:
 # group different from the caller's own group, which would deadlock.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   QT_VERSION: '6.10.3'

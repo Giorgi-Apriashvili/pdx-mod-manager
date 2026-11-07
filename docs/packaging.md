@@ -241,8 +241,8 @@ Inno Setup 6.5.2 is the oldest version that can compile it (PNG wizard images).
   the first place to look when an update did not arrive.
 
 [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) is the
-check the release workflow runs on a built setup, also for pull requests that touch
-the packaging. It covers the first install (expected files including
+check the release workflow runs on a built setup, in a release and in a dry run.
+It covers the first install (expected files including
 `plugins\tls\qschannelbackend.dll`, the single Start Menu shortcut and its target, the
 desktop shortcut), a first install into a folder with another program's files, one
 into a folder with a non-ASCII name, the refusal to replace a newer installed

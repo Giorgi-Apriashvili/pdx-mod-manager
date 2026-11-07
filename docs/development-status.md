@@ -20,7 +20,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 
 | Area | Location | State | Evidence |
 | --- | --- | --- | --- |
-| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI green on `main` on 2026-10-30 with the four Windows-only checks | |
+| Build, presets, pinned dependencies, CI, format check | `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `.github/workflows/ci.yml` | done; CI green on `main` on 2026-10-30 with the four Windows-only checks. Since 2026-11-07 (owner's decision) CI runs only for a release and by hand; pushes are checked locally with `scripts/check.sh` (`--full` runs the same checks) | |
 | Core model, catalog, logging and redaction, SHA-256, UTF-8 | `src/core` | done, tested | |
 | Playset operations, readiness, dependencies, import plan | `src/core` | done, tested | |
 | Share-code protocol v1 and regression fixtures | `src/sharing`, [`share-code-protocol.md`](share-code-protocol.md) | done, tested | |
@@ -369,11 +369,13 @@ Packaging ([`packaging.md`](packaging.md)):
 
 1. Done 2026-10-30: the repository is on GitHub
    (https://github.com/Giorgi-Apriashvili/pdx-mod-manager, public, MIT), `main` is
-   protected (CI checks required for merges, no force pushes or deletion),
+   protected (no force pushes or deletion; CI checks were required for merges
+   until 2026-11-07, when CI moved to releases only),
    and the code base is clang-tidy clean (`.clang-tidy`, `tests/.clang-tidy`).
-2. Done 2026-10-30: the required checks are "Build and test (Windows MSVC)",
+2. Done 2026-10-30: the required checks were "Build and test (Windows MSVC)",
    "Format check", "Sanitizers (Windows MSVC, ASan, Qt-free libraries)" and
-   "Warnings (Windows clang-cl, Qt-free libraries)".
+   "Warnings (Windows clang-cl, Qt-free libraries)". Removed 2026-11-07: CI no
+   longer runs on pushes or pull requests, so they could never pass.
 3. Optional: warn when two enabled EU4 mods contain the same file.
 4. Implement the import options item above, with tests. Done 2026-11-06: the
    helper exit wait and the launch refresh. The discard flow for unrecoverable
@@ -393,6 +395,10 @@ Packaging ([`packaging.md`](packaging.md)):
 
 ## Working rules
 
+- Before every push run `bash scripts/check.sh`, and `--full` for larger changes
+  and before a release: GitHub runs CI only for releases and by hand. Releases
+  start by pushing a tag `vX.Y.Z` ([`releasing.md`](releasing.md)), only with the
+  owner's OK.
 - Real game data is read-only unless the user approves a live step: never
   write, rename or delete under Steam, the game folders or
   `Documents/Paradox Interactive`, never start a game or press Play, never

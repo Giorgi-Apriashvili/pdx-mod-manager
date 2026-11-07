@@ -1,6 +1,7 @@
 # Release: full CI, the Windows packages (ZIP and installer), then a GitHub
-# release. Procedure: docs/releasing.md. Pull requests that touch the packaging
-# only build and smoke test the packages; they never publish.
+# release. Procedure: docs/releasing.md. Pushing a tag vX.Y.Z starts a release;
+# a run started by hand (Actions > Release > Run workflow) with dry_run builds
+# and tests the packages and publishes nothing.
 #
 # The release is created as a draft, filled, and only then published, so the
 # releases/latest API that the in-app updater reads never sees a partial release.
@@ -25,11 +26,6 @@ on:
         default: false
   push:
     tags: ['v*.*.*']
-  pull_request:
-    paths:
-      - 'packaging/**'
-      - 'cmake/Packaging.cmake'
-      - '.github/workflows/release.yml'
 
 permissions:
   contents: read
@@ -38,7 +34,6 @@ permissions:
 # run would wait for itself.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   QT_VERSION: '6.10.3'
@@ -90,9 +85,6 @@ jobs:
               version="${GITHUB_REF_NAME#v}"
               publish=true
               ;;
-            pull_request)
-              version="$project_version"
-              ;;
             *)
               fail "Unexpected event $GITHUB_EVENT_NAME."
               ;;
@@ -105,34 +97,32 @@ jobs:
           [ "$version" = "$project_version" ] ||
             fail "Version $version does not match project(VERSION) $project_version in CMakeLists.txt."
 
-          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
-            [ "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER" ] ||
-              fail "Only the repository owner can run a release (triggered by $GITHUB_TRIGGERING_ACTOR)."
+          [ "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER" ] ||
+            fail "Only the repository owner can run a release (triggered by $GITHUB_TRIGGERING_ACTOR)."
 
-            # Released copies ask for updates by repository id, so a release
-            # anywhere else would never reach them.
-            contract_id="$(bash scripts/check-update-contract.sh get repository_id)"
-            [ "$GITHUB_REPOSITORY_ID" = "$contract_id" ] ||
-              fail "This repository has the id $GITHUB_REPOSITORY_ID; the application asks repository $contract_id for updates."
-            contract_name="$(bash scripts/check-update-contract.sh get repository)"
-            if [ "${GITHUB_REPOSITORY,,}" != "${contract_name,,}" ]; then
-              echo "::warning::The repository is now $GITHUB_REPOSITORY; update HOMEPAGE_URL in CMakeLists.txt and 'repository' in packaging/update-contract.txt ($contract_name)."
-            fi
-
-            # "identical" or "behind": main contains this commit.
-            status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status)"
-            case "$status" in
-              identical | behind) ;;
-              *) fail "Commit $GITHUB_SHA is not on main ($status)." ;;
-            esac
-
-            if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .html_url > /dev/null 2>&1; then
-              fail "Release $tag already exists."
-            fi
-            # Higher than every published release; checked again before the draft.
-            bash scripts/check-update-contract.sh published "$version" ||
-              fail "Version $version must be higher than every published release."
+          # Released copies ask for updates by repository id, so a release
+          # anywhere else would never reach them.
+          contract_id="$(bash scripts/check-update-contract.sh get repository_id)"
+          [ "$GITHUB_REPOSITORY_ID" = "$contract_id" ] ||
+            fail "This repository has the id $GITHUB_REPOSITORY_ID; the application asks repository $contract_id for updates."
+          contract_name="$(bash scripts/check-update-contract.sh get repository)"
+          if [ "${GITHUB_REPOSITORY,,}" != "${contract_name,,}" ]; then
+            echo "::warning::The repository is now $GITHUB_REPOSITORY; update HOMEPAGE_URL in CMakeLists.txt and 'repository' in packaging/update-contract.txt ($contract_name)."
           fi
+
+          # "identical" or "behind": main contains this commit.
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status)"
+          case "$status" in
+            identical | behind) ;;
+            *) fail "Commit $GITHUB_SHA is not on main ($status)." ;;
+          esac
+
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .html_url > /dev/null 2>&1; then
+            fail "Release $tag already exists."
+          fi
+          # Higher than every published release; checked again before the draft.
+          bash scripts/check-update-contract.sh published "$version" ||
+            fail "Version $version must be higher than every published release."
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             existing="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag" \
               --jq "map(select(.ref == \"refs/tags/$tag\")) | length")"
@@ -151,17 +141,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Version $version, tag $tag, publish=$publish, prerelease=$prerelease"
 
-  # A pull request already runs ci.yml on its own.
   ci:
     name: CI
     needs: validate
-    if: ${{ github.event_name != 'pull_request' }}
     uses: ./.github/workflows/ci.yml
 
   package:
     name: Package (Windows)
     needs: [validate, ci]
-    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.ci.result == 'success' || needs.ci.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.ci.result == 'success' }}
     runs-on: windows-2025
     timeout-minutes: 60
     env:

@@ -9,21 +9,22 @@ prerequisites and commands are in the [README](README.md); the structure is in
 
 1. Branch from `main` (`feature/<topic>`, `fix/<topic>`).
 2. Make small, coherent commits; each should build and pass the tests.
-3. Before opening a pull request run, at minimum:
+3. Run the local checks before you push or open a pull request. GitHub runs CI
+   only for a release and when started by hand (Actions > CI > Run workflow),
+   not on pushes or pull requests, so these are what keeps `main` working:
 
    ```sh
-   cmake --preset core-debug && cmake --build --preset core-debug && ctest --preset core-debug
-   scripts/check-format.sh
+   bash scripts/check.sh          # small changes: the debug build with Qt and every
+                                  # test, formatting, QML lint, update contract, contrast
+   bash scripts/check.sh --full   # larger changes and every release: also ASan and
+                                  # clang-cl with UBSan, the QML preview tests, clang-tidy
+                                  # on changed files, and a build of HEAD from a fresh checkout
    ```
 
-   and, if you touched `src/app` or `ui/`, the `debug` preset with Qt
-   (`ctest --preset debug` includes the application tests, among them the
-   check that QML shows data as plain text) and, after colour changes,
-   `python3 ui/dev/check_contrast.py`.
-4. Open a pull request against `main`. CI must pass: build and tests with
-   MSVC and warnings as errors, including the application tests, ASan and a
-   clang-cl build with UBSan and warnings as errors on the Qt-free libraries, the format
-   check and the contrast check.
+   `--full` runs everything the release's CI runs (build and tests with MSVC and
+   warnings as errors, ASan, clang-cl with UBSan and warnings as errors on the
+   Qt-free libraries, the format, update contract and contrast checks).
+4. Open a pull request against `main`, and say which checks you ran.
 5. Update documentation in the same pull request: the changelog entry under
    *Unreleased*, an ADR for a material trade-off, the support matrix only with
    evidence.

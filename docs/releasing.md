@@ -39,7 +39,7 @@ earlier release. The version comes from `project(VERSION)` in the root
    relative link does not resolve on the release page. A version without a section
    still releases, with GitHub's generated notes and a workflow warning.
 3. **Check the update contract**: `bash scripts/check-update-contract.sh` must
-   pass (CI runs it in "Format check" as well). If it fails, the release would not
+   pass (`scripts/check.sh` runs it, and so does the release's CI). If it fails, the release would not
    reach installed copies: put the value back, never the contract file
    ([the update contract](#the-update-contract)).
 4. **Re-test the update path when the release touches the updater, the installer,
@@ -54,16 +54,22 @@ earlier release. The version comes from `project(VERSION)` in the root
    that fails, [withdraw the release](#withdrawing-a-bad-release). The smoke test
    covers the installer's side on every run, but not a released copy finding,
    verifying and starting the new release, which only a published release can show.
-5. **Commit to `main`** and wait for CI to pass.
-6. **Dry run**: GitHub > Actions > Release > Run workflow, branch `main`, the
-   version, *dry run* ticked. See below for what it does.
-7. **Release**: the same with *dry run* off. Tick *prerelease* for a test
-   release; it does not become the "latest" release, so the updater does
-   not offer it.
-8. **Verify** the result (see below).
+5. **Check locally and push**: `bash scripts/check.sh --full` on the release
+   commit, then commit to `main` and push. GitHub runs no CI on pushes; the
+   release run repeats it on a clean runner before it builds anything.
+6. **Dry run**, when step 4 applies: GitHub > Actions > Release > Run workflow,
+   branch `main`, the version, *dry run* ticked. See below for what it does.
+7. **Release**: push the tag, which must point at a commit on `main`:
 
-Pushing a tag `vx.y.z` that points at a commit on `main` does the same as step 5
-without the dialog. Prefer the dialog: it also creates the tag.
+   ```sh
+   git tag vx.y.z
+   git push origin vx.y.z
+   ```
+
+   For a test release, use the dialog of step 6 with *dry run* off and
+   *prerelease* ticked instead; it creates the tag itself. A pre-release does not
+   become the "latest" release, so the updater does not offer it.
+8. **Verify** the result (see below).
 
 ## What the workflow does
 
@@ -72,7 +78,7 @@ without the dialog. Prefer the dialog: it also creates the tag.
 | Validate release request | The version is `x.y.z` without leading zeros and equals `project(VERSION)`; the run was started by the owner; the commit is on `main`; the repository's id is the one installed copies ask (`GITHUB_REPOSITORY_ID`, a warning if its name is no longer the one in `HOMEPAGE_URL`); no release with that tag exists; the version is higher than every published release; for a dispatched run, the tag does not exist yet. Warns if `CHANGELOG.md` has no section. |
 | CI | The whole of [`ci.yml`](../.github/workflows/ci.yml): build and test with MSVC, ASan, and clang-cl warnings and UBSan on the Qt-free libraries, format, the update contract. |
 | Package (Windows) | `release` preset without tests, `cpack`, the installer; checks that `pmm-app.exe` contains the repository id as text, so a build that asks another repository for updates is never published here; then [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1) (silent installs to temp folders: expected files including the TLS plugin, uninstall entry and version, another program's folders left alone, a folder with a non-ASCII name, the single Start Menu shortcut and the desktop shortcut, refusal to replace a newer version, failed upgrades that leave the previous version working, a failed update run that starts it again, a working upgrade, the update run with the application's exact arguments while the mutex is held, which starts the real `pmm-app.exe`, uninstall leaves nothing). Uploads the packages as workflow artifacts. |
-| Publish GitHub release | Needs all of the above. Generates and verifies `SHA256SUMS.txt`, checks the assets and the version against the update contract once more, creates a **draft**, uploads every asset, compares names and sizes, and only then flips the draft to published. The tag is created by that flip. |
+| Publish GitHub release | Needs all of the above. Generates and verifies `SHA256SUMS.txt`, checks the assets and the version against the update contract once more, creates a **draft**, uploads every asset, compares names and sizes, and only then flips the draft to published. A pushed tag exists already; for a run started from the dialog, that flip creates the tag. |
 
 The publish job is the only one with `contents: write`. Because the release stays
 a draft until it is complete, the `releases/latest` API that the update check
@@ -90,9 +96,11 @@ registration, mutex, shortcuts and standard profile of the user who runs it.
 of the workflow run (30 days): download them from the run's summary page and try
 them. Nothing appears under Releases and no tag is created.
 
-**Pull requests** that change `packaging/**`, `cmake/Packaging.cmake` or
-`release.yml` run the package job and the smoke test only; CI runs for them
-through its own workflow as usual.
+**CI outside releases**: [`ci.yml`](../.github/workflows/ci.yml) runs for every
+release and when started by hand (Actions > CI > Run workflow), never on pushes or
+pull requests (owner's decision, 2026-11-07). Pushes are checked locally with
+[`scripts/check.sh`](../scripts/check.sh), whose `--full` mode runs the same
+checks.
 
 If a run fails after creating the draft, the draft stays (invisible to the
 public, without a tag). Fix the cause and run the workflow again: it deletes
