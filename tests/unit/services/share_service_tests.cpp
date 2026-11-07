@@ -397,6 +397,90 @@ TEST_CASE("Replacing a playset is explicit, exact and recoverable", "[services][
     CHECK(shape(require(playsets.playset(target)).entries) == shape(old));
 }
 
+TEST_CASE("An import that queues no acquisition creates and reuses no job", "[services][share]") {
+    const std::string code = senderCode();
+    // Two identical computers; only the first import queues downloads. On both,
+    // 2000000002 is already downloading and 2000000003 has no job.
+    World queued;
+    World notQueued;
+    std::int64_t target = 0;
+    AcquisitionJob downloading;
+    for (World* w : {&queued, &notQueued}) {
+        w->addWorkshopMod("2000000001", "UI Overhaul Example");
+        w->refresh();
+        target = makePlayset(*w, {workshopEntry("2000000050", "Old A")}, "Target");
+        persistence::AcquisitionJobRepository jobs(*w->db);
+        downloading =
+            require(jobs.createOrReuse({kGame, source::SteamWorkshop, "2000000002"}, target));
+        downloading.state = AcquisitionState::Downloading;
+        downloading.attempts = 1;
+        downloading.bytesDownloaded = 1000;
+        downloading.bytesTotal = 4000;
+        requireOk(jobs.update(downloading));
+        downloading = require(jobs.get(downloading.id));
+    }
+    const auto apply = [&](World& w, ImportMode mode, bool queue) {
+        ShareService share(w.ctx);
+        ImportOptions options;
+        options.queueAcquisition = queue;
+        const std::optional<std::int64_t> replaced =
+            mode == ImportMode::Replace ? std::optional<std::int64_t>(target) : std::nullopt;
+        return require(share.applyImport(share.previewImport(code), mode, replaced, {}, options));
+    };
+    // Everything an import writes except its jobs.
+    const auto exceptJobs = [](const std::string& state) {
+        std::istringstream in(state);
+        std::string out;
+        for (std::string line; std::getline(in, line);) {
+            if (line.rfind("job ", 0) != 0)
+                out += line + "\n";
+        }
+        return out;
+    };
+
+    for (const ImportMode mode : {ImportMode::New, ImportMode::Replace}) {
+        INFO((mode == ImportMode::New ? "as a new playset" : "replacing a playset"));
+        const AppliedImport withJobs = apply(queued, mode, true);
+        // A job insert would fail the whole import.
+        injectJobInsertFailure(notQueued);
+        const AppliedImport applied = apply(notQueued, mode, false);
+        removeJobInsertFailure(notQueued);
+
+        // Queued as before: the running download is reused, 2000000003 gets one.
+        REQUIRE(withJobs.jobs.size() == 2);
+        CHECK(withJobs.jobs[0].id == downloading.id);
+        CHECK(withJobs.jobs[1].identity.id == "2000000003");
+
+        // Not queued: no job, and the running download is untouched.
+        CHECK(applied.jobs.empty());
+        persistence::AcquisitionJobRepository jobs(*notQueued.db);
+        const std::vector<AcquisitionJob> stored = require(jobs.listForGame(kGame));
+        REQUIRE(stored.size() == 1);
+        CHECK(stored[0].id == downloading.id);
+        CHECK(stored[0].state == AcquisitionState::Downloading);
+        CHECK(stored[0].playsetId == std::optional<std::int64_t>(target));
+        CHECK(stored[0].bytesDownloaded == 1000);
+        CHECK(stored[0].updatedAt == downloading.updatedAt);
+
+        // Everything else is identical: playsets, entries, history, selection.
+        CHECK(applied.playsetId == withJobs.playsetId);
+        CHECK(applied.playsetName == withJobs.playsetName);
+        CHECK(applied.replacedHistoryId == withJobs.replacedHistoryId);
+        CHECK(applied.plan.toAcquire == withJobs.plan.toAcquire);
+        CHECK(exceptJobs(dumpState(notQueued)) == exceptJobs(dumpState(queued)));
+        if (mode == ImportMode::Replace)
+            CHECK(applied.replacedHistoryId.has_value());
+
+        // The entry without a job reads "Not installed", not "cancelled".
+        const PlaysetView view = require(loadPlaysetView(notQueued.ctx, applied.playsetId));
+        REQUIRE(view.rows.size() == 4);
+        CHECK(view.rows[0].readiness.status == EntryStatus::Downloading);
+        CHECK(view.rows[1].entry.identity.id == "2000000003");
+        CHECK(view.rows[1].readiness.status == EntryStatus::Missing);
+        CHECK(view.rows[1].readiness.detail == "Not installed. Download it from Steam Workshop.");
+    }
+}
+
 TEST_CASE("A failed import leaves existing playsets and the database untouched",
           "[services][share]") {
     const std::string code = senderCode();

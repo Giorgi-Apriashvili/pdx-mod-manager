@@ -261,8 +261,10 @@ Invokables:
     snapshotted and restorable from the history).
   - It persists the exact playset, queues acquisition of missing Workshop
     entries (disabled ones included) and activates the playset. With Steam
-    off nothing is queued, not even for a later session: the entries stay
-    "Missing" until `acquireMissing()`. Signal `imported(playsetId)`, -1 on
+    off nothing is queued, not even for a later session: an entry whose mod
+    has no job stays "Missing" until `acquireMissing()`, earlier jobs keep
+    their state, and the notification counts the entries of each kind (no
+    job, still queued, failed before). Signal `imported(playsetId)`, -1 on
     failure, with a notification.
   - A code for another supported game is imported as a new playset of that
     game (replace is refused), and the window switches to that game.
@@ -275,6 +277,8 @@ Invokables:
 - `playsetName`, `proposedName`;
 - `total`, `enabled`, `installed`, `missing`, `missingEnabled`,
   `missingDisabled`, `localUnmapped`;
+- `downloads` (bool): false when Workshop downloads are off in this session,
+  so the import queues nothing;
 - `warnings` (list; the portability note is not repeated here);
 - `entries` (list of `{position, name, source, providerId, enabled,
   statusText}`).

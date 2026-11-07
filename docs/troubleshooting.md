@@ -260,7 +260,9 @@ listed as missing, nothing is subscribed or downloaded, and an import queues
 no downloads. `--read-only` does the same and also never writes game files
 or launches a game; Play then shows "Read-only verification mode". Start the
 manager without these options to download or play; imported entries that are
-still missing can then be fetched with **Download missing**.
+still missing can then be fetched with **Download missing** (or **Retry**
+after an earlier failed download), and downloads queued before resume on
+their own.
 
 ## The database was created by a newer version
 

@@ -1226,18 +1226,24 @@ TEST_CASE("Importing with downloads off leaves nothing for a later session to do
                    backend.mods()->count() == 2;
         }));
 
-        const std::size_t unfinished = runner.callBlocking([](AppRuntime& runtime) {
-            auto jobs = persistence::AcquisitionJobRepository(runtime.database()).listUnfinished();
+        // No job record at all, not even a withdrawn (cancelled) one.
+        const std::size_t recorded = runner.callBlocking([](AppRuntime& runtime) {
+            auto jobs =
+                persistence::AcquisitionJobRepository(runtime.database()).listForGame(kGame);
             return jobs ? jobs.value().size() : std::size_t{99};
         });
-        CHECK(unfinished == 0);
+        CHECK(recorded == 0);
         const ModRowData* gone = backend.mods()->row(1);
         REQUIRE(gone);
         CHECK(gone->entry.identity.id == "4002");
         CHECK(gone->status == "missing");
         CHECK(gone->statusText == "Missing");
+        // The details panel: not the text of a cancelled download.
+        CHECK(gone->problems.join('\n').toStdString() ==
+              "Not installed. Download it from Steam Workshop.");
         CHECK(backend.notifications()->latest().value("text").toString().contains(
-            "1 missing Workshop mod listed; downloads are off in this session."));
+            "1 missing Workshop mod not queued because downloads are off in this session; "
+            "restart Paradox Mod Manager normally, then use Download missing."));
         backend.shutdown();
         runner.shutdown();
     }
@@ -1260,6 +1266,97 @@ TEST_CASE("Importing with downloads off leaves nothing for a later session to do
     runtime->acquisition()->start(kGame);
     CHECK(sessions.opened == 0);
     CHECK(sessions.sent == 0);
+}
+
+TEST_CASE("Importing with downloads off reports the downloads from before as they stand",
+          "[app][backend]") {
+    // The import leaves earlier jobs alone, so a missing mod reads as its
+    // newest job says, and the notification must say the same.
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    for (const char* id : {"4001", "4002", "4003", "4004"})
+        world.addWorkshopMod(id, std::string("Mod ") + id);
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter)); // --no-steam
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    backend.playsets()->create(QStringLiteral("Source"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    const std::int64_t source = backend.activePlaysetId();
+    backend.mods()->addMods({"steam-workshop:4001", "steam-workshop:4002", "steam-workshop:4003",
+                             "steam-workshop:4004"});
+    REQUIRE(waitUntil([&] { return backend.mods()->count() == 4 && !backend.mods()->busy(); }));
+    backend.sharing()->exportCode();
+    REQUIRE(waitUntil([&] { return !backend.sharing()->lastExportCode().isEmpty(); }));
+
+    // Only 4001 is still installed. An earlier session with Steam left 4003
+    // queued, and the download of 4004 failed.
+    for (const char* id : {"4002", "4003", "4004"})
+        fs::remove_all(world.workshop / id);
+    const std::vector<AcquisitionJob> before =
+        require(runner.callBlocking([](AppRuntime& runtime) -> Result<std::vector<AcquisitionJob>> {
+            PMM_TRY(runtime.games().rescanMods(kGame));
+            persistence::AcquisitionJobRepository jobs(runtime.database());
+            PMM_TRY(jobs.createOrReuse({kGame, source::SteamWorkshop, "4003"}, std::nullopt));
+            auto failed = jobs.createOrReuse({kGame, source::SteamWorkshop, "4004"}, std::nullopt);
+            if (!failed)
+                return std::move(failed).error();
+            failed.value().state = AcquisitionState::Failed;
+            failed.value().attempts = 3;
+            failed.value().errorCode = "timeout";
+            failed.value().errorMessage = "Steam did not finish the download.";
+            PMM_TRY(jobs.update(failed.value()));
+            return jobs.listForGame(kGame);
+        }));
+    REQUIRE(before.size() == 2);
+
+    backend.sharing()->previewImport(backend.sharing()->lastExportCode());
+    REQUIRE(
+        waitUntil([&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+    const QVariantMap preview = backend.sharing()->preview();
+    REQUIRE(preview.value("missing").toInt() == 3);
+    // The confirm button's tooltip says that nothing will be queued.
+    CHECK(preview.contains("downloads"));
+    CHECK_FALSE(preview.value("downloads").toBool());
+    REQUIRE(backend.sharing()->confirmImport("new", -1, QStringLiteral("Imported")));
+    REQUIRE(waitUntil([&] {
+        return backend.activePlaysetId() != source &&
+               backend.mods()->playsetId() == backend.activePlaysetId() &&
+               backend.mods()->count() == 4;
+    }));
+
+    const std::vector<AcquisitionJob> after = require(runner.callBlocking([](AppRuntime& runtime) {
+        return persistence::AcquisitionJobRepository(runtime.database()).listForGame(kGame);
+    }));
+    REQUIRE(after.size() == 2);
+    for (std::size_t i = 0; i < after.size(); ++i) {
+        CHECK(after[i].id == before[i].id);
+        CHECK(after[i].state == before[i].state);
+        CHECK(after[i].updatedAt == before[i].updatedAt);
+    }
+    const ModRowData* missing = backend.mods()->row(1);
+    const ModRowData* queued = backend.mods()->row(2);
+    const ModRowData* failed = backend.mods()->row(3);
+    REQUIRE((missing && queued && failed));
+    CHECK(missing->statusText == "Missing");
+    CHECK(missing->problems.join('\n').toStdString() ==
+          "Not installed. Download it from Steam Workshop.");
+    CHECK(queued->statusText == "Queued");
+    CHECK(failed->statusText == "Failed");
+    CHECK(failed->problems.join('\n').toStdString() == "Steam did not finish the download.");
+    const QString text = backend.notifications()->latest().value("text").toString();
+    CHECK(text.contains("1 missing Workshop mod not queued because downloads are off in this "
+                        "session; restart Paradox Mod Manager normally, then use Download "
+                        "missing."));
+    CHECK(text.contains("1 missing Workshop mod still queued from before; downloading resumes "
+                        "when Paradox Mod Manager is restarted normally."));
+    CHECK(text.contains("1 missing Workshop mod could not be downloaded before; restart Paradox "
+                        "Mod Manager normally, then use Retry in Downloads."));
+    backend.shutdown();
+    runner.shutdown();
 }
 
 #if defined(PMM_STEAM_HELPER_PATH) && defined(PMM_FAKE_STEAM_API_PATH)

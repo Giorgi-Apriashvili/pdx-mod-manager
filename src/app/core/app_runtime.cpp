@@ -144,6 +144,15 @@ void AppRuntime::runMaintenance() {
         logInfo(kComponent, "removed finished acquisition jobs",
                 {{"jobs", std::to_string(removed.value())}});
     }
+    // Left by imports with downloads off in 0.1.0 and 0.1.1; they would read
+    // "cancelled" instead of "Not installed" until the retention above.
+    if (auto removed = jobs.removeWithdrawnImportJobs(); !removed) {
+        logWarning(kComponent, "removing withdrawn import jobs failed",
+                   {{"error", removed.error().message}});
+    } else if (removed.value() > 0) {
+        logInfo(kComponent, "removed withdrawn import jobs",
+                {{"jobs", std::to_string(removed.value())}});
+    }
     if (Status pruned = m_transactions->prune(kKeptTransactions); !pruned)
         logWarning(kComponent, "pruning configuration transactions failed",
                    {{"error", pruned.error().message}});

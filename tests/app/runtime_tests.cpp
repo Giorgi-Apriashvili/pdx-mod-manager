@@ -112,6 +112,7 @@ TEST_CASE("AppRuntime applies retention at start-up", "[app][runtime]") {
         auto job = require(
             jobs.createOrReuse(ModIdentity{kGame, source::SteamWorkshop, "123"}, std::nullopt));
         job.state = AcquisitionState::Cancelled;
+        job.errorCode = "cancelled"; // by the user, so only the retention removes it
         requireOk(jobs.update(job));
         CHECK(require(jobs.listForGame(kGame)).size() == 1);
     }
@@ -121,6 +122,39 @@ TEST_CASE("AppRuntime applies retention at start-up", "[app][runtime]") {
     auto runtime = require(AppRuntime::create(options));
     persistence::AcquisitionJobRepository jobs(runtime->database());
     CHECK(require(jobs.listForGame(kGame)).empty());
+}
+
+TEST_CASE("AppRuntime removes the jobs that imports with downloads off withdrew at start-up",
+          "[app][runtime]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    std::int64_t cancelled = 0;
+    {
+        auto runtime = require(AppRuntime::create(hermeticOptions(profile, adapter)));
+        persistence::AcquisitionJobRepository jobs(runtime->database());
+        // What an import with downloads off left in 0.1.0 and 0.1.1.
+        auto withdrawn = require(
+            jobs.createOrReuse(ModIdentity{kGame, source::SteamWorkshop, "123"}, std::nullopt));
+        withdrawn.state = AcquisitionState::Cancelled;
+        requireOk(jobs.update(withdrawn));
+        // A download the user cancelled.
+        auto user = require(
+            jobs.createOrReuse(ModIdentity{kGame, source::SteamWorkshop, "456"}, std::nullopt));
+        user.state = AcquisitionState::Cancelled;
+        user.errorCode = "cancelled";
+        user.errorMessage = "Cancelled before anything was requested from Steam.";
+        requireOk(jobs.update(user));
+        cancelled = user.id;
+        CHECK(require(jobs.listForGame(kGame)).size() == 2);
+    }
+    // Long before the 7-day retention.
+    auto runtime = require(AppRuntime::create(hermeticOptions(profile, adapter)));
+    persistence::AcquisitionJobRepository jobs(runtime->database());
+    const std::vector<AcquisitionJob> remaining = require(jobs.listForGame(kGame));
+    REQUIRE(remaining.size() == 1);
+    CHECK(remaining[0].id == cancelled);
 }
 
 TEST_CASE("AppRuntime reports interrupted configuration changes without recovering them",

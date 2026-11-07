@@ -36,6 +36,12 @@ public:
     Result<std::vector<AcquisitionJob>> listForGame(const GameKey& game); // creation order
     // Deletes terminal jobs last updated before `cutoffUnixMs`; returns count.
     Result<int> removeFinishedOlderThan(std::int64_t cutoffUnixMs);
+    // Deletes the jobs that an import with downloads off created and withdrew
+    // in the same transaction (versions 0.1.0 and 0.1.1): Cancelled with no
+    // error, no attempt and no byte. A cancellation by the user always records
+    // the error code "cancelled" and a message, so those jobs are kept; nothing
+    // else writes the Cancelled state. Returns the count.
+    Result<int> removeWithdrawnImportJobs();
 
 private:
     Database& m_db;
