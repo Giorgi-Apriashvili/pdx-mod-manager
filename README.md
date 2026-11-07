@@ -13,9 +13,9 @@ The first release targets **Stellaris** and **Europa Universalis IV** on Windows
 ([ADR 0009](docs/adr/0009-windows-only.md)). It needs no server, account or
 telemetry.
 
-> **Status: 0.1.1 ([2026-11-07](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1)).** The desktop
+> **Status: 0.1.2 ([2026-11-07](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.2)).** The desktop
 > application (`pmm-app`), the EU4 and Stellaris adapters and every layer below
-> them are implemented and covered by 517 automated tests. On Windows 11 with Steam,
+> them are implemented and covered by 539 automated tests. On Windows 11 with Steam,
 > both games were started directly by the application with the selected mods
 > (checked in the games' own logs), a missing Workshop mod was subscribed and
 > downloaded live for each game, and the failure cases behaved as specified

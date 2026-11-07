@@ -513,7 +513,11 @@ Packaging ([`packaging.md`](packaging.md)):
    and checked in CI and in the workflow. Done 2026-11-07:
    [0.1.1](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1) released from `4046b83` ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42313402701)) with Play without a
    playset and Play requiring the Steam client. The owner's installed 0.1.0
-   updated itself to it on 2026-11-07, the first real update.
+   updated itself to it on 2026-11-07, the first real update. Done 2026-11-07:
+   [0.1.2](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.2) released from `2dadc9b` by pushing its tag ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42359177117))
+   with backlog items 1-5: discarding an interrupted change that Recover cannot
+   undo, imports with downloads off, all-or-nothing edits, descriptor files that
+   share a mod id, and the update contract check matching code only.
 
 ## Working rules
 
