@@ -120,6 +120,8 @@ mutate 'the application in another folder' 's/^#define AppExe .*/#define AppExe 
 mutate 'another update parameter in the setup' 's/{param:PMMUPDATE|0}/{param:UPDATE|0}/' "$iss"
 mutate 'another mutex in the setup' 's/^#define AppRunningMutex .*/#define AppRunningMutex "Local\\Other"/' "$iss"
 mutate 'another setup name' 's/^OutputBaseFilename=.*/OutputBaseFilename=pmm-setup/' "$iss"
+because 'installer.iss starts the application again after an update run'
+mutate 'no relaunch after an update run' 's/; Check: IsPmmUpdate/; Check: not IsPmmUpdate/' "$iss"
 smoke=packaging/windows/smoke-test-installer.ps1
 mutate 'no TLS plugin in the smoke test' 's/.plugins\\tls\\qschannelbackend\.dll.,//' "$smoke"
 mutate 'other update arguments in the smoke test' "s|'/PMMUPDATE=1')|'/PMMUPDATE=1', '/NOICONS')|" "$smoke"
@@ -158,6 +160,8 @@ harmless 'a token in a commented-out line' \
   '/UserAgentHeader/a // request.setRawHeader("Authorization", "token x");' src/app/core/update_client.cpp
 because 'installer.iss checks AppMutex'
 mutate 'the AppMutex line commented out' 's/^AppMutex=/; &/' "$iss"
+because 'installer.iss starts the application again after an update run'
+mutate 'the relaunch after an update run commented out' '/; Check: IsPmmUpdate/s/^/; /' "$iss"
 because 'installer.iss recognises /PMMUPDATE=1'
 mutate 'the update parameter only in a Pascal comment' '/{param:PMMUPDATE|0}/s|Result := |&False; // |' "$iss"
 because 'installer.iss polls the mutex'

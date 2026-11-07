@@ -445,6 +445,8 @@ check_sources() {
   has "installer.iss waits for $mutex" "#define AppRunningMutex \"$mutex\"" "$iss"
   has "installer.iss checks AppMutex" "AppMutex={#AppRunningMutex}" "$iss"
   has "installer.iss polls the mutex" "CheckForMutexes('{#AppRunningMutex}')" "$iss"
+  has_regex "installer.iss starts the application again after an update run" \
+    '^[[:space:]]*Filename:[[:space:]]*"\{app\}\\\{#AppExe\}";(.*;)?[[:space:]]*Check:[[:space:]]*IsPmmUpdate[[:space:]]*(;|$)' "$iss"
   has "the smoke test holds $mutex" "'$mutex'" "$smoke"
 
   # The installation.
