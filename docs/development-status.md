@@ -39,7 +39,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
 | Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; verified by the extended smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | [installer](evidence/installer-2026-10-30.md) |
 | Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **a real update verified** on 2026-11-07: the owner's installed 0.1.0 updated itself to [0.1.1](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1). 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
-| Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; passed on GitHub in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | |
+| Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; passed on GitHub in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). Since 2026-11-07 the check reads the code of the sources, without their comments, and also checks the relaunch after an update run: 55 source checks, 104 test cases | |
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
@@ -445,12 +445,27 @@ Packaging ([`packaging.md`](packaging.md)):
   with `v0.1.0` and `v0.1.1` once they were published, and the owner's installed
   0.1.0 updated itself through it. The `Release` workflow's validation still compares
   it with `GITHUB_REPOSITORY_ID` before anything is built.
-- Accepted for 0.1.0 after the lockdown review: `check-update-contract.sh` matches
-  text, so a value that survives only in a comment still passes (for example
-  `/releases/latest` removed from the code, or the relaunch's `Check:` flipped); the
-  unit test that pins `latestReleaseApiUrl()` and the smoke test on the runner catch
-  those. An update run that the downgrade guard refuses does not start the
-  application again; that needs an installed version newer than the running one.
+- Fixed 2026-11-07 (owner's go-ahead of 2026-11-07; accepted for 0.1.0 after the
+  lockdown review until then): `check-update-contract.sh` matched text, so a value
+  that survived only in a comment still passed, for example `/releases/latest`
+  removed from the code but left in the comment in `app_update.hpp`. It now reads a
+  copy of each source without its comments, made by a string-aware POSIX awk
+  stripper per syntax: C++ (char literals, digit separators, raw strings), Inno
+  Setup with its Pascal code and preprocessor, PowerShell (here-strings), the
+  workflows' YAML and their shell, CMake (bracket comments and arguments); every
+  line keeps its number. Documentation is read whole: `docs/updates.md` and the
+  comment at the top of `installer.iss`, whose list of the update arguments was a
+  check that only ever matched a comment. A new check covers the other example of
+  the review, the relaunch's `Check:` flipped: the `[Run]` entry that starts
+  `{app}\{#AppExe}` must have `Check: IsPmmUpdate`. 55 source checks pass; the 104
+  cases of `test-update-contract.sh` pass with gawk and with `gawk --posix` (mawk,
+  which the Ubuntu runners use, is not installed here) and include, for each
+  syntax, a value left only in a comment (fails) and comment markers in strings
+  (passes). Not handled: a quote within `$(...)` in a PowerShell `"..."` string,
+  and a C++ `//` comment continued by a trailing backslash.
+- Accepted for 0.1.0 after the lockdown review: an update run that the downgrade
+  guard refuses does not start the application again; that needs an installed
+  version newer than the running one.
   "Open release page" falls back to the compiled slug's list of releases while no
   reply in the session has named the repository (no release yet, or no answer).
 - `jurplel/install-qt-action` is the one third-party action left in the jobs that

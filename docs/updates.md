@@ -277,8 +277,9 @@ enough to ship an update.
   the real API through the client. CTest does not run it.
 - [`scripts/check-update-contract.sh`](../scripts/check-update-contract.sh) and its
   test [`scripts/test-update-contract.sh`](../scripts/test-update-contract.sh), in
-  CI's "Format check" job: the sources against the contract, and mutated copies,
-  versions and release assets that must fail.
+  CI's "Format check" job: the code of the sources against the contract (a value
+  left only in a comment does not count), and mutated copies, versions and release
+  assets that must fail.
 - [`smoke-test-installer.ps1`](../packaging/windows/smoke-test-installer.ps1), on the
   GitHub runner only: the installer's side, including update runs with the exact
   arguments and the relaunch of the real `pmm-app.exe`
