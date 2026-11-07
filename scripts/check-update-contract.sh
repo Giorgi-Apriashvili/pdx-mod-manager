@@ -2,7 +2,8 @@
 # Checks the update contract, frozen since 0.1.0: packaging/update-contract.txt,
 # explained in docs/updates.md ("Compatibility contract").
 #
-#   scripts/check-update-contract.sh                       the sources still carry every value (CI)
+#   scripts/check-update-contract.sh                       the sources still carry every value (CI),
+#                                                          in their code: comments do not count
 #   scripts/check-update-contract.sh version <x.y.z>       a version a release may have
 #   scripts/check-update-contract.sh published <x.y.z>     the same, and strictly higher than every
 #                                                          published release (gh; GH_REPO or GITHUB_REPOSITORY)
@@ -95,32 +96,200 @@ version_greater() {
 
 # ---- sources -------------------------------------------------------------
 
+# The checks read the code of a source, without its comments: a value that is left
+# only in a comment is a drift. Documentation is read whole (documents).
 passed=0
+code_dir=""
+list=()
 
-files_exist() {
-  local file
+# strip_comments <file>: the code of the file, by the comment syntax of its type:
+# every comment removed (one that ends within a line leaves a space), every string
+# kept whole, every line on its line number. CRs are dropped, as grep on Windows
+# drops them. POSIX awk: mawk on the Ubuntu runners.
+#   C++            // and /* */, outside "...", '...' and R"x(...)x"
+#   Inno Setup     lines starting with ";", except in [Code]; there Pascal's //,
+#                  { } and (* *), outside '...' and {#...}; preprocessor lines (#)
+#                  are code everywhere
+#   PowerShell     # where a token starts, and <# #>, outside '...', "..." and
+#                  here-strings
+#   YAML           # at the start of a line or after a blank, outside '...' and
+#                  "..." within the line: YAML comments and those of run: scripts
+#   CMake          # and #[[ ]], outside "..." and [[ ]] (any number of =)
+#   Markdown       read whole
+# Not handled: a quote within $(...) in a PowerShell "..." string ends the string,
+# and a C++ // comment does not go on after a backslash at the end of its line.
+strip_comments() {
+  local syntax
+  case "$1" in
+    *.hpp | *.cpp) syntax=cpp ;;
+    *.iss) syntax=inno ;;
+    *.ps1) syntax=powershell ;;
+    *.yml) syntax=yaml ;;
+    CMakeLists.txt | */CMakeLists.txt | *.cmake) syntax=cmake ;;
+    *.md) syntax=text ;;
+    *) die "no comment syntax is known for $1" ;;
+  esac
+  awk -v syntax="$syntax" -v q="'" '
+    # mode: "" in code; "comment" or "string" until the text in closer, which can
+    # be on a later line; "here" in a PowerShell here-string, until a line starts
+    # with closer. In a string, escape is its escape character ("" for none),
+    # doubled whether a doubled closing quote stays in it (Pascal, PowerShell), and
+    # multiline whether it goes on past the end of its line.
+    function enter_string(text, esc, dbl, multi) {
+      mode = "string"; closer = text; escape = esc; doubled = dbl; multiline = multi
+    }
+    # The identifier or number that ends right before position at of s.
+    function word_before(s, at,   start) {
+      start = at
+      while (start > 1 && substr(s, start - 1, 1) ~ /[A-Za-z0-9_]/) start--
+      return substr(s, start, at - start)
+    }
+    BEGIN {
+      mode = ""; section = ""
+      if (syntax == "cpp") special = "[/\"" q "]"
+      else if (syntax == "inno") special = "[/{(" q "]"
+      else if (syntax == "powershell") special = "[#<@`\"" q "]"
+      else if (syntax == "yaml") special = "[#\\\\\"" q "]"
+      else special = "[#\"\\\\[]"
+      here_start = "^[\"" q "][ \t]*$"
+    }
+    {
+      sub(/\r$/, "")
+      line = $0; n = length(line); out = ""; i = 1
+      if (syntax == "text") { print line; next }
+      if (syntax == "inno") {
+        if (line ~ /^[ \t]*\[[A-Za-z]+[]][ \t]*$/) {
+          section = tolower(line); gsub(/[^a-z]/, "", section); mode = ""
+          print line; next
+        }
+        if (line ~ /^[ \t]*#/) { print line; next }
+        if (section != "code") {
+          if (line ~ /^[ \t]*;/) line = ""
+          print line; next
+        }
+      }
+      if (mode == "here") {
+        lead = line; sub(/[^ \t].*$/, "", lead)
+        if (substr(line, length(lead) + 1, 2) != closer) { print line; next }
+        i = length(lead) + 3; out = substr(line, 1, i - 1); mode = ""
+      }
+      while (i <= n) {
+        rest = substr(line, i)
+        if (mode == "comment") {
+          j = index(rest, closer)
+          # The preprocessor expands {#...} in a Pascal { } comment too.
+          if (closer == "}" && (k = index(rest, "{#")) > 0 && k < j) { i += j; continue }
+          if (j == 0) break
+          i += j - 1 + length(closer); out = out " "; mode = ""
+          continue
+        }
+        if (mode == "string") {
+          j = index(rest, closer)
+          k = (escape == "") ? 0 : index(rest, escape)
+          if (k > 0 && (j == 0 || k < j)) { out = out substr(rest, 1, k + 1); i += k + 1; continue }
+          if (j == 0) { out = out rest; break }
+          j += length(closer) - 1
+          if (doubled && substr(rest, j + 1, 1) == closer) j++
+          else mode = ""
+          out = out substr(rest, 1, j); i += j
+          continue
+        }
+        if (!match(rest, special)) { out = out rest; break }
+        out = out substr(rest, 1, RSTART - 1); i += RSTART - 1
+        c = substr(line, i, 1); c2 = substr(line, i, 2)
+        prev = (i > 1) ? substr(line, i - 1, 1) : ""
+        if (syntax == "cpp") {
+          if (c2 == "//") break
+          if (c2 == "/*") { mode = "comment"; closer = "*/"; i += 2; continue }
+          if (c == q) {
+            # After a number, a quote is a digit separator.
+            if (word_before(line, i) !~ /^[0-9]/) enter_string(q, "\\", 0, 0)
+          } else if (c == "\"") {
+            if (word_before(line, i) ~ /^(u8|[uUL])?R$/ && match(substr(line, i + 1), /^[^ ()\\\t]*[(]/)) {
+              enter_string(")" substr(line, i + 1, RLENGTH - 1) "\"", "", 0, 1)
+              out = out substr(line, i, RLENGTH + 1); i += RLENGTH + 1
+              continue
+            }
+            enter_string("\"", "\\", 0, 0)
+          }
+        } else if (syntax == "inno") {
+          if (c2 == "//") break
+          if (c2 == "{#") {
+            j = index(substr(line, i), "}")
+            if (j == 0) j = n - i + 1
+            out = out substr(line, i, j); i += j
+            continue
+          }
+          if (c == "{") { mode = "comment"; closer = "}"; i++; continue }
+          if (c2 == "(*") { mode = "comment"; closer = "*)"; i += 2; continue }
+          if (c == q) enter_string(q, "", 1, 0)
+        } else if (syntax == "powershell") {
+          if (c2 == "<#") { mode = "comment"; closer = "#>"; i += 2; continue }
+          if (c == "#" && (prev == "" || prev ~ /[ \t;,=|&(){}]/)) break
+          if (c == "`") { out = out c2; i += 2; continue }
+          if (c == "@" && substr(line, i + 1) ~ here_start) {
+            mode = "here"; closer = substr(line, i + 1, 1) "@"; out = out substr(line, i)
+            break
+          }
+          if (c == q) enter_string(q, "", 1, 1)
+          else if (c == "\"") enter_string("\"", "`", 1, 1)
+        } else if (syntax == "yaml") {
+          if (c == "#" && (prev == "" || prev ~ /[ \t]/)) break
+          if (c == "\\") { out = out c2; i += 2; continue }
+          if (c == q) enter_string(q, "", 0, 0)
+          else if (c == "\"") enter_string("\"", "\\", 0, 0)
+        } else {
+          if (c == "#") {
+            if (!match(substr(line, i + 1), /^\[=*\[/)) break
+            mode = "comment"; closer = "]" substr(line, i + 2, RLENGTH - 2) "]"; i += RLENGTH + 1
+            continue
+          }
+          if (c == "\\") { out = out c2; i += 2; continue }
+          if (c == "[" && (prev == "" || prev ~ /[ \t(]/) && match(substr(line, i), /^\[=*\[/)) {
+            enter_string("]" substr(line, i + 1, RLENGTH - 2) "]", "", 0, 1)
+            out = out substr(line, i, RLENGTH); i += RLENGTH
+            continue
+          }
+          if (c == "\"") enter_string("\"", "\\", 0, 1)
+        }
+        out = out c; i++
+      }
+      # A string that cannot span lines ends with its line, unless the line ends
+      # with a backslash (C++ and YAML).
+      if (mode == "string" && !multiline && substr(line, n, 1) != "\\") mode = ""
+      print out
+    }' < "$root/$1"
+}
+
+# readable <code|text> <file>...: sets list to what the checks read of the files:
+# their code, a copy without comments (strip_comments) made once in $code_dir, or
+# their whole text. Returns 1 for a missing file, which is a problem.
+readable() {
+  local kind="$1" file
+  shift
+  list=()
   for file in "$@"; do
     if [ ! -f "$root/$file" ]; then
       problem "$file is missing"
       return 1
     fi
+    if [ "$kind" = text ]; then
+      list+=("$root/$file")
+      continue
+    fi
+    if [ ! -f "$code_dir/$file" ]; then
+      mkdir -p "$code_dir/$(dirname "$file")"
+      strip_comments "$file" > "$code_dir/$file"
+    fi
+    list+=("$code_dir/$file")
   done
 }
 
-paths() {
-  local file
-  for file in "$@"; do
-    printf '%s\n' "$root/$file"
-  done
-}
-
-# has <description> <fixed text> <file>...: one of the files contains the text.
-has() {
-  local what="$1" text="$2"
-  shift 2
-  files_exist "$@" || return 0
-  local list=()
-  mapfile -t list < <(paths "$@")
+# contains <code|text> <description> <fixed text> <file>...
+contains() {
+  local kind="$1" what="$2" text="$3"
+  shift 3
+  readable "$kind" "$@" || return 0
   if grep -F -q -e "$text" -- "${list[@]}"; then
     passed=$((passed + 1))
   else
@@ -128,13 +297,23 @@ has() {
   fi
 }
 
+# has <description> <fixed text> <file>...: the code of one of the files contains
+# the text.
+has() {
+  contains code "$@"
+}
+
+# documents <description> <fixed text> <file>...: one of the files contains the
+# text, comments included: documentation of a value.
+documents() {
+  contains text "$@"
+}
+
 # has_regex <description> <extended regex> <file>...
 has_regex() {
   local what="$1" regex="$2"
   shift 2
-  files_exist "$@" || return 0
-  local list=()
-  mapfile -t list < <(paths "$@")
+  readable code "$@" || return 0
   if grep -E -q -e "$regex" -- "${list[@]}"; then
     passed=$((passed + 1))
   else
@@ -144,23 +323,22 @@ has_regex() {
 
 # lacks <description> <extended regex, case-insensitive> <file>...
 lacks() {
-  local what="$1" regex="$2"
+  local what="$1" regex="$2" found
   shift 2
-  files_exist "$@" || return 0
-  local list=() found
-  mapfile -t list < <(paths "$@")
+  readable code "$@" || return 0
   if found="$(grep -E -i -n -H -e "$regex" -- "${list[@]}")"; then
-    problem "drift: $what; found: ${found//$root\//}"
+    problem "drift: $what; found: ${found//$code_dir\//}"
   else
     passed=$((passed + 1))
   fi
 }
 
-# The value of a constant such as "kMaxInstallerBytes = 512ll * 1024 * 1024;",
-# computed; nothing when it is not a plain product.
+# The value of a constant such as "kMaxInstallerBytes = 512ll * 1024 * 1024;" in
+# the code of a file, computed; nothing when it is not a plain product.
 cpp_constant() {
   local expression
-  expression="$(sed -n "s/.*$1 = \\(.*\\);.*/\\1/p" "$root/$2" | head -n 1)"
+  readable code "$2" || return 0
+  expression="$(sed -n "s/.*$1 = \\(.*\\);.*/\\1/p" "${list[0]}" | head -n 1)"
   expression="$(printf '%s' "$expression" | sed -e 's/std::size_t{\([0-9]*\)}/\1/g' -e 's/\([0-9]\)ll/\1/g')"
   [[ "$expression" =~ ^[0-9]+( \* [0-9]+)*$ ]] || return 0
   echo $((expression))
@@ -205,6 +383,9 @@ check_sources() {
     [ -z "$(version_parts "$bad")" ] || problem "version_regex accepts '$bad'"
   done
 
+  tmp_dir="$(mktemp -d)"
+  [ -n "$tmp_dir" ] && [ -d "$tmp_dir" ] || die "mktemp failed"
+  code_dir="$tmp_dir/code"
   local cmake=CMakeLists.txt
   local update=(src/services/app_update.hpp src/services/app_update.cpp)
   local client=(src/app/core/update_client.hpp src/app/core/update_client.cpp)
@@ -226,7 +407,7 @@ check_sources() {
   has_regex "the code that builds the request gets the id" \
     "PMM_GITHUB_REPOSITORY_ID|(^|[^0-9])$id([^0-9]|$)" "${update[@]}"
   has "the client requests that URL" "latestReleaseApiUrl(" "${client[@]}"
-  # Code, not comments: a header name in quotes or Qt's enum value.
+  # A header name in quotes or Qt's enum value, not a word in a string.
   lacks "the client sends no credentials" \
     '"(proxy-)?authorization"|"(bearer|token|basic) |WellKnownHeader::(Proxy)?Authorization' "${client[@]}"
   has "drafts are recognised" '"draft"' "${update[@]}"
@@ -256,7 +437,7 @@ check_sources() {
   param_value="${param_name#*=}"
   param_name="${param_name%%=*}"
   has "the application starts the setup with $arguments" "$cpp_args" "${update[@]}"
-  has "installer.iss documents $arguments" "$arguments" "$iss"
+  documents "installer.iss documents $arguments" "$arguments" "$iss"
   has "installer.iss recognises /$param_name=$param_value" \
     "ExpandConstant('{param:$param_name|0}') = '$param_value'" "$iss"
   has "the smoke test runs the setup with $arguments" "$ps_args" "$smoke"
@@ -299,7 +480,7 @@ check_sources() {
   local key
   for key in api_url installer_asset checksum_asset installer_arguments running_mutex app_id \
     app_executable installed_marker tls_plugin version_regex checksum_line_regex; do
-    has "docs/updates.md names $key" "$(value "$key")" "$doc"
+    documents "docs/updates.md names $key" "$(value "$key")" "$doc"
   done
 
   finish "$passed source checks OK"
