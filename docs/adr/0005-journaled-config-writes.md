@@ -85,16 +85,21 @@ one launch, and a crash or power loss can happen between any two writes.
   need: a target that already holds its original contents (a crash before its
   write, or a file put back since) needs none, and neither does one that did
   not exist before and is still absent. Every needed backup is still verified
-  before any target changes. When a target cannot be read at all, a bad backup
-  is reported with the read error instead of `IntegrityCheckFailed`, because a
-  retry may find it original.
+  before any target changes. `IntegrityCheckFailed` means a needed backup is
+  missing or damaged (wrong hash, or above the size limit). A backup that
+  exists but cannot be read right now (in use by another program, access
+  denied) is reported with its read error, and so is a bad backup whose target
+  cannot be read at all: a retry may succeed.
 - A transaction that still cannot be recovered can be given up with
   `abandon(txid)`: the journal says `abandoned` (with the reason in
   `lastError`), no target is changed, and the folder keeps its backups until
-  `prune()` removes it like any finished transaction. `listIncomplete()` no
-  longer returns it, so it stops blocking its game. The application offers
-  this as **Discard this record** after Recover failed with
-  `IntegrityCheckFailed`, behind a confirmation that names the files.
+  `prune()` removes it like any finished transaction; `prune()` counts it from
+  when it was abandoned (`updatedUnixMs`), not from its creation, so the
+  remaining backups of an old crashed launch are not deleted at the next
+  start. `listIncomplete()` no longer returns it, so it stops blocking its
+  game. The application offers this as **Discard this record** after Recover
+  failed with `IntegrityCheckFailed`, behind a confirmation that names the
+  files.
 - The journal format stays 1. A version without the new state cannot read an
   abandoned journal and skips that folder, so there it neither blocks nor is
   pruned.

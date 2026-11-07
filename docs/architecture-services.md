@@ -431,7 +431,9 @@ target that no longer holds its original contents. A transaction with such a
 target whose backup is missing or damaged cannot be recovered
 (`IntegrityCheckFailed`, nothing changed); the application then offers
 **Discard this record**, which calls `discardInterrupted()` after a
-confirmation that names the files, so that it stops blocking its game.
+confirmation that names the files, so that it stops blocking its game. A
+backup that is there but cannot be read right now (another program keeps it
+open) gives its read error instead, and Recover can simply be tried again.
 
 The game starts only after its helper has exited or been killed, so Steam no
 longer sees a process with the game's app id. Whether a still-exiting helper

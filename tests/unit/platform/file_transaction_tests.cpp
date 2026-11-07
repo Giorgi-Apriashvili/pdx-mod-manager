@@ -1,12 +1,16 @@
+#include "core/log.hpp"
 #include "platform/file_transaction.hpp"
 #include "platform/fs.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <windows.h>
 
+#include <chrono>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 using namespace pmm;
@@ -323,6 +327,30 @@ TEST_CASE("Recovery refuses before changing anything when a needed backup is gon
     CHECK(manager.listIncomplete()->size() == 1);
 }
 
+TEST_CASE("A backup that another program keeps open is not reported as gone",
+          "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const TransactionRecord record = crashAfter(manager, s, 3);
+    const fs::path backup = record.directory / record.entries[2].backupFile;
+    // Opened without sharing, as a virus scanner might.
+    const HANDLE lock = CreateFileW(backup.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    REQUIRE(lock != INVALID_HANDLE_VALUE);
+    const auto recovered = manager.recover(record.id);
+    CloseHandle(lock);
+    REQUIRE_FALSE(recovered.ok());
+    CHECK(recovered.error().code == ErrorCode::IoError);
+    CHECK(recovered.error().message.find("settings.txt") != std::string::npos);
+    CHECK(recovered.error().message.find("close it and try again") != std::string::npos);
+    s.checkApplied();
+    CHECK(stateOf(manager, record.id) == TransactionState::Applying);
+
+    // Once it is released, Recover works.
+    REQUIRE(manager.recover(record.id).ok());
+    s.checkOriginal();
+}
+
 TEST_CASE("restore needs no backup for a target already back to its original",
           "[platform][transaction]") {
     Scenario s;
@@ -573,6 +601,38 @@ TEST_CASE("prune treats an abandoned change as finished", "[platform][transactio
     CHECK((*remaining)[0].id == interrupted);
     CHECK((*remaining)[1].id == committed->id);
     CHECK_FALSE(fs::exists(s.journal / abandoned));
+}
+
+TEST_CASE("prune counts an abandoned change from when it was abandoned",
+          "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const TransactionRecord crashed = crashAfter(manager, s, 2);
+    fs::remove(crashed.directory / crashed.entries[0].backupFile);
+    std::vector<std::string> launches;
+    for (int i = 0; i < 3; ++i) {
+        const auto record = manager.apply("launch " + std::to_string(i), {{s.unrelated, "x"}});
+        REQUIRE(record.ok());
+        launches.push_back(record->id);
+    }
+    // Abandoned later than the newest launch was made.
+    const std::int64_t newest = manager.load(launches.back())->createdUnixMs;
+    while (nowUnixMs() <= newest)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    REQUIRE(manager.abandon(crashed.id).ok());
+
+    // Created first, it is still the newest finished change; its remaining
+    // backup stays.
+    REQUIRE(manager.prune(2).ok());
+    const auto remaining = manager.list();
+    REQUIRE(remaining.ok());
+    REQUIRE(remaining->size() == 2);
+    CHECK((*remaining)[0].id == crashed.id);
+    CHECK((*remaining)[1].id == launches[2]);
+    CHECK(fs::exists(crashed.directory / crashed.entries[2].backupFile));
+
+    REQUIRE(manager.prune(1).ok());
+    CHECK(manager.list()->front().id == crashed.id);
 }
 
 TEST_CASE("Transaction states round-trip through their names", "[platform][transaction]") {

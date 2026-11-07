@@ -164,10 +164,12 @@ Status writeJournal(TransactionRecord& record) {
 
 // Puts entries [0, count) back to their state before apply(). Every backup
 // that is still needed is read and verified first, so a missing or damaged one
-// aborts before anything changes. A target that already holds its original
-// contents needs no backup (a crash before its write, or put back since), and
-// neither does one that did not exist before. Then each entry is processed
-// even if an earlier one fails; the first error is returned.
+// aborts before anything changes (IntegrityCheckFailed), and so does one that
+// cannot be read right now, with its read error (in use by another program,
+// say: a retry may work). A target that already holds its original contents
+// needs no backup (a crash before its write, or put back since), and neither
+// does one that did not exist before. Then each entry is processed even if an
+// earlier one fails; the first error is returned.
 Status undoEntries(const TransactionRecord& record, std::size_t count, UndoMode mode) {
     count = std::min(count, record.entries.size());
     std::vector<std::optional<std::string>> originals(count); // empty: already the original
@@ -184,7 +186,15 @@ Status undoEntries(const TransactionRecord& record, std::size_t count, UndoMode 
             originals[i] = std::move(contents).value();
             continue;
         }
-        const std::string problem = contents ? "is damaged" : "is missing or unreadable";
+        // Only a missing backup, or a damaged one (above the size limit that
+        // applied to the original, or with another hash), is gone for good.
+        const bool missing = !contents && contents.error().code == ErrorCode::NotFound;
+        if (!contents && !missing && contents.error().code != ErrorCode::LimitExceeded)
+            return Error(contents.error().code,
+                         "Could not read the backup of " + quotedName(entry.target) +
+                             ", so nothing was restored. " + contents.error().message,
+                         contents.error().detail);
+        const std::string problem = missing ? "is missing" : "is damaged";
         const std::string backupDetail = contents ? pathToUtf8(backup) : contents.error().detail;
         // A target that could not be read may hold its original contents after
         // all; trying again once it can be read may need no backup. (A missing
@@ -192,10 +202,9 @@ Status undoEntries(const TransactionRecord& record, std::size_t count, UndoMode 
         if (!current && current.error().code != ErrorCode::NotFound &&
             current.error().code != ErrorCode::LimitExceeded)
             return Error(current.error().code,
-                         "Could not read " + quotedName(entry.target) +
-                             " to check whether it still holds its original contents, and its "
-                             "backup " +
-                             problem + ", so nothing was restored.",
+                         current.error().message + " Nothing was restored: its backup " + problem +
+                             ", so recovery has to read the file to check whether it still "
+                             "holds its original contents.",
                          current.error().detail + "; backup: " + backupDetail);
         return makeError(ErrorCode::IntegrityCheckFailed,
                          "The backup of " + quotedName(entry.target) + " " + problem +
@@ -580,6 +589,17 @@ Status FileTransactionManager::prune(std::size_t keepLast) {
         if (!isIncomplete(record.state))
             finished.push_back(&record);
     }
+    // An abandoned one counts from when it was given up, not from the launch
+    // that crashed: its backups may be the only copies of the originals.
+    const auto since = [](const TransactionRecord* record) {
+        return record->state == TransactionState::Abandoned
+                   ? std::max(record->createdUnixMs, record->updatedUnixMs)
+                   : record->createdUnixMs;
+    };
+    std::stable_sort(finished.begin(), finished.end(),
+                     [&](const TransactionRecord* a, const TransactionRecord* b) {
+                         return since(a) < since(b);
+                     });
     std::optional<Error> firstError;
     const std::size_t excess = finished.size() > keepLast ? finished.size() - keepLast : 0;
     for (std::size_t i = 0; i < excess; ++i) {

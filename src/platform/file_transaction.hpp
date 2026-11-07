@@ -113,9 +113,10 @@ public:
     // contents apply() wrote). Marks it "recovered". Targets that already hold
     // their original contents, or did not exist before and still do not, need
     // no backup; any other target whose backup is missing or damaged fails
-    // with IntegrityCheckFailed before anything changes. When such a target
-    // cannot even be read, the read error is returned instead (retrying may
-    // succeed).
+    // with IntegrityCheckFailed before anything changes. A backup that cannot
+    // be read right now (in use by another program, access denied), or such a
+    // target that cannot be read, fails with that read error instead, also
+    // before anything changes: retrying may succeed.
     Result<TransactionRecord> recover(std::string_view txid);
 
     // Gives up an interrupted ("prepared" or "applying") transaction that
@@ -133,7 +134,8 @@ public:
 
     // Deletes the oldest finished transactions (every state but "prepared" and
     // "applying", so abandoned ones too, with their backups) so that at most
-    // `keepLast` remain. Interrupted ones are never deleted.
+    // `keepLast` remain. Interrupted ones are never deleted. An abandoned one
+    // counts from when it was abandoned, the others from their creation.
     Status prune(std::size_t keepLast);
 
     void setFaultsForTesting(FileTransactionFaults faults) { m_faults = faults; }
