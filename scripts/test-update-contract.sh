@@ -220,6 +220,19 @@ sed -i -e '/^app_id = /d' "$copy/packaging/update-contract.txt"
 because "no single value for 'app_id'"
 expect 2 'a value missing from the contract stops the check' bash "$copy/scripts/check-update-contract.sh"
 
+# An awk that fails on the Inno Setup script, before any of its checks ran.
+mkdir -p "$work/failing-awk"
+cat > "$work/failing-awk/awk" << EOF
+#!/usr/bin/env bash
+case "\$*" in *syntax=inno*) echo 'awk: simulated failure' >&2; exit 2 ;; esac
+exec '$(command -v awk)' "\$@"
+EOF
+chmod +x "$work/failing-awk/awk"
+fresh_copy
+because 'could not read the code of packaging/windows/installer.iss'
+expect 2 'a comment stripper that fails stops the check' \
+  env PATH="$work/failing-awk:$PATH" bash "$copy/scripts/check-update-contract.sh"
+
 # ---- versions ------------------------------------------------------------
 
 check="$root/scripts/check-update-contract.sh"

@@ -265,7 +265,8 @@ strip_comments() {
 
 # readable <code|text> <file>...: sets list to what the checks read of the files:
 # their code, a copy without comments (strip_comments) made once in $code_dir, or
-# their whole text. Returns 1 for a missing file, which is a problem.
+# their whole text. Returns 1 for a missing file, which is a problem; stops the
+# check if a copy cannot be made.
 readable() {
   local kind="$1" file
   shift
@@ -281,7 +282,11 @@ readable() {
     fi
     if [ ! -f "$code_dir/$file" ]; then
       mkdir -p "$code_dir/$(dirname "$file")"
-      strip_comments "$file" > "$code_dir/$file"
+      # Not left behind for the next check, also from a subshell (cpp_constant).
+      strip_comments "$file" > "$code_dir/$file" || {
+        rm -f -- "$code_dir/$file"
+        die "could not read the code of $file"
+      }
     fi
     list+=("$code_dir/$file")
   done
