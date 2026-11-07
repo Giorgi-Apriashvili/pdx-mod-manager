@@ -182,7 +182,10 @@ release page. What is contacted, verified and protected against is in
       transactions are kept.
    7. Interrupted configuration transactions are **not** recovered. They
       produce a startup notice, block launching (`LaunchService::check`) and
-      are offered as **Recover** next to Play.
+      are offered as **Recover** next to Play. One that Recover cannot undo
+      because a backup is missing or damaged is then offered as **Discard
+      this record**, behind a confirmation
+      ([troubleshooting](troubleshooting.md#recover-reports-a-missing-or-damaged-backup)).
 4. `Backend::initialize()` loads the UI settings, the cached game states and
    the initial game's context from the database. The initial game is
    `--game`, else the last selected game, else the first installed supported
@@ -350,7 +353,14 @@ platform:
   client, and available on its own once `steam.exe` appears or the game or
   the Paradox launcher goes away, after which the re-checks stop (none at all
   in read-only sessions), also in the Play section's text and accessible
-  description;
+  description; an interrupted change whose backup is missing or damaged:
+  Recover fails and offers to discard it with its file listed, discarding it
+  makes Play available and the next Play writes the configuration again,
+  while a Recover that fails for another reason offers only Recover and
+  read-only sessions do neither; in the window, the "Discard this record"
+  action appearing only then, and a confirmation that names the file and the
+  folder, has Cancel focused, closes on Enter and Escape without a change,
+  and discards on **Discard**;
 - a 2,000-entry playset with a time budget for each GUI-thread operation;
 - the real QML module against the real Backend, without QML warnings, with a
   playset and a mod named like rich text with a remote image: nothing tries

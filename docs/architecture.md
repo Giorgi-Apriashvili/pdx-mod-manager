@@ -180,7 +180,9 @@ validation; a new provider means a new provider module and a new `source` key
 
 Recovery: on start-up `listIncomplete()` finds transactions interrupted by a
 crash; the application shows a notice and offers **Recover** (`recover()`)
-next to Play. "Restore pre-launch configuration" calls `restore(txid)` for the
+next to Play. One that cannot be recovered because a backup it needs is
+missing or damaged can then be given up with **Discard this record**
+(`abandon()`, after a confirmation): its files stay as they are. "Restore pre-launch configuration" calls `restore(txid)` for the
 last committed launch transaction.
 
 ## 4. Threading model

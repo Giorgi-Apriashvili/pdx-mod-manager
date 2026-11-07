@@ -101,6 +101,7 @@ banner's "Show load order" link restores the view.
 | Playset history | Close (Shift+Tab reaches the Restore buttons) |
 | Locate installation | the first Browse… button |
 | Remove from playset (confirmation) | the confirm button; the question is its description |
+| Discard an interrupted change (confirmation) | Cancel, so Enter changes nothing; the question, with the files, is its description |
 | New / duplicate / rename playset | the name field, with the text selected |
 | Keyboard shortcuts | the list |
 

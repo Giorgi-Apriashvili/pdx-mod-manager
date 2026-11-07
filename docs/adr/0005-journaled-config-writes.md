@@ -78,3 +78,23 @@ one launch, and a crash or power loss can happen between any two writes.
   (its launch label, or a target in that game's user-data folder). Those of
   other games are shown as warnings, so a transaction that `recover()` cannot
   undo does not keep every game from launching.
+
+## Amendment (2026-11-07): recovery without unneeded backups, abandoned changes
+
+- `recover()` and `restore()` read and verify only the backups they still
+  need: a target that already holds its original contents (a crash before its
+  write, or a file put back since) needs none, and neither does one that did
+  not exist before and is still absent. Every needed backup is still verified
+  before any target changes. When a target cannot be read at all, a bad backup
+  is reported with the read error instead of `IntegrityCheckFailed`, because a
+  retry may find it original.
+- A transaction that still cannot be recovered can be given up with
+  `abandon(txid)`: the journal says `abandoned` (with the reason in
+  `lastError`), no target is changed, and the folder keeps its backups until
+  `prune()` removes it like any finished transaction. `listIncomplete()` no
+  longer returns it, so it stops blocking its game. The application offers
+  this as **Discard this record** after Recover failed with
+  `IntegrityCheckFailed`, behind a confirmation that names the files.
+- The journal format stays 1. A version without the new state cannot read an
+  abandoned journal and skips that folder, so there it neither blocks nor is
+  pruned.
