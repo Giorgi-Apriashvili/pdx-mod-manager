@@ -1226,18 +1226,24 @@ TEST_CASE("Importing with downloads off leaves nothing for a later session to do
                    backend.mods()->count() == 2;
         }));
 
-        const std::size_t unfinished = runner.callBlocking([](AppRuntime& runtime) {
-            auto jobs = persistence::AcquisitionJobRepository(runtime.database()).listUnfinished();
+        // No job record at all, not even a withdrawn (cancelled) one.
+        const std::size_t recorded = runner.callBlocking([](AppRuntime& runtime) {
+            auto jobs =
+                persistence::AcquisitionJobRepository(runtime.database()).listForGame(kGame);
             return jobs ? jobs.value().size() : std::size_t{99};
         });
-        CHECK(unfinished == 0);
+        CHECK(recorded == 0);
         const ModRowData* gone = backend.mods()->row(1);
         REQUIRE(gone);
         CHECK(gone->entry.identity.id == "4002");
         CHECK(gone->status == "missing");
         CHECK(gone->statusText == "Missing");
+        // The details panel: not the text of a cancelled download.
+        CHECK(gone->problems.join('\n').toStdString() ==
+              "Not installed. Download it from Steam Workshop.");
         CHECK(backend.notifications()->latest().value("text").toString().contains(
-            "1 missing Workshop mod listed; downloads are off in this session."));
+            "1 missing Workshop mod not queued because downloads are off in this session; "
+            "restart Paradox Mod Manager normally, then use Download missing."));
         backend.shutdown();
         runner.shutdown();
     }
