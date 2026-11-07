@@ -179,7 +179,8 @@ release page. What is contacted, verified and protected against is in
    6. Retention runs: playset history older than 30 days is purged (the
       newest 10 entries per playset are kept), finished acquisition jobs
       older than 7 days are removed, and the newest 10 finished configuration
-      transactions are kept.
+      transactions are kept (a discarded one counts from when it was
+      discarded).
    7. Interrupted configuration transactions are **not** recovered. They
       produce a startup notice, block launching (`LaunchService::check`) and
       are offered as **Recover** next to Play. One that Recover cannot undo

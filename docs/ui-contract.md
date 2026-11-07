@@ -332,10 +332,13 @@ Properties:
   damaged; `discardableFiles` (string list, display paths of the files those
   changes wrote or were writing) and `discardFolders` (string list, their
   transaction folders, which keep the records and the remaining backups) are
-  for the confirmation. The offer ends when the game changes, after a
-  successful recovery or discard, and when a refresh shows no interrupted
-  change any more; a recovery that fails for another reason does not offer
-  it.
+  for the confirmation. The offer ends when the game changes, when
+  `discardInterrupted()` is called (if discarding fails, the next
+  `recoverInterrupted()` offers it again), with the next recovery, and when a
+  refresh shows no interrupted change any more; a recovery that fails for
+  another reason (a file or a backup that another program keeps open, say)
+  does not offer it. When Recover or the discard action had the focus and goes
+  away, the focus moves to the mod list.
 
 The verdict is refreshed whenever the playset, the inventory or the
 downloads change, after a launch, and when the window is activated. While

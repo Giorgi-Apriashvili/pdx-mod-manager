@@ -43,6 +43,9 @@ what is still missing.
   explanation below it is also its description.
 - The update banner that the daily check shows never takes focus. Its "Not
   now" link hides it for the session and returns focus to the mod list.
+- When **Recover** or **Discard this record** goes away while it has the
+  focus (its banner closes after a recovery or a discard, or the discard link
+  once it was used), the focus moves to the mod list.
 
 ### Shortcuts
 
@@ -243,7 +246,7 @@ outlines and checked fills. Disabled controls are exempt and stay faded.
 
 Automated:
 
-- `ui/dev/preview.sh --test` (fake backend, 23 tests): besides the editing
+- `ui/dev/preview.sh --test` (fake backend, 25 tests): besides the editing
   tests, Tab visits the actions, games and mods columns in that order and
   returns to the list; F6 / Shift+F6; Enter opens Settings from its button,
   Tab stays inside the dialog and Esc returns focus to the button; Esc on the
@@ -251,7 +254,9 @@ Automated:
   reorder and undo; Shift+F10 opens the context menu on "Enable" and Esc
   returns to the same row; Ctrl+Space; F1 list paging; the accessible name of
   the current row; the update banner leaves focus in the list, Tab reaches "Not
-  now" and Enter there hides the banner and returns focus to the list.
+  now" and Enter there hides the banner and returns focus to the list;
+  discarding an interrupted change from the keyboard (Enter on the link, Tab
+  from Cancel to Discard, Enter) returns focus to the list.
 - `ctest --preset debug -R Pmm.Ui` (real Backend, offscreen window, key events
   through `QTest`): Tab order, F6, Alt+Up/Down and Ctrl+Up/Down with undo, Esc
   on the confirmation, the context menu and the shortcuts list with focus

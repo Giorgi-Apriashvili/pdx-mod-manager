@@ -33,7 +33,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
 | Play without a playset (for 0.1.1) | `src/services/launch_service`, `src/app/core/view_data`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/vanilla-launch`. Owner's decision of 2026-11-06: spec section 7 says "validate the installation, active playset, ..."; no playset now means a launch without mods instead of a blocker. Every other check still runs; the empty mod list is written as one journaled transaction labelled `launch <game> without mods`, which Restore and Recover handle like any launch. Tested with fakes only; **not run against a real game** (a live run needs the owner's approval) | |
 | Play requires the Steam client for Steam installations (for 0.1.1) | `src/services/launch_service`, `src/platform/steam`, `src/app/gui/backend`, `src/app/core/view_data`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`app.md`](app.md), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/require-steam`. Owner's decision of 2026-11-06: games could be started directly with Steam closed; Play now requires the Steam client for Steam installations (`DistributionSource::Steam`: found through Steam's app manifest, or located by hand inside a Steam library). A copy from another store located by hand is not blocked. The check uses the process list the running-instance check already reads (`steam.exe`, or the pid in `HKCU\Software\Valve\Steam\ActiveProcess` without a readable name); an unreadable list is a warning. While Steam, the game or the Paradox launcher blocks, the Backend re-checks every 3 s without the write probes, so Play follows on its own. Tested with fakes only; **not run against a real game or Steam** (a live run needs the owner's approval). Limitations: whether Steam runs is detected, whether it is signed in is not; the process list covers every Windows session, so another signed-in user's Steam counts as running | |
-| Discard an interrupted change that Recover cannot undo (for the next release) | `src/platform/file_transaction`, `src/services/launch_service`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, `ui/dialogs/ConfirmDialog.qml`, [`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup), [ADR 0005](adr/0005-journaled-config-writes.md) | done 2026-11-07 on `agent/discard-interrupted`. Recovery skips the backups of targets already original (or absent and absent before); `abandon()` gives up an interrupted transaction (`abandoned`, no file changed, folder and backups kept, pruned like any finished one); after a Recover that failed with `IntegrityCheckFailed` the banner offers "Discard this record", and Play is available afterwards when nothing else blocks. Tested with fakes only; **not run against a real game** | |
+| Discard an interrupted change that Recover cannot undo (for the next release) | `src/platform/file_transaction`, `src/services/launch_service`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, `ui/dialogs/ConfirmDialog.qml`, [`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup), [ADR 0005](adr/0005-journaled-config-writes.md) | done 2026-11-07 on `agent/discard-interrupted`. Recovery skips the backups of targets already original (or absent and absent before); `abandon()` gives up an interrupted transaction (`abandoned`, no file changed, folder and backups kept, pruned like any finished one but counted from when it was abandoned); after a Recover that failed with `IntegrityCheckFailed` the banner offers "Discard this record", and Play is available afterwards when nothing else blocks. Tested with fakes only; **not run against a real game** | |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
@@ -49,9 +49,9 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 Local runs only, with fakes and temporary folders; no game was started and no
 real journal was touched.
 
-- `debug` preset: **0 warnings**, **529/529 tests pass**, by label: core 50,
-  sharing 54, persistence 71, platform 57, providers 61, games 52, services
-  86, application 103.
+- `debug` preset: **0 warnings**, **532/532 tests pass**, by label: core 50,
+  sharing 54, persistence 71, platform 59, providers 61, games 52, services
+  86, application 104.
 - New tests: in `file_transaction_tests.cpp`, recovery with a missing or
   damaged backup of a target that is already original (a crash before the
   first write, a file put back by hand while a created file is still
@@ -77,10 +77,23 @@ real journal was touched.
   Play. The relaxed recovery and restore tests fail against the code before
   the change. The 31 new and changed tests passed 10 times each, eight in
   parallel (310 runs).
-- Fake-backend QML tests (`ui/dev/preview.sh --test`, offscreen): 24/24, ten
-  runs. QML lint: clean. `scripts/check-format.sh`: 238 files OK.
-  `clang-tidy` on the three changed `.cpp` files and the four changed test
-  files: clean.
+- After the review: a backup that another program keeps open is reported
+  with its read error (Recover can be retried, nothing is offered to discard)
+  instead of `IntegrityCheckFailed`; `prune()` counts an abandoned record from
+  when it was abandoned, so a freshly discarded record of an old launch keeps
+  its remaining backups; focus leaves Recover or the discard link for the mod
+  list when they go away. New tests: a backup held open without sharing
+  (`IoError` with the "close it and try again" hint, nothing changed, then
+  recovered once released), `prune()` keeping a record abandoned after newer
+  launches, the offer ending when the game changes and a Recover answered
+  after a switch offering nothing (a second fake game, not installed), and
+  discarding from the keyboard leaving the focus on the mod list (in
+  `qml_tests.cpp` and the preview tests). The held-backup, prune and focus
+  tests fail against the code before these fixes; the changed tests passed 10
+  times each, eight in parallel.
+- Fake-backend QML tests (`ui/dev/preview.sh --test`, offscreen): 25/25.
+  QML lint: clean. `scripts/check-format.sh`: 238 files OK. `clang-tidy` on
+  the changed `.cpp` files: clean.
 
 ## Test status (2026-11-06, Play requires Steam, `agent/require-steam`)
 
@@ -347,7 +360,9 @@ Services and application:
   `LaunchService::discardInterrupted(txid)`; "Discard this record" next to
   Recover, offered only after Recover failed with `IntegrityCheckFailed`,
   behind a confirmation (Cancel focused) that names the files and the backup
-  folder ([`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup),
+  folder; a backup that is only in use gives its read error and offers
+  Recover again only; `prune()` counts an abandoned record from when it was
+  abandoned ([`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup),
   [ADR 0005 amendment](adr/0005-journaled-config-writes.md)).
 - On Windows, two descriptor files whose names differ only in unpaired
   surrogates map to the same local mod id and make the inventory save fail;
