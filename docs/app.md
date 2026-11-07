@@ -180,7 +180,9 @@ release page. What is contacted, verified and protected against is in
       newest 10 entries per playset are kept), finished acquisition jobs
       older than 7 days are removed, and the newest 10 finished configuration
       transactions are kept (a discarded one counts from when it was
-      discarded).
+      discarded). The cancelled jobs that imports with downloads off left in
+      0.1.0 and 0.1.1 are removed at once
+      (`AcquisitionJobRepository::removeWithdrawnImportJobs()`).
    7. Interrupted configuration transactions are **not** recovered. They
       produce a startup notice, block launching (`LaunchService::check`) and
       are offered as **Recover** next to Play. One that Recover cannot undo

@@ -189,7 +189,10 @@ database rows.
 - `previewImport(text)`: decodes, validates and builds the `ImportPlan` against
   the cached inventory of the manifest's game. It is read-only: no database
   write, no job, no download.
-- `applyImport(preview, mode, target, name)`: see the import flow below.
+- `applyImport(preview, mode, target, name, options)`: see the import flow
+  below. `ImportOptions::queueAcquisition` (default true) is false when
+  Workshop downloads are off; the import then creates and reuses no job and
+  is otherwise identical.
 
 ### AcquisitionCoordinator (`acquisition_coordinator.hpp`)
 
@@ -310,7 +313,7 @@ stripped.
                           => ImportPreview {manifest | error, plan, gameInstalled}
                              (nothing written)
 
- user confirms --applyImport(preview, New | Replace, target, name)-->
+ user confirms --applyImport(preview, New | Replace, target, name, options)-->
    validate: preview ok, validateManifest again, adapter, target exists and
              belongs to the game (Replace), name valid and unique
    rebuild the plan against the CURRENT inventory (a rescan may have installed
@@ -319,11 +322,12 @@ stripped.
    Database::transaction {
        New:     PlaysetRepository::create(exact entries)
        Replace: replaceWithSnapshot(target, exact entries, "import_replace")  (restorable)
-       for id in plan.toAcquire (missing Workshop entries, disabled ones included):
-           AcquisitionJobRepository::createOrReuse(id, playsetId)
+       if options.queueAcquisition (downloads on):
+           for id in plan.toAcquire (missing Workshop entries, disabled ones included):
+               AcquisitionJobRepository::createOrReuse(id, playsetId)
        settings: game.<key>.activePlaysetId, app.lastGameKey
    }   any failure rolls back everything: no playset, no job, no selection change
- app: coordinator.start(game)
+ app: coordinator.start(game) (downloads on)
 ```
 
 The imported entries are never reordered, re-flagged, filtered or extended.
@@ -331,8 +335,9 @@ Extra mods installed on this machine stay out of the playset. Local mods that
 are not installed here have no job: they show "needs user action", meaning map
 or install them manually. Until content is installed and seen by the inventory,
 every missing entry reads Pending, Downloading, Failed, Unavailable or
-NeedsUserAction, never Ready. Launching stays blocked while any of them is
-enabled.
+NeedsUserAction, never Ready; with downloads off a missing Workshop entry has
+no job and reads Missing ("Not installed"). Launching stays blocked while any
+of them is enabled.
 
 ## Data flow: acquisition
 

@@ -216,6 +216,12 @@ decides retention and calls, typically at startup:
   removed for good (their entries cascade). Recommended: 30 days, keep 10.
 * `AcquisitionJobRepository::removeFinishedOlderThan(cutoff)` removes terminal
   jobs. Recommended: 7 days.
+* `AcquisitionJobRepository::removeWithdrawnImportJobs()` removes the jobs
+  that imports with downloads off in 0.1.0 and 0.1.1 created and cancelled in
+  the same transaction: `cancelled` with an empty error code and message, no
+  attempt and no byte. A cancellation by the user always records the error
+  code `cancelled` and a message, and nothing else writes that state, so no
+  user's cancellation matches.
 
 ## Migrations
 

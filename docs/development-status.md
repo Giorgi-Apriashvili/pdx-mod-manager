@@ -343,14 +343,26 @@ file.
 
 Services and application:
 
-- `ShareService::applyImport` should take `ImportOptions { bool
-  queueAcquisition = true; }`; then replace `applyImportWithoutDownloads` in
-  `src/app/gui/share_controller.cpp` with a call that passes
-  `queueAcquisition = steam`. Today an import with downloads off cancels the
-  jobs it created in the same transaction: the cancelled records stay until
-  the 7-day retention removes them, the details panel shows the "cancelled"
-  text instead of "Not installed", and jobs left by earlier `--no-steam`
-  imports are not cleaned up.
+- Done 2026-11-07 on `agent/import-options` (owner's go-ahead of 2026-11-07),
+  tested with fakes only: `ShareService::applyImport` takes `ImportOptions {
+  bool queueAcquisition = true; }`, and `ShareController::confirmImport`
+  passes `queueAcquisition = steam` instead of calling
+  `applyImportWithoutDownloads`, which created the jobs and cancelled them in
+  the same transaction. An import with downloads off now creates and reuses no
+  job and leaves existing ones alone; its missing Workshop entries read "Not
+  installed. Download it from Steam Workshop." in the details panel instead of
+  "The download was cancelled. Retry to acquire this mod.", and the
+  notification says to restart normally and use **Download missing**. The jobs
+  that such imports left in 0.1.0 and 0.1.1 are told apart reliably and
+  removed at every start
+  (`AcquisitionJobRepository::removeWithdrawnImportJobs()` in
+  `AppRuntime::runMaintenance`, next to the 7-day retention): in every
+  version, only that withdrawal and the acquisition reducer's Cancel wrote the
+  Cancelled state, and Cancel always records the error code `cancelled` with a
+  message, while a withdrawn job has an empty error code and message, no
+  attempt and no byte. A test cancels a parked job that never ran through
+  `cancelAll` and checks that the clean-up keeps it. Since nothing creates
+  such jobs any more, the clean-up can be dropped in a later version.
 - Done 2026-11-07 (owner's decision of 2026-11-07: before the next release),
   tested with fakes only: a configuration transaction whose **Recover** fails
   because of a missing or damaged backup no longer blocks that game for good.

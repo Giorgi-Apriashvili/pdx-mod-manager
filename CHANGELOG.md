@@ -22,6 +22,7 @@ is one line, and its links are full URLs.
 ### Fixed
 
 - **Importing over a playset keeps its name.** **Replace existing playset** renamed the replaced playset to the name proposed for a new one, such as "SP (2)" for "SP"; it now keeps its name.
+- **Imports with Workshop downloads off leave no cancelled downloads.** In a session started with `--no-steam` or `--read-only`, an import queued the missing Workshop mods and cancelled them at once, so for up to 7 days their details said "The download was cancelled" instead of "Not installed". It now queues nothing, the notification says how to get the mods later, and the cancelled downloads left by such imports are removed at the next start.
 
 ## [0.1.1] - 2026-11-07
 
