@@ -158,7 +158,7 @@ strip_comments() {
       line = $0; n = length(line); out = ""; i = 1
       if (syntax == "text") { print line; next }
       if (syntax == "inno") {
-        if (line ~ /^[ \t]*\[[A-Za-z]+[]][ \t]*$/) {
+        if (line ~ /^[ \t]*\[[A-Za-z]+][ \t]*$/) {
           section = tolower(line); gsub(/[^a-z]/, "", section); mode = ""
           print line; next
         }
