@@ -123,6 +123,11 @@ mutate 'another mutex in the setup' 's/^#define AppRunningMutex .*/#define AppRu
 mutate 'another setup name' 's/^OutputBaseFilename=.*/OutputBaseFilename=pmm-setup/' "$iss"
 because 'installer.iss starts the application again after an update run'
 mutate 'no relaunch after an update run' 's/; Check: IsPmmUpdate/; Check: not IsPmmUpdate/' "$iss"
+because 'the relaunch after an update run is not skipped'
+mutate 'the relaunch skipped in a silent run' '/; Check: IsPmmUpdate/s/runasoriginaluser/& skipifsilent/' "$iss"
+because 'installer.iss starts the application again after an update run'
+mutate 'the relaunch outside [Run]' 's/^\[Run\]$/[UninstallRun]/' "$iss"
+harmless 'a section name in lowercase' 's/^\[Run\]$/[run]/' "$iss"
 smoke=packaging/windows/smoke-test-installer.ps1
 mutate 'no TLS plugin in the smoke test' 's/.plugins\\tls\\qschannelbackend\.dll.,//' "$smoke"
 mutate 'other update arguments in the smoke test' "s|'/PMMUPDATE=1')|'/PMMUPDATE=1', '/NOICONS')|" "$smoke"

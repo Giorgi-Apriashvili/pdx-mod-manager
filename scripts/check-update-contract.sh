@@ -328,6 +328,21 @@ has_regex() {
   fi
 }
 
+# has_in_section <description> <section> <extended regex> <file>: a line in
+# [<section>] of the code of an Inno Setup script matches the regex.
+has_in_section() {
+  local what="$1" section="$2" regex="$3" file="$4"
+  readable code "$file" || return 0
+  # Not grep -q, which can stop reading before awk has written everything.
+  if awk -v section="[$section]" '
+      /^[ \t]*\[[A-Za-z]+][ \t]*$/ { inside = (tolower($1) == tolower(section)); next }
+      inside' "${list[0]}" | grep -E -e "$regex" > /dev/null; then
+    passed=$((passed + 1))
+  else
+    problem "drift: $what; expected in [$section] of $file: /$regex/"
+  fi
+}
+
 # lacks <description> <extended regex, case-insensitive> <file>...
 lacks() {
   local what="$1" regex="$2" found
@@ -452,8 +467,12 @@ check_sources() {
   has "installer.iss waits for $mutex" "#define AppRunningMutex \"$mutex\"" "$iss"
   has "installer.iss checks AppMutex" "AppMutex={#AppRunningMutex}" "$iss"
   has "installer.iss polls the mutex" "CheckForMutexes('{#AppRunningMutex}')" "$iss"
-  has_regex "installer.iss starts the application again after an update run" \
+  has_in_section "installer.iss starts the application again after an update run" Run \
     '^[[:space:]]*Filename:[[:space:]]*"\{app\}\\\{#AppExe\}";(.*;)?[[:space:]]*Check:[[:space:]]*IsPmmUpdate[[:space:]]*(;|$)' "$iss"
+  # An update run is silent (skipifsilent), and the relaunch is no choice on the
+  # last page (postinstall).
+  lacks "the relaunch after an update run is not skipped (skipifsilent, postinstall)" \
+    'Flags:[^;]*(skipifsilent|postinstall).*Check:[[:space:]]*IsPmmUpdate[[:space:]]*(;|$)|Check:[[:space:]]*IsPmmUpdate[[:space:]]*;.*Flags:[^;]*(skipifsilent|postinstall)' "$iss"
   has "the smoke test holds $mutex" "'$mutex'" "$smoke"
 
   # The installation.
