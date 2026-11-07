@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests scripts/check-update-contract.sh (CI, "Format check"): the sources pass,
-# and a copy of them with any one contract value changed fails; versions and
+# and a copy of them with any one contract value changed fails, also when the old
+# value is left in a comment, while comment markers in strings pass; versions and
 # release assets that a released copy would reject are refused, and the published
 # releases are compared through a stub gh. No network.
 #
@@ -153,7 +154,8 @@ harmless 'a C++ string with // and /* before a value' \
   's|out += "/releases/latest";|out += "/*//" "/releases/latest";|' "$cpp"
 harmless 'a digit separator, then a string with a quote and //' \
   "s|out += \"/releases/latest\";|n = 1'000; s = \"'//\"; &|" "$cpp"
-harmless 'a quote in a char literal, then a string with //' "s|out += \"/releases/latest\";|c = '\"'; s = \"//\"; &|" "$cpp"
+harmless 'a quote in a char literal, then a string with //' \
+  "s|out += \"/releases/latest\";|c = '\"'; s = \"//\"; &|" "$cpp"
 harmless 'a quote in a raw string, then a string with /*' \
   "s|out += \"/releases/latest\";|r = R\"x(\")x\"; out += \"/*//\" \"/releases/latest\";|" "$cpp"
 harmless 'a token in a commented-out line' \
