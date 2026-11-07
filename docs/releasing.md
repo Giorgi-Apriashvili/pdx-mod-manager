@@ -137,7 +137,7 @@ them:
 
 | Where | What |
 | --- | --- |
-| CI, "Format check" | The sources still carry every value; `scripts/test-update-contract.sh` tests the check itself. |
+| CI, "Format check" | The sources still carry every value in their code: comments are removed first (C++, Inno Setup with its preprocessor and Pascal code, PowerShell, the workflows and their scripts, CMake), so a value left only in a comment fails; documentation, such as [`updates.md`](updates.md), is read whole. `scripts/test-update-contract.sh` tests the check itself. |
 | Release, validate | The version's grammar; higher than every published release (GitHub's 404 for `releases/latest` is accepted only when nothing but pre-releases exists); the repository id. |
 | Release, package | `pmm-app.exe` contains the repository id. The smoke test runs the installer's side of the contract. |
 | Release, publish, before the draft | Every asset name and `SHA256SUMS.txt` line against the grammar, LF only, no BOM, every name once, the setup and `SHA256SUMS.txt` present, the setup at most 512 MiB and `SHA256SUMS.txt` at most 64 KiB, the digests; the version again. |

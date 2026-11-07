@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests scripts/check-update-contract.sh (CI, "Format check"): the sources pass,
-# and a copy of them with any one contract value changed fails; versions and
+# and a copy of them with any one contract value changed fails, also when the old
+# value is left in a comment, while comment markers in strings pass; versions and
 # release assets that a released copy would reject are refused, and the published
 # releases are compared through a stub gh. No network.
 #
@@ -61,9 +62,9 @@ fresh_copy() {
   done
 }
 
-# mutate <description> <sed script> <file>...: the check must find the change,
-# which must apply to at least one of the files.
-mutate() {
+# edit <description> <sed script> <file>...: a fresh copy with the change, which
+# must apply to at least one of the files; 1, counted as a failure, if it does not.
+edit() {
   local what="$1" script="$2" file changed=false
   shift 2
   fresh_copy
@@ -76,10 +77,21 @@ mutate() {
     failures=$((failures + 1))
     echo "FAILED: $what: the change did not apply to $*"
     reason=""
-    return
+    return 1
   fi
+}
+
+# mutate <description> <sed script> <file>...: the check must find the change.
+mutate() {
+  edit "$@" || return 0
   [ -n "$reason" ] || because 'drift:'
-  expect 1 "$what is found" bash "$copy/scripts/check-update-contract.sh"
+  expect 1 "$1 is found" bash "$copy/scripts/check-update-contract.sh"
+}
+
+# harmless <description> <sed script> <file>...: the check must still pass.
+harmless() {
+  edit "$@" || return 0
+  expect 0 "$1 is not a drift" bash "$copy/scripts/check-update-contract.sh"
 }
 
 fresh_copy
@@ -109,6 +121,13 @@ mutate 'the application in another folder' 's/^#define AppExe .*/#define AppExe 
 mutate 'another update parameter in the setup' 's/{param:PMMUPDATE|0}/{param:UPDATE|0}/' "$iss"
 mutate 'another mutex in the setup' 's/^#define AppRunningMutex .*/#define AppRunningMutex "Local\\Other"/' "$iss"
 mutate 'another setup name' 's/^OutputBaseFilename=.*/OutputBaseFilename=pmm-setup/' "$iss"
+because 'installer.iss starts the application again after an update run'
+mutate 'no relaunch after an update run' 's/; Check: IsPmmUpdate/; Check: not IsPmmUpdate/' "$iss"
+because 'the relaunch after an update run is not skipped'
+mutate 'the relaunch skipped in a silent run' '/; Check: IsPmmUpdate/s/runasoriginaluser/& skipifsilent/' "$iss"
+because 'installer.iss starts the application again after an update run'
+mutate 'the relaunch outside [Run]' 's/^\[Run\]$/[UninstallRun]/' "$iss"
+harmless 'a section name in lowercase' 's/^\[Run\]$/[run]/' "$iss"
 smoke=packaging/windows/smoke-test-installer.ps1
 mutate 'no TLS plugin in the smoke test' 's/.plugins\\tls\\qschannelbackend\.dll.,//' "$smoke"
 mutate 'other update arguments in the smoke test' "s|'/PMMUPDATE=1')|'/PMMUPDATE=1', '/NOICONS')|" "$smoke"
@@ -125,6 +144,78 @@ because "version_regex accepts '01.0.0'"
 mutate 'a version grammar with leading zeros' \
   's/^version_regex = .*/version_regex = ^[0-9]+\\.[0-9]+\\.[0-9]+$/' "$contract_file"
 
+# Comments: a value that is left only in a comment is a drift, in each syntax the
+# check reads; comment markers in strings are code.
+cpp=src/services/app_update.cpp
+because 'the API request asks for releases/latest'
+mutate '/releases/latest only in a C++ comment' 's|out += "/releases/latest";|// &|' "$cpp"
+because 'the application starts the setup with'
+mutate 'the update arguments only in a C++ block comment' 's|return {"/SILENT".*};|return {}; /* & */|' "$cpp"
+because 'kMaxInstallerBytes'
+mutate 'a larger installer limit with the old one in a comment' \
+  's|kMaxInstallerBytes = 512ll \* 1024 \* 1024;|kMaxInstallerBytes = 1024ll * 1024 * 1024; // was &|' \
+  src/services/app_update.hpp
+harmless 'a C++ string with // and /* before a value' \
+  's|out += "/releases/latest";|out += "/*//" "/releases/latest";|' "$cpp"
+harmless 'a digit separator, then a string with a quote and //' \
+  "s|out += \"/releases/latest\";|n = 1'000; s = \"'//\"; &|" "$cpp"
+harmless 'a quote in a char literal, then a string with //' \
+  "s|out += \"/releases/latest\";|c = '\"'; s = \"//\"; &|" "$cpp"
+harmless 'a quote in a raw string, then a string with /*' \
+  "s|out += \"/releases/latest\";|r = R\"x(\")x\"; out += \"/*//\" \"/releases/latest\";|" "$cpp"
+harmless 'a token in a commented-out line' \
+  '/UserAgentHeader/a // request.setRawHeader("Authorization", "token x");' src/app/core/update_client.cpp
+because 'installer.iss checks AppMutex'
+mutate 'the AppMutex line commented out' 's/^AppMutex=/; &/' "$iss"
+# The preprocessor drops a line that starts with //, in every section.
+because 'installer.iss checks AppMutex'
+mutate 'the AppMutex line behind //' 's|^AppMutex=|// &|' "$iss"
+because 'the installation is per-user'
+mutate 'the per-user installation behind an indented //' 's|^PrivilegesRequired=lowest|  // &|' "$iss"
+because 'installer.iss waits for Local\ParadoxModManagerRunning'
+mutate 'another mutex in the setup, the old one behind //' \
+  's|^#define AppRunningMutex .*|// &\n#define AppRunningMutex "Local\\Other"|' "$iss"
+because 'installer.iss polls the mutex'
+mutate 'the mutex polls in a Pascal comment with a } behind //' \
+  's|^  Waited := 0;$|{\n// }\n&|; s|^  Result := not CheckForMutexes.*|&\n}|' "$iss"
+because 'installer.iss starts the application again after an update run'
+mutate 'the relaunch after an update run commented out' '/; Check: IsPmmUpdate/s/^/; /' "$iss"
+because 'installer.iss recognises /PMMUPDATE=1'
+mutate 'the update parameter only in a Pascal comment' '/{param:PMMUPDATE|0}/s|Result := |&False; // |' "$iss"
+because 'installer.iss polls the mutex'
+mutate 'the mutex poll only in Pascal block comments' "s/CheckForMutexes('{#AppRunningMutex}')/False (* & *)/g" "$iss"
+harmless 'a Pascal string with a quote, braces and comment markers before a value' \
+  "s|Result := ExpandConstant(|Log('it''s { (* // '); &|" "$iss"
+because 'installer.iss documents /SILENT /SP- /NORESTART /PMMUPDATE=1'
+mutate 'the update arguments missing from the comment at the top of installer.iss' \
+  's|with /SILENT /SP- /NORESTART /PMMUPDATE=1 and|with the update arguments and|' "$iss"
+because 'the smoke test runs the setup with'
+mutate 'the update arguments only in a PowerShell comment' \
+  "s/^\(\$updateArguments = \)\(@(.*)\)/\1@() # \2/" "$smoke"
+because 'the smoke test holds'
+mutate 'the mutex only in a PowerShell block comment' \
+  "s/^\(\$mutexName = \)\('[^']*'\)/\1'Local\\\\Other' <# \2 #>/" "$smoke"
+harmless 'PowerShell strings with # and quotes before a value' \
+  "s/^\$mutexName = /&\"\`\" #\" + 'it''s <# ' + /" "$smoke"
+because 'CI runs this check'
+mutate 'the contract check of CI only in a YAML comment' \
+  's|bash scripts/check-update-contract.sh|true # &|' .github/workflows/ci.yml
+because 'the workflow checks the assets'
+mutate 'the asset check of the workflow in a commented-out step' \
+  '/- name: Check the release against the update contract/,/published "\$VERSION"/s/^/#/' \
+  .github/workflows/release.yml
+harmless 'quoted # and ${#...} in a workflow before a value' \
+  "s|bash scripts/check-update-contract.sh\$|echo \${#GITHUB_SHA} \"\\\\\" #1\" ' #2' \&\& &|" .github/workflows/ci.yml
+because 'PMM_GITHUB_REPOSITORY_ID is 1439071956'
+mutate 'the repository id only in a CMake comment' \
+  's/^set(PMM_GITHUB_REPOSITORY_ID 1439071956)/set(PMM_GITHUB_REPOSITORY_ID 1439071957) # &/' CMakeLists.txt
+because 'packages must have'
+mutate 'the TLS plugin check only in a CMake bracket comment' \
+  's|^set(_pmm_tls .*|set(_pmm_tls "${QT_DEPLOY_PREFIX}") #[==[\n&\n]==]|' \
+  packaging/windows/prune-qt-deployment.cmake
+harmless 'CMake strings and a bracket argument with # before a value' \
+  's|^  HOMEPAGE_URL|  DESCRIPTION "C# \\" #[[" [=[ # ]=]&|' CMakeLists.txt
+
 fresh_copy
 printf '%s\n' '// No Authorization header and no token are ever sent.' >> "$copy/src/app/core/update_client.cpp"
 expect 0 'a comment about credentials is not a drift' bash "$copy/scripts/check-update-contract.sh"
@@ -133,6 +224,19 @@ fresh_copy
 sed -i -e '/^app_id = /d' "$copy/packaging/update-contract.txt"
 because "no single value for 'app_id'"
 expect 2 'a value missing from the contract stops the check' bash "$copy/scripts/check-update-contract.sh"
+
+# An awk that fails on the Inno Setup script, before any of its checks ran.
+mkdir -p "$work/failing-awk"
+cat > "$work/failing-awk/awk" << EOF
+#!/usr/bin/env bash
+case "\$*" in *syntax=inno*) echo 'awk: simulated failure' >&2; exit 2 ;; esac
+exec '$(command -v awk)' "\$@"
+EOF
+chmod +x "$work/failing-awk/awk"
+fresh_copy
+because 'could not read the code of packaging/windows/installer.iss'
+expect 2 'a comment stripper that fails stops the check' \
+  env PATH="$work/failing-awk:$PATH" bash "$copy/scripts/check-update-contract.sh"
 
 # ---- versions ------------------------------------------------------------
 
