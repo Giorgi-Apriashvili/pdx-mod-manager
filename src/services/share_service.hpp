@@ -21,7 +21,8 @@
 //                    the exact playset (or replaces an explicitly chosen one,
 //                    snapshotting its previous state), creates or reuses an
 //                    acquisition job for every missing Workshop entry
-//                    (disabled ones included, installed usable content never)
+//                    (disabled ones included, installed usable content never;
+//                    none at all without ImportOptions::queueAcquisition)
 //                    and makes the playset active. Any failure rolls the whole
 //                    transaction back and leaves the database unchanged.
 // The imported entries are never reordered, re-flagged, filtered or extended.
@@ -59,6 +60,15 @@ struct ImportPreview {
     bool ok() const noexcept { return !error.has_value(); }
 };
 
+struct ImportOptions {
+    // Creates or reuses an acquisition job for every missing Workshop entry.
+    // False when Workshop downloads are off: the import then creates and reuses
+    // no job (AppliedImport::jobs is empty, existing jobs are left as they are)
+    // and is otherwise identical, so its missing entries read "Not installed"
+    // and nothing is left for a later session to download on its own.
+    bool queueAcquisition = true;
+};
+
 struct AppliedImport {
     std::int64_t playsetId = 0;
     std::string playsetName;
@@ -86,7 +96,7 @@ public:
     // would not fit into sharing::kMaxPlaysetNameBytes.
     Result<AppliedImport> applyImport(const ImportPreview& preview, ImportMode mode,
                                       std::optional<std::int64_t> targetPlaysetId = std::nullopt,
-                                      const std::string& name = {});
+                                      const std::string& name = {}, ImportOptions options = {});
 
 private:
     const ServiceContext& m_ctx;

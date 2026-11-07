@@ -223,7 +223,7 @@ ImportPreview ShareService::previewImport(std::string_view text) {
 
 Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, ImportMode mode,
                                                 std::optional<std::int64_t> targetPlaysetId,
-                                                const std::string& name) {
+                                                const std::string& name, ImportOptions options) {
     // --- Validation: nothing is written until all of it has passed. ---------
     if (!preview.ok())
         return notSaved(*preview.error);
@@ -336,11 +336,13 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
             applied.playsetId = target.id;
         }
         applied.jobs.clear();
-        for (const ModIdentity& identity : plan.toAcquire) {
-            auto job = jobs.createOrReuse(identity, applied.playsetId);
-            if (!job)
-                return std::move(job).error();
-            applied.jobs.push_back(std::move(job).value());
+        if (options.queueAcquisition) {
+            for (const ModIdentity& identity : plan.toAcquire) {
+                auto job = jobs.createOrReuse(identity, applied.playsetId);
+                if (!job)
+                    return std::move(job).error();
+                applied.jobs.push_back(std::move(job).value());
+            }
         }
         PMM_TRY(settings.setInt(settings_key::activePlayset(game), applied.playsetId));
         return settings.set(settings_key::LastGame, game);
