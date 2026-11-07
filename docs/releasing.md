@@ -6,9 +6,10 @@ procedure for the repository owner. The workflow refuses to run a release for
 anyone else, and it publishes nothing for pull requests.
 
 **0.1.0 was published with this procedure on 2026-11-06** ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)), after a
-dry run of the same checks ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). No update between two published releases
-has happened yet. A pre-release is not offered by the updater, so the first real
-test of the update is the next normal release (step 4 below).
+dry run of the same checks ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). 0.1.1 followed on 2026-11-07
+([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42313402701)), without a separate dry run because
+it changed neither the updater nor the packaging. An installed copy updating from
+one published release to the next has not been observed yet.
 
 Every release must keep the [update contract](#the-update-contract): copies that are
 already installed find and install it only through the values frozen in 0.1.0.

@@ -163,8 +163,9 @@ ZIP copies and development builds get "Open release page". The log
 says which one a copy has, at start-up: `update mode mode=installer` or
 `mode=releasePage`.
 
-**Not verified yet:** no update between two published releases has happened (0.1.0,
-published on 2026-11-06, is the first). What has been run is listed in the
+**Not verified yet:** no installed copy has been seen updating from one published
+release to the next (0.1.1, published on 2026-11-07, is the first a 0.1.0 copy can
+update to). What has been run is listed in the
 [installer evidence](evidence/installer-2026-10-30.md#after-merging-the-update-check):
 the installer with these exact arguments, waiting for the real `pmm-app`, with a
 stand-in program for the relaunch, and the client against a local stub and a real
