@@ -23,9 +23,9 @@ telemetry.
 > ignores the mod order for file overrides** (the mod whose name sorts first
 > wins); Stellaris follows it. See the
 > [support matrix](docs/support-matrix.md) and the
-> [development status](docs/development-status.md). An update from one published
-> release to the next has not been observed yet: 0.1.1 is the first version an
-> installed 0.1.0 can update to.
+> [development status](docs/development-status.md). The in-app update works
+> between published releases: on 2026-11-07 an installed 0.1.0 updated itself to
+> 0.1.1.
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -54,7 +54,7 @@ reason documented.
 | In-game verification of loaded mods and order | **Verified** 2026-10-30 with probe mods, both games | Stellaris: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
 | Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md) |
 | Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked; not code signed |
-| Updates: a daily check (can be turned off) and a button, verify the installer's SHA-256, install and restart | Implemented, unverified end to end | [Updates](docs/updates.md): 0.1.1 (2026-11-07) is the first release an installed copy can update to; no such update has been observed yet. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch. The values every released copy relies on are frozen and checked in CI ([compatibility contract](docs/updates.md#compatibility-contract-frozen-since-010)) |
+| Updates: a daily check (can be turned off) and a button, verify the installer's SHA-256, install and restart | **Verified** 2026-11-07 with a real update from 0.1.0 to 0.1.1 | [Updates](docs/updates.md): the owner's installed 0.1.0 found the published 0.1.1, and **Update and restart** installed it. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch. The values every released copy relies on are frozen and checked in CI ([compatibility contract](docs/updates.md#compatibility-contract-frozen-since-010)) |
 | GitHub releases from a workflow | **Verified** 2026-11-06: 0.1.0 published by it | [Releasing](docs/releasing.md), [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030) |
 | Hearts of Iron IV, Crusader Kings III, Victoria 3 | Unsupported | Known to the catalog only; their share codes are rejected as "not supported by this version" |
 

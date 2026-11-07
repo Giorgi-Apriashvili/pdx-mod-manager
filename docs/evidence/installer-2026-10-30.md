@@ -152,7 +152,8 @@ Start Menu group, no desktop link, and no `pmm-app` or setup process.
 - The update button pressed in a real installed copy, and the relaunch of the real
   application: the relaunch has no arguments, so it would open the standard profile.
   The stand-in stood in for that one step.
-- A real update between two published releases: none exists.
+- A real update between two published releases: none existed. (Done on 2026-11-07:
+  the owner's installed 0.1.0 updated itself to 0.1.1 with the update button.)
 - Inno Setup 6.7.1 as on the runner image (6.7.3 here), and the `Release` workflow:
   the workflow cannot run before it is pushed. Its bash steps were run locally
   against a stub `gh`, see below.

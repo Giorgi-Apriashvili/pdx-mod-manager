@@ -37,7 +37,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
 | Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; verified by the extended smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | [installer](evidence/installer-2026-10-30.md) |
-| Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **no real update has been observed**: [0.1.1](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1) (2026-11-07) is the first release an installed copy can update to. 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
+| Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **a real update verified** on 2026-11-07: the owner's installed 0.1.0 updated itself to [0.1.1](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1). 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
 | Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; passed on GitHub in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | |
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
@@ -213,8 +213,9 @@ assets pass `check-update-contract.sh assets`; the tag points at `f13e899`; the
 notes equal the changelog section plus the fixed note, and their links answer
 HTTP 200.
 
-**Not verified:** a real update between two published releases has never run,
-and neither has the update button in a real installed copy.
+**Verified 2026-11-07:** the first real update. The owner's installed 0.1.0 found
+the published 0.1.1, **Update and restart** installed it, and the owner reported
+that it worked.
 
 ## Test status (2026-11-06, after the launch fixes)
 
@@ -333,9 +334,8 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 Packaging ([`packaging.md`](packaging.md)):
 
-- 0.1.0 and 0.1.1 are published, but no installed copy has been seen updating from
-  one to the other, and the update button in a real installed copy has not been
-  run. The owner's installed 0.1.0 is the first test of both. The
+- 0.1.0 and 0.1.1 are published, and on 2026-11-07 the owner's installed 0.1.0
+  updated itself to 0.1.1 with **Update and restart**. The
   owner installed 0.1.0 with the wizard on 2026-11-06, and it worked; on that
   computer neither the browser nor SmartScreen warned, which may come from its
   settings, so the documented warnings stay.
@@ -388,8 +388,8 @@ Packaging ([`packaging.md`](packaging.md)):
    are frozen in [`../packaging/update-contract.txt`](../packaging/update-contract.txt)
    and checked in CI and in the workflow. Done 2026-11-07:
    [0.1.1](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1) released from `4046b83` ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42313402701)) with Play without a
-   playset and Play requiring the Steam client. Next: the owner's installed 0.1.0
-   updating to it, the first real update.
+   playset and Play requiring the Steam client. The owner's installed 0.1.0
+   updated itself to it on 2026-11-07, the first real update.
 
 ## Working rules
 

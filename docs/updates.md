@@ -163,16 +163,15 @@ ZIP copies and development builds get "Open release page". The log
 says which one a copy has, at start-up: `update mode mode=installer` or
 `mode=releasePage`.
 
-**Not verified yet:** no installed copy has been seen updating from one published
-release to the next (0.1.1, published on 2026-11-07, is the first a 0.1.0 copy can
-update to). What has been run is listed in the
+**Verified 2026-11-07:** the owner's installed 0.1.0 updated itself to the published
+0.1.1 with **Update and restart**, the first update between two published releases.
+What had been run before is listed in the
 [installer evidence](evidence/installer-2026-10-30.md#after-merging-the-update-check):
 the installer with these exact arguments, waiting for the real `pmm-app`, with a
 stand-in program for the relaunch, and the client against a local stub and a real
 GitHub asset. Since 2026-11-06 the installer smoke test on the GitHub runner also
 runs an update run with these arguments against a held mutex and checks that it
-starts the installed `pmm-app.exe`; it passed on 2026-11-06. The button pressed in a
-real installed copy has not been run.
+starts the installed `pmm-app.exe`; it passed on 2026-11-06.
 
 ## Compatibility contract (frozen since 0.1.0)
 

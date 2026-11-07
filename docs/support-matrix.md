@@ -56,8 +56,7 @@ tested. Results:
   download through the application, restart persistence of a pending job, and
   the failure cases ([evidence](evidence/live-validation-2026-10-30.md)).
 
-Not observed yet: other stores, Steam's own offline mode, and an update from one
-published release to the next.
+Not observed yet: other stores and Steam's own offline mode.
 
 ## Application build
 
@@ -73,8 +72,8 @@ published release to the next.
 | --- | --- |
 | Per-user installer: install, upgrade, failed upgrade, uninstall | **Verified** 2026-10-30, silent runs in a scratch folder ([evidence](evidence/installer-2026-10-30.md)); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked |
 | Installer: no downgrade over a newer version, one Start Menu shortcut, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, a folder with a non-ASCII name | **Verified** 2026-11-06 by the extended smoke test on a clean GitHub runner ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) |
-| "Check for updates" and the daily check (on by default, once a day, a banner for a new version) | Implemented; tested against a local stub. The real request by repository id on 2026-11-06: HTTP 404 without a redirect before 0.1.0 was published, HTTP 200 with `v0.1.0` after, and with `v0.1.1` after that was published on 2026-11-07, read by the real update client. A 0.1.0 copy offering 0.1.1 has not been observed yet |
-| "Update and restart" (download, verify, installer, relaunch) | Implemented, unverified end to end. Parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch. The relaunch of the real `pmm-app.exe` after an update run passed in the smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). Not available in `--profile` and `--no-steam` sessions |
+| "Check for updates" and the daily check (on by default, once a day, a banner for a new version) | Implemented; tested against a local stub. The real request by repository id on 2026-11-06: HTTP 404 without a redirect before 0.1.0 was published, HTTP 200 with `v0.1.0` after, and with `v0.1.1` after that was published on 2026-11-07, read by the real update client. **Verified** 2026-11-07: the owner's installed 0.1.0 found 0.1.1 and updated to it |
+| "Update and restart" (download, verify, installer, relaunch) | **Verified** 2026-11-07: the owner's installed 0.1.0 updated itself to the published 0.1.1. Before that, parts run: a real GitHub asset through the real client, the installer with the exact arguments waiting for the real `pmm-app`, a stand-in for the relaunch. The relaunch of the real `pmm-app.exe` after an update run passed in the smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). Not available in `--profile` and `--no-steam` sessions |
 | Update contract (the values every released copy relies on) | Checked from 2026-11-06 by `scripts/check-update-contract.sh` in CI and by the `Release` workflow ([contract](updates.md#compatibility-contract-frozen-since-010)); passed on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) |
 | `Release` workflow | **Verified** 2026-11-06: published 0.1.0 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)) after the full CI, the package, the installer smoke test and the contract checks |
 
