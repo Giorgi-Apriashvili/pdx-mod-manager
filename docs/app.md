@@ -219,7 +219,7 @@ and joins the thread.
 | `--profile <dir>` | Keep every application file (database, journal, logs, cache) in `<dir>` instead of the standard per-user locations. Use it for a clean, isolated profile, for example for the "import into a clean profile" acceptance step. An installed copy does not install updates in such a session: it offers the release page and says to restart without `--profile`. |
 | `--verbose` | Write debug-level log records (including redacted helper stderr). |
 | `--game <key>` | Select this game at start-up (`stellaris`, `eu4`). |
-| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing, so a later session with Steam downloads them only after **Download missing**. Updates offer the release page instead of installing, as with `--profile`. |
+| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing: a later session with Steam resumes only the downloads queued before, and the other missing mods need **Download missing** (or **Retry** after an earlier failed download). Updates offer the release page instead of installing, as with `--profile`. |
 | `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. "Check for updates" and the daily check are off too, and Settings says so. |
 
 ### Hidden verification switches

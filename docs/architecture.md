@@ -112,9 +112,12 @@ validation; a new provider means a new provider module and a new `source` key
 4. With Workshop downloads on, an acquisition job is created (or reused) for
    every missing Workshop entry, enabled or not. With downloads off
    (`--no-steam`, `--read-only`) the import creates and reuses no job
-   (`ImportOptions::queueAcquisition`), so the entries stay missing ("Not
-   installed") until the user chooses **Download missing**. Local entries
-   are never downloaded; they need mapping or manual installation.
+   (`ImportOptions::queueAcquisition`) and leaves earlier jobs as they are:
+   an entry whose mod has no job stays missing ("Not installed") until the
+   user chooses **Download missing**, and the others read as their newest
+   job says (an unfinished one resumes in a later session with downloads on,
+   a failed one needs **Retry**). Local entries are never downloaded; they
+   need mapping or manual installation.
 5. Readiness (`computePlaysetReadiness`) is recomputed as jobs and scans
    progress; failed or unavailable entries stay in the playset, visible.
    Workshop items that are registered with the game but have no content are

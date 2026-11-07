@@ -191,8 +191,8 @@ database rows.
   write, no job, no download.
 - `applyImport(preview, mode, target, name, options)`: see the import flow
   below. `ImportOptions::queueAcquisition` (default true) is false when
-  Workshop downloads are off; the import then creates and reuses no job and
-  is otherwise identical.
+  Workshop downloads are off; the import then creates and reuses no job,
+  leaves earlier jobs as they are and is otherwise identical.
 
 ### AcquisitionCoordinator (`acquisition_coordinator.hpp`)
 
@@ -335,9 +335,11 @@ Extra mods installed on this machine stay out of the playset. Local mods that
 are not installed here have no job: they show "needs user action", meaning map
 or install them manually. Until content is installed and seen by the inventory,
 every missing entry reads Pending, Downloading, Failed, Unavailable or
-NeedsUserAction, never Ready; with downloads off a missing Workshop entry has
-no job and reads Missing ("Not installed"). Launching stays blocked while any
-of them is enabled.
+NeedsUserAction, never Ready; with downloads off the import creates no job,
+so a missing Workshop entry reads Missing ("Not installed") unless its mod
+already has a job, whose state it shows (an unfinished one resumes in a later
+session with downloads on). Launching stays blocked while any of them is
+enabled.
 
 ## Data flow: acquisition
 

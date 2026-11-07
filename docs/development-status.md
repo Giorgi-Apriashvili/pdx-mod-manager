@@ -349,12 +349,20 @@ Services and application:
   passes `queueAcquisition = steam` instead of calling
   `applyImportWithoutDownloads`, which created the jobs and cancelled them in
   the same transaction. An import with downloads off now creates and reuses no
-  job and leaves existing ones alone; its missing Workshop entries read "Not
-  installed. Download it from Steam Workshop." in the details panel instead of
-  "The download was cancelled. Retry to acquire this mod.", and the
-  notification says to restart normally and use **Download missing**. The jobs
-  that such imports left in 0.1.0 and 0.1.1 are told apart reliably and
-  removed at every start
+  job and leaves existing ones alone; its missing Workshop entries without a
+  job read "Not installed. Download it from Steam Workshop." in the details
+  panel instead of "The download was cancelled. Retry to acquire this mod.",
+  and the others read as their mod's newest job says. The notification counts
+  them the same way as the mod list: not queued (restart normally, then
+  **Download missing**), still queued from before (resumes after a normal
+  restart) and could not be downloaded before (restart normally, then
+  **Retry**); the import dialog's confirm tooltip no longer says that missing
+  mods are queued. Unlike an import with downloads on, which queues a fresh
+  job, an entry whose mod has a failed, unavailable or needs-action job from
+  the last 7 days keeps that state and is not taken by **Download missing**;
+  this is deliberate (the import touches no job) and the notification says to
+  use **Retry**. The jobs that such imports left in 0.1.0 and 0.1.1 are told
+  apart reliably and removed at every start
   (`AcquisitionJobRepository::removeWithdrawnImportJobs()` in
   `AppRuntime::runMaintenance`, next to the 7-day retention): in every
   version, only that withdrawal and the acquisition reducer's Cancel wrote the
