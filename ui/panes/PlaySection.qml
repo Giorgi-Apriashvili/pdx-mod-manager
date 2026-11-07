@@ -9,6 +9,9 @@ Rectangle {
 
     // "Discard this record": Main.qml asks for confirmation first.
     signal discardRequested()
+    // Recover or Discard went away while it had the focus (with the banner, or
+    // Discard once pressed); like the other banners, focus goes to the mod list.
+    signal focusReleased()
 
     readonly property var launcher: Backend.launcher
     readonly property bool hasGame: Backend.games.currentSupported && Backend.games.currentInstalled
@@ -25,6 +28,12 @@ Rectangle {
     readonly property bool playable: launcher.canPlay && !launcher.busy && hasGame
     readonly property list<string> warningLines: Theme.lines(launcher.warnings)
     readonly property int maxBlockers: 4
+
+    function checkBannerFocus() {
+        if ((recoverButton.activeFocus && !recoverButton.visible)
+                || (discardButton.activeFocus && !discardButton.visible))
+            root.focusReleased()
+    }
 
     function stateText(state: string): string {
         switch (state) {
@@ -70,17 +79,23 @@ Rectangle {
                   ? qsTr("A previous launch stopped while writing game files, and Recover cannot undo it because a backup is missing or damaged. Discard its record to launch with the files as they are now.")
                   : qsTr("A previous launch stopped while writing game files. Recover to restore the files to their previous state.")
             AppButton {
+                id: recoverButton
                 text: qsTr("Recover")
                 iconName: "wrench"
                 onClicked: root.launcher.recoverInterrupted()
+                onVisibleChanged: Qt.callLater(root.checkBannerFocus)
             }
             LinkButton {
+                id: discardButton
                 objectName: "discardInterruptedButton"
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.launcher.canDiscardInterrupted
                 text: qsTr("Discard this record")
                 toolTipText: qsTr("Stop recovering this change and leave its files as they are now (asks first)")
                 onClicked: root.discardRequested()
+                onVisibleChanged: Qt.callLater(root.checkBannerFocus)
+                // The confirmation gives the focus back to it, maybe once it is hidden.
+                onActiveFocusChanged: Qt.callLater(root.checkBannerFocus)
             }
         }
 

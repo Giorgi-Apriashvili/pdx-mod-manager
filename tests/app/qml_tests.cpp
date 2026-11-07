@@ -912,14 +912,24 @@ TEST_CASE(
         CHECK(backend.launcher()->hasInterruptedTransaction());
         CHECK(stateOf() == platform::TransactionState::Applying);
 
-        // Confirming discards it: the banner goes and Play is available.
-        openConfirmation();
+        // Confirming from the keyboard discards it: the banner goes, Play is
+        // available, and the focus leaves the hidden action for the mod list.
+        discard->forceActiveFocus(Qt::TabFocusReason);
+        key(Qt::Key_Return);
+        REQUIRE(waitUntil([&] { return confirm->property("opened").toBool(); }));
         auto* confirmButton = window->findChild<QQuickItem*>(QStringLiteral("confirmButton"));
         REQUIRE(confirmButton);
         CHECK(confirmButton->property("text").toString() == "Discard");
-        REQUIRE(QMetaObject::invokeMethod(confirmButton, "clicked"));
+        key(Qt::Key_Tab);
+        REQUIRE(waitUntil([&] { return confirmButton->hasActiveFocus(); }));
+        key(Qt::Key_Return);
         REQUIRE(waitUntil([&] { return !banner->isVisible(); }));
         REQUIRE(waitUntil([&] { return play->isEnabled(); }));
+        REQUIRE(waitUntil([&] {
+            QQuickItem* item = window->activeFocusItem();
+            return item && item->objectName() == "modList";
+        }));
+        CHECK_FALSE(discard->hasActiveFocus());
         CHECK(stateOf() == platform::TransactionState::Abandoned);
         CHECK(require(platform::readFile(target)) == "after");
 

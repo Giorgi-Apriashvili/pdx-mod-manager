@@ -150,6 +150,16 @@ platform::TransactionRecord interruptLaunch(const fs::path& profile, const fs::p
     return incomplete->front();
 }
 
+// A second supported game ("eu4"), not installed, to switch to.
+class AbsentGameAdapter : public FakeAdapter {
+public:
+    using FakeAdapter::FakeAdapter;
+    const GameCatalogEntry& catalog() const override { return *findGame("eu4"); }
+    std::vector<GameInstallation> discover(const games::DiscoveryEnvironment&) const override {
+        return {};
+    }
+};
+
 std::optional<platform::TransactionRecord> journalRecord(ServiceRunner& runner,
                                                          const std::string& id) {
     return runner.callBlocking([id](AppRuntime& runtime) {
@@ -899,6 +909,61 @@ TEST_CASE("A Recover that fails for another reason offers only Recover again", "
     CHECK(require(platform::readFile(target)) == "before");
     CHECK(launcher.canPlay());
     CHECK(backend.notifications()->latest().value("title").toString() == "Configuration recovered");
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("The offer to discard an interrupted change ends when the game changes",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    AbsentGameAdapter other(world);
+    const fs::path profile = temp.path() / "profile";
+    const platform::TransactionRecord record =
+        interruptLaunch(profile, world.userData / "load_order.txt");
+    fs::remove(record.directory / record.entries.at(0).backupFile);
+    RunnerOptions options = runnerOptions(profile, adapter);
+    options.runtime.adapters = std::vector<const games::GameAdapter*>{&adapter, &other};
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    BackendOptions backendOptions;
+    backendOptions.initialGame = kGame;
+    Backend backend(runner, backendOptions);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    REQUIRE(backend.currentGame() == kGame);
+    LaunchController& launcher = *backend.launcher();
+    REQUIRE(launcher.recoverInterrupted());
+    REQUIRE(waitUntil([&] { return launcher.canDiscardInterrupted(); }));
+
+    // The change still shows in the other game (as a warning), without the offer.
+    backend.selectGame("eu4");
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    REQUIRE(waitUntil([&] { return launcher.hasInterruptedTransaction(); }));
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    CHECK(launcher.discardableFiles().isEmpty());
+    CHECK_FALSE(launcher.discardInterrupted());
+
+    // A Recover answered after the game changed offers nothing either.
+    backend.selectGame(kGame);
+    REQUIRE(waitUntil([&] { return launcher.hasInterruptedTransaction(); }));
+    QSignalSpy posted(backend.notifications(), &NotificationCenter::posted);
+    REQUIRE(launcher.recoverInterrupted());
+    backend.selectGame("eu4");
+    const auto recoveryText = [&]() -> std::optional<QString> {
+        for (const QList<QVariant>& notification : posted) {
+            if (notification.at(1).toString() == "Recovery incomplete")
+                return notification.at(2).toString();
+        }
+        return std::nullopt;
+    };
+    REQUIRE(waitUntil([&] { return recoveryText().has_value(); }));
+    CHECK(recoveryText()->contains("load_order.txt"));
+    CHECK_FALSE(recoveryText()->contains("discard"));
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    CHECK(journalRecord(runner, record.id)->state == platform::TransactionState::Applying);
     backend.shutdown();
     runner.shutdown();
 }

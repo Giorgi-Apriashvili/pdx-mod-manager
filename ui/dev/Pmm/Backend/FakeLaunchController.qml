@@ -50,7 +50,7 @@ QtObject {
         if (backupMissing) {
             discardableFiles = ["C:\\Users\\Player\\Documents\\Paradox Interactive\\Stellaris\\dlc_load.json"]
             discardFolders = ["C:\\Users\\Player\\AppData\\Roaming\\ParadoxModManager\\transactions\\20261107T101500000Z-0000"]
-            notifications.post("error", "Recovery incomplete", "The backup of \"dlc_load.json\" is missing or unreadable, so nothing was restored.")
+            notifications.post("error", "Recovery incomplete", "The backup of \"dlc_load.json\" is missing, so nothing was restored.")
             return true
         }
         hasInterruptedTransaction = false
@@ -61,7 +61,7 @@ QtObject {
     function discardInterrupted(): bool {
         if (!canDiscardInterrupted)
             return false
-        notifications.post("info", "Interrupted change discarded", "Its files were left as they are now. Its record and remaining backups stay in " + discardFolders.join(", ") + ".")
+        notifications.post("info", "Interrupted change discarded", "Its files were left as they are now. Its record and remaining backups stay in " + discardFolders.join(", ") + " until later launches make it old enough to be cleaned up.")
         hasInterruptedTransaction = false
         backupMissing = false
         discardableFiles = []

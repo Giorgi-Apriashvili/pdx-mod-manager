@@ -17,6 +17,8 @@ Rectangle {
     signal deleteRequested()
     signal historyRequested()
     signal discardInterruptedRequested()
+    // A focused action of the Play section went away (Main.qml moves the focus on).
+    signal focusReleased()
 
     readonly property bool hasGame: Backend.games.currentSupported && Backend.games.currentInstalled
     readonly property bool hasPlayset: Backend.playsets.activeId >= 0
@@ -105,6 +107,7 @@ Rectangle {
         PlaySection {
             Layout.fillWidth: true
             onDiscardRequested: root.discardInterruptedRequested()
+            onFocusReleased: root.focusReleased()
         }
     }
 }

@@ -9,7 +9,7 @@ import Pmm.Backend
 // theme switching, the import flow, discarding an interrupted change that
 // Recover cannot undo, and keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
-// Updates section and the update banner).
+// Updates section, the update banner and the discard action).
 // Run: ui/dev/preview.sh --test
 Item {
     width: 120
@@ -466,6 +466,29 @@ Item {
             Backend.updates.state = "idle"
             Backend.updates.checkedAutomatically = false
             banner.dismissed = false
+        }
+
+        function test_a12_discardFromKeyboardMovesFocusOn() {
+            requireFocus()
+            const launcher = Backend.launcher
+            launcher.hasInterruptedTransaction = true
+            launcher.backupMissing = true
+            launcher.recoverInterrupted()
+            const banner = named("interruptedBanner")
+            const discard = named("discardInterruptedButton")
+            tryVerify(() => discard.visible)
+            discard.forceActiveFocus(Qt.TabFocusReason)
+            press(Qt.Key_Return)
+            const dialog = named("confirmDialog")
+            tryVerify(() => dialog.opened)
+            tryVerify(() => findChild(dialog.footer, "cancelButton").activeFocus)
+            press(Qt.Key_Tab)
+            tryVerify(() => findChild(dialog.footer, "confirmButton").activeFocus)
+            press(Qt.Key_Return)
+            tryVerify(() => !banner.visible)
+            // The focused action went away with the banner: the mod list has the focus.
+            tryVerify(() => named("modList").activeFocus)
+            verify(!discard.activeFocus)
         }
 
         name: "PmmUi"

@@ -27,9 +27,11 @@
 // damaged (IntegrityCheckFailed: retrying cannot help) are remembered, and
 // canDiscardInterrupted offers discardInterrupted() for exactly those, with
 // their files and backup folders for the confirmation. The offer ends when the
-// game changes, after a successful recovery or discard, and when a refresh
-// shows no interrupted change any more. Recovery that fails for another
-// reason (a locked file, say) offers Recover again only.
+// game changes, when discardInterrupted() is called (if discarding fails,
+// Recover offers it again), with the next recovery, and when a refresh shows
+// no interrupted change any more. Recovery that fails for another reason (a
+// file or a backup that another program keeps open, say) offers Recover
+// again only.
 
 #include "app/core/view_data.hpp"
 

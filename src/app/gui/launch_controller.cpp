@@ -283,7 +283,8 @@ bool LaunchController::discardInterrupted() {
                     tr("Interrupted change discarded"),
                     tr("Its files were left as they are now, and it no longer blocks launching; "
                        "Play writes the game configuration again. Its record and remaining "
-                       "backups stay in %1.")
+                       "backups stay in %1 until later launches make it old enough to be "
+                       "cleaned up.")
                         .arg(outcome.folders.join(QStringLiteral(", "))));
             m_backend->refreshLaunch();
         });

@@ -61,8 +61,9 @@ Things the QML relies on beyond the tables in the contract:
 - Object names for automation: `gamesPane`, `modsPane`, `sidePane`,
   `modList`, `searchField`, `statusFilter`, `sortSelector`,
   `playsetSelector`, `columnHeader`, `dragHandleArea`, `playButton`,
-  `settingsButton`, `importDialog`, `importNameField`, `importConfirmButton`,
-  `confirmDialog`, `confirmButton`, `settingsDialog`, `shortcutsDialog`,
+  `interruptedBanner`, `discardInterruptedButton`, `settingsButton`,
+  `importDialog`, `importNameField`, `importConfirmButton`, `confirmDialog`,
+  `confirmButton`, `cancelButton`, `settingsDialog`, `shortcutsDialog`,
   `shortcutList`.
 
 ## Interaction reference
