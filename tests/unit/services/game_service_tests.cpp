@@ -260,6 +260,7 @@ TEST_CASE("A rescan saves descriptor files that give a mod the same id as one br
         require(playsets.playset(require(games.importCurrentConfiguration(kGame))));
     REQUIRE(imported.entries.size() == 2);
     CHECK(imported.entries[0].identity == twin->identity);
+    CHECK(imported.entries[0].nameHint == "Twin"); // not the bare id
     CHECK(imported.entries[1].identity.id == "example_local_tweaks");
 }
 

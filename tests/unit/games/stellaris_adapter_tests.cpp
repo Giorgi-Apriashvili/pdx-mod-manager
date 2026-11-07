@@ -513,8 +513,17 @@ TEST_CASE("Stellaris scan merges descriptor files that give a mod the same id",
     REQUIRE(entries.ok());
     REQUIRE(entries->size() == 2);
     CHECK((*entries)[0].identity == twin.identity);
+    CHECK((*entries)[0].nameHint == "Third twin"); // the file that has the referenced name
     CHECK((*entries)[1].identity == ModIdentity{"stellaris", "local", "local_tweaks"});
     CHECK_FALSE(f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{twin}).ok());
+
+    // Without such a file the reference names the entry.
+    fs::remove(modDir / fs::path(L"twin\xFFFD.mod"));
+    entries = f.adapter.readCurrentConfiguration(inst, mods);
+    REQUIRE(entries.ok());
+    REQUIRE_FALSE(entries->empty());
+    CHECK((*entries)[0].identity == twin.identity);
+    CHECK((*entries)[0].nameHint == ref);
 }
 
 TEST_CASE("Stellaris current configuration is read from dlc_load.json", "[games][stellaris]") {

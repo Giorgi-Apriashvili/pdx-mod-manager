@@ -131,7 +131,8 @@ Nothing is ever written below a Steam folder or the game installation.
   content path or descriptor path; `descriptorRef` is the first file's, in
   file name order), and no other id is made up for one of them, because
   playsets and share codes refer to mods by id. `dlc_load.json` references
-  to any of the files resolve to it.
+  to any of the files resolve to it; an imported entry is named after the
+  mod of the file the reference names, else the reference.
 
 **Not installed**: a registered Workshop item whose content exists in no Steam
 library (for example right after the game was reinstalled, before Steam has
