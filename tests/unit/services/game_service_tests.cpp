@@ -1,9 +1,11 @@
+#include "games/stellaris.hpp"
 #include "persistence/installation_repository.hpp"
 #include "persistence/inventory_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "services/app_paths.hpp"
 #include "services/game_service.hpp"
 #include "services/playset_service.hpp"
+#include "services/playset_view.hpp"
 #include "sharing/manifest.hpp"
 #include "test_support.hpp"
 
@@ -11,6 +13,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
+#include <fstream>
 
 using namespace pmm;
 using namespace pmm::services;
@@ -186,6 +189,78 @@ TEST_CASE("Rescans drop cached local fingerprints that the folder's time cannot 
     const auto stored = require(inventory.find(local->identity));
     REQUIRE(stored);
     CHECK(stored->fingerprint.empty());
+}
+
+TEST_CASE("A rescan saves descriptor files that give a mod the same id as one broken mod",
+          "[services][games]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    // The real dlc_load.json adapter decides the identities.
+    const games::StellarisAdapter stellaris;
+    w.ctx.adapters = {&stellaris};
+    const fs::path modDir = w.userData / "mod";
+    const std::string folder = platform::toGenericUtf8(modDir / "example_local_tweaks");
+    writeText(modDir / "example_local_tweaks.mod",
+              "name=\"Example Local Tweaks\"\npath=\"" + folder + "\"\n");
+    // Names with one UTF-8 form: unpaired surrogates have none and read as
+    // U+FFFD, like the literal U+FFFD.
+    const std::string id = "twin\xEF\xBF\xBD";
+    for (const wchar_t* name : {L"twin\xD800.mod", L"twin\xDC00.mod", L"twin\xFFFD.mod"}) {
+        std::ofstream(modDir / fs::path(name), std::ios::binary)
+            << "name=\"Twin\"\npath=\"" << folder << "\"\n";
+        std::error_code ec;
+        if (!fs::exists(modDir / fs::path(name), ec))
+            SKIP("this filesystem refuses names that are not valid Unicode");
+    }
+
+    GameService games(w.ctx);
+    const GameState state = require(games.rescanMods(kGame));
+    CHECK_FALSE(state.scanError);
+    const std::vector<InstalledMod> saved = require(games.cachedInventory(kGame));
+    CHECK(saved.size() == 5); // three Workshop items, the local mod and the twins as one
+    const auto twin = std::find_if(saved.begin(), saved.end(),
+                                   [&](const InstalledMod& m) { return m.identity.id == id; });
+    REQUIRE(twin != saved.end());
+    CHECK(twin->identity.source == source::Local);
+    CHECK(twin->state == InstallState::Broken);
+    REQUIRE(twin->problems.size() == 1);
+    const std::string ref = "mod/" + id + ".mod";
+    CHECK_THAT(twin->problems.front(),
+               ContainsSubstring("The descriptor files " + ref + " (\"Twin\"), " + ref +
+                                 " (\"Twin\") and " + ref + " (\"Twin\") all give"));
+    CHECK_THAT(twin->problems.front(),
+               ContainsSubstring("Rename them so that each has a distinct name, then rescan."));
+    CHECK(hasMod(saved, source::Local, "example_local_tweaks"));
+    CHECK(hasMod(saved, source::SteamWorkshop, "2000000001"));
+    for (const InstalledMod& mod : saved) {
+        if (mod.identity.id != id)
+            CHECK(mod.state == InstallState::Ready);
+    }
+
+    // A playset entry for the id shows the problem and keeps Play unavailable.
+    persistence::PlaysetRepository repo(*w.db);
+    Playset playset;
+    playset.game = kGame;
+    playset.name = "Twins";
+    playset.entries = {localEntry(id, "Twin"), localEntry("example_local_tweaks", "")};
+    const PlaysetView view = require(loadPlaysetView(w.ctx, require(repo.create(playset)), {}));
+    REQUIRE(view.rows.size() == 2);
+    CHECK(view.rows[0].readiness.status == EntryStatus::Broken);
+    CHECK_THAT(view.rows[0].readiness.detail, ContainsSubstring("Rename them"));
+    CHECK(view.rows[0].displayName == "Twin");
+    CHECK(view.rows[1].readiness.status == EntryStatus::Ready);
+    CHECK_FALSE(view.launch.canLaunch);
+
+    // The game's own reference to the id becomes that entry on import.
+    writeText(w.userData / "dlc_load.json",
+              "{\"enabled_mods\":[\"" + ref + "\",\"mod/example_local_tweaks.mod\"]}");
+    PlaysetService playsets(w.ctx);
+    const Playset imported =
+        require(playsets.playset(require(games.importCurrentConfiguration(kGame))));
+    REQUIRE(imported.entries.size() == 2);
+    CHECK(imported.entries[0].identity == twin->identity);
+    CHECK(imported.entries[1].identity.id == "example_local_tweaks");
 }
 
 TEST_CASE("The game's current configuration becomes a new active playset", "[services][games]") {

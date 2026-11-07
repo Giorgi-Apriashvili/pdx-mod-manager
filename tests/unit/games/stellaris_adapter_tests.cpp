@@ -443,6 +443,80 @@ TEST_CASE("Stellaris scan keeps mods with unstorable paths as broken", "[games][
     CHECK(f.mod(mods, "Ünïcødé mod").state == InstallState::Ready);
 }
 
+TEST_CASE("Stellaris scan merges descriptor files that give a mod the same id",
+          "[games][stellaris]") {
+    StellarisFixture f;
+    const GameInstallation inst = f.discovered();
+    const std::vector<InstalledMod> before = f.scan(inst);
+
+    // Three names with one UTF-8 form: unpaired surrogates have none and read
+    // as U+FFFD, like the literal U+FFFD. Each file alone is a usable local mod.
+    const std::string id = "twin\xEF\xBF\xBD";
+    const std::string ref = "mod/" + id + ".mod";
+    const fs::path modDir = f.userData() / "mod";
+    const std::vector<std::pair<fs::path, std::string>> twins{
+        {fs::path(L"twin\xD800.mod"), "First twin"},
+        {fs::path(L"twin\xDBFF.mod"), "Second twin"},
+        {fs::path(L"twin\xFFFD.mod"), "Third twin"}};
+    for (const auto& [name, label] : twins) {
+        const fs::path folder = modDir / u8path(label);
+        fs::create_directories(folder);
+        std::ofstream(modDir / name, std::ios::binary)
+            << "name=\"" << label << "\"\npath=\"" << platform::toGenericUtf8(folder) << "\"\n";
+        std::error_code ec;
+        if (!fs::exists(modDir / name, ec))
+            SKIP("this filesystem refuses names that are not valid Unicode");
+    }
+
+    const std::vector<InstalledMod> mods = f.scan(inst);
+    REQUIRE(mods.size() == before.size() + 1);
+    for (std::size_t i = 1; i < mods.size(); ++i)
+        CHECK(mods[i - 1].identity < mods[i].identity); // sorted, each identity once
+
+    // One entry that no single file stands for, with one problem naming them all.
+    const InstalledMod& twin = f.mod(mods, id);
+    CHECK(twin.identity == ModIdentity{"stellaris", "local", id});
+    CHECK(twin.state == InstallState::Broken);
+    CHECK(twin.problems ==
+          std::vector<std::string>{
+              "The descriptor files " + ref + " (\"First twin\"), " + ref +
+              " (\"Second twin\") and " + ref + " (\"Third twin\") all give this mod the id \"" +
+              id +
+              "\", so they cannot be told apart. Rename them so that each has a distinct name, "
+              "then rescan. Characters in file names that are not valid Unicode are shown as "
+              "\xEF\xBF\xBD."});
+    for (const std::string& problem : twin.problems)
+        CHECK(isValidUtf8(problem));
+    CHECK(twin.descriptor.name.empty());
+    CHECK(twin.descriptorPath.empty());
+    CHECK(twin.contentPath.empty());
+    CHECK(twin.descriptorRef == ref);
+    CHECK(f.mod(f.scan(inst), id).problems == twin.problems); // deterministic
+
+    // Everything else is unaffected.
+    for (const InstalledMod& old : before) {
+        const auto now = std::find_if(mods.begin(), mods.end(), [&](const InstalledMod& m) {
+            return m.identity == old.identity;
+        });
+        REQUIRE(now != mods.end());
+        CHECK(now->state == old.state);
+        CHECK(now->problems == old.problems);
+        CHECK(now->descriptorPath == old.descriptorPath);
+        CHECK(now->contentPath == old.contentPath);
+    }
+
+    // The game's references to the id resolve to that entry, and it is never launched.
+    test::writeText(f.userData() / "dlc_load.json", "{\"enabled_mods\":[\"" + ref +
+                                                        "\",\"mod/local_tweaks.mod\",\"" + ref +
+                                                        "\"]}");
+    auto entries = f.adapter.readCurrentConfiguration(inst, mods);
+    REQUIRE(entries.ok());
+    REQUIRE(entries->size() == 2);
+    CHECK((*entries)[0].identity == twin.identity);
+    CHECK((*entries)[1].identity == ModIdentity{"stellaris", "local", "local_tweaks"});
+    CHECK_FALSE(f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{twin}).ok());
+}
+
 TEST_CASE("Stellaris current configuration is read from dlc_load.json", "[games][stellaris]") {
     StellarisFixture f;
     const GameInstallation inst = f.discovered();
