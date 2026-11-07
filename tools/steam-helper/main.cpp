@@ -9,7 +9,9 @@
 // Safety: commands carry only validated published-file ids. There is no
 // command to unsubscribe, delete, or touch arbitrary paths or URLs.
 
+#include "core/utf8.hpp"
 #include "providers/helper_protocol.hpp"
+#include "providers/internal/path_text.hpp"
 #include "providers/workshop_item.hpp"
 #include "steam_api_loader.hpp"
 
@@ -48,11 +50,6 @@ constexpr int kEResultTimeout = 16;
 constexpr const char* kUsage =
     "usage: pmm-steam-helper --app-id <digits> --steam-api <path to steam_api64.dll | "
     "steam_api.dll>";
-
-std::string utf8(const fs::path& p) {
-    const auto u8 = p.u8string();
-    return std::string(u8.begin(), u8.end());
-}
 
 void diag(const std::string& text) {
     std::fprintf(stderr, "pmm-steam-helper: %s\n", text.c_str());
@@ -272,14 +269,17 @@ int run(const std::vector<fs::path>& args) {
     std::string appId;
     fs::path library;
     for (std::size_t i = 0; i < args.size(); ++i) {
-        const std::string arg = utf8(args[i]);
+        // Never throws (path::u8string() did for unpaired surrogates): such an
+        // argument reads with U+FFFD and is rejected as unknown or as app id.
+        const std::string arg = internal::displayPath(args[i]);
         if (arg == "--app-id" && i + 1 < args.size()) {
-            appId = utf8(args[++i]);
+            appId = internal::displayPath(args[++i]);
         } else if (arg == "--steam-api" && i + 1 < args.size()) {
             library = args[++i];
         } else {
-            return fail(HelperFailure::InvalidArguments,
-                        "Unexpected argument \"" + arg.substr(0, 64) + "\". " + kUsage);
+            return fail(HelperFailure::InvalidArguments, "Unexpected argument \"" +
+                                                             std::string(utf8Prefix(arg, 64)) +
+                                                             "\". " + kUsage);
         }
     }
     if (appId.empty() || library.empty())

@@ -4,6 +4,7 @@
 
 #if defined(PMM_STEAM_HELPER_PATH) && defined(PMM_FAKE_STEAM_API_PATH)
 
+#include "core/utf8.hpp"
 #include "providers/helper_protocol.hpp"
 #include "test_support.hpp"
 
@@ -77,9 +78,16 @@ private:
 class HelperProcess {
 public:
     HelperProcess(const std::string& appId, const fs::path& library) {
-        start({"--app-id", appId, "--steam-api"}, library);
+        start({L"--app-id", u8path(appId).wstring(), L"--steam-api", library.wstring()});
     }
-    explicit HelperProcess(const std::vector<std::string>& args) { start(args, {}); }
+    explicit HelperProcess(const std::vector<std::string>& args) {
+        std::vector<std::wstring> wide;
+        for (const auto& a : args)
+            wide.push_back(u8path(a).wstring());
+        start(wide);
+    }
+    // As wmain receives them, also arguments without a UTF-8 form.
+    explicit HelperProcess(const std::vector<std::wstring>& args) { start(args); }
 
     ~HelperProcess() {
         closeStdin();
@@ -139,7 +147,7 @@ public:
     std::vector<std::string> stderrLines() { return m_err.drain(5s); }
 
 private:
-    void start(const std::vector<std::string>& args, const fs::path& library) {
+    void start(const std::vector<std::wstring>& args) {
         const fs::path exe = u8path(PMM_STEAM_HELPER_PATH);
         SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
         HANDLE inRead = nullptr, inWrite = nullptr, outRead = nullptr, outWrite = nullptr,
@@ -153,9 +161,7 @@ private:
 
         std::wstring cmd = quote(exe.wstring());
         for (const auto& a : args)
-            cmd += L" " + quote(u8path(a).wstring());
-        if (!library.empty())
-            cmd += L" " + quote(library.wstring());
+            cmd += L" " + quote(a);
 
         STARTUPINFOW si{};
         si.cb = sizeof si;
@@ -419,6 +425,21 @@ TEST_CASE("Helper rejects bad arguments and unloadable libraries", "[providers][
             std::vector<std::string>{"--app-id", "281990", "--url", "https://example.invalid"});
         CHECK(helper.next<ReadyEvent>().error == HelperFailure::InvalidArguments);
         CHECK(helper.waitExit(10s) == exitCode(HelperExitCode::InvalidArguments));
+    }
+    SECTION("arguments without a UTF-8 form") {
+        // Unpaired surrogates: path::u8string() threw for them, which ended the
+        // helper without a ready event.
+        HelperProcess unknown(std::vector<std::wstring>{L"--app-id", L"281990", L"--url\xD800"});
+        const auto ready = unknown.next<ReadyEvent>();
+        CHECK(ready.error == HelperFailure::InvalidArguments);
+        CHECK(isValidUtf8(ready.message));
+        CHECK(ready.message.find("\"--url\xEF\xBF\xBD\"") != std::string::npos);
+        CHECK(unknown.waitExit(10s) == exitCode(HelperExitCode::InvalidArguments));
+
+        HelperProcess appId(std::vector<std::wstring>{L"--app-id", L"281990\xDC00", L"--steam-api",
+                                                      steam.library.wstring()});
+        CHECK(appId.next<ReadyEvent>().error == HelperFailure::InvalidArguments);
+        CHECK(appId.waitExit(10s) == exitCode(HelperExitCode::InvalidArguments));
     }
 }
 
