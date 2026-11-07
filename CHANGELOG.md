@@ -21,6 +21,7 @@ is one line, and its links are full URLs.
 
 ### Fixed
 
+- **Edits of several selected mods are all or nothing.** When an undo or redo that was still being saved took away one of the selected mods, enabling, disabling, moving or removing the selection changed the other mods without saying so; now nothing changes and a warning says so, and you can simply repeat the edit.
 - **Importing over a playset keeps its name.** **Replace existing playset** renamed the replaced playset to the name proposed for a new one, such as "SP (2)" for "SP"; it now keeps its name.
 - **Imports with Workshop downloads off leave no cancelled downloads.** In a session started with `--no-steam` or `--read-only`, an import queued the missing Workshop mods and cancelled them at once, so for up to 7 days their details said "The download was cancelled" instead of "Not installed". It now queues nothing, the notification says how to get the mods later (and which ones were already queued or failed before), the import button no longer says they will be queued, and the cancelled downloads left by such imports are removed at the next start.
 

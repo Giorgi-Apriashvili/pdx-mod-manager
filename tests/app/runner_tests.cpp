@@ -1180,6 +1180,34 @@ TEST_CASE("Row edits made while an undo is in flight hit the entries the user sa
         CHECK(latest.value("level").toString() == "warning");
         CHECK(latest.value("text").toString().contains("undo or redo"));
     }
+    SECTION("an edit of several rows, one of which the undo takes away, changes none") {
+        mods.addMods({"steam-workshop:1006"});
+        REQUIRE(waitUntil([&] { return mods.count() == 6 && !mods.busy(); }));
+        mods.undo();
+        // Rows 4 and 5 are 1005 and 1006; the undo removes 1006.
+        SECTION("enable/disable") {
+            mods.setEnabledRows({4, 5}, false);
+        }
+        SECTION("keyboard move") {
+            mods.moveRows({4, 5}, -1);
+        }
+        SECTION("drag and drop") {
+            mods.moveRows({4, 5}, -3);
+        }
+        SECTION("removal") {
+            mods.removeRows({4, 5});
+        }
+        REQUIRE(settled());
+        const std::vector<PlaysetEntry> stored = storedEntries(runner, id);
+        CHECK(ids(stored) == Ids{"1001", "1002", "1003", "1004", "1005"});
+        CHECK(std::all_of(stored.begin(), stored.end(),
+                          [](const PlaysetEntry& entry) { return entry.enabled; }));
+        CHECK(ids(mods) == ids(stored));
+        CHECK(mods.enabledCount() == 5);
+        const QVariantMap latest = backend.notifications()->latest();
+        CHECK(latest.value("level").toString() == "warning");
+        CHECK(latest.value("text").toString().contains("Nothing was changed"));
+    }
     backend.shutdown();
     runner.shutdown();
 }

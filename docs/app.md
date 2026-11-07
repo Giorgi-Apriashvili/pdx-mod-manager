@@ -54,8 +54,10 @@ written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
 - **Edits are optimistic.** `ModListModel` applies an edit at once with the
   same core functions the services use (`core/playset_ops`), then sends it to
   `PlaysetService`. The worker returns the authoritative state, which is
-  reconciled once no other edit is in flight. Refused edits are reverted by
-  that state and explained in a notification.
+  reconciled once no other edit is in flight. Edits name their rows by
+  identity, and the worker applies an edit to all of them or, when an undo or
+  redo still in flight has taken one away, to none. Refused edits are reverted
+  by that state and explained in a notification.
 - **Reorders reach the view as `dataChanged`.** `QSortFilterProxyModel` turns
   source row moves into a layout change without a hint. A QML `ListView`
   then rebuilds its delegates and scrolls back to the top. The QML re-selects

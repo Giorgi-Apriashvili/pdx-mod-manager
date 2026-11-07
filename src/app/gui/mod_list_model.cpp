@@ -71,7 +71,8 @@ std::size_t gapForTarget(const std::vector<std::size_t>& sorted, std::size_t siz
 
 // The stored load order of a playset, by identity. Edits name their rows by
 // identity and are resolved against it on the worker when they run: an undo
-// or redo still in flight changes what the GUI's row indices point at.
+// or redo still in flight changes what the GUI's row indices point at. An
+// edit applies to all of its rows or, when one of them is gone, to none.
 class StoredOrder {
 public:
     static Result<StoredOrder> load(AppRuntime& runtime, std::int64_t playsetId) {
@@ -236,7 +237,7 @@ QString ModListModel::setEnabledRows(const QList<int>& rows, bool on) {
             if (!order)
                 return {order.error(), {}};
             const std::vector<std::size_t> current = order.value().indicesOf(targets);
-            if (current.empty())
+            if (current.size() != targets.size())
                 return {changedMeanwhile(), {}};
             auto issues = runtime.playsets().setEnabled(playsetId, current, on);
             if (!issues)
@@ -309,7 +310,7 @@ void ModListModel::moveRows(const QList<int>& rows, int delta) {
             if (!order)
                 return {order.error(), {}};
             const std::vector<std::size_t> current = order.value().indicesOf(targets);
-            if (current.empty())
+            if (current.size() != targets.size())
                 return {changedMeanwhile(), {}};
             auto result = delta < 0 ? runtime.playsets().moveUp(playsetId, current, filter)
                                     : runtime.playsets().moveDown(playsetId, current, filter);
@@ -336,7 +337,7 @@ void ModListModel::moveRows(const QList<int>& rows, int delta) {
                 return {order.error(), {}};
             const std::vector<std::size_t> current = order.value().indicesOf(targets);
             const std::optional<std::size_t> gap = order.value().gapBefore(anchor);
-            if (current.empty() || !gap)
+            if (current.size() != targets.size() || !gap)
                 return {changedMeanwhile(), {}};
             auto result = runtime.playsets().moveBlock(playsetId, current, *gap, filter);
             if (!result)
@@ -380,7 +381,7 @@ void ModListModel::removeRows(const QList<int>& rows) {
             if (!order)
                 return {order.error(), {}};
             const std::vector<std::size_t> current = order.value().indicesOf(targets);
-            if (current.empty())
+            if (current.size() != targets.size())
                 return {changedMeanwhile(), {}};
             Status done = runtime.playsets().removeEntries(playsetId, current);
             if (!done)

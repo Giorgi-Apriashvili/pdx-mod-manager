@@ -390,8 +390,10 @@ Services and application:
 - `tools/steam-helper/main.cpp` converts paths with `path::u8string()` for
   diagnostics, which can throw on Windows for unpaired surrogates; use the
   non-throwing conversion of `src/providers/internal/path_text`.
-- A mod list edit whose entries are partly gone applies to the rest without
-  telling the user (it is refused only when none are left).
+- Done 2026-11-07: a mod list edit of several rows is all or nothing. When an
+  undo or redo still in flight has taken one of its rows away, nothing changes
+  and the warning says so; it used to apply to the rest without telling the
+  user (owner's choice of the two options).
 - On Clang, `PMM_TRY` names its variable by line number; two on one line
   would collide (no such use exists).
 - Optional: bring the running window to the front on a second start
