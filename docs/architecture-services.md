@@ -278,6 +278,12 @@ It never unsubscribes or deletes anything.
   `ValidationFailed`); its message names the first blocker and its detail
   lists them all.
 - Recovery functions: `interruptedTransactions()`, `recoverInterrupted(txid)`,
+  `discardInterrupted(txid, reason)` (gives up an interrupted transaction of
+  any game through `FileTransactionManager::abandon()`: no file is changed,
+  the folder and its backups are kept, the journal says `abandoned` with the
+  reason as `lastError`, and it no longer blocks or warns; one that is no
+  longer interrupted is refused with `InvalidArgument`; the application
+  offers it only after recovery failed with `IntegrityCheckFailed`),
   `lastRestorableTransaction(game)` (the newest committed launch of the game,
   with either label form) and `restoreTransaction(txid)` (the user's "restore
   pre-launch configuration").
@@ -420,9 +426,14 @@ overwrites it the next time it is used. After a crash, a transaction left
 "prepared" or "applying" blocks launching its game until
 `recoverInterrupted()` puts the backed-up files back. The application shows a
 notice on start-up and offers Recover next to Play when
-`interruptedTransactions()` is not empty. A transaction whose backups are
-missing or damaged cannot be recovered and keeps blocking its game; a discard
-action is planned for after 0.1.0 ([development status](development-status.md)).
+`interruptedTransactions()` is not empty. Recovery needs a backup only for a
+target that no longer holds its original contents. A transaction with such a
+target whose backup is missing or damaged cannot be recovered
+(`IntegrityCheckFailed`, nothing changed); the application then offers
+**Discard this record**, which calls `discardInterrupted()` after a
+confirmation that names the files, so that it stops blocking its game. A
+backup that is there but cannot be read right now (another program keeps it
+open) gives its read error instead, and Recover can simply be tried again.
 
 The game starts only after its helper has exited or been killed, so Steam no
 longer sees a process with the game's app id. Whether a still-exiting helper

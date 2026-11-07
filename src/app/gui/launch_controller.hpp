@@ -21,12 +21,25 @@
 // selection may change while the game runs). A launch parks the game's
 // Workshop downloads (and resumes them if it fails), so the downloads view is
 // refreshed after every outcome.
+//
+// recoverInterrupted() recovers every interrupted configuration change (any
+// game). Those it cannot recover because a backup they need is missing or
+// damaged (IntegrityCheckFailed: retrying cannot help) are remembered, and
+// canDiscardInterrupted offers discardInterrupted() for exactly those, with
+// their files and backup folders for the confirmation. The offer ends when the
+// game changes, when discardInterrupted() is called (if discarding fails,
+// Recover offers it again), with the next recovery, and when a refresh shows
+// no interrupted change any more. Recovery that fails for another reason (a
+// file or a backup that another program keeps open, say) offers Recover
+// again only.
 
 #include "app/core/view_data.hpp"
 
 #include <QObject>
 #include <QString>
 #include <QStringList>
+
+#include <vector>
 
 namespace pmm::app {
 
@@ -44,6 +57,9 @@ class LaunchController : public QObject {
     Q_PROPERTY(bool startedWithPlayset READ startedWithPlayset NOTIFY stateChanged)
     Q_PROPERTY(bool hasInterruptedTransaction READ hasInterruptedTransaction NOTIFY changed)
     Q_PROPERTY(bool canRestoreBackup READ canRestoreBackup NOTIFY changed)
+    Q_PROPERTY(bool canDiscardInterrupted READ canDiscardInterrupted NOTIFY changed)
+    Q_PROPERTY(QStringList discardableFiles READ discardableFiles NOTIFY changed)
+    Q_PROPERTY(QStringList discardFolders READ discardFolders NOTIFY changed)
 
 public:
     explicit LaunchController(Backend* backend, QObject* parent = nullptr);
@@ -58,11 +74,19 @@ public:
     bool startedWithPlayset() const { return m_startedWithPlayset; }
     bool hasInterruptedTransaction() const { return m_data.interrupted; }
     bool canRestoreBackup() const { return m_data.canRestoreBackup; }
+    bool canDiscardInterrupted() const { return !m_discardable.empty(); }
+    // Display paths: the files the changes to discard wrote or were writing,
+    // and the folders that keep their records and backups.
+    QStringList discardableFiles() const;
+    QStringList discardFolders() const;
     // The last verdict applied (C++ only).
     const LaunchData& data() const { return m_data; }
 
     Q_INVOKABLE void play();
     Q_INVOKABLE bool recoverInterrupted();
+    // Discards the changes Recover could not undo (canDiscardInterrupted);
+    // their files stay as they are now.
+    Q_INVOKABLE bool discardInterrupted();
     Q_INVOKABLE bool restoreLastBackup();
     // Last generated report; copyDiagnostics() regenerates it.
     Q_INVOKABLE QString diagnosticsText() const { return m_diagnostics; }
@@ -80,6 +104,14 @@ signals:
     void diagnosticsReady(const QString& text);
 
 private:
+    // An interrupted change that recovery cannot undo.
+    struct Unrecoverable {
+        QString id;
+        QStringList files; // display paths
+        QString folder;    // the transaction folder: journal and backups
+        QString error;     // why recovery failed
+    };
+
     void setState(const QString& state, bool busy);
 
     Backend* m_backend;
@@ -90,6 +122,7 @@ private:
     QString m_lastErrorDetail;
     bool m_startedWithPlayset = false;
     QString m_diagnostics;
+    std::vector<Unrecoverable> m_discardable;
 };
 
 } // namespace pmm::app

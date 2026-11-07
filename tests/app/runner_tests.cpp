@@ -12,6 +12,7 @@
 #include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/settings_repository.hpp"
+#include "platform/file_transaction.hpp"
 #include "platform/steam.hpp"
 #include "test_support.hpp"
 
@@ -27,6 +28,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -131,6 +133,40 @@ RunnerOptions runnerOptions(const fs::path& profile, const FakeAdapter& adapter,
         context.listProcesses = [processes] { return processes->read(); };
     };
     return options;
+}
+
+// Leaves a launch of the fake game without mods "applying" in the profile's
+// journal, as a crash right after writing `target` would.
+platform::TransactionRecord interruptLaunch(const fs::path& profile, const fs::path& target) {
+    writeText(target, "before");
+    platform::FileTransactionManager journal(profile / "transactions");
+    platform::FileTransactionFaults crash;
+    crash.crashAfterWrites = std::size_t{1};
+    journal.setFaultsForTesting(crash);
+    REQUIRE_FALSE(journal.apply("launch stellaris without mods", {{target, "after"}}).ok());
+    const auto incomplete = journal.listIncomplete();
+    REQUIRE(incomplete.ok());
+    REQUIRE(incomplete->size() == 1);
+    return incomplete->front();
+}
+
+// A second supported game ("eu4"), not installed, to switch to.
+class AbsentGameAdapter : public FakeAdapter {
+public:
+    using FakeAdapter::FakeAdapter;
+    const GameCatalogEntry& catalog() const override { return *findGame("eu4"); }
+    std::vector<GameInstallation> discover(const games::DiscoveryEnvironment&) const override {
+        return {};
+    }
+};
+
+std::optional<platform::TransactionRecord> journalRecord(ServiceRunner& runner,
+                                                         const std::string& id) {
+    return runner.callBlocking([id](AppRuntime& runtime) {
+        auto record = runtime.context().transactions.load(id);
+        return record ? std::optional<platform::TransactionRecord>(std::move(record).value())
+                      : std::nullopt;
+    });
 }
 
 std::int64_t storedActivePlayset(ServiceRunner& runner) {
@@ -745,6 +781,219 @@ TEST_CASE("Play stays blocked when the active playset cannot be loaded", "[app][
         return !history || !history.value().empty();
     });
     CHECK_FALSE(launched);
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("A change Recover cannot undo can be discarded, and Play is available again",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    const fs::path target = world.userData / "load_order.txt";
+    const platform::TransactionRecord record = interruptLaunch(profile, target);
+    const fs::path backup = record.directory / record.entries.at(0).backupFile;
+    SECTION("its backup is missing") {
+        fs::remove(backup);
+    }
+    SECTION("its backup is damaged") {
+        writeText(backup, "damaged");
+    }
+    auto started = std::make_shared<std::atomic<int>>(0);
+    RunnerOptions options = runnerOptions(profile, adapter);
+    options.runtime.configureContext = [hermetic = options.runtime.configureContext,
+                                        started](services::ServiceContext& context) {
+        hermetic(context);
+        // Records the start; nothing is executed. Steam stays running.
+        context.startProcess =
+            [started](const platform::ProcessSpec&) -> Result<platform::StartedProcess> {
+            ++*started;
+            return platform::StartedProcess{4242};
+        };
+    };
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    LaunchController& launcher = *backend.launcher();
+    REQUIRE(launcher.hasInterruptedTransaction());
+    CHECK_FALSE(launcher.canPlay());
+    CHECK(launcher.blockers().join('\n').contains("interrupted"));
+    // Offered only after Recover has failed.
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    CHECK_FALSE(launcher.discardInterrupted());
+
+    QSignalSpy changed(&launcher, &LaunchController::changed);
+    REQUIRE(launcher.recoverInterrupted());
+    REQUIRE(waitUntil([&] { return launcher.canDiscardInterrupted(); }));
+    CHECK(launcher.discardableFiles() == QStringList{qpath(target)});
+    CHECK(launcher.discardFolders() == QStringList{qpath(record.directory)});
+    const QVariantMap failed = backend.notifications()->latest();
+    CHECK(failed.value("title").toString() == "Recovery incomplete");
+    CHECK(failed.value("text").toString().contains("load_order.txt"));
+    CHECK(failed.value("text").toString().contains("discard the record next to Play"));
+    // The refresh after Recover still shows the change, and keeps the offer.
+    const int recovered = static_cast<int>(changed.count());
+    REQUIRE(waitUntil([&] { return changed.count() > recovered; }));
+    CHECK(launcher.hasInterruptedTransaction());
+    CHECK(launcher.canDiscardInterrupted());
+    CHECK_FALSE(launcher.canPlay());
+
+    REQUIRE(launcher.discardInterrupted());
+    CHECK_FALSE(launcher.canDiscardInterrupted()); // taken at once: a second click does nothing
+    CHECK_FALSE(launcher.discardInterrupted());
+    REQUIRE(waitUntil([&] { return !launcher.hasInterruptedTransaction(); }));
+    CHECK(launcher.canPlay());
+    CHECK(launcher.blockers().isEmpty());
+    const QVariantMap discarded = backend.notifications()->latest();
+    CHECK(discarded.value("title").toString() == "Interrupted change discarded");
+    CHECK(discarded.value("text").toString().contains(qpath(record.directory)));
+    // The file stays as the interrupted launch left it; the journal says why.
+    CHECK(require(platform::readFile(target)) == "after");
+    const auto journal = journalRecord(runner, record.id);
+    REQUIRE(journal);
+    CHECK(journal->state == platform::TransactionState::Abandoned);
+    CHECK(journal->lastError.find("recovery failed") != std::string::npos);
+
+    // The next Play writes the configuration again.
+    launcher.play();
+    REQUIRE(waitUntil([&] { return launcher.state() == QLatin1String("started"); }));
+    CHECK(*started == 1);
+    CHECK(require(platform::readFile(target)).empty()); // no mods
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("A Recover that fails for another reason offers only Recover again", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    const fs::path target = world.userData / "load_order.txt";
+    const platform::TransactionRecord record = interruptLaunch(profile, target);
+    // A folder in place of the file: it cannot be put back, but the backup is fine.
+    fs::remove(target);
+    fs::create_directory(target);
+    ServiceRunner runner(runnerOptions(profile, adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    LaunchController& launcher = *backend.launcher();
+    REQUIRE(launcher.hasInterruptedTransaction());
+
+    QSignalSpy changed(&launcher, &LaunchController::changed);
+    REQUIRE(launcher.recoverInterrupted());
+    REQUIRE(waitUntil([&] {
+        return backend.notifications()->latest().value("title").toString() == "Recovery incomplete";
+    }));
+    // ... and the refresh after it.
+    const int recovered = static_cast<int>(changed.count());
+    REQUIRE(waitUntil([&] { return changed.count() > recovered; }));
+    CHECK_FALSE(backend.notifications()->latest().value("text").toString().contains("discard"));
+    CHECK(launcher.hasInterruptedTransaction());
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    CHECK(launcher.discardableFiles().isEmpty());
+    CHECK_FALSE(launcher.discardInterrupted());
+    REQUIRE(journalRecord(runner, record.id));
+    CHECK(journalRecord(runner, record.id)->state == platform::TransactionState::Applying);
+
+    // Once the folder is gone, Recover succeeds.
+    fs::remove(target);
+    REQUIRE(launcher.recoverInterrupted());
+    REQUIRE(waitUntil([&] { return !launcher.hasInterruptedTransaction(); }));
+    CHECK(require(platform::readFile(target)) == "before");
+    CHECK(launcher.canPlay());
+    CHECK(backend.notifications()->latest().value("title").toString() == "Configuration recovered");
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("The offer to discard an interrupted change ends when the game changes",
+          "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    AbsentGameAdapter other(world);
+    const fs::path profile = temp.path() / "profile";
+    const platform::TransactionRecord record =
+        interruptLaunch(profile, world.userData / "load_order.txt");
+    fs::remove(record.directory / record.entries.at(0).backupFile);
+    RunnerOptions options = runnerOptions(profile, adapter);
+    options.runtime.adapters = std::vector<const games::GameAdapter*>{&adapter, &other};
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    BackendOptions backendOptions;
+    backendOptions.initialGame = kGame;
+    Backend backend(runner, backendOptions);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    REQUIRE(backend.currentGame() == kGame);
+    LaunchController& launcher = *backend.launcher();
+    REQUIRE(launcher.recoverInterrupted());
+    REQUIRE(waitUntil([&] { return launcher.canDiscardInterrupted(); }));
+
+    // The change still shows in the other game (as a warning), without the offer.
+    backend.selectGame("eu4");
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    REQUIRE(waitUntil([&] { return launcher.hasInterruptedTransaction(); }));
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    CHECK(launcher.discardableFiles().isEmpty());
+    CHECK_FALSE(launcher.discardInterrupted());
+
+    // A Recover answered after the game changed offers nothing either.
+    backend.selectGame(kGame);
+    REQUIRE(waitUntil([&] { return launcher.hasInterruptedTransaction(); }));
+    QSignalSpy posted(backend.notifications(), &NotificationCenter::posted);
+    REQUIRE(launcher.recoverInterrupted());
+    backend.selectGame("eu4");
+    const auto recoveryText = [&]() -> std::optional<QString> {
+        for (const QList<QVariant>& notification : posted) {
+            if (notification.at(1).toString() == "Recovery incomplete")
+                return notification.at(2).toString();
+        }
+        return std::nullopt;
+    };
+    REQUIRE(waitUntil([&] { return recoveryText().has_value(); }));
+    CHECK(recoveryText()->contains("load_order.txt"));
+    CHECK_FALSE(recoveryText()->contains("discard"));
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    CHECK(journalRecord(runner, record.id)->state == platform::TransactionState::Applying);
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Read-only sessions neither recover nor discard interrupted changes", "[app][backend]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    const platform::TransactionRecord record =
+        interruptLaunch(profile, world.userData / "load_order.txt");
+    fs::remove(record.directory / record.entries.at(0).backupFile);
+    ServiceRunner runner(runnerOptions(profile, adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    BackendOptions options;
+    options.readOnly = true;
+    Backend backend(runner, options);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    LaunchController& launcher = *backend.launcher();
+    REQUIRE(launcher.hasInterruptedTransaction());
+
+    CHECK_FALSE(launcher.recoverInterrupted());
+    CHECK(backend.notifications()->latest().value("title").toString() == "Recovery is disabled");
+    CHECK_FALSE(launcher.canDiscardInterrupted());
+    CHECK_FALSE(launcher.discardInterrupted());
+    CHECK(backend.notifications()->latest().value("title").toString() == "Discarding is disabled");
+    REQUIRE(journalRecord(runner, record.id));
+    CHECK(journalRecord(runner, record.id)->state == platform::TransactionState::Applying);
     backend.shutdown();
     runner.shutdown();
 }

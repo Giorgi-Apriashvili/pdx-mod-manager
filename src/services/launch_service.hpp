@@ -18,6 +18,8 @@
 // launch label or a target in its user-data folder). Other interrupted
 // transactions are warnings: they cannot make this game's files inconsistent,
 // and one that cannot be recovered must not keep every game from launching.
+// One that cannot be recovered can be discarded (discardInterrupted()); then
+// it blocks nothing.
 // Without a playset (std::nullopt) only the playset checks are skipped and a
 // warning says the game starts without mods; a playset id that no longer
 // exists still blocks. The installation's blockers (folders, processes,
@@ -119,6 +121,15 @@ public:
     // Configuration transactions interrupted by a crash (any game).
     Result<std::vector<platform::TransactionRecord>> interruptedTransactions();
     Result<platform::TransactionRecord> recoverInterrupted(std::string_view transactionId);
+    // Gives up an interrupted transaction of any game that cannot be recovered
+    // (FileTransactionManager::abandon): its files stay as they are, its
+    // backups stay in its folder, and it no longer blocks launching. `reason`
+    // (for example why recovery failed) is kept in its journal. Refuses one
+    // that is no longer interrupted (recovered or discarded meanwhile) with
+    // InvalidArgument. Which transactions to offer is the caller's decision:
+    // the application offers those whose recovery failed for good.
+    Result<platform::TransactionRecord> discardInterrupted(std::string_view transactionId,
+                                                           std::string reason = {});
     // Newest committed launch transaction of `game`, with or without a playset
     // (the configuration from before that launch can be restored).
     Result<std::optional<platform::TransactionRecord>>

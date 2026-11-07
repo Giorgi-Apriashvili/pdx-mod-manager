@@ -501,6 +501,11 @@ LaunchService::recoverInterrupted(std::string_view transactionId) {
     return m_ctx.transactions.recover(transactionId);
 }
 
+Result<platform::TransactionRecord>
+LaunchService::discardInterrupted(std::string_view transactionId, std::string reason) {
+    return m_ctx.transactions.abandon(transactionId, std::move(reason));
+}
+
 Result<std::optional<platform::TransactionRecord>>
 LaunchService::lastRestorableTransaction(const GameKey& game) {
     auto committed = m_ctx.transactions.listCommitted();

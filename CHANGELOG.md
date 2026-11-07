@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+### Added
+
+- **Discard an interrupted change that cannot be recovered.** When **Recover** cannot undo an interrupted configuration change because a backup is missing or damaged, the banner next to Play now offers **Discard this record**. After a confirmation that lists the files, the change no longer blocks Play, its files stay as they are, and the next Play writes the game configuration again; until now the game stayed blocked until the change's folder was moved by hand. Recover also no longer needs the backup of a file that is already back to its original contents.
+
 ### Fixed
 
 - **Importing over a playset keeps its name.** **Replace existing playset** renamed the replaced playset to the name proposed for a new one, such as "SP (2)" for "SP"; it now keeps its name.

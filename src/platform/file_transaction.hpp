@@ -16,7 +16,13 @@
 // did not exist before) and marks the journal "rolled_back". A crash leaves
 // "prepared" or "applying" behind; listIncomplete() finds those and recover()
 // undoes them. Backups are verified against their recorded hash before any
-// restore.
+// target changes; a target that already holds its original contents needs no
+// backup. One that recover() cannot undo (a backup it needs is missing or
+// damaged) can be given up with abandon(), which marks it "abandoned" and
+// changes no target.
+//
+// Journals keep format 1. A version without the "abandoned" state cannot read
+// such a journal; list() skips it there, so it neither blocks nor is pruned.
 //
 // Txids are "<UTC yyyymmddThhmmssmmm>Z-<4-digit sequence>", so they sort by
 // creation time. Not thread-safe; use one manager per journal root (pmm-app
@@ -48,6 +54,7 @@ enum class TransactionState {
     RolledBack, // apply() failed and undid its changes
     Recovered,  // interrupted transaction undone by recover()
     Restored,   // committed transaction undone by restore()
+    Abandoned,  // interrupted transaction given up by abandon(); targets left as they were
 };
 
 const char* toString(TransactionState state) noexcept; // "prepared", "applying", ...
@@ -68,7 +75,7 @@ struct TransactionRecord {
     std::int64_t createdUnixMs = 0;
     std::int64_t updatedUnixMs = 0;
     std::vector<TransactionEntry> entries;
-    std::string lastError; // why it was rolled back, if it was
+    std::string lastError; // why it was rolled back or abandoned, if it was
     fs::path directory;    // <journalRoot>/<id>
 };
 
@@ -103,16 +110,32 @@ public:
 
     // Undoes an interrupted transaction: restores the backed-up originals and
     // deletes targets that did not exist before (only if they still hold the
-    // contents apply() wrote). Marks it "recovered".
+    // contents apply() wrote). Marks it "recovered". Targets that already hold
+    // their original contents, or did not exist before and still do not, need
+    // no backup; any other target whose backup is missing or damaged fails
+    // with IntegrityCheckFailed before anything changes. A backup that cannot
+    // be read right now (in use by another program, access denied), or such a
+    // target that cannot be read, fails with that read error instead, also
+    // before anything changes: retrying may succeed.
     Result<TransactionRecord> recover(std::string_view txid);
+
+    // Gives up an interrupted ("prepared" or "applying") transaction that
+    // cannot be recovered: marks it "abandoned", keeping `reason` (if any) as
+    // lastError. Changes no target and keeps the folder with its backups;
+    // listIncomplete() no longer returns it. Any other state is refused with
+    // InvalidArgument.
+    Result<TransactionRecord> abandon(std::string_view txid, std::string reason = {});
 
     // Puts back the originals saved by a committed transaction ("restore the
     // configuration from before launch"); files it created are deleted.
-    // Marks it "restored"; may be repeated.
+    // Marks it "restored"; may be repeated. Like recover(), a target already
+    // back to its original contents needs no backup.
     Result<TransactionRecord> restore(std::string_view txid);
 
-    // Deletes the oldest finished transactions so that at most `keepLast`
-    // remain. Interrupted ones are never deleted.
+    // Deletes the oldest finished transactions (every state but "prepared" and
+    // "applying", so abandoned ones too, with their backups) so that at most
+    // `keepLast` remain. Interrupted ones are never deleted. An abandoned one
+    // counts from when it was abandoned, the others from their creation.
     Status prune(std::size_t keepLast);
 
     void setFaultsForTesting(FileTransactionFaults faults) { m_faults = faults; }

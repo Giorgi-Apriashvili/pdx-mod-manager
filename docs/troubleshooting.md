@@ -143,21 +143,46 @@ copies of the original files. Do not edit them by hand.
 
 ### Recover reports a missing or damaged backup
 
-"The backup of ... is missing or unreadable" or "... is damaged, so nothing
-was restored" means the change cannot be undone automatically: nothing was
-changed by the attempt, and the transaction keeps blocking launches of that
-game. The application has no action yet to discard such a record (planned for
-after 0.1.0).
-Until then:
+"The backup of ... is missing" or "... is damaged, so nothing was restored"
+means the change cannot be undone automatically: nothing was changed by the
+attempt. Recover needs a backup only for a file that still differs from what
+it was before the change; a file that already holds its original contents
+needs none. Recover compares the exact contents, so only an exact copy of the
+file as it was just before that launch helps (for example one from File
+History taken after the file last changed): put it back and press
+**Recover** again. Any other copy, such as an older one or one from another
+playset, still differs and gives the same message.
 
-1. Close the manager.
-2. Check the files named in the message in the game's user-data folder, for
-   example `dlc_load.json`. If in doubt, let the Paradox launcher write the
-   game's configuration again by starting the game once through it, then
-   close the game and the launcher.
-3. Move the transaction's `<id>` folder out of `transactions/` (keep it until
-   you are sure you do not need its backups; do not delete files inside it).
-4. Start the manager: the game is no longer blocked.
+Otherwise the banner next to Play now offers **Discard this record**. It asks
+first, and the question lists the files the interrupted change wrote or was
+writing. **Discard** gives up the change:
+
+- Those files stay as they are now, possibly half of the interrupted launch's
+  configuration; the manager does not touch them.
+- The change no longer blocks launching. The next **Play** writes the game's
+  configuration again. To go back to the Paradox launcher's configuration
+  instead, start the game once through the launcher, then close the game and
+  the launcher.
+- The record and its remaining backups stay in its `<id>` folder in
+  `transactions/`, marked `abandoned` in its `journal.json`, until later
+  launches make it old enough to be cleaned up: when it starts, the manager
+  keeps the newest 10 finished changes, and a discarded one counts from the
+  moment it was discarded, not from the launch that was interrupted.
+
+**Cancel** (also Escape, or Enter, since Cancel has the focus) changes
+nothing. Discarding is offered only when Recover failed because of a missing
+or damaged backup, and only until the game is switched or **Discard** is
+pressed; press Recover again to get the offer back. When Recover fails for
+another reason, for example a file or its backup that another program (a
+virus scanner or a backup tool, say) keeps open ("Could not read the backup
+of ..."), nothing is offered to discard: close that program or fix the
+access, and press Recover again.
+
+If discarding fails (the message says why, for example that the transaction
+folder cannot be written), fix the cause if you can, then press **Recover**
+again and, when it offers it, **Discard this record** again. If that keeps
+failing, close the manager and move the transaction's `<id>` folder out of
+`transactions/`; keep it until you are sure you do not need its backups.
 
 ## Restoring the pre-launch configuration and using the official launcher
 

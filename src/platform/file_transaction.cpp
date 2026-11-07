@@ -162,30 +162,54 @@ Status writeJournal(TransactionRecord& record) {
     return writeFileAtomic(record.directory / kJournalFile, text);
 }
 
-// Puts entries [0, count) back to their state before apply(). Every backup is
-// read and verified first, so a damaged backup aborts before anything changes.
-// Then each entry is processed even if an earlier one fails; the first error
-// is returned.
+// Puts entries [0, count) back to their state before apply(). Every backup
+// that is still needed is read and verified first, so a missing or damaged one
+// aborts before anything changes (IntegrityCheckFailed), and so does one that
+// cannot be read right now, with its read error (in use by another program,
+// say: a retry may work). A target that already holds its original contents
+// needs no backup (a crash before its write, or put back since), and neither
+// does one that did not exist before. Then each entry is processed even if an
+// earlier one fails; the first error is returned.
 Status undoEntries(const TransactionRecord& record, std::size_t count, UndoMode mode) {
     count = std::min(count, record.entries.size());
-    std::vector<std::string> originals(count);
+    std::vector<std::optional<std::string>> originals(count); // empty: already the original
     for (std::size_t i = 0; i < count; ++i) {
         const TransactionEntry& entry = record.entries[i];
         if (!entry.existed)
             continue;
+        Result<std::string> current = readFile(entry.target, kMaxFileBytes);
+        if (current && sha256Hex(*current) == entry.backupSha256)
+            continue;
         const fs::path backup = record.directory / entry.backupFile;
         Result<std::string> contents = readFile(backup, kMaxFileBytes);
-        if (!contents)
-            return makeError(ErrorCode::IntegrityCheckFailed,
-                             "The backup of " + quotedName(entry.target) +
-                                 " is missing or unreadable, so nothing was restored.",
-                             contents.error().detail);
-        if (sha256Hex(*contents) != entry.backupSha256)
-            return makeError(ErrorCode::IntegrityCheckFailed,
-                             "The backup of " + quotedName(entry.target) +
-                                 " is damaged, so nothing was restored.",
-                             pathToUtf8(backup));
-        originals[i] = std::move(contents).value();
+        if (contents && sha256Hex(*contents) == entry.backupSha256) {
+            originals[i] = std::move(contents).value();
+            continue;
+        }
+        // Only a missing backup, or a damaged one (above the size limit that
+        // applied to the original, or with another hash), is gone for good.
+        const bool missing = !contents && contents.error().code == ErrorCode::NotFound;
+        if (!contents && !missing && contents.error().code != ErrorCode::LimitExceeded)
+            return Error(contents.error().code,
+                         "Could not read the backup of " + quotedName(entry.target) +
+                             ", so nothing was restored. " + contents.error().message,
+                         contents.error().detail);
+        const std::string problem = missing ? "is missing" : "is damaged";
+        const std::string backupDetail = contents ? pathToUtf8(backup) : contents.error().detail;
+        // A target that could not be read may hold its original contents after
+        // all; trying again once it can be read may need no backup. (A missing
+        // one, or one above the size limit that applied to the original, is not.)
+        if (!current && current.error().code != ErrorCode::NotFound &&
+            current.error().code != ErrorCode::LimitExceeded)
+            return Error(current.error().code,
+                         current.error().message + " Nothing was restored: its backup " + problem +
+                             ", so recovery has to read the file to check whether it still "
+                             "holds its original contents.",
+                         current.error().detail + "; backup: " + backupDetail);
+        return makeError(ErrorCode::IntegrityCheckFailed,
+                         "The backup of " + quotedName(entry.target) + " " + problem +
+                             ", so nothing was restored.",
+                         backupDetail);
     }
 
     std::optional<Error> firstError;
@@ -193,10 +217,9 @@ Status undoEntries(const TransactionRecord& record, std::size_t count, UndoMode 
         const TransactionEntry& entry = record.entries[i];
         Status status;
         if (entry.existed) {
-            Result<std::string> current = readFile(entry.target, kMaxFileBytes);
-            if (current && sha256Hex(*current) == entry.backupSha256)
+            if (!originals[i])
                 continue; // already the original
-            status = writeFileAtomic(entry.target, originals[i]);
+            status = writeFileAtomic(entry.target, *originals[i]);
         } else {
             std::error_code ec;
             if (!fs::exists(entry.target, ec))
@@ -240,6 +263,8 @@ const char* toString(TransactionState state) noexcept {
         return "recovered";
     case TransactionState::Restored:
         return "restored";
+    case TransactionState::Abandoned:
+        return "abandoned";
     }
     return "prepared";
 }
@@ -247,7 +272,8 @@ const char* toString(TransactionState state) noexcept {
 std::optional<TransactionState> transactionStateFromString(std::string_view text) noexcept {
     for (const TransactionState state :
          {TransactionState::Prepared, TransactionState::Applying, TransactionState::Committed,
-          TransactionState::RolledBack, TransactionState::Recovered, TransactionState::Restored}) {
+          TransactionState::RolledBack, TransactionState::Recovered, TransactionState::Restored,
+          TransactionState::Abandoned}) {
         if (text == toString(state))
             return state;
     }
@@ -331,11 +357,11 @@ Result<TransactionRecord> FileTransactionManager::apply(std::string label,
     }
 
     // Records the failure on a transaction whose targets are all untouched.
-    const auto abandon = [&](Error error) -> Error {
+    const auto failUntouched = [&](Error error) -> Error {
         record.state = TransactionState::RolledBack;
         record.lastError = error.message;
         if (!writeJournal(record).ok())
-            logWarning(kComponent, "could not record an abandoned change", {{"id", record.id}});
+            logWarning(kComponent, "could not record a failed change", {{"id", record.id}});
         return error;
     };
 
@@ -351,16 +377,16 @@ Result<TransactionRecord> FileTransactionManager::apply(std::string label,
             continue;
         Result<std::string> original = readFile(entry.target, kMaxFileBytes);
         if (!original)
-            return abandon(std::move(original).error());
+            return failUntouched(std::move(original).error());
         if (Status status = writeFileAtomic(record.directory / entry.backupFile, *original);
             !status.ok())
-            return abandon(std::move(status).error());
+            return failUntouched(std::move(status).error());
         entry.backupSha256 = sha256Hex(*original);
     }
 
     record.state = TransactionState::Applying;
     if (Status status = writeJournal(record); !status.ok())
-        return abandon(std::move(status).error());
+        return failUntouched(std::move(status).error());
 
     // Undoes targets [0, touched) after `error`. If that fails too, the journal
     // stays "applying" so that recover() can finish it later.
@@ -508,6 +534,36 @@ Result<TransactionRecord> FileTransactionManager::recover(std::string_view txid)
     return record;
 }
 
+Result<TransactionRecord> FileTransactionManager::abandon(std::string_view txid,
+                                                          std::string reason) {
+    Result<TransactionRecord> loaded = load(txid);
+    if (!loaded)
+        return loaded;
+    TransactionRecord record = std::move(loaded).value();
+    if (!isIncomplete(record.state)) {
+        const std::string why =
+            record.state == TransactionState::Abandoned   ? " was already discarded."
+            : record.state == TransactionState::Recovered ? " was already recovered, so there is "
+                                                            "nothing to discard."
+                                                          : " was not interrupted, so there is "
+                                                            "nothing to discard.";
+        return makeError(ErrorCode::InvalidArgument, "Configuration change " + record.id + why,
+                         toString(record.state));
+    }
+    record.state = TransactionState::Abandoned;
+    if (!reason.empty())
+        record.lastError = std::move(reason);
+    PMM_TRY(writeJournal(record));
+    std::string targets;
+    for (const TransactionEntry& entry : record.entries)
+        targets += (targets.empty() ? "" : "; ") + pathToUtf8(entry.target);
+    logWarning(kComponent,
+               "interrupted configuration change abandoned; its files were left as "
+               "they are",
+               {{"id", record.id}, {"label", record.label}, {"targets", targets}});
+    return record;
+}
+
 Result<TransactionRecord> FileTransactionManager::restore(std::string_view txid) {
     Result<TransactionRecord> loaded = load(txid);
     if (!loaded)
@@ -533,6 +589,17 @@ Status FileTransactionManager::prune(std::size_t keepLast) {
         if (!isIncomplete(record.state))
             finished.push_back(&record);
     }
+    // An abandoned one counts from when it was given up, not from the launch
+    // that crashed: its backups may be the only copies of the originals.
+    const auto since = [](const TransactionRecord* record) {
+        return record->state == TransactionState::Abandoned
+                   ? std::max(record->createdUnixMs, record->updatedUnixMs)
+                   : record->createdUnixMs;
+    };
+    std::stable_sort(finished.begin(), finished.end(),
+                     [&](const TransactionRecord* a, const TransactionRecord* b) {
+                         return since(a) < since(b);
+                     });
     std::optional<Error> firstError;
     const std::size_t excess = finished.size() > keepLast ? finished.size() - keepLast : 0;
     for (std::size_t i = 0; i < excess; ++i) {

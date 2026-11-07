@@ -33,6 +33,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
 | Play without a playset (for 0.1.1) | `src/services/launch_service`, `src/app/core/view_data`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/vanilla-launch`. Owner's decision of 2026-11-06: spec section 7 says "validate the installation, active playset, ..."; no playset now means a launch without mods instead of a blocker. Every other check still runs; the empty mod list is written as one journaled transaction labelled `launch <game> without mods`, which Restore and Recover handle like any launch. Tested with fakes only; **not run against a real game** (a live run needs the owner's approval) | |
 | Play requires the Steam client for Steam installations (for 0.1.1) | `src/services/launch_service`, `src/platform/steam`, `src/app/gui/backend`, `src/app/core/view_data`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`app.md`](app.md), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/require-steam`. Owner's decision of 2026-11-06: games could be started directly with Steam closed; Play now requires the Steam client for Steam installations (`DistributionSource::Steam`: found through Steam's app manifest, or located by hand inside a Steam library). A copy from another store located by hand is not blocked. The check uses the process list the running-instance check already reads (`steam.exe`, or the pid in `HKCU\Software\Valve\Steam\ActiveProcess` without a readable name); an unreadable list is a warning. While Steam, the game or the Paradox launcher blocks, the Backend re-checks every 3 s without the write probes, so Play follows on its own. Tested with fakes only; **not run against a real game or Steam** (a live run needs the owner's approval). Limitations: whether Steam runs is detected, whether it is signed in is not; the process list covers every Windows session, so another signed-in user's Steam counts as running | |
+| Discard an interrupted change that Recover cannot undo (for the next release) | `src/platform/file_transaction`, `src/services/launch_service`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, `ui/dialogs/ConfirmDialog.qml`, [`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup), [ADR 0005](adr/0005-journaled-config-writes.md) | done 2026-11-07 on `agent/discard-interrupted`. Recovery skips the backups of targets already original (or absent and absent before); `abandon()` gives up an interrupted transaction (`abandoned`, no file changed, folder and backups kept, pruned like any finished one but counted from when it was abandoned); after a Recover that failed with `IntegrityCheckFailed` the banner offers "Discard this record", and Play is available afterwards when nothing else blocks. Tested with fakes only; **not run against a real game** | |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
@@ -42,6 +43,57 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
+
+## Test status (2026-11-07, discard an unrecoverable change, `agent/discard-interrupted`)
+
+Local runs only, with fakes and temporary folders; no game was started and no
+real journal was touched.
+
+- `debug` preset: **0 warnings**, **532/532 tests pass**, by label: core 50,
+  sharing 54, persistence 71, platform 59, providers 61, games 52, services
+  86, application 104.
+- New tests: in `file_transaction_tests.cpp`, recovery with a missing or
+  damaged backup of a target that is already original (a crash before the
+  first write, a file put back by hand while a created file is still
+  removed), recovery that still refuses with `IntegrityCheckFailed` and
+  changes nothing when a needed backup is gone (and reports the read error
+  while the target cannot be read), `restore()` without the backup of a
+  target already original, `abandon()` on "applying" and "prepared" records
+  (no target changed, folder and remaining backup kept, excluded from
+  `listIncomplete()`, read back after a restart, refused again), its refusal
+  of committed, restored, rolled-back and recovered records, `prune()`
+  removing an abandoned record as finished, and the `abandoned` name. In
+  `launch_service_tests.cpp`, `discardInterrupted()` unblocking this game's
+  launch (and the next launch writing the configuration), leaving another
+  game's interrupted change as a warning, refusing a recovered or committed
+  record, and discarding another game's record. In `runner_tests.cpp`,
+  Recover failing on a missing or damaged backup, the offer with the file and
+  folder, the discard, Play available and starting, the journal `abandoned`
+  with its reason; a Recover failing for another reason (a folder in place of
+  the file) without the offer, then succeeding; read-only sessions refusing
+  both. In `qml_tests.cpp`, the action appearing only after Recover failed,
+  the confirmation naming the file and folder with Cancel focused, Enter and
+  Escape changing nothing, and **Discard** hiding the banner and enabling
+  Play. The relaxed recovery and restore tests fail against the code before
+  the change. The 31 new and changed tests passed 10 times each, eight in
+  parallel (310 runs).
+- After the review: a backup that another program keeps open is reported
+  with its read error (Recover can be retried, nothing is offered to discard)
+  instead of `IntegrityCheckFailed`; `prune()` counts an abandoned record from
+  when it was abandoned, so a freshly discarded record of an old launch keeps
+  its remaining backups; focus leaves Recover or the discard link for the mod
+  list when they go away. New tests: a backup held open without sharing
+  (`IoError` with the "close it and try again" hint, nothing changed, then
+  recovered once released), `prune()` keeping a record abandoned after newer
+  launches, the offer ending when the game changes and a Recover answered
+  after a switch offering nothing (a second fake game, not installed), and
+  discarding from the keyboard leaving the focus on the mod list (in
+  `qml_tests.cpp` and the preview tests). The held-backup, prune and focus
+  tests fail against the code before these fixes; the changed tests passed 10
+  times each, eight in parallel.
+- Fake-backend QML tests (`ui/dev/preview.sh --test`, offscreen): 25/25.
+  QML lint: clean. `scripts/check-format.sh`: 238 files OK. `clang-tidy` on
+  the changed `.cpp` files: clean.
 
 ## Test status (2026-11-06, Play requires Steam, `agent/require-steam`)
 
@@ -299,14 +351,19 @@ Services and application:
   the 7-day retention removes them, the details panel shows the "cancelled"
   text instead of "Not installed", and jobs left by earlier `--no-steam`
   imports are not cleaned up.
-- A configuration transaction whose **Recover** fails (missing or damaged
-  backup, `IntegrityCheckFailed`) keeps blocking that game's launches; other
-  games only show a warning. Planned: `recover()` skips targets already back
-  to their original contents; `FileTransactionManager::abandon(txid)` with an
-  `Abandoned` state; `LaunchService::discardInterrupted(txid)`; a "Discard
-  this record" action next to Play, offered only after Recover failed, behind
-  a confirmation that names the files; then [`troubleshooting.md`](troubleshooting.md).
-  Deferred to after 0.1.0 by the owner's decision of 2026-11-06.
+- Done 2026-11-07 (owner's decision of 2026-11-07: before the next release),
+  tested with fakes only: a configuration transaction whose **Recover** fails
+  because of a missing or damaged backup no longer blocks that game for good.
+  `recover()` and `restore()` need no backup for a target already back to its
+  original contents; `FileTransactionManager::abandon(txid)` marks an
+  interrupted transaction `abandoned` without touching a file;
+  `LaunchService::discardInterrupted(txid)`; "Discard this record" next to
+  Recover, offered only after Recover failed with `IntegrityCheckFailed`,
+  behind a confirmation (Cancel focused) that names the files and the backup
+  folder; a backup that is only in use gives its read error and offers
+  Recover again only; `prune()` counts an abandoned record from when it was
+  abandoned ([`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup),
+  [ADR 0005 amendment](adr/0005-journaled-config-writes.md)).
 - On Windows, two descriptor files whose names differ only in unpaired
   surrogates map to the same local mod id and make the inventory save fail;
   the adapter scan should merge them or mark them Broken.
@@ -378,8 +435,9 @@ Packaging ([`packaging.md`](packaging.md)):
    longer runs on pushes or pull requests, so they could never pass.
 3. Optional: warn when two enabled EU4 mods contain the same file.
 4. Implement the import options item above, with tests. Done 2026-11-06: the
-   helper exit wait and the launch refresh. The discard flow for unrecoverable
-   transactions is deferred to after 0.1.0 (owner's decision, 2026-11-06).
+   helper exit wait and the launch refresh. Done 2026-11-07: the discard flow
+   for unrecoverable transactions (deferred on 2026-11-06, then scheduled
+   before the next release by the owner on 2026-11-07).
 5. With the user's approval, the remaining live pieces (table above). Record
    results in [`validation.md`](validation.md) and
    [`support-matrix.md`](support-matrix.md).

@@ -1,12 +1,16 @@
+#include "core/log.hpp"
 #include "platform/file_transaction.hpp"
 #include "platform/fs.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <windows.h>
 
+#include <chrono>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 using namespace pmm;
@@ -64,6 +68,27 @@ std::string onlyTransactionId(const FileTransactionManager& manager) {
     REQUIRE(all.ok());
     REQUIRE(all->size() == 1);
     return all->front().id;
+}
+
+// Leaves the scenario's change "applying", as a crash after `writes` writes would.
+TransactionRecord crashAfter(FileTransactionManager& manager, const Scenario& s,
+                             std::size_t writes) {
+    manager.setFaultsForTesting({std::nullopt, writes});
+    REQUIRE_FALSE(manager.apply("crashing", s.writes()).ok());
+    manager.setFaultsForTesting({});
+    const auto incomplete = manager.listIncomplete();
+    REQUIRE(incomplete.ok());
+    REQUIRE_FALSE(incomplete->empty());
+    return incomplete->back();
+}
+
+// Rewinds an interrupted journal to "prepared", as if the crash hit during backups.
+void rewindToPrepared(const fs::path& journalFile) {
+    std::string journal = test::readText(journalFile);
+    const auto at = journal.find("\"applying\"");
+    REQUIRE(at != std::string::npos);
+    journal.replace(at, 10, "\"prepared\"");
+    test::writeText(journalFile, journal);
 }
 
 } // namespace
@@ -179,13 +204,7 @@ TEST_CASE("A crash while preparing leaves the targets untouched", "[platform][tr
     REQUIRE_FALSE(manager.apply("crashing", s.writes()).ok());
     const std::string id = onlyTransactionId(manager);
 
-    // Rewind the journal to "prepared", as if the crash hit during backups.
-    const fs::path journalFile = s.journal / id / "journal.json";
-    std::string journal = test::readText(journalFile);
-    const auto at = journal.find("\"applying\"");
-    REQUIRE(at != std::string::npos);
-    journal.replace(at, 10, "\"prepared\"");
-    test::writeText(journalFile, journal);
+    rewindToPrepared(s.journal / id / "journal.json");
     test::writeText(s.first, "changed later by the user");
 
     REQUIRE(manager.listIncomplete()->front().state == TransactionState::Prepared);
@@ -232,6 +251,212 @@ TEST_CASE("A damaged backup aborts restore before anything changes", "[platform]
     CHECK(restored.error().code == ErrorCode::IntegrityCheckFailed);
     s.checkApplied();
     CHECK(stateOf(manager, record->id) == TransactionState::Committed);
+}
+
+TEST_CASE("Recovery needs no backup for a target that is already original",
+          "[platform][transaction]") {
+    const bool damaged = GENERATE(false, true);
+    CAPTURE(damaged);
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const auto spoil = [&](const TransactionRecord& record, std::size_t entry) {
+        const fs::path backup = record.directory / record.entries[entry].backupFile;
+        if (damaged)
+            test::writeText(backup, "tampered");
+        else
+            fs::remove(backup);
+    };
+
+    SECTION("a crash before the first write: every target is original or absent") {
+        const TransactionRecord record = crashAfter(manager, s, 0);
+        spoil(record, 0);
+        spoil(record, 2);
+        const auto recovered = manager.recover(record.id);
+        REQUIRE(recovered.ok());
+        CHECK(recovered->state == TransactionState::Recovered);
+    }
+    SECTION("a changed target was put back by hand; the new file is still removed") {
+        const TransactionRecord record = crashAfter(manager, s, 2);
+        test::writeText(s.first, "{\"enabled_mods\":[]}");
+        spoil(record, 0);
+        REQUIRE(manager.recover(record.id).ok());
+    }
+    s.checkOriginal();
+    CHECK(manager.listIncomplete()->empty());
+}
+
+TEST_CASE("Recovery refuses before changing anything when a needed backup is gone",
+          "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const TransactionRecord record = crashAfter(manager, s, 3);
+    const fs::path backup = record.directory / record.entries[2].backupFile;
+    SECTION("missing") {
+        fs::remove(backup);
+        const auto recovered = manager.recover(record.id);
+        REQUIRE_FALSE(recovered.ok());
+        CHECK(recovered.error().code == ErrorCode::IntegrityCheckFailed);
+        CHECK(recovered.error().message.find("settings.txt") != std::string::npos);
+        CHECK(recovered.error().message.find("missing") != std::string::npos);
+    }
+    SECTION("damaged") {
+        test::writeText(backup, "tampered");
+        const auto recovered = manager.recover(record.id);
+        REQUIRE_FALSE(recovered.ok());
+        CHECK(recovered.error().code == ErrorCode::IntegrityCheckFailed);
+        CHECK(recovered.error().message.find("damaged") != std::string::npos);
+    }
+    SECTION("missing, and the target cannot be read: the read error, as a retry may work") {
+        fs::remove(backup);
+        fs::remove(s.third);
+        fs::create_directory(s.third);
+        const auto recovered = manager.recover(record.id);
+        REQUIRE_FALSE(recovered.ok());
+        CHECK(recovered.error().code == ErrorCode::IoError);
+        CHECK(recovered.error().message.find("settings.txt") != std::string::npos);
+        // Gone for good: only its backup could put it back.
+        fs::remove(s.third);
+        const auto again = manager.recover(record.id);
+        REQUIRE_FALSE(again.ok());
+        CHECK(again.error().code == ErrorCode::IntegrityCheckFailed);
+        test::writeText(s.third, "language=\"l_german\"\n");
+    }
+    // Nothing was changed, and the change is still waiting.
+    s.checkApplied();
+    CHECK(stateOf(manager, record.id) == TransactionState::Applying);
+    CHECK(manager.listIncomplete()->size() == 1);
+}
+
+TEST_CASE("A backup that another program keeps open is not reported as gone",
+          "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const TransactionRecord record = crashAfter(manager, s, 3);
+    const fs::path backup = record.directory / record.entries[2].backupFile;
+    // Opened without sharing, as a virus scanner might.
+    const HANDLE lock = CreateFileW(backup.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    REQUIRE(lock != INVALID_HANDLE_VALUE);
+    const auto recovered = manager.recover(record.id);
+    CloseHandle(lock);
+    REQUIRE_FALSE(recovered.ok());
+    CHECK(recovered.error().code == ErrorCode::IoError);
+    CHECK(recovered.error().message.find("settings.txt") != std::string::npos);
+    CHECK(recovered.error().message.find("close it and try again") != std::string::npos);
+    s.checkApplied();
+    CHECK(stateOf(manager, record.id) == TransactionState::Applying);
+
+    // Once it is released, Recover works.
+    REQUIRE(manager.recover(record.id).ok());
+    s.checkOriginal();
+}
+
+TEST_CASE("restore needs no backup for a target already back to its original",
+          "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const auto record = manager.apply("launch", s.writes());
+    REQUIRE(record.ok());
+    test::writeText(s.first, "{\"enabled_mods\":[]}");
+    fs::remove(record->directory / record->entries[0].backupFile);
+
+    const auto restored = manager.restore(record->id);
+    REQUIRE(restored.ok());
+    CHECK(restored->state == TransactionState::Restored);
+    s.checkOriginal();
+}
+
+TEST_CASE("abandon gives up an interrupted change without touching its files",
+          "[platform][transaction]") {
+    const bool prepared = GENERATE(false, true);
+    CAPTURE(prepared);
+    Scenario s;
+    std::string id;
+    fs::path directory;
+    {
+        FileTransactionManager manager(s.journal);
+        const TransactionRecord record = crashAfter(manager, s, 2);
+        id = record.id;
+        directory = record.directory;
+        fs::remove(directory / record.entries[0].backupFile);
+        REQUIRE(manager.recover(id).error().code == ErrorCode::IntegrityCheckFailed);
+        if (prepared)
+            rewindToPrepared(directory / "journal.json");
+
+        const auto abandoned = manager.abandon(id, "The backup is missing.");
+        REQUIRE(abandoned.ok());
+        CHECK(abandoned->state == TransactionState::Abandoned);
+        CHECK(abandoned->lastError == "The backup is missing.");
+        CHECK(manager.listIncomplete()->empty());
+    }
+    // The files stay as the interrupted change left them.
+    CHECK(test::readText(s.first) == "{\"enabled_mods\":[\"mod/ugc_1.mod\"]}");
+    CHECK(test::readText(s.created) == "{\"enabledMods\":[]}");
+    CHECK(test::readText(s.third) == "language=\"l_english\"\n");
+    CHECK(test::readText(s.unrelated) == "leave me alone");
+    // The folder keeps the journal and the remaining backup.
+    CHECK(test::entryNames(directory) == std::vector<std::string>{"0002.bak", "journal.json"});
+
+    // A restart reads it back as given up.
+    FileTransactionManager restarted(s.journal);
+    const auto loaded = restarted.load(id);
+    REQUIRE(loaded.ok());
+    CHECK(loaded->state == TransactionState::Abandoned);
+    CHECK(loaded->lastError == "The backup is missing.");
+    REQUIRE(loaded->entries.size() == 3);
+    CHECK(loaded->entries[1].target == s.created);
+    CHECK(restarted.listIncomplete()->empty());
+    CHECK(restarted.listCommitted()->empty());
+    CHECK(restarted.list()->size() == 1);
+
+    const auto again = restarted.abandon(id);
+    REQUIRE_FALSE(again.ok());
+    CHECK(again.error().code == ErrorCode::InvalidArgument);
+    CHECK(again.error().message.find("already discarded") != std::string::npos);
+    CHECK(restarted.recover(id).error().code == ErrorCode::InvalidArgument);
+    CHECK(restarted.restore(id).error().code == ErrorCode::InvalidArgument);
+    CHECK(stateOf(restarted, id) == TransactionState::Abandoned);
+}
+
+TEST_CASE("abandon refuses changes that are not interrupted", "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    std::string id;
+    TransactionState state = TransactionState::Committed;
+    std::string expected = "was not interrupted";
+    SECTION("committed") {
+        REQUIRE(manager.apply("launch", s.writes()).ok());
+        id = onlyTransactionId(manager);
+    }
+    SECTION("restored") {
+        const auto record = manager.apply("launch", s.writes());
+        REQUIRE(record.ok());
+        id = record->id;
+        REQUIRE(manager.restore(id).ok());
+        state = TransactionState::Restored;
+    }
+    SECTION("rolled back") {
+        manager.setFaultsForTesting({1u, std::nullopt});
+        REQUIRE_FALSE(manager.apply("failing", s.writes()).ok());
+        id = onlyTransactionId(manager);
+        state = TransactionState::RolledBack;
+    }
+    SECTION("recovered") {
+        id = crashAfter(manager, s, 1).id;
+        REQUIRE(manager.recover(id).ok());
+        state = TransactionState::Recovered;
+        expected = "already recovered";
+    }
+    const fs::path journalFile = s.journal / id / "journal.json";
+    const std::string before = test::readText(journalFile);
+    const auto abandoned = manager.abandon(id, "reason");
+    REQUIRE_FALSE(abandoned.ok());
+    CHECK(abandoned.error().code == ErrorCode::InvalidArgument);
+    CHECK(abandoned.error().message.find(expected) != std::string::npos);
+    CHECK(stateOf(manager, id) == state);
+    CHECK(test::readText(journalFile) == before);
+    CHECK(manager.abandon("../escape").error().code == ErrorCode::InvalidArgument);
+    CHECK(manager.abandon("20260101T000000000Z-0000").error().code == ErrorCode::NotFound);
 }
 
 TEST_CASE("A permission failure surfaces PermissionDenied and rolls back",
@@ -359,11 +584,64 @@ TEST_CASE("Transaction ids sort by creation time and prune keeps the newest",
     CHECK(manager.list()->size() == 1);
 }
 
+TEST_CASE("prune treats an abandoned change as finished", "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const std::string abandoned = crashAfter(manager, s, 1).id;
+    REQUIRE(manager.abandon(abandoned).ok());
+    const std::string interrupted = crashAfter(manager, s, 1).id;
+    const auto committed = manager.apply("launch", {{s.third, "newest"}});
+    REQUIRE(committed.ok());
+
+    // The abandoned change is the oldest finished one, so it goes first.
+    REQUIRE(manager.prune(1).ok());
+    const auto remaining = manager.list();
+    REQUIRE(remaining.ok());
+    REQUIRE(remaining->size() == 2);
+    CHECK((*remaining)[0].id == interrupted);
+    CHECK((*remaining)[1].id == committed->id);
+    CHECK_FALSE(fs::exists(s.journal / abandoned));
+}
+
+TEST_CASE("prune counts an abandoned change from when it was abandoned",
+          "[platform][transaction]") {
+    Scenario s;
+    FileTransactionManager manager(s.journal);
+    const TransactionRecord crashed = crashAfter(manager, s, 2);
+    fs::remove(crashed.directory / crashed.entries[0].backupFile);
+    std::vector<std::string> launches;
+    for (int i = 0; i < 3; ++i) {
+        const auto record = manager.apply("launch " + std::to_string(i), {{s.unrelated, "x"}});
+        REQUIRE(record.ok());
+        launches.push_back(record->id);
+    }
+    // Abandoned later than the newest launch was made.
+    const std::int64_t newest = manager.load(launches.back())->createdUnixMs;
+    while (nowUnixMs() <= newest)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    REQUIRE(manager.abandon(crashed.id).ok());
+
+    // Created first, it is still the newest finished change; its remaining
+    // backup stays.
+    REQUIRE(manager.prune(2).ok());
+    const auto remaining = manager.list();
+    REQUIRE(remaining.ok());
+    REQUIRE(remaining->size() == 2);
+    CHECK((*remaining)[0].id == crashed.id);
+    CHECK((*remaining)[1].id == launches[2]);
+    CHECK(fs::exists(crashed.directory / crashed.entries[2].backupFile));
+
+    REQUIRE(manager.prune(1).ok());
+    CHECK(manager.list()->front().id == crashed.id);
+}
+
 TEST_CASE("Transaction states round-trip through their names", "[platform][transaction]") {
     for (const auto state :
          {TransactionState::Prepared, TransactionState::Applying, TransactionState::Committed,
-          TransactionState::RolledBack, TransactionState::Recovered, TransactionState::Restored})
+          TransactionState::RolledBack, TransactionState::Recovered, TransactionState::Restored,
+          TransactionState::Abandoned})
         CHECK(transactionStateFromString(toString(state)) == state);
     CHECK_FALSE(transactionStateFromString("committing").has_value());
     CHECK(std::string(toString(TransactionState::RolledBack)) == "rolled_back");
+    CHECK(std::string(toString(TransactionState::Abandoned)) == "abandoned");
 }

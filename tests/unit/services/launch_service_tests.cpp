@@ -740,6 +740,111 @@ TEST_CASE("An interrupted configuration change blocks launching until it is reco
     CHECK(w.started.size() == 1);
 }
 
+TEST_CASE("A change that cannot be recovered can be discarded so that the game launches again",
+          "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    const std::string previous = installPreviousConfiguration(w);
+    w.refresh();
+    const std::int64_t id = makePlayset(w, mixedEntries());
+    LaunchService launcher(w.ctx, nullptr);
+
+    // A launch that crashed after writing dlc_load.json, whose backup is gone.
+    platform::FileTransactionFaults crash;
+    crash.crashAfterWrites = std::size_t{1};
+    w.transactions.setFaultsForTesting(crash);
+    REQUIRE_FALSE(launcher.launch(kGame, id));
+    w.transactions.setFaultsForTesting({});
+    const auto interrupted = require(launcher.interruptedTransactions());
+    REQUIRE(interrupted.size() == 1);
+    const platform::TransactionRecord& record = interrupted[0];
+    fs::remove(record.directory / record.entries.at(0).backupFile);
+    const auto failed = launcher.recoverInterrupted(record.id);
+    REQUIRE_FALSE(failed);
+    CHECK(failed.error().code == ErrorCode::IntegrityCheckFailed);
+    CHECK(launcher.check(kGame, id).interruptedBlocks);
+
+    SECTION("this game's change: Play is available again") {
+        const platform::TransactionRecord discarded =
+            require(launcher.discardInterrupted(record.id, failed.error().message));
+        CHECK(discarded.state == platform::TransactionState::Abandoned);
+        CHECK(discarded.lastError == failed.error().message);
+        // The file stays as the interrupted launch left it.
+        CHECK(readText(configFile(w)) == kTranslatedOrder);
+        CHECK(require(launcher.interruptedTransactions()).empty());
+
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK_FALSE(check.interruptedTransaction);
+        CHECK_FALSE(check.interruptedBlocks);
+        CHECK_FALSE(contains(check.blockers, "interrupted"));
+        CHECK_FALSE(contains(check.warnings, "interrupted"));
+        require(launcher.launch(kGame, id));
+        CHECK(w.started.size() == 1);
+        CHECK(readText(configFile(w)) == kTranslatedOrder);
+
+        // Already discarded: refused, and nothing changes.
+        const auto again = launcher.discardInterrupted(record.id);
+        REQUIRE_FALSE(again);
+        CHECK(again.error().code == ErrorCode::InvalidArgument);
+        CHECK_THAT(again.error().message, ContainsSubstring("already discarded"));
+    }
+    SECTION("only the discarded change stops blocking") {
+        const fs::path eu4Data = w.documents / "Paradox Interactive" / u8("Europa Universalis IV");
+        interruptChange(w, LaunchService::transactionLabel("eu4", 7, "EU4 Main"),
+                        eu4Data / "dlc_load.json");
+        require(launcher.discardInterrupted(record.id));
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK(check.interruptedTransaction); // EU4's is still offered for recovery
+        CHECK_FALSE(check.interruptedBlocks);
+        CHECK(contains(check.warnings, "Europa Universalis IV"));
+    }
+    SECTION("recovered meanwhile: refused") {
+        // The user put the file back by hand, so recovery needs no backup.
+        writeText(configFile(w), previous);
+        require(launcher.recoverInterrupted(record.id));
+        const auto refused = launcher.discardInterrupted(record.id);
+        REQUIRE_FALSE(refused);
+        CHECK(refused.error().code == ErrorCode::InvalidArgument);
+        CHECK_THAT(refused.error().message, ContainsSubstring("already recovered"));
+        CHECK(launcher.check(kGame, id).canLaunch);
+    }
+    SECTION("a change that was not interrupted: refused") {
+        const platform::TransactionRecord committed = require(w.transactions.apply(
+            "settings import", {platform::FileWrite{w.root / "elsewhere" / "settings.txt", "x"}}));
+        const auto refused = launcher.discardInterrupted(committed.id);
+        REQUIRE_FALSE(refused);
+        CHECK(refused.error().code == ErrorCode::InvalidArgument);
+        CHECK_THAT(refused.error().message, ContainsSubstring("was not interrupted"));
+        CHECK(launcher.check(kGame, id).interruptedBlocks);
+    }
+}
+
+TEST_CASE("Another game's change that cannot be recovered can be discarded", "[services][launch]") {
+    World w;
+    w.installFixtureMods();
+    installPreviousConfiguration(w);
+    w.refresh();
+    const std::int64_t id = makePlayset(w, mixedEntries());
+    const fs::path target =
+        w.documents / "Paradox Interactive" / u8("Europa Universalis IV") / "dlc_load.json";
+    interruptChange(w, LaunchService::transactionLabel("eu4", 7, "EU4 Main"), target);
+    LaunchService launcher(w.ctx, nullptr);
+    const auto interrupted = require(launcher.interruptedTransactions());
+    REQUIRE(interrupted.size() == 1);
+    writeText(interrupted[0].directory / interrupted[0].entries.at(0).backupFile, "damaged");
+    CHECK(launcher.recoverInterrupted(interrupted[0].id).error().code ==
+          ErrorCode::IntegrityCheckFailed);
+
+    require(launcher.discardInterrupted(interrupted[0].id));
+    CHECK(readText(target) == "changed");
+    const LaunchCheck check = launcher.check(kGame, id);
+    CHECK(check.canLaunch);
+    CHECK_FALSE(check.interruptedTransaction);
+    CHECK_FALSE(contains(check.warnings, "Europa Universalis IV"));
+}
+
 TEST_CASE("Only an interrupted change of this game's files blocks its launch",
           "[services][launch]") {
     World w;

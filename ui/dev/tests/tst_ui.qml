@@ -6,9 +6,10 @@ import Pmm.Backend
 // Smoke tests of the QML layer against the fake backend: virtualization with
 // 2,000 rows, keyboard editing with undo/redo, the reorder rules while
 // searching, delete confirmation, drag-and-drop, column-width persistence,
-// theme switching, the import flow, and keyboard accessibility (Tab order, F6,
+// theme switching, the import flow, discarding an interrupted change that
+// Recover cannot undo, and keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
-// Updates section and the update banner).
+// Updates section, the update banner and the discard action).
 // Run: ui/dev/preview.sh --test
 Item {
     width: 120
@@ -204,6 +205,42 @@ Item {
             compare(Backend.launcher.blockers.length, 0)
             compare(Backend.launcher.warnings[0], "No playset is selected, so the game starts without mods.")
             verify(named("playButton").enabled)
+        }
+
+        function test_8b_discardInterruptedAfterRecoverFails() {
+            const launcher = Backend.launcher
+            launcher.hasInterruptedTransaction = true
+            launcher.backupMissing = true
+            const banner = named("interruptedBanner")
+            const discard = named("discardInterruptedButton")
+            tryVerify(() => banner.visible)
+            verify(!discard.visible)
+            launcher.recoverInterrupted()
+            verify(launcher.canDiscardInterrupted)
+            tryVerify(() => discard.visible)
+            verify(banner.text.indexOf("missing or damaged") >= 0)
+
+            // The confirmation names the file; Cancel is the default and does nothing.
+            const dialog = named("confirmDialog")
+            // Placed after Recover once the row has laid it out.
+            tryVerify(() => discard.x > 0)
+            mouseClick(discard)
+            tryVerify(() => dialog.opened)
+            verify(dialog.cancelIsDefault)
+            verify(dialog.message.indexOf("dlc_load.json") >= 0)
+            verify(dialog.detail.indexOf("20261107T101500000Z-0000") >= 0)
+            mouseClick(findChild(dialog.footer, "cancelButton"))
+            tryVerify(() => !dialog.visible)
+            verify(launcher.hasInterruptedTransaction)
+            verify(launcher.canDiscardInterrupted)
+
+            mouseClick(discard)
+            tryVerify(() => dialog.opened)
+            mouseClick(findChild(dialog.footer, "confirmButton"))
+            tryVerify(() => !dialog.visible)
+            verify(!launcher.hasInterruptedTransaction)
+            verify(!launcher.canDiscardInterrupted)
+            tryVerify(() => !banner.visible)
         }
 
         function test_9_importCreatesPlayset() {
@@ -429,6 +466,29 @@ Item {
             Backend.updates.state = "idle"
             Backend.updates.checkedAutomatically = false
             banner.dismissed = false
+        }
+
+        function test_a12_discardFromKeyboardMovesFocusOn() {
+            requireFocus()
+            const launcher = Backend.launcher
+            launcher.hasInterruptedTransaction = true
+            launcher.backupMissing = true
+            launcher.recoverInterrupted()
+            const banner = named("interruptedBanner")
+            const discard = named("discardInterruptedButton")
+            tryVerify(() => discard.visible)
+            discard.forceActiveFocus(Qt.TabFocusReason)
+            press(Qt.Key_Return)
+            const dialog = named("confirmDialog")
+            tryVerify(() => dialog.opened)
+            tryVerify(() => findChild(dialog.footer, "cancelButton").activeFocus)
+            press(Qt.Key_Tab)
+            tryVerify(() => findChild(dialog.footer, "confirmButton").activeFocus)
+            press(Qt.Key_Return)
+            tryVerify(() => !banner.visible)
+            // The focused action went away with the banner: the mod list has the focus.
+            tryVerify(() => named("modList").activeFocus)
+            verify(!discard.activeFocus)
         }
 
         name: "PmmUi"

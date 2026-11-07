@@ -83,6 +83,19 @@ ApplicationWindow {
             Backend.playsets.rename(id, name)
     }
 
+    // The interrupted changes Recover could not undo; their files stay as they are.
+    function askDiscardInterrupted() {
+        const launcher = Backend.launcher
+        if (!launcher.canDiscardInterrupted)
+            return
+        confirmDialog.ask(qsTr("Discard the interrupted change"),
+                          qsTr("Recover cannot undo this change because a backup it needs is missing or damaged. Discarding its record leaves these files as they are now:")
+                          + "\n" + launcher.discardableFiles.join("\n"),
+                          qsTr("It then no longer blocks launching. The next Play writes the game configuration again, or start the game once through the Paradox launcher. The record and its remaining backups stay in %1 until later launches make it old enough to be cleaned up.")
+                          .arg(launcher.discardFolders.join(", ")),
+                          qsTr("Discard"), true, true, () => Backend.launcher.discardInterrupted())
+    }
+
     function deleteActivePlayset() {
         // Deletion is snapshotted by the backend; the Restore banner undoes it.
         const id = Backend.playsets.activeId
@@ -263,7 +276,7 @@ ApplicationWindow {
             onRemoveRequested: (rows, description) => {
                 confirmDialog.ask(qsTr("Remove from playset"), description,
                                   qsTr("The mods stay installed and can be added again. Ctrl+Z undoes the removal."),
-                                  qsTr("Remove"), true, () => {
+                                  qsTr("Remove"), true, false, () => {
                                       Backend.mods.removeRows(rows)
                                       modsPane.afterRemove()
                                   })
@@ -279,6 +292,8 @@ ApplicationWindow {
             SplitView.maximumWidth: 480
             onImportRequested: window.openImport("")
             onExportRequested: window.openExport()
+            onDiscardInterruptedRequested: window.askDiscardInterrupted()
+            onFocusReleased: modsPane.focusList()
             onNewPlaysetRequested: window.askName("new")
             onDuplicateRequested: window.askName("duplicate")
             onRenameRequested: window.askName("rename")

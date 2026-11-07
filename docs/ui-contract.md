@@ -326,7 +326,19 @@ Properties:
 - `startedWithPlayset` (bool): whether the last started launch used a
   playset, so the "started" text says what is running even when the
   selection changes afterwards;
-- `hasInterruptedTransaction` (bool), `canRestoreBackup` (bool).
+- `hasInterruptedTransaction` (bool), `canRestoreBackup` (bool);
+- `canDiscardInterrupted` (bool): the last `recoverInterrupted()` left
+  changes that it cannot undo because a backup they need is missing or
+  damaged; `discardableFiles` (string list, display paths of the files those
+  changes wrote or were writing) and `discardFolders` (string list, their
+  transaction folders, which keep the records and the remaining backups) are
+  for the confirmation. The offer ends when the game changes, when
+  `discardInterrupted()` is called (if discarding fails, the next
+  `recoverInterrupted()` offers it again), with the next recovery, and when a
+  refresh shows no interrupted change any more; a recovery that fails for
+  another reason (a file or a backup that another program keeps open, say)
+  does not offer it. When Recover or the discard action had the focus and goes
+  away, the focus moves to the mod list.
 
 The verdict is refreshed whenever the playset, the inventory or the
 downloads change, after a launch, and when the window is activated. While
@@ -347,6 +359,13 @@ Invokables:
 
 - `play()`;
 - `recoverInterrupted() -> bool`, `restoreLastBackup() -> bool`;
+- `discardInterrupted() -> bool`: gives up the changes
+  `canDiscardInterrupted` offers, leaving their files as they are, and
+  refreshes the verdict, so Play becomes available when nothing else blocks.
+  False in read-only sessions (with a notification) and when nothing is
+  offered. The QML asks first: the Play section's banner shows "Discard this
+  record" next to Recover, and the confirmation (Cancel focused) names the
+  files and the folders;
 - `diagnosticsText() -> string`: the last generated report;
 - `copyDiagnostics()`: regenerates the redacted report and copies it.
 
