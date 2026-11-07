@@ -162,6 +162,17 @@ harmless 'a token in a commented-out line' \
   '/UserAgentHeader/a // request.setRawHeader("Authorization", "token x");' src/app/core/update_client.cpp
 because 'installer.iss checks AppMutex'
 mutate 'the AppMutex line commented out' 's/^AppMutex=/; &/' "$iss"
+# The preprocessor drops a line that starts with //, in every section.
+because 'installer.iss checks AppMutex'
+mutate 'the AppMutex line behind //' 's|^AppMutex=|// &|' "$iss"
+because 'the installation is per-user'
+mutate 'the per-user installation behind an indented //' 's|^PrivilegesRequired=lowest|  // &|' "$iss"
+because 'installer.iss waits for Local\ParadoxModManagerRunning'
+mutate 'another mutex in the setup, the old one behind //' \
+  's|^#define AppRunningMutex .*|// &\n#define AppRunningMutex "Local\\Other"|' "$iss"
+because 'installer.iss polls the mutex'
+mutate 'the mutex polls in a Pascal comment with a } behind //' \
+  's|^  Waited := 0;$|{\n// }\n&|; s|^  Result := not CheckForMutexes.*|&\n}|' "$iss"
 because 'installer.iss starts the application again after an update run'
 mutate 'the relaunch after an update run commented out' '/; Check: IsPmmUpdate/s/^/; /' "$iss"
 because 'installer.iss recognises /PMMUPDATE=1'

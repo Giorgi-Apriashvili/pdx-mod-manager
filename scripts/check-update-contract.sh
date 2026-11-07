@@ -107,9 +107,9 @@ list=()
 # kept whole, every line on its line number. CRs are dropped, as grep on Windows
 # drops them. POSIX awk: mawk on the Ubuntu runners.
 #   C++            // and /* */, outside "...", '...' and R"x(...)x"
-#   Inno Setup     lines starting with ";", except in [Code]; there Pascal's //,
-#                  { } and (* *), outside '...' and {#...}; preprocessor lines (#)
-#                  are code everywhere
+#   Inno Setup     lines starting with // everywhere (the preprocessor drops them),
+#                  and with ";" except in [Code]; there Pascal's //, { } and (* *),
+#                  outside '...' and {#...}; preprocessor lines (#) are code
 #   PowerShell     # where a token starts, and <# #>, outside '...', "..." and
 #                  here-strings
 #   YAML           # at the start of a line or after a blank, outside '...' and
@@ -163,6 +163,8 @@ strip_comments() {
           print line; next
         }
         if (line ~ /^[ \t]*#/) { print line; next }
+        # The preprocessor drops the line, also within a Pascal comment.
+        if (line ~ /^[ \t]*\/\//) { print ""; next }
         if (section != "code") {
           if (line ~ /^[ \t]*;/) line = ""
           print line; next
