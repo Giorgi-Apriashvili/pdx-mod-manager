@@ -118,10 +118,11 @@ other or as a name with a real �. The mod list then shows one **Broken** mod
 whose problem says "The descriptor files … all give this mod the id …" and
 names every file with its mod name. None of the files is used for that id,
 because playsets and share codes refer to mods by id, and Play stays
-unavailable for a playset that contains it. Rename the files in File
-Explorer so that each has a distinct name made of ordinary characters, then
-**Rescan**. Playset entries keep the old id: when no file has that name any
-more, remove the entry and add the renamed mod with **Add mods…**.
+unavailable while it is enabled in the playset (a disabled entry never blocks
+launching). Rename the files in File Explorer so that each has a distinct
+name made of ordinary characters, then **Rescan**. Playset entries keep the
+old id: when no file has that name any more, remove the entry and add the
+renamed mod with **Add mods…**.
 
 ## Configuration permission errors
 

@@ -391,9 +391,11 @@ Services and application:
   `DlcLoadJsonAdapter`, with one problem that names every file and its mod
   name and asks to rename them, then rescan. No file stands for the entry and
   no other id is made up, because playsets and share codes refer to mods by
-  id; a playset entry for it reads Broken and keeps Play unavailable, and
-  `dlc_load.json` references to the files, also in an imported current
-  configuration, resolve to it ([stellaris.md](games/stellaris.md#mods),
+  id; a playset entry for it reads Broken and, while enabled, keeps Play
+  unavailable, and `dlc_load.json` references to the files, also in an
+  imported current configuration, resolve to it; the imported entry is named
+  after the mod of the file the reference names, else the reference
+  ([stellaris.md](games/stellaris.md#mods),
   [troubleshooting](troubleshooting.md#several-descriptor-files-give-a-mod-the-same-id)).
   The save did not actually fail: `GameService::normalizeInventory` kept
   whichever entry sorted first and dropped the others with only a log line.
@@ -403,10 +405,11 @@ Services and application:
 - Done 2026-11-07: `tools/steam-helper/main.cpp` reads its arguments with
   `providers::internal::displayPath` instead of `path::u8string()`, so an
   argument with unpaired surrogates gets an `invalid_arguments` ready event
-  instead of ending the helper (end-to-end test). No other throwing
-  conversion of a path (`u8string()`, `string()`, `generic_string()`,
-  `u8path`, stream output) is left in `src/` or `tools/`; the tests use
-  them on fixed names only.
+  instead of ending the helper (end-to-end test), and
+  `validateHelperArguments` shortens the app id in its error detail without
+  cutting a U+FFFD in half. No other throwing conversion of a path
+  (`u8string()`, `string()`, `generic_string()`, `u8path`, stream output) is
+  left in `src/` or `tools/`; the tests use them on fixed names only.
 - Done 2026-11-07: a mod list edit of several rows is all or nothing. When an
   undo or redo still in flight has taken one of its rows away, nothing changes
   and the warning says so; it used to apply to the rest without telling the
