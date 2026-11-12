@@ -24,7 +24,8 @@ Rectangle {
     readonly property list<real> defaultColumns: [44, 30, 0, 90, 150]
     property list<real> columns: defaultColumns
     readonly property real gripWidth: 18
-    readonly property real minNameWidth: 160
+    // With the default widths, Name keeps 128 pixels in the narrowest column (460).
+    readonly property real minNameWidth: 120
     readonly property real fixedWidth: gripWidth + columns[0] + columns[1] + columns[3] + columns[4]
     readonly property real nameWidth: Math.max(minNameWidth, modList.width - fixedWidth)
     readonly property list<real> effectiveWidths: [columns[0], columns[1], nameWidth, columns[3], columns[4]]
@@ -480,6 +481,12 @@ Rectangle {
             color: Theme.pane
 
             RowLayout {
+                id: headerRow
+                // Too narrow for the controls at their usual widths: the filter
+                // and sort drop their "Show:" and "Sort:" prefixes and get
+                // narrower, and the playset selector and search share the rest.
+                readonly property bool narrow: width < 230 + 120 + 2 * 150 + 4 * spacing
+                readonly property real narrowOptionWidth: 104
                 anchors.fill: parent
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10
@@ -488,8 +495,9 @@ Rectangle {
                 AppComboBox {
                     id: playsetCombo
                     objectName: "playsetSelector"
-                    Layout.preferredWidth: 230
-                    Layout.minimumWidth: 140
+                    Layout.preferredWidth: headerRow.narrow ? Math.floor((headerRow.width - 2 * headerRow.narrowOptionWidth
+                                                                          - 3 * headerRow.spacing) / 2)
+                                                            : 230
                     enabled: root.hasGame && Backend.playsets.count > 0
                     model: Backend.playsets
                     textRole: "name"
@@ -506,7 +514,7 @@ Rectangle {
                     id: searchField
                     objectName: "searchField"
                     Layout.fillWidth: true
-                    Layout.minimumWidth: 120
+                    Layout.minimumWidth: headerRow.narrow ? 0 : 120
                     Layout.maximumWidth: 420
                     iconName: "search"
                     clearable: true
@@ -531,6 +539,7 @@ Rectangle {
                 }
 
                 Item {
+                    visible: !headerRow.narrow
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                 }
@@ -538,12 +547,12 @@ Rectangle {
                 AppComboBox {
                     id: filterCombo
                     objectName: "statusFilter"
-                    Layout.preferredWidth: 150
+                    Layout.preferredWidth: headerRow.narrow ? headerRow.narrowOptionWidth : 150
                     enabled: root.canEdit
                     textRole: "text"
                     valueRole: "value"
                     model: root.filterOptions
-                    displayText: qsTr("Show: %1").arg(currentText)
+                    displayText: headerRow.narrow ? currentText : qsTr("Show: %1").arg(currentText)
                     currentIndex: root.optionIndex(root.filterOptions, Backend.modView.statusFilter)
                     accessibleName: qsTr("Status filter")
                     toolTipText: qsTr("Filter the list by state")
@@ -553,12 +562,12 @@ Rectangle {
                 AppComboBox {
                     id: sortCombo
                     objectName: "sortSelector"
-                    Layout.preferredWidth: 150
+                    Layout.preferredWidth: headerRow.narrow ? headerRow.narrowOptionWidth : 150
                     enabled: root.canEdit
                     textRole: "text"
                     valueRole: "value"
                     model: root.sortOptions
-                    displayText: qsTr("Sort: %1").arg(currentText)
+                    displayText: headerRow.narrow ? currentText : qsTr("Sort: %1").arg(currentText)
                     currentIndex: root.optionIndex(root.sortOptions, Backend.modView.sortMode)
                     accessibleName: qsTr("Browse sort")
                     toolTipText: qsTr("Sort for browsing; the load order itself is not changed")
@@ -582,42 +591,61 @@ Rectangle {
             color: Theme.pane
 
             RowLayout {
+                id: toolbarRow
+                // Icons only when the labels do not fit; the names stay the
+                // accessible names and the tool tips say what each one does.
+                readonly property bool compact: width < addButton.labelledWidth + enableButton.labelledWidth
+                                                        + disableButton.labelledWidth + removeButton.labelledWidth
+                                                        + upButton.labelledWidth + downButton.labelledWidth
+                                                        + 2 * Theme.controlHeight + 2 * separator.implicitWidth
+                                                        + (selectedText.visible ? selectedText.implicitWidth : 0)
+                                                        + 11 * spacing
                 anchors.fill: parent
                 anchors.leftMargin: 8
                 anchors.rightMargin: 8
                 spacing: 2
 
                 AppButton {
+                    id: addButton
                     text: qsTr("Add mods…")
                     iconName: "plus"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.canEdit
                     toolTipText: qsTr("Add installed mods to this playset (Ctrl+Shift+A)")
                     onClicked: root.addModsRequested()
                 }
-                ToolSeparator {}
+                ToolSeparator {
+                    id: separator
+                }
                 AppButton {
+                    id: enableButton
                     text: qsTr("Enable")
                     iconName: "check"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.hasTarget
                     toolTipText: qsTr("Enable the selected mods (Space toggles)")
                     Accessible.name: qsTr("Enable selected mods")
                     onClicked: root.setEnabledSelected(true)
                 }
                 AppButton {
+                    id: disableButton
                     text: qsTr("Disable")
                     iconName: "minus"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.hasTarget
                     toolTipText: qsTr("Disable the selected mods (Space toggles)")
                     Accessible.name: qsTr("Disable selected mods")
                     onClicked: root.setEnabledSelected(false)
                 }
                 AppButton {
+                    id: removeButton
                     text: qsTr("Remove")
                     iconName: "trash"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.hasTarget
                     toolTipText: qsTr("Remove the selected mods from this playset (Delete). They stay installed.")
                     Accessible.name: qsTr("Remove selected mods from playset")
@@ -625,9 +653,11 @@ Rectangle {
                 }
                 ToolSeparator {}
                 AppButton {
+                    id: upButton
                     text: qsTr("Move up")
                     iconName: "arrow-up"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.canMoveUp
                     toolTipText: Backend.modView.reorderAllowed ? qsTr("Load earlier (Alt+Up or Ctrl+Up)")
                                                                 : Backend.modView.reorderBlockedReason
@@ -635,9 +665,11 @@ Rectangle {
                     onClicked: root.moveSelection(-1)
                 }
                 AppButton {
+                    id: downButton
                     text: qsTr("Move down")
                     iconName: "arrow-down"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.canMoveDown
                     toolTipText: Backend.modView.reorderAllowed ? qsTr("Load later (Alt+Down or Ctrl+Down)")
                                                                 : Backend.modView.reorderBlockedReason
@@ -650,6 +682,7 @@ Rectangle {
                 }
 
                 Text {
+                    id: selectedText
                     visible: root.selectedCount > 1
                     text: qsTr("%1 selected").arg(Theme.formatCount(root.selectedCount))
                     Accessible.role: Accessible.StaticText

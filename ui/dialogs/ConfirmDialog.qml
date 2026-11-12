@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Pmm.Ui
 
@@ -32,29 +33,43 @@ AppDialog {
     onOpened: (dialog.cancelIsDefault ? cancelButton : confirmButton).forceActiveFocus()
     onClosed: action = null
 
-    contentItem: ColumnLayout {
-        spacing: 6
+    // Scrolls when a long list of files makes it taller than a small window.
+    contentItem: Flickable {
+        id: scroller
+        implicitHeight: content.implicitHeight
+        contentWidth: width
+        contentHeight: content.implicitHeight
+        clip: true
+        interactive: contentHeight > height
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: AppScrollBar {}
 
-        Text {
-            Layout.fillWidth: true
-            text: dialog.message
-            textFormat: Text.PlainText
-            font.pixelSize: Theme.fontSize
-            color: Theme.text
-            wrapMode: Text.Wrap
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
-        }
-        Text {
-            Layout.fillWidth: true
-            visible: dialog.detail.length > 0
-            text: dialog.detail
-            textFormat: Text.PlainText
-            font.pixelSize: Theme.fontSize
-            color: Theme.textMuted
-            wrapMode: Text.Wrap
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
+        ColumnLayout {
+            id: content
+            width: scroller.width
+            spacing: 6
+
+            Text {
+                Layout.fillWidth: true
+                text: dialog.message
+                textFormat: Text.PlainText
+                font.pixelSize: Theme.fontSize
+                color: Theme.text
+                wrapMode: Text.Wrap
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: dialog.detail.length > 0
+                text: dialog.detail
+                textFormat: Text.PlainText
+                font.pixelSize: Theme.fontSize
+                color: Theme.textMuted
+                wrapMode: Text.Wrap
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
+            }
         }
     }
 

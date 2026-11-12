@@ -74,13 +74,20 @@ ColumnLayout {
         Accessible.name: text
     }
 
-    // Text-only so all four fit on one row in the narrowest right column.
-    RowLayout {
+    // Text-only, on one row where their labels fit and in two rows in a
+    // narrow column.
+    GridLayout {
+        id: actions
+        readonly property real labelsWidth: [newButton, duplicateButton, renameButton, deleteButton]
+            .reduce((sum, b) => sum + b.implicitContentWidth + b.leftPadding + b.rightPadding, 0)
         Layout.fillWidth: true
         Layout.topMargin: 2
-        spacing: 4
+        columns: width >= labelsWidth + 3 * columnSpacing ? 4 : 2
+        columnSpacing: 4
+        rowSpacing: 4
 
         AppButton {
+            id: newButton
             Layout.fillWidth: true
             leftPadding: 8
             rightPadding: 8
@@ -90,6 +97,7 @@ ColumnLayout {
             onClicked: root.newRequested()
         }
         AppButton {
+            id: duplicateButton
             Layout.fillWidth: true
             leftPadding: 8
             rightPadding: 8
@@ -100,6 +108,7 @@ ColumnLayout {
             onClicked: root.duplicateRequested()
         }
         AppButton {
+            id: renameButton
             Layout.fillWidth: true
             leftPadding: 8
             rightPadding: 8
@@ -110,6 +119,7 @@ ColumnLayout {
             onClicked: root.renameRequested()
         }
         AppButton {
+            id: deleteButton
             Layout.fillWidth: true
             leftPadding: 8
             rightPadding: 8

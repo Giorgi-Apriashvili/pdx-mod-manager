@@ -547,6 +547,68 @@ Item {
             launcher.state = "idle"
         }
 
+        // The smallest window: every column fits, the toolbar shows icons, and
+        // Play stays reachable while blockers and a banner make the actions
+        // column taller than the window.
+        function test_b1_minimumWindow() {
+            requireFocus()
+            const launcher = Backend.launcher
+            win.width = win.minimumWidth
+            win.height = win.minimumHeight
+            tryCompare(win, "width", 900)
+            tryCompare(win, "height", 440)
+            const games = named("gamesPane")
+            const mods = named("modsPane")
+            const side = named("sidePane")
+            tryVerify(() => side.x + side.width <= win.width + 0.5)
+            verify(games.width >= win.gamesMinimumWidth)
+            verify(mods.width >= win.modsMinimumWidth)
+            verify(side.width >= win.sideMinimumWidth)
+            // Squeezed, but the chosen width is what is stored.
+            verify(side.width < win.defaultRightWidth)
+            win.storePaneWidths()
+            compare(Backend.settings.rightPaneWidth, win.defaultRightWidth)
+            for (const name of ["playsetSelector", "searchField", "statusFilter", "sortSelector"]) {
+                const item = named(name)
+                const x = item.mapToItem(mods, 0, 0).x
+                verify(x >= 0 && x + item.width <= mods.width, name + " outside the mods column")
+            }
+            const play = named("playButton")
+            const page = named("sidePage")
+            verify(play.mapToItem(side, 0, 0).y + play.height <= side.height, "Play is not visible")
+
+            launcher.steamRunning = false
+            launcher.hasInterruptedTransaction = true
+            tryVerify(() => page.interactive, 2000, "the actions column did not start scrolling")
+            verify(tabTo(play, 80), "Tab never reached Play")
+            // Revealed: inside the visible part of the scrolled column.
+            tryVerify(() => {
+                const y = play.mapToItem(side, 0, 0).y
+                return y >= 0 && y + play.height <= side.height
+            }, 2000, "Play was not scrolled into view")
+            verify(play.Accessible.description.indexOf("Steam is not running") >= 0)
+
+            launcher.steamRunning = true
+            launcher.hasInterruptedTransaction = false
+            win.width = 1400
+            win.height = 860
+            tryVerify(() => !page.interactive)
+        }
+
+        // A dragged divider stores the width it was dragged to (the stored
+        // widths are the chosen ones, SplitView.preferredWidth).
+        function test_b2_draggedDividerWidthPersists() {
+            const games = named("gamesPane")
+            const width = games.width
+            const handle = games.mapToItem(win.contentItem, games.width, games.height / 2)
+            mouseDrag(win.contentItem, handle.x, handle.y, 40, 0)
+            tryCompare(games, "width", width + 40)
+            compare(Backend.settings.leftPaneWidth, width + 40)
+            mouseDrag(win.contentItem, handle.x + 40, handle.y, -40, 0)
+            tryCompare(games, "width", width)
+            compare(Backend.settings.leftPaneWidth, width)
+        }
+
         SignalSpy {
             id: notificationSpy
             target: Backend.notifications

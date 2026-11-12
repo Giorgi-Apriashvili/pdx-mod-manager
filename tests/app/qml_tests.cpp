@@ -522,6 +522,8 @@ struct UpdatesHarness {
         window->resize(window->minimumSize());
         window->requestActivate();
         REQUIRE(QTest::qWaitForWindowActive(window));
+        // The content follows the new size a little later.
+        REQUIRE(waitUntil([&] { return window->contentItem()->size() == QSizeF(window->size()); }));
     }
 
     void close() {
@@ -827,6 +829,11 @@ QVariant evaluateIn(QObject* object, const QString& expression) {
     return QQmlExpression(qmlContext(object), object, expression).evaluate();
 }
 
+// The item's rectangle in `ancestor`'s coordinates.
+QRectF rectIn(const QQuickItem* item, const QQuickItem* ancestor) {
+    return item->mapRectToItem(ancestor, QRectF(0, 0, item->width(), item->height()));
+}
+
 // Presses Tab until `item` has the focus; false if it never gets it.
 bool tabTo(QQuickWindow* window, QObject* item, int limit) {
     for (int i = 0; i < limit && !hasActiveFocus(item); ++i) {
@@ -946,6 +953,163 @@ TEST_CASE("A blocked Play is reachable with Tab, says why, and launches once it 
         // It kept the focus while the launch ran.
         CHECK(play->hasActiveFocus());
 
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("The smallest window fits a 200 % screen and keeps Play reachable", "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addLocalMod("beta", "Beta");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    // A launch that crashed while writing: its banner, Recover and a blocker
+    // make the actions column taller than the smallest window.
+    const fs::path target = world.userData / "load_order.txt";
+    writeText(target, "before");
+    {
+        platform::FileTransactionManager journal(profile / "transactions");
+        platform::FileTransactionFaults crash;
+        crash.crashAfterWrites = std::size_t{1};
+        journal.setFaultsForTesting(crash);
+        REQUIRE_FALSE(journal.apply("launch stellaris without mods", {{target, "after"}}).ok());
+    }
+    RunnerOptions options;
+    options.runtime = hermeticOptions(profile, adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        BackendOptions backendOptions;
+        backendOptions.readOnly = true; // one more reason next to Play
+        Backend backend(runner, backendOptions);
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Small"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001", "local:beta"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+
+        // 1920x1080 at 200 % leaves a maximized window about 960x470 logical
+        // pixels, 1366x768 at 150 % about 911x441.
+        CHECK(window->minimumSize() == QSize(900, 440));
+        window->resize(window->minimumSize());
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        REQUIRE(waitUntil([&] { return window->width() == 900 && window->height() == 440; }));
+
+        const auto item = [&](const char* name) {
+            auto* found = window->findChild<QQuickItem*>(QLatin1String(name));
+            REQUIRE(found);
+            return found;
+        };
+        QQuickItem* games = item("gamesPane");
+        QQuickItem* mods = item("modsPane");
+        QQuickItem* side = item("sidePane");
+        QQuickItem* content = window->contentItem();
+        // The columns keep their minimums and fit side by side.
+        REQUIRE(waitUntil([&] { return rectIn(side, content).right() <= 900.5; }));
+        CHECK(games->width() >= 160);
+        CHECK(mods->width() >= 460);
+        CHECK(side->width() >= 250);
+        CHECK(rectIn(games, content).right() <= rectIn(mods, content).left() + 0.5);
+        CHECK(rectIn(mods, content).right() <= rectIn(side, content).left() + 0.5);
+        // The mods column's header controls stay inside it.
+        for (const char* name :
+             {"playsetSelector", "searchField", "statusFilter", "sortSelector"}) {
+            INFO(name);
+            const QRectF rect = rectIn(item(name), mods);
+            CHECK(rect.left() >= 0);
+            CHECK(rect.right() <= mods->width() + 0.5);
+            CHECK(rect.width() >= 90);
+        }
+        // The table's columns fit the list: Name keeps its minimum.
+        CHECK(evaluateIn(item("modList"),
+                         QStringLiteral("root.fixedWidth + root.nameWidth <= modList.width + 0.5"))
+                  .toBool());
+
+        // The actions column scrolls as a whole; Tab reaches Play and scrolls it
+        // into view, with its reasons.
+        QQuickItem* page = item("sidePage");
+        QQuickItem* play = item("playButton");
+        CHECK(item("interruptedBanner")->isVisible());
+        CHECK(page->property("interactive").toBool());
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(tabTo(window, play, 40));
+        CHECK(waitUntil([&] {
+            const QRectF rect = rectIn(play, side);
+            return rect.top() >= 0 && rect.bottom() <= side->height() + 0.5;
+        }));
+        const QString description =
+            evaluateIn(play, QStringLiteral("Accessible.description")).toString();
+        INFO(description.toStdString());
+        CHECK(description.startsWith("Blocked: "));
+        CHECK(description.contains("Read-only verification mode"));
+        CHECK(description.contains("interrupted"));
+
+        // A taller window shows everything again without scrolling.
+        window->resize(1400, 860);
+        CHECK(waitUntil([&] { return !page->property("interactive").toBool(); }));
+        CHECK(rectIn(play, content).bottom() <= 860.5);
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("A window saved at the smallest size is restored at that size", "[app][qml]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    // Below the minimum, the saved size is ignored and the default is used.
+    const auto [saved, restored] = GENERATE(table<QSize, QSize>({
+        {QSize(900, 440), QSize(900, 440)},
+        {QSize(1000, 520), QSize(1000, 520)},
+        {QSize(899, 440), QSize(1400, 860)},
+        {QSize(900, 439), QSize(1400, 860)},
+    }));
+    INFO("saved " << saved.width() << "x" << saved.height());
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        backend.settings()->setWindowX(40);
+        backend.settings()->setWindowY(40);
+        backend.settings()->setWindowWidth(saved.width());
+        backend.settings()->setWindowHeight(saved.height());
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        CHECK(window->size() == restored);
         window->close();
         backend.shutdown();
     }

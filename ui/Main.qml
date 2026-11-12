@@ -16,6 +16,11 @@ ApplicationWindow {
     readonly property int defaultHeight: 860
     readonly property int defaultLeftWidth: 200
     readonly property int defaultRightWidth: 300
+    // Narrowest columns that still show every control. The mods column keeps
+    // its minimum; the outer columns give way first when the window narrows.
+    readonly property int gamesMinimumWidth: 160
+    readonly property int modsMinimumWidth: 460
+    readonly property int sideMinimumWidth: 250
     property bool geometryRestored: false
     property string nameMode
 
@@ -145,15 +150,21 @@ ApplicationWindow {
             s.windowMaximized = maximized
     }
 
+    // The widths the user chose by dragging, not the ones a narrow window
+    // squeezes the columns to.
     function storePaneWidths() {
-        Backend.settings.leftPaneWidth = Math.round(gamesPane.width)
-        Backend.settings.rightPaneWidth = Math.round(sidePane.width)
+        Backend.settings.leftPaneWidth = Math.round(gamesPane.SplitView.preferredWidth)
+        Backend.settings.rightPaneWidth = Math.round(sidePane.SplitView.preferredWidth)
     }
 
     width: defaultWidth
     height: defaultHeight
-    minimumWidth: 980
-    minimumHeight: 600
+    // Fits a maximized window on a 1920x1080 screen at 200 % (about 960x470
+    // logical pixels for the window's content) and on 1366x768 at 150 % (about
+    // 911x441): the three column minimums and the dividers take 872 pixels, and
+    // at 440 the actions column scrolls as a whole instead of hiding Play.
+    minimumWidth: 900
+    minimumHeight: 440
     visible: true
     title: Backend.games.currentName.length > 0
            ? qsTr("%1 – Paradox Mod Manager").arg(Backend.games.currentName)
@@ -258,8 +269,11 @@ ApplicationWindow {
             objectName: "gamesPane"
             SplitView.preferredWidth: Backend.settings.leftPaneWidth > 0 ? Backend.settings.leftPaneWidth
                                                                          : window.defaultLeftWidth
-            SplitView.minimumWidth: 160
-            SplitView.maximumWidth: 360
+            SplitView.minimumWidth: window.gamesMinimumWidth
+            // Leaves the other two columns their minimums.
+            SplitView.maximumWidth: Math.max(window.gamesMinimumWidth,
+                                             Math.min(360, split.width - window.modsMinimumWidth
+                                                           - window.sideMinimumWidth - 2))
             onLocateRequested: window.openLocate()
             onSettingsRequested: window.openSettings()
         }
@@ -268,7 +282,7 @@ ApplicationWindow {
             id: modsPane
             objectName: "modsPane"
             SplitView.fillWidth: true
-            SplitView.minimumWidth: 460
+            SplitView.minimumWidth: window.modsMinimumWidth
             onAddModsRequested: window.openAddMods()
             onImportRequested: window.openImport("")
             onNewPlaysetRequested: window.askName("new")
@@ -288,8 +302,11 @@ ApplicationWindow {
             objectName: "sidePane"
             SplitView.preferredWidth: Backend.settings.rightPaneWidth > 0 ? Backend.settings.rightPaneWidth
                                                                           : window.defaultRightWidth
-            SplitView.minimumWidth: 270
-            SplitView.maximumWidth: 480
+            SplitView.minimumWidth: window.sideMinimumWidth
+            // Leaves the mods column its minimum next to the games column.
+            SplitView.maximumWidth: Math.max(window.sideMinimumWidth,
+                                             Math.min(480, split.width - gamesPane.width
+                                                           - window.modsMinimumWidth - 2))
             onImportRequested: window.openImport("")
             onExportRequested: window.openExport()
             onDiscardInterruptedRequested: window.askDiscardInterrupted()
