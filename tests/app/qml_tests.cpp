@@ -961,6 +961,150 @@ TEST_CASE("A blocked Play is reachable with Tab, says why, and launches once it 
     CHECK(QmlWarnings::list().isEmpty());
 }
 
+TEST_CASE("Column dividers and table column edges resize from the keyboard", "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addLocalMod("beta", "Beta");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Widths"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001", "local:beta"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        REQUIRE(window->width() == 1400);
+
+        AppSettings* settings = backend.settings();
+        auto* list = window->findChild<QQuickItem*>(QStringLiteral("modList"));
+        auto* side = window->findChild<QQuickItem*>(QStringLiteral("sidePane"));
+        auto* games = window->findChild<QQuickItem*>(QStringLiteral("gamesPane"));
+        auto* sideDivider = window->findChild<QQuickItem*>(QStringLiteral("sideDivider"));
+        auto* gamesDivider = window->findChild<QQuickItem*>(QStringLiteral("gamesDivider"));
+        REQUIRE(list);
+        REQUIRE(side);
+        REQUIRE(games);
+        REQUIRE(sideDivider);
+        REQUIRE(gamesDivider);
+        const auto key = [&](Qt::Key k, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+            QTest::keyClick(window, k, modifiers);
+            QCoreApplication::processEvents();
+        };
+        const auto focusedName = [&] {
+            QQuickItem* item = window->activeFocusItem();
+            return item ? evaluateIn(item, QStringLiteral("Accessible.name")).toString()
+                        : QString();
+        };
+        const auto isSeparator = [&](QQuickItem* item) {
+            return evaluateIn(item, QStringLiteral("Accessible.role === Accessible.Separator"))
+                .toBool();
+        };
+        const auto widthIs = [](QQuickItem* item, qreal width) {
+            return waitUntil([&] { return qFuzzyCompare(item->width(), width); });
+        };
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(hasActiveFocus(list));
+
+        // After the list, Tab reaches the divider of the actions column. Left
+        // moves it left, so the column gets wider; Shift takes larger steps.
+        key(Qt::Key_Tab);
+        REQUIRE(hasActiveFocus(sideDivider));
+        CHECK(isSeparator(sideDivider));
+        CHECK(focusedName() == "Actions column width: 300 pixels");
+        key(Qt::Key_Left);
+        CHECK(widthIs(side, 310));
+        CHECK(settings->rightPaneWidth() == 310);
+        CHECK(focusedName() == "Actions column width: 310 pixels");
+        key(Qt::Key_Right, Qt::ShiftModifier);
+        CHECK(widthIs(side, 260));
+        CHECK(settings->rightPaneWidth() == 260);
+        key(Qt::Key_Home);
+        CHECK(widthIs(side, 250));
+        CHECK(settings->rightPaneWidth() == 250);
+        key(Qt::Key_End);
+        CHECK(widthIs(side, 480));
+        CHECK(settings->rightPaneWidth() == 480);
+        key(Qt::Key_Return);
+        CHECK(widthIs(side, 300));
+        CHECK(settings->rightPaneWidth() == 300);
+
+        // The games column's divider is the last stop of that column.
+        key(Qt::Key_F6);
+        REQUIRE(tabTo(window, gamesDivider, 10));
+        CHECK(isSeparator(gamesDivider));
+        CHECK(focusedName() == "Games column width: 200 pixels");
+        key(Qt::Key_Right);
+        CHECK(widthIs(games, 210));
+        CHECK(settings->leftPaneWidth() == 210);
+        key(Qt::Key_Home);
+        CHECK(widthIs(games, 160));
+        key(Qt::Key_End);
+        CHECK(widthIs(games, 360));
+        CHECK(settings->leftPaneWidth() == 360);
+        key(Qt::Key_Return);
+        CHECK(widthIs(games, 200));
+        CHECK(settings->leftPaneWidth() == 200);
+        key(Qt::Key_Tab);
+        CHECK(focusedPane(window) == "modsPane");
+
+        // The table's column edges are one stop, right before the list.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        key(Qt::Key_Tab, Qt::ShiftModifier);
+        REQUIRE(window->activeFocusItem());
+        CHECK(isSeparator(window->activeFocusItem()));
+        CHECK(focusedName() == "Position column width: 44 pixels");
+        key(Qt::Key_Right);
+        CHECK(settings->columnWidths().value(0) == 54);
+        key(Qt::Key_Right, Qt::ShiftModifier);
+        CHECK(settings->columnWidths().value(0) == 104);
+        key(Qt::Key_Home);
+        CHECK(settings->columnWidths().value(0) == 32);
+        key(Qt::Key_Return);
+        CHECK(settings->columnWidths().value(0) == 44);
+        // Ctrl+Right moves to the next edges. Right of Name an edge resizes the
+        // column after it: Left widens Status, End leaves Name its minimum.
+        key(Qt::Key_Right, Qt::ControlModifier);
+        CHECK(focusedName() == "Enabled column width: 30 pixels");
+        key(Qt::Key_Right, Qt::ControlModifier);
+        key(Qt::Key_Right, Qt::ControlModifier);
+        CHECK(focusedName() == "Status column width: 150 pixels");
+        key(Qt::Key_Left);
+        CHECK(settings->columnWidths().value(4) == 160);
+        key(Qt::Key_End);
+        CHECK(settings->columnWidths().value(4) > 160);
+        CHECK(settings->columnWidths().value(2) == 120); // Name at its minimum
+        key(Qt::Key_Return);
+        CHECK(settings->columnWidths().value(4) == 150);
+        key(Qt::Key_Tab);
+        CHECK(hasActiveFocus(list));
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
 TEST_CASE("The smallest window fits a 200 % screen and keeps Play reachable", "[app][qml][a11y]") {
     qputenv("QT_QUICK_BACKEND", "software");
     TempDir temp;

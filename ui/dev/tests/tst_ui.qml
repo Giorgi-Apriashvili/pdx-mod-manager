@@ -7,10 +7,11 @@ import Pmm.Backend
 // 2,000 rows, keyboard editing with undo/redo, the reorder rules while
 // searching, delete confirmation, drag-and-drop, column-width persistence,
 // theme switching, the import flow, discarding an interrupted change that
-// Recover cannot undo, and keyboard accessibility (Tab order, F6,
+// Recover cannot undo, keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
-// Updates section, the update banner and the discard action).
-// Run: ui/dev/preview.sh --test
+// Updates section, the update banner, the discard action, a blocked Play and
+// column widths from the keyboard), and the smallest window.
+// Run: ui/dev/preview.sh --test, or ctest -L ui-preview
 Item {
     width: 120
     height: 80
@@ -545,6 +546,94 @@ Item {
             compare(notificationSpy.count, 0)
             tryCompare(launcher, "state", "started", 5000)
             launcher.state = "idle"
+        }
+
+        function test_a14_keyboardResizesTableColumns() {
+            requireFocus()
+            const header = named("columnHeader")
+            const defaults = named("modsPane").defaultColumns
+            // The column edges are one Tab stop, right before the list.
+            press(Qt.Key_Tab, Qt.ShiftModifier)
+            let edge = win.activeFocusItem
+            compare(edge.Accessible.role, Accessible.Separator)
+            compare(edge.Accessible.name, "Position column width: " + header.widths[0] + " pixels")
+            const width = header.widths[0]
+            press(Qt.Key_Right)
+            compare(header.widths[0], width + 10)
+            compare(Backend.settings.columnWidths[0], width + 10)
+            press(Qt.Key_Right, Qt.ShiftModifier)
+            compare(Backend.settings.columnWidths[0], width + 60)
+            press(Qt.Key_Home)
+            compare(Backend.settings.columnWidths[0], header.minimums[0])
+            press(Qt.Key_Return)
+            compare(Backend.settings.columnWidths[0], defaults[0])
+
+            // Ctrl+Right moves to the next edges; right of Name an edge resizes the
+            // column after it, so Left widens Status.
+            press(Qt.Key_Right, Qt.ControlModifier)
+            press(Qt.Key_Right, Qt.ControlModifier)
+            press(Qt.Key_Right, Qt.ControlModifier)
+            edge = win.activeFocusItem
+            verify(edge.Accessible.name.startsWith("Status column width: "), edge.Accessible.name)
+            compare(header.currentEdge, 3)
+            const status = header.widths[4]
+            press(Qt.Key_Left)
+            compare(Backend.settings.columnWidths[4], status + 10)
+            press(Qt.Key_End)
+            verify(header.widths[4] > status + 10)
+            compare(named("modsPane").nameWidth, named("modsPane").minNameWidth)
+            press(Qt.Key_Return)
+            compare(Backend.settings.columnWidths[4], defaults[4])
+
+            // The header stays one stop: Tab leaves it for the list, and Shift+Tab
+            // comes back to the edge used last.
+            press(Qt.Key_Tab)
+            verify(named("modList").activeFocus)
+            press(Qt.Key_Tab, Qt.ShiftModifier)
+            compare(win.activeFocusItem, edge)
+        }
+
+        function test_a15_keyboardResizesPanes() {
+            requireFocus()
+            const side = named("sidePane")
+            const games = named("gamesPane")
+            // After the list, Tab reaches the divider at the actions column.
+            press(Qt.Key_Tab)
+            const sideDivider = named("sideDivider")
+            verify(sideDivider.activeFocus)
+            compare(sideDivider.Accessible.role, Accessible.Separator)
+            const width = side.width
+            compare(sideDivider.Accessible.name, "Actions column width: " + width + " pixels")
+            // The divider moves left, so the actions column gets wider.
+            press(Qt.Key_Left)
+            tryCompare(side, "width", width + 10)
+            compare(Backend.settings.rightPaneWidth, width + 10)
+            press(Qt.Key_Right, Qt.ShiftModifier)
+            tryCompare(side, "width", width - 40)
+            compare(Backend.settings.rightPaneWidth, width - 40)
+            press(Qt.Key_Home)
+            tryCompare(side, "width", win.sideMinimumWidth)
+            compare(Backend.settings.rightPaneWidth, win.sideMinimumWidth)
+            press(Qt.Key_End)
+            tryCompare(side, "width", sideDivider.maximum)
+            verify(sideDivider.maximum > width + 10)
+            press(Qt.Key_Return)
+            tryCompare(side, "width", win.defaultRightWidth)
+            compare(Backend.settings.rightPaneWidth, win.defaultRightWidth)
+
+            // The games column's divider is the last stop of that column.
+            const gamesDivider = named("gamesDivider")
+            press(Qt.Key_F6) // the selected game
+            verify(tabTo(gamesDivider, 10), "Tab never reached the games column's divider")
+            const gamesWidth = games.width
+            press(Qt.Key_Right)
+            tryCompare(games, "width", gamesWidth + 10)
+            compare(Backend.settings.leftPaneWidth, gamesWidth + 10)
+            press(Qt.Key_Return)
+            tryCompare(games, "width", win.defaultLeftWidth)
+            compare(Backend.settings.leftPaneWidth, win.defaultLeftWidth)
+            press(Qt.Key_Tab)
+            compare(focusedPane(), "modsPane")
         }
 
         // The smallest window: every column fits, the toolbar shows icons, and

@@ -21,7 +21,12 @@ Rectangle {
     signal discardInterruptedRequested()
     // A focused action of the Play section went away (Main.qml moves the focus on).
     signal focusReleased()
+    // From the divider: a new width, or the default one (Main.qml applies it).
+    signal widthRequested(real width)
+    signal widthResetRequested()
 
+    // The keyboard divider to the mods column (Main.qml sets its range).
+    property alias divider: divider
     readonly property bool hasGame: Backend.games.currentSupported && Backend.games.currentInstalled
     readonly property bool hasPlayset: Backend.playsets.activeId >= 0
     // Smallest height of the details and downloads area (which scrolls on its
@@ -34,12 +39,28 @@ Rectangle {
 
     // F6 target: the first enabled control (Import code when a game is ready).
     function focusFirst() {
-        const next = root.nextItemInFocusChain(true)
+        const next = divider.nextItemInFocusChain(true)
         if (next)
             next.forceActiveFocus(Qt.TabFocusReason)
     }
 
     color: Theme.pane
+
+    // First in the column's Tab order, on the divider to the mods column.
+    ResizeHandle {
+        id: divider
+        objectName: "sideDivider"
+        z: 1
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        width: 7
+        columnName: qsTr("Actions column")
+        value: root.width
+        side: -1
+        onResizeRequested: width => root.widthRequested(width)
+        onResetRequested: root.widthResetRequested()
+    }
 
     Flickable {
         id: page

@@ -11,9 +11,14 @@ Rectangle {
     id: root
 
     property int otherGameCount: 0
+    // The keyboard divider to the mods column (Main.qml sets its range).
+    property alias divider: divider
 
     signal locateRequested()
     signal settingsRequested()
+    // From the divider: a new width, or the default one (Main.qml applies it).
+    signal widthRequested(real width)
+    signal widthResetRequested()
 
     function countOtherGames() {
         let n = 0
@@ -180,5 +185,20 @@ Rectangle {
                 onClicked: root.settingsRequested()
             }
         }
+    }
+
+    // Last in the column's Tab order, on the divider to the mods column.
+    ResizeHandle {
+        id: divider
+        objectName: "gamesDivider"
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        width: 7
+        columnName: qsTr("Games column")
+        value: root.width
+        side: 1
+        onResizeRequested: width => root.widthRequested(width)
+        onResetRequested: root.widthResetRequested()
     }
 }

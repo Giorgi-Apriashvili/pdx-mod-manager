@@ -29,6 +29,8 @@ Rectangle {
     readonly property real fixedWidth: gripWidth + columns[0] + columns[1] + columns[3] + columns[4]
     readonly property real nameWidth: Math.max(minNameWidth, modList.width - fixedWidth)
     readonly property list<real> effectiveWidths: [columns[0], columns[1], nameWidth, columns[3], columns[4]]
+    // Widest each column can get without squeezing Name below its minimum.
+    readonly property list<real> columnMaximums: columns.map(w => Math.max(24, modList.width - (fixedWidth - w) - minNameWidth))
     readonly property var filterOptions: [
         { value: "all", text: qsTr("All mods") },
         { value: "enabled", text: qsTr("Enabled") },
@@ -99,6 +101,13 @@ Rectangle {
         const c = columns.map(w => Math.round(w))
         c[2] = Math.round(nameWidth)
         Backend.settings.columnWidths = c
+    }
+
+    // Mouse drag or keyboard; never squeezes the stretching Name column below its minimum.
+    function resizeColumn(column: int, width: real) {
+        const c = columns.slice()
+        c[column] = Math.max(24, Math.min(width, columnMaximums[column]))
+        columns = c
     }
 
     function optionIndex(options: var, value: string): int {
@@ -768,16 +777,15 @@ Rectangle {
             visible: root.canEdit && Backend.mods.count > 0
             gripWidth: root.gripWidth
             widths: root.effectiveWidths
+            maximums: root.columnMaximums
             sortMode: Backend.modView.sortMode
             onSortRequested: mode => Backend.modView.sortMode = mode
-            onResized: (column, width) => {
-                const c = root.columns.slice()
-                // Never squeeze the stretching Name column below its minimum.
-                const others = root.fixedWidth - c[column]
-                c[column] = Math.max(24, Math.min(width, modList.width - others - root.minNameWidth))
-                root.columns = c
-            }
+            onResized: (column, width) => root.resizeColumn(column, width)
             onResizeFinished: root.saveColumns()
+            onResetRequested: column => {
+                root.resizeColumn(column, root.defaultColumns[column])
+                root.saveColumns()
+            }
         }
 
         // Table
