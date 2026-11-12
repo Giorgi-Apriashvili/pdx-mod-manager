@@ -157,8 +157,29 @@ ApplicationWindow {
         Backend.settings.rightPaneWidth = Math.round(sidePane.SplitView.preferredWidth)
     }
 
+    // The width to keep for a column moved to `width` from `chosen`: a column
+    // that a narrow window squeezes sits at its maximum, so moving it to that
+    // maximum (End, Right on the games divider, a drag towards it) changes
+    // nothing on screen and keeps the wider chosen width.
+    function chosenWidth(pane: Item, width: real, chosen: real): real {
+        return width >= pane.SplitView.maximumWidth - 0.5 && width < chosen ? chosen : width
+    }
+
+    // After a drag of a divider, which set the column's preferred width.
+    function keepChosenWidth(pane: Item, chosen: real) {
+        const width = chosenWidth(pane, pane.SplitView.preferredWidth, chosen)
+        if (width !== pane.SplitView.preferredWidth)
+            pane.SplitView.preferredWidth = width
+    }
+
     // A column divider moved from the keyboard, like a drag of its handle.
     function setPaneWidth(pane: Item, width: real) {
+        pane.SplitView.preferredWidth = chosenWidth(pane, width, pane.SplitView.preferredWidth)
+        storePaneWidths()
+    }
+
+    // Enter on a divider: the default width, stored even while squeezed.
+    function resetPaneWidth(pane: Item, width: real) {
         pane.SplitView.preferredWidth = width
         storePaneWidths()
     }
@@ -248,9 +269,21 @@ ApplicationWindow {
         anchors.topMargin: updateBanner.visible ? updateBanner.height + 12 : 0
         orientation: Qt.Horizontal
 
+        // The chosen widths when a drag starts: SplitView sets the dragged
+        // column's preferred width, which a drag towards the limit of a
+        // squeezed column would lower to the squeezed width.
+        property real gamesChosen
+        property real sideChosen
+
         onResizingChanged: {
-            if (!resizing)
-                window.storePaneWidths()
+            if (resizing) {
+                gamesChosen = gamesPane.SplitView.preferredWidth
+                sideChosen = sidePane.SplitView.preferredWidth
+                return
+            }
+            window.keepChosenWidth(gamesPane, gamesChosen)
+            window.keepChosenWidth(sidePane, sideChosen)
+            window.storePaneWidths()
         }
 
         // The mouse side of a divider. The keyboard reaches each divider through
@@ -284,10 +317,11 @@ ApplicationWindow {
                                                            - window.sideMinimumWidth - 2))
             divider.minimum: SplitView.minimumWidth
             divider.maximum: SplitView.maximumWidth
+            divider.defaultValue: window.defaultLeftWidth
             onLocateRequested: window.openLocate()
             onSettingsRequested: window.openSettings()
             onWidthRequested: width => window.setPaneWidth(gamesPane, width)
-            onWidthResetRequested: window.setPaneWidth(gamesPane, window.defaultLeftWidth)
+            onWidthResetRequested: window.resetPaneWidth(gamesPane, window.defaultLeftWidth)
         }
 
         ModsPane {
@@ -321,8 +355,9 @@ ApplicationWindow {
                                                            - window.modsMinimumWidth - 2))
             divider.minimum: SplitView.minimumWidth
             divider.maximum: SplitView.maximumWidth
+            divider.defaultValue: window.defaultRightWidth
             onWidthRequested: width => window.setPaneWidth(sidePane, width)
-            onWidthResetRequested: window.setPaneWidth(sidePane, window.defaultRightWidth)
+            onWidthResetRequested: window.resetPaneWidth(sidePane, window.defaultRightWidth)
             onImportRequested: window.openImport("")
             onExportRequested: window.openExport()
             onDiscardInterruptedRequested: window.askDiscardInterrupted()

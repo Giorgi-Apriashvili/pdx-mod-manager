@@ -18,8 +18,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <QAccessible>
 #include <QDate>
 #include <QDir>
+#include <QKeyEvent>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QQmlApplicationEngine>
@@ -34,11 +36,16 @@
 #include <QTcpSocket>
 #include <QTest>
 #include <QUrl>
+#include <QtGui/private/qguiapplication_p.h>
+#include <QtGui/qpa/qplatformaccessibility.h>
+#include <QtGui/qpa/qplatformintegration.h>
 #include <QtQml/qqml.h>
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 Q_IMPORT_QML_PLUGIN(Pmm_UiPlugin)
@@ -805,7 +812,8 @@ TEST_CASE("Play says Steam is not running and becomes available once it runs", "
         CHECK_FALSE(play->property("available").toBool());
         CHECK(play->isEnabled()); // focusable, so the keyboard reaches the reasons
         CHECK(evaluate("root.blockerLines.join('|')").toString() == blocker);
-        CHECK(evaluate("toolTipText").toString() == blocker);
+        // The reason is on screen above Play; no tool tip covers it.
+        CHECK(evaluate("toolTipText").toString().isEmpty());
         CHECK(evaluate("Accessible.description").toString() == "Blocked: " + blocker);
 
         // Steam starts; nothing else happens in the window.
@@ -842,6 +850,41 @@ bool tabTo(QQuickWindow* window, QObject* item, int limit) {
     }
     return hasActiveFocus(item);
 }
+
+// Records the texts of Accessible.announce() while it exists. Qt sends
+// accessibility events only while accessibility is active, which on Windows
+// takes a screen reader; this switches it on for the offscreen platform.
+class Announcements {
+public:
+    Announcements() : m_platform(QGuiApplicationPrivate::platformIntegration()->accessibility()) {
+        REQUIRE(m_platform);
+        texts().clear();
+        m_previous = QAccessible::installUpdateHandler(&Announcements::record);
+        m_platform->setActive(true);
+    }
+    ~Announcements() {
+        m_platform->setActive(false);
+        QAccessible::installUpdateHandler(m_previous);
+    }
+    Announcements(const Announcements&) = delete;
+    Announcements& operator=(const Announcements&) = delete;
+
+    // The texts announced since the last call.
+    static QStringList take() { return std::exchange(texts(), {}); }
+
+private:
+    static QStringList& texts() {
+        static QStringList list;
+        return list;
+    }
+    static void record(QAccessibleEvent* event) {
+        if (event->type() == QAccessible::Announcement)
+            texts().append(static_cast<QAccessibleAnnouncementEvent*>(event)->message());
+    }
+
+    QPlatformAccessibility* m_platform;
+    QAccessible::UpdateHandler m_previous = nullptr;
+};
 
 } // namespace
 
@@ -917,7 +960,7 @@ TEST_CASE("A blocked Play is reachable with Tab, says why, and launches once it 
         REQUIRE(tabTo(window, play, 40));
         CHECK(evaluate("Accessible.name").toString() == "Play Stellaris, unavailable");
         CHECK(evaluate("Accessible.description").toString() == "Blocked: " + blocker);
-        CHECK(evaluate("toolTipText").toString() == blocker);
+        CHECK(evaluate("toolTipText").toString().isEmpty()); // the reason is on screen
 
         // Enter, Space and a click show the reasons instead of launching.
         QSignalSpy posted(backend.notifications(), &NotificationCenter::posted);
@@ -932,6 +975,15 @@ TEST_CASE("A blocked Play is reachable with Tab, says why, and launches once it 
             CHECK(arguments.at(1).toString() == "The game cannot be started yet");
             CHECK(arguments.at(2).toString() == blocker);
         }
+        // Holding Enter: its auto-repeated presses post nothing more.
+        for (int i = 0; i < 3; ++i) {
+            QKeyEvent repeat(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QString(), true);
+            QCoreApplication::sendEvent(window, &repeat);
+        }
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Return, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &release);
+        QCoreApplication::processEvents();
+        CHECK(posted.size() == 3);
         waitUntil([] { return false; }, std::chrono::milliseconds(300));
         CHECK(*launches == 0);
         CHECK(backend.launcher()->state() == QLatin1String("idle"));
@@ -1105,6 +1157,155 @@ TEST_CASE("Column dividers and table column edges resize from the keyboard", "[a
     CHECK(QmlWarnings::list().isEmpty());
 }
 
+TEST_CASE(
+    "A divider key announces the width the column gets, and a squeezed column keeps its width",
+    "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addLocalMod("beta", "Beta");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Spoken"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001", "local:beta"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        REQUIRE(window->width() == 1400);
+
+        AppSettings* settings = backend.settings();
+        auto* list = window->findChild<QQuickItem*>(QStringLiteral("modList"));
+        auto* side = window->findChild<QQuickItem*>(QStringLiteral("sidePane"));
+        auto* games = window->findChild<QQuickItem*>(QStringLiteral("gamesPane"));
+        auto* sideDivider = window->findChild<QQuickItem*>(QStringLiteral("sideDivider"));
+        auto* gamesDivider = window->findChild<QQuickItem*>(QStringLiteral("gamesDivider"));
+        REQUIRE(list);
+        REQUIRE(side);
+        REQUIRE(games);
+        REQUIRE(sideDivider);
+        REQUIRE(gamesDivider);
+        Announcements announcements;
+        // The key, then only the queued calls (Qt.callLater), not the next
+        // frame, in which the split view applies a divider's new width.
+        const auto press = [&](Qt::Key k, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+            QTest::keyClick(window, k, modifiers);
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+        };
+        // Nothing is spoken before the width is applied, then it is spoken once.
+        const auto spoken = [&](const std::function<bool()>& applied, int width) {
+            const QStringList expected{QStringLiteral("%1 pixels").arg(width)};
+            INFO("expected: " << expected.join("").toStdString());
+            QStringList texts = Announcements::take();
+            INFO("before the width was applied: " << texts.join(" | ").toStdString());
+            CHECK((texts.isEmpty() || texts == expected));
+            CHECK(waitUntil(applied));
+            CHECK(waitUntil([&] {
+                texts += Announcements::take();
+                return !texts.isEmpty();
+            }));
+            INFO("in all: " << texts.join(" | ").toStdString());
+            CHECK(texts == expected);
+        };
+        const auto widthIs = [](QQuickItem* item, qreal width) {
+            return [item, width] { return qFuzzyCompare(item->width(), width); };
+        };
+
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        QTest::keyClick(window, Qt::Key_Tab);
+        REQUIRE(hasActiveFocus(sideDivider));
+        Announcements::take();
+        press(Qt::Key_Left);
+        spoken(widthIs(side, 310), 310);
+        press(Qt::Key_Left, Qt::ShiftModifier);
+        spoken(widthIs(side, 360), 360);
+        press(Qt::Key_Return);
+        spoken(widthIs(side, 300), 300);
+        press(Qt::Key_Home);
+        spoken(widthIs(side, 250), 250);
+        // Already at the narrowest: nothing changes, and the width is spoken.
+        press(Qt::Key_Home);
+        spoken(widthIs(side, 250), 250);
+        press(Qt::Key_Return);
+        spoken(widthIs(side, 300), 300);
+
+        QTest::keyClick(window, Qt::Key_F6);
+        REQUIRE(tabTo(window, gamesDivider, 10));
+        Announcements::take();
+        press(Qt::Key_Right);
+        spoken(widthIs(games, 210), 210);
+        press(Qt::Key_Return);
+        spoken(widthIs(games, 200), 200);
+
+        // A column edge applies its width at once.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        QTest::keyClick(window, Qt::Key_Tab, Qt::ShiftModifier);
+        Announcements::take();
+        press(Qt::Key_Right);
+        spoken([&] { return settings->columnWidths().value(0) == 54; }, 54);
+        press(Qt::Key_Return);
+        spoken([&] { return settings->columnWidths().value(0) == 44; }, 44);
+
+        // The smallest window squeezes the outer columns below their chosen
+        // widths: a key that would widen one changes nothing, says the width it
+        // has, and leaves the chosen width stored.
+        window->resize(window->minimumSize());
+        REQUIRE(waitUntil([&] { return side->width() == 250 && games->width() < 200; }));
+        const qreal squeezed = games->width();
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        QTest::keyClick(window, Qt::Key_Tab);
+        REQUIRE(hasActiveFocus(sideDivider));
+        Announcements::take();
+        press(Qt::Key_Left);
+        spoken(widthIs(side, 250), 250);
+        press(Qt::Key_End);
+        spoken(widthIs(side, 250), 250);
+        CHECK(settings->rightPaneWidth() == 300);
+        QTest::keyClick(window, Qt::Key_F6);
+        REQUIRE(tabTo(window, gamesDivider, 10));
+        Announcements::take();
+        press(Qt::Key_Right);
+        spoken(widthIs(games, squeezed), static_cast<int>(squeezed));
+        CHECK(settings->leftPaneWidth() == 200);
+        // Enter on a squeezed column stores the default, as wide as it can be.
+        press(Qt::Key_Left);
+        spoken(widthIs(games, squeezed - 10), static_cast<int>(squeezed) - 10);
+        CHECK(settings->leftPaneWidth() == static_cast<int>(squeezed) - 10);
+        press(Qt::Key_Return);
+        spoken(widthIs(games, squeezed), static_cast<int>(squeezed));
+        CHECK(settings->leftPaneWidth() == 200);
+
+        // In a wider window the chosen widths come back.
+        window->resize(1400, 860);
+        CHECK(waitUntil(widthIs(games, 200)));
+        CHECK(waitUntil(widthIs(side, 300)));
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
 TEST_CASE("The smallest window fits a 200 % screen and keeps Play reachable", "[app][qml][a11y]") {
     qputenv("QT_QUICK_BACKEND", "software");
     TempDir temp;
@@ -1186,6 +1387,29 @@ TEST_CASE("The smallest window fits a 200 % screen and keeps Play reachable", "[
         CHECK(evaluateIn(item("modList"),
                          QStringLiteral("root.fixedWidth + root.nameWidth <= modList.width + 0.5"))
                   .toBool());
+        // The toolbar shows icons only, no button below its own width.
+        QQuickItem* toolbar = item("modsToolbar");
+        const auto buttonsFit = [&] {
+            int buttons = 0;
+            for (QQuickItem* child : toolbar->childItems()) {
+                if (!child->isVisible() || !child->property("labelledWidth").isValid())
+                    continue;
+                ++buttons;
+                INFO(evaluateIn(child, QStringLiteral("Accessible.name")).toString().toStdString());
+                CHECK(child->width() >= child->implicitWidth() - 0.5);
+            }
+            CHECK(buttons >= 6);
+        };
+        CHECK(toolbar->property("compact").toBool());
+        buttonsFit();
+        // Filtered, the footer's "Showing 1 of 2" stays inside the column.
+        backend.modView()->setSearch(QStringLiteral("Alpha"));
+        QQuickItem* showing = item("showingStat");
+        REQUIRE(waitUntil([&] { return showing->isVisible(); }));
+        CHECK(showing->property("text").toString() == "Showing 1 of 2");
+        CHECK(rectIn(showing, mods).left() >= 0);
+        CHECK(rectIn(showing, mods).right() <= mods->width() + 0.5);
+        backend.modView()->setSearch(QString());
 
         // The actions column scrolls as a whole; Tab reaches Play and scrolls it
         // into view, with its reasons.
@@ -1206,10 +1430,13 @@ TEST_CASE("The smallest window fits a 200 % screen and keeps Play reachable", "[
         CHECK(description.contains("Read-only verification mode"));
         CHECK(description.contains("interrupted"));
 
-        // A taller window shows everything again without scrolling.
+        // A taller window shows everything again without scrolling, and the
+        // toolbar's labels come back.
         window->resize(1400, 860);
         CHECK(waitUntil([&] { return !page->property("interactive").toBool(); }));
         CHECK(rectIn(play, content).bottom() <= 860.5);
+        CHECK(waitUntil([&] { return !toolbar->property("compact").toBool(); }));
+        buttonsFit();
 
         window->close();
         backend.shutdown();

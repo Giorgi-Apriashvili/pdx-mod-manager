@@ -515,6 +515,14 @@ Item {
             compare(play.Accessible.name, play.text + ", unavailable")
             verify(play.Accessible.description.startsWith("Blocked: "), play.Accessible.description)
             verify(play.Accessible.description.indexOf(blocker) >= 0, play.Accessible.description)
+            // The reasons are listed just above Play, so no tool tip covers them;
+            // past four, it lists the ones behind "…and N more".
+            compare(play.toolTipText, "")
+            launcher.extraBlockers = ["Reason 2.", "Reason 3.", "Reason 4.", "Reason 5.", "Reason 6."]
+            compare(play.toolTipText, "Reason 5.\nReason 6.")
+            verify(play.Accessible.description.indexOf("Reason 6.") >= 0, play.Accessible.description)
+            launcher.extraBlockers = []
+            compare(play.toolTipText, "")
 
             // Enter, Space and a click explain instead of launching.
             const launches = launcher.playCount
@@ -541,6 +549,8 @@ Item {
             compare(launcher.state, "validating")
             verify(play.activeFocus)
             verify(!play.available)
+            // What a screen reader says next for the focused button.
+            compare(play.Accessible.name, play.text + ", starting")
             press(Qt.Key_Return) // busy: nothing happens, nothing is posted
             compare(launcher.playCount, launches + 1)
             compare(notificationSpy.count, 0)
@@ -636,6 +646,45 @@ Item {
             compare(focusedPane(), "modsPane")
         }
 
+        // The table header hides (an empty playset, or none) while one of its
+        // column edges has the focus: the focus moves on, so arrow keys never
+        // resize columns that are not shown.
+        function test_a16_hiddenColumnEdgesGiveUpTheFocus() {
+            requireFocus()
+            const header = named("columnHeader")
+            const list = named("modList")
+            press(Qt.Key_Tab, Qt.ShiftModifier)
+            const edge = win.activeFocusItem
+            compare(edge.Accessible.role, Accessible.Separator)
+            const widths = JSON.stringify(Backend.settings.columnWidths)
+
+            // Ctrl+N and Enter: a new, empty playset; the dialog gives the focus
+            // back to the edge, which is hidden by then.
+            const count = Backend.playsets.count
+            press(Qt.Key_N, Qt.ControlModifier)
+            tryVerify(() => win.activeFocusItem !== edge)
+            press(Qt.Key_Return)
+            tryCompare(Backend.playsets, "count", count + 1)
+            tryVerify(() => !header.visible)
+            tryVerify(() => list.activeFocus, 2000, "the focus stayed on a hidden column edge")
+            press(Qt.Key_Right)
+            compare(JSON.stringify(Backend.settings.columnWidths), widths)
+
+            // No playset: no list either, so the column's first control.
+            Backend.playsets.activate(firstPlaysetId)
+            tryCompare(Backend.mods, "count", 2000)
+            tryVerify(() => header.visible)
+            win.selectMod(0)
+            press(Qt.Key_Tab, Qt.ShiftModifier)
+            compare(win.activeFocusItem.Accessible.role, Accessible.Separator)
+            Backend.playsets.activate(-1)
+            tryVerify(() => !header.visible)
+            tryVerify(() => win.activeFocusItem && win.activeFocusItem.Accessible.role !== Accessible.Separator,
+                      2000, "the focus stayed on a hidden column edge")
+            verify(win.activeFocusItem.visible)
+            // The empty playset stays: deleting it would show the Restore banner.
+        }
+
         // The smallest window: every column fits, the toolbar shows icons, and
         // Play stays reachable while blockers and a banner make the actions
         // column taller than the window.
@@ -662,9 +711,24 @@ Item {
                 const x = item.mapToItem(mods, 0, 0).x
                 verify(x >= 0 && x + item.width <= mods.width, name + " outside the mods column")
             }
+            // The toolbar shows icons only, none squeezed below its own width.
+            const toolbar = named("modsToolbar")
+            verify(toolbar.compact, "the toolbar keeps its labels at the smallest width")
+            for (const button of toolbarButtons(toolbar))
+                verify(button.width >= button.implicitWidth - 0.5, button.Accessible.name + " is squeezed")
             const play = named("playButton")
             const page = named("sidePage")
             verify(play.mapToItem(side, 0, 0).y + play.height <= side.height, "Play is not visible")
+            // The footer shows its counts without words, so "Showing N of M"
+            // and "Scanning…" stay inside the column.
+            const footer = named("modsFooter")
+            Backend.modView.statusFilter = "warning"
+            Backend.games.scanning = true
+            tryVerify(() => named("showingStat").visible)
+            verify(footer.compact)
+            verifyInside(footer)
+            Backend.games.scanning = false
+            Backend.modView.statusFilter = "all"
 
             launcher.steamRunning = false
             launcher.hasInterruptedTransaction = true
@@ -682,6 +746,142 @@ Item {
             win.width = 1400
             win.height = 860
             tryVerify(() => !page.interactive)
+            // With room, the labels and words come back.
+            tryVerify(() => !toolbar.compact)
+            verify(!footer.compact)
+            for (const button of toolbarButtons(toolbar))
+                verify(button.width >= button.implicitWidth - 0.5, button.Accessible.name + " is squeezed")
+        }
+
+        // The visible buttons of a toolbar row.
+        function toolbarButtons(row: Item): list<Item> {
+            const buttons = []
+            for (const child of row.children) {
+                if (child.visible && child.labelledWidth !== undefined)
+                    buttons.push(child)
+            }
+            verify(buttons.length >= 6, "toolbar buttons not found")
+            return buttons
+        }
+
+        // Every visible item of a row lies inside it.
+        function verifyInside(row: Item) {
+            for (const child of row.children) {
+                if (child.visible && child.width > 0)
+                    verify(child.x >= -0.5 && child.x + child.width <= row.width + 0.5,
+                           (child.text ?? child.objectName) + " runs out of its row: " + child.x + " + "
+                           + child.width + " > " + row.width)
+            }
+        }
+
+        // In a window that squeezes the outer columns, a divider key or drag
+        // that cannot widen a column changes nothing, and the stored widths
+        // stay the chosen ones, which come back in a wider window.
+        function test_b3_squeezedColumnsKeepTheChosenWidths() {
+            requireFocus()
+            const games = named("gamesPane")
+            const side = named("sidePane")
+            const sideDivider = named("sideDivider")
+            const gamesDivider = named("gamesDivider")
+            // From the default widths (Enter on each divider).
+            press(Qt.Key_Tab)
+            verify(sideDivider.activeFocus)
+            press(Qt.Key_Return)
+            press(Qt.Key_F6)
+            verify(tabTo(gamesDivider, 10), "Tab never reached the games column's divider")
+            press(Qt.Key_Return)
+            tryCompare(games, "width", win.defaultLeftWidth)
+            tryCompare(side, "width", win.defaultRightWidth)
+            win.width = win.minimumWidth
+            win.height = win.minimumHeight
+            tryCompare(side, "width", win.sideMinimumWidth)
+            tryVerify(() => games.width < win.defaultLeftWidth)
+            const squeezed = games.width
+
+            // The actions column: Left would widen it, End too.
+            win.selectMod(0)
+            press(Qt.Key_Tab)
+            verify(sideDivider.activeFocus)
+            press(Qt.Key_Left)
+            press(Qt.Key_End)
+            press(Qt.Key_Left, Qt.ShiftModifier)
+            wait(50)
+            compare(side.width, win.sideMinimumWidth)
+            compare(Backend.settings.rightPaneWidth, win.defaultRightWidth)
+
+            // The games column: Right and End would widen it; Left narrows it
+            // for real, and Enter brings back the default.
+            press(Qt.Key_F6)
+            verify(tabTo(gamesDivider, 10), "Tab never reached the games column's divider")
+            press(Qt.Key_Right)
+            press(Qt.Key_End)
+            wait(50)
+            compare(games.width, squeezed)
+            compare(Backend.settings.leftPaneWidth, win.defaultLeftWidth)
+            press(Qt.Key_Left)
+            tryCompare(games, "width", squeezed - 10)
+            compare(Backend.settings.leftPaneWidth, squeezed - 10)
+            press(Qt.Key_Return)
+            tryCompare(games, "width", squeezed)
+            compare(Backend.settings.leftPaneWidth, win.defaultLeftWidth)
+
+            // Dragging either divider towards the squeezed column's limit.
+            const gamesHandle = games.mapToItem(win.contentItem, games.width, games.height / 2)
+            mouseDrag(win.contentItem, gamesHandle.x, gamesHandle.y, 30, 0)
+            const sideHandle = side.mapToItem(win.contentItem, -1, side.height / 2)
+            mouseDrag(win.contentItem, sideHandle.x, sideHandle.y, -30, 0)
+            wait(50)
+            compare(games.width, squeezed)
+            compare(side.width, win.sideMinimumWidth)
+            compare(Backend.settings.leftPaneWidth, win.defaultLeftWidth)
+            compare(Backend.settings.rightPaneWidth, win.defaultRightWidth)
+
+            win.width = 1400
+            win.height = 860
+            tryCompare(games, "width", win.defaultLeftWidth)
+            tryCompare(side, "width", win.defaultRightWidth)
+        }
+
+        // A confirmation taller than the smallest window scrolls, from the
+        // keyboard as well (the focus is on its buttons), and its text leaves
+        // room for the scroll bar.
+        function test_b4_longConfirmationScrolls() {
+            requireFocus()
+            win.width = win.minimumWidth
+            win.height = win.minimumHeight
+            tryCompare(win.contentItem, "height", 440)
+            const dialog = named("confirmDialog")
+            const files = []
+            for (let i = 1; i <= 60; ++i)
+                files.push("C:\\Users\\Player\\Documents\\Paradox Interactive\\Stellaris\\file" + i + ".txt")
+            dialog.ask("Discard", "These files stay as they are:\n" + files.join("\n"), "Details.", "Discard",
+                       true, true, null)
+            tryVerify(() => dialog.opened)
+            const scroller = findChild(dialog.contentItem, "confirmScroller") ?? dialog.contentItem
+            compare(scroller.objectName, "confirmScroller")
+            tryVerify(() => scroller.interactive, 2000, "the long confirmation does not scroll")
+            const content = scroller.contentItem.children[0]
+            verify(content.width <= scroller.width - 12, "the text runs under the scroll bar")
+            tryVerify(() => findChild(dialog.footer, "cancelButton").activeFocus)
+            const bottom = scroller.contentHeight - scroller.height
+            compare(scroller.contentY, 0)
+            press(Qt.Key_Down)
+            verify(scroller.contentY > 0)
+            press(Qt.Key_End)
+            compare(scroller.contentY, bottom)
+            press(Qt.Key_PageUp)
+            verify(scroller.contentY < bottom)
+            press(Qt.Key_Home)
+            compare(scroller.contentY, 0)
+            press(Qt.Key_PageDown)
+            verify(scroller.contentY > 0)
+            // The buttons still get their keys: Tab, then Escape closes.
+            press(Qt.Key_Tab)
+            verify(findChild(dialog.footer, "confirmButton").activeFocus)
+            press(Qt.Key_Escape)
+            tryVerify(() => !dialog.visible)
+            win.width = 1400
+            win.height = 860
         }
 
         // A dragged divider stores the width it was dragged to (the stored

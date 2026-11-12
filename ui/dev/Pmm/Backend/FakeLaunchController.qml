@@ -12,12 +12,15 @@ QtObject {
     property FakeModListModel mods
     property FakePlaysetsModel playsets
     property bool steamRunning: true
+    // More reasons after these, e.g. more than the Play section lists.
+    property list<string> extraBlockers: []
     readonly property bool canPlay: blockers.length === 0 && !busy
     readonly property list<string> blockers: (steamRunning ? [] : ["Steam is not running. Start Steam and sign in, then launch Stellaris."])
         .concat(mods && mods.blockingCount > 0
             ? [mods.blockingCount + (mods.blockingCount === 1 ? " enabled mod is" : " enabled mods are")
                + " not ready (missing, downloading or broken). Disable them or wait for downloads."]
             : [])
+        .concat(extraBlockers)
     readonly property list<string> warnings: playsets && playsets.activeId < 0
         ? ["No playset is selected, so the game starts without mods."]
         : mods && mods.warningCount > 0 ? [mods.warningCount + " mods report compatibility warnings."] : []

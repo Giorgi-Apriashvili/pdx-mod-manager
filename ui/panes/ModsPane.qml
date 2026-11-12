@@ -495,11 +495,22 @@ Rectangle {
                 // and sort drop their "Show:" and "Sort:" prefixes and get
                 // narrower, and the playset selector and search share the rest.
                 readonly property bool narrow: width < 230 + 120 + 2 * 150 + 4 * spacing
-                readonly property real narrowOptionWidth: 104
+                // As wide as the longest option needs (with the padding and the
+                // arrow), but at most a quarter of the row; 104 in the narrowest
+                // column.
+                readonly property real narrowOptionWidth: Math.max(104, Math.min(optionMetrics.widest + 36,
+                                                                                  Math.floor((width - 3 * spacing) / 4)))
                 anchors.fill: parent
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10
                 spacing: 6
+
+                FontMetrics {
+                    id: optionMetrics
+                    readonly property real widest: Math.max(...root.filterOptions.concat(root.sortOptions).map(
+                                                                option => optionMetrics.advanceWidth(option.text)))
+                    font: filterCombo.font
+                }
 
                 AppComboBox {
                     id: playsetCombo
@@ -601,6 +612,7 @@ Rectangle {
 
             RowLayout {
                 id: toolbarRow
+                objectName: "modsToolbar"
                 // Icons only when the labels do not fit; the names stay the
                 // accessible names and the tool tips say what each one does.
                 readonly property bool compact: width < addButton.labelledWidth + enableButton.labelledWidth
@@ -778,7 +790,10 @@ Rectangle {
             gripWidth: root.gripWidth
             widths: root.effectiveWidths
             maximums: root.columnMaximums
+            defaults: root.defaultColumns
             sortMode: Backend.modView.sortMode
+            // The list, or without a playset (no list) the first control.
+            onFocusReleased: modList.visible ? root.focusList() : root.focusFirst()
             onSortRequested: mode => Backend.modView.sortMode = mode
             onResized: (column, width) => root.resizeColumn(column, width)
             onResizeFinished: root.saveColumns()
@@ -1114,45 +1129,83 @@ Rectangle {
             }
 
             RowLayout {
+                id: footerRow
+                objectName: "modsFooter"
+                // A narrow mods column shows the counts without their words
+                // (each keeps them in its tool tip and accessible name). The
+                // counts give way first, so "Showing N of M" and "Scanning…"
+                // stay in view whatever the font.
+                readonly property bool compact: width < [countStat, enabledStat, readyStat, missingStat, warningStat,
+                                                         showingStat, scanningStat]
+                                                        .filter(stat => stat.visible)
+                                                        .reduce((sum, stat) => sum + stat.fullWidth + 14, 0)
                 anchors.fill: parent
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10
                 spacing: 14
                 visible: root.canEdit
 
-                FooterStat {
-                    text: qsTr("%1 mods").arg(Theme.formatCount(Backend.mods.count))
-                    strong: true
-                }
-                FooterStat {
-                    iconName: "check"
-                    iconColor: Theme.accent
-                    text: qsTr("%1 enabled").arg(Theme.formatCount(Backend.mods.enabledCount))
-                }
-                FooterStat {
-                    iconName: "check-circle"
-                    iconColor: Theme.success
-                    text: qsTr("%1 ready").arg(Theme.formatCount(Backend.mods.readyCount))
-                }
-                FooterStat {
-                    iconName: "circle-alert"
-                    iconColor: Backend.mods.missingCount > 0 ? Theme.danger : Theme.textFaint
-                    text: qsTr("%1 missing").arg(Theme.formatCount(Backend.mods.missingCount))
-                }
-                FooterStat {
-                    iconName: "triangle-alert"
-                    iconColor: Backend.mods.warningCount > 0 ? Theme.warning : Theme.textFaint
-                    text: qsTr("%1 with warnings").arg(Theme.formatCount(Backend.mods.warningCount))
-                }
                 Item {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumWidth: 0
+                    clip: counts.width > width
+
+                    Row {
+                        id: counts
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: footerRow.compact ? 10 : 14
+
+                        FooterStat {
+                            id: countStat
+                            text: qsTr("%1 mods").arg(Theme.formatCount(Backend.mods.count))
+                            strong: true
+                        }
+                        FooterStat {
+                            id: enabledStat
+                            iconName: "check"
+                            iconColor: Theme.accent
+                            text: qsTr("%1 enabled").arg(Theme.formatCount(Backend.mods.enabledCount))
+                            shortText: Theme.formatCount(Backend.mods.enabledCount)
+                            compact: footerRow.compact
+                        }
+                        FooterStat {
+                            id: readyStat
+                            iconName: "check-circle"
+                            iconColor: Theme.success
+                            text: qsTr("%1 ready").arg(Theme.formatCount(Backend.mods.readyCount))
+                            shortText: Theme.formatCount(Backend.mods.readyCount)
+                            compact: footerRow.compact
+                        }
+                        FooterStat {
+                            id: missingStat
+                            iconName: "circle-alert"
+                            iconColor: Backend.mods.missingCount > 0 ? Theme.danger : Theme.textFaint
+                            text: qsTr("%1 missing").arg(Theme.formatCount(Backend.mods.missingCount))
+                            shortText: Theme.formatCount(Backend.mods.missingCount)
+                            compact: footerRow.compact
+                        }
+                        FooterStat {
+                            id: warningStat
+                            iconName: "triangle-alert"
+                            iconColor: Backend.mods.warningCount > 0 ? Theme.warning : Theme.textFaint
+                            text: qsTr("%1 with warnings").arg(Theme.formatCount(Backend.mods.warningCount))
+                            shortText: Theme.formatCount(Backend.mods.warningCount)
+                            compact: footerRow.compact
+                        }
+                    }
                 }
                 FooterStat {
+                    id: showingStat
+                    objectName: "showingStat"
+                    Layout.minimumWidth: implicitWidth
                     visible: modList.count !== Backend.mods.count
                     text: qsTr("Showing %1 of %2").arg(Theme.formatCount(modList.count))
                                                    .arg(Theme.formatCount(Backend.mods.count))
                 }
                 FooterStat {
+                    id: scanningStat
+                    Layout.minimumWidth: implicitWidth
                     visible: Backend.games.scanning
                     text: qsTr("Scanning…")
                 }

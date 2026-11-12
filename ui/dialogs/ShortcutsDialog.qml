@@ -44,6 +44,7 @@ AppDialog {
         { title: qsTr("Games, dialogs and menus"), rows: [
             [qsTr("Up, Down"), qsTr("Next / previous game, list row or menu item")],
             [qsTr("Enter, Space"), qsTr("Select the game, activate the button or menu item")],
+            [qsTr("Up, Down, PgUp, PgDn, Home, End"), qsTr("Scroll a confirmation whose text does not fit")],
             [qsTr("Esc"), qsTr("Close the dialog or menu; focus returns where it was")]
         ] }
     ]

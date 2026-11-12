@@ -15,6 +15,8 @@ Item {
     property real value
     property real minimum: 0
     property real maximum: 10000
+    // What Enter asks for; within minimum..maximum it is what the column shows.
+    property real defaultValue: minimum
     // +1: the column is left of the divider, so Right widens it; -1: right of it.
     property int side: 1
     property int step: 10
@@ -22,25 +24,62 @@ Item {
     // Ctrl+Left and Ctrl+Right ask for the neighbouring divider (column edges).
     property bool hasNeighbors: false
 
-    // A width within minimum..maximum; resetRequested() for the default width,
-    // which the owner applies even where the window is too narrow to show it.
+    // A width within minimum..maximum, never the current one: a key that
+    // changes nothing on screen (the column is at its limit, maybe squeezed by
+    // a narrow window) asks for nothing, so the stored width stays as chosen.
+    // resetRequested() asks for the default width, which the owner stores even
+    // where the window is too narrow to show it.
     signal resizeRequested(real width)
     signal resetRequested()
     signal neighborRequested(int delta)
 
+    // The width that a key asked for and the layout has not applied yet: the
+    // announcement waits for it (a SplitView applies widths in its next polish).
+    property real _pending: -1
+
+    function clamped(width: real): real {
+        return Math.round(Math.max(minimum, Math.min(maximum, width)))
+    }
+
     function resizeTo(width: real) {
-        resizeRequested(Math.round(Math.max(minimum, Math.min(maximum, width))))
-        // The new width is spoken once the layout has applied it.
-        Qt.callLater(announceWidth)
+        const target = clamped(width)
+        if (target === Math.round(value)) {
+            announceWidth()
+            return
+        }
+        _pending = target
+        resizeRequested(target)
+        awaitWidth()
     }
 
     function reset() {
+        const target = clamped(defaultValue)
+        const changes = target !== Math.round(value)
+        _pending = changes ? target : -1
         resetRequested()
-        Qt.callLater(announceWidth)
+        if (changes)
+            awaitWidth()
+        else
+            announceWidth()
+    }
+
+    // The new width is spoken once value has it (onValueChanged; at once for
+    // the table's columns), or after a moment if the layout settles on
+    // another width.
+    function awaitWidth() {
+        if (_pending >= 0)
+            pendingTimer.restart()
     }
 
     function announceWidth() {
+        _pending = -1
+        pendingTimer.stop()
         Accessible.announce(qsTr("%1 pixels").arg(Math.round(value)), Accessible.Polite)
+    }
+
+    onValueChanged: {
+        if (_pending >= 0 && Math.round(value) === _pending)
+            announceWidth()
     }
 
     activeFocusOnTab: true
@@ -80,6 +119,12 @@ Item {
             return
         }
         event.accepted = true
+    }
+
+    Timer {
+        id: pendingTimer
+        interval: 300
+        onTriggered: root.announceWidth()
     }
 
     // Only keyboard focus reaches this item, so the ring follows activeFocus.

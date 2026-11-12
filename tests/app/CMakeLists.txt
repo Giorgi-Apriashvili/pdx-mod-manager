@@ -1,7 +1,11 @@
 # Application-layer tests (label pmm_app_tests): models, controllers, the
 # services worker, the Steam helper host against the real pmm-steam-helper and
 # the fake Steam API library, and the Web API host against a local stub.
-find_package(Qt6 REQUIRED COMPONENTS Test)
+# GuiPrivate: qml_tests.cpp switches on the offscreen platform's accessibility
+# to record the announcements (QPlatformAccessibility); the tests always run
+# against the Qt they were built with.
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+find_package(Qt6 REQUIRED COMPONENTS Test GuiPrivate)
 set(CMAKE_AUTOMOC ON)
 
 add_executable(pmm_app_tests
@@ -19,7 +23,7 @@ add_executable(pmm_app_tests
   update_stub.hpp
   update_tests.cpp)
 target_link_libraries(pmm_app_tests PRIVATE
-  Catch2::Catch2 pmm_appgui pmm_uiplugin Qt6::Quick Qt6::QuickControls2 Qt6::Test Qt6::Network
+  Catch2::Catch2 pmm_appgui pmm_uiplugin Qt6::Quick Qt6::QuickControls2 Qt6::Test Qt6::Network Qt6::GuiPrivate
   nlohmann_json::nlohmann_json)
 target_compile_definitions(pmm_app_tests PRIVATE
   PMM_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures"
@@ -50,7 +54,8 @@ catch_discover_tests(pmm_app_tests
 # that lists the QML_FILES of ui/CMakeLists.txt points the module Pmm.Ui at the
 # sources, so no build of the module is needed. Registered only when Qt's
 # qmltestrunner is there.
-find_program(PMM_QMLTESTRUNNER qmltestrunner HINTS "${_pmm_qt_bin}")
+# Only the kit's own: another Qt's qmltestrunner on PATH would not load this one's modules.
+find_program(PMM_QMLTESTRUNNER qmltestrunner PATHS "${_pmm_qt_bin}" NO_DEFAULT_PATH)
 if(PMM_QMLTESTRUNNER)
   set(_pmm_preview_module "${CMAKE_BINARY_DIR}/ui-preview/Pmm/Ui")
   file(STRINGS "${PROJECT_SOURCE_DIR}/ui/CMakeLists.txt" _pmm_ui_lines)

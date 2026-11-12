@@ -33,9 +33,31 @@ AppDialog {
     onOpened: (dialog.cancelIsDefault ? cancelButton : confirmButton).forceActiveFocus()
     onClosed: action = null
 
+    // Up, Down, Page Up, Page Down, Home and End on the buttons scroll a text
+    // that is taller than the dialog: nothing in it takes the focus.
+    function scrollText(key: int): bool {
+        if (!scroller.interactive)
+            return false
+        const page = Math.max(20, scroller.height - 20)
+        const bottom = scroller.contentHeight - scroller.height
+        let y = scroller.contentY
+        switch (key) {
+        case Qt.Key_Up: y -= 40; break
+        case Qt.Key_Down: y += 40; break
+        case Qt.Key_PageUp: y -= page; break
+        case Qt.Key_PageDown: y += page; break
+        case Qt.Key_Home: y = 0; break
+        case Qt.Key_End: y = bottom; break
+        default: return false
+        }
+        scroller.contentY = Math.max(0, Math.min(bottom, y))
+        return true
+    }
+
     // Scrolls when a long list of files makes it taller than a small window.
     contentItem: Flickable {
         id: scroller
+        objectName: "confirmScroller"
         implicitHeight: content.implicitHeight
         contentWidth: width
         contentHeight: content.implicitHeight
@@ -46,7 +68,8 @@ AppDialog {
 
         ColumnLayout {
             id: content
-            width: scroller.width
+            // Room for the scroll bar while there is one.
+            width: scroller.width - (scroller.interactive ? 12 : 0)
             spacing: 6
 
             Text {
@@ -74,6 +97,8 @@ AppDialog {
     }
 
     footer: DialogFooter {
+        Keys.onPressed: event => event.accepted = dialog.scrollText(event.key)
+
         AppButton {
             id: cancelButton
             objectName: "cancelButton"

@@ -167,11 +167,17 @@ Rectangle {
             // Space or a click show the reasons instead of launching. It also
             // keeps the focus while a launch it started runs.
             available: root.playable
+            // While blocked, the reasons are on screen just above, where a tool
+            // tip would cover them: it lists only those behind "…and N more".
             toolTipText: root.launcher.busy ? ""
-                         : !root.playable ? root.blockerLines.join("\n")
+                         : !root.playable ? root.blockerLines.slice(root.maxBlockers).join("\n")
                          : root.hasPlayset ? qsTr("Apply this playset and start the game directly, without the Paradox launcher")
                                            : qsTr("Start the game directly, without mods and without the Paradox launcher")
-            Accessible.name: root.playable ? text : qsTr("%1, unavailable").arg(text)
+            // A launch it started keeps the focus here: "starting", not
+            // "unavailable", is what a screen reader says after the key press.
+            Accessible.name: root.playable ? text
+                             : root.launcher.busy ? qsTr("%1, starting").arg(text)
+                             : qsTr("%1, unavailable").arg(text)
             Accessible.description: root.launcher.busy ? (root.stateText(root.launcher.state) || qsTr("A launch is in progress."))
                                     : !root.playable ? qsTr("Blocked: %1").arg(root.blockerLines.join("; "))
                                     : root.hasPlayset ? qsTr("Starts the game with this playset")

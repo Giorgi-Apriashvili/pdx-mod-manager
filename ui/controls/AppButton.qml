@@ -48,13 +48,14 @@ Button {
     ToolTip.text: toolTipText
     ToolTip.delay: 600
 
-    // Space is built in; Enter and Return activate a focused button as well.
+    // Space is built in; Enter and Return activate a focused button as well,
+    // once per press like Space: holding the key does not repeat the action.
     Keys.onReturnPressed: event => activate(event)
     Keys.onEnterPressed: event => activate(event)
 
     function activate(event: KeyEvent) {
         event.accepted = true
-        if (enabled)
+        if (enabled && !event.isAutoRepeat)
             clicked()
     }
 

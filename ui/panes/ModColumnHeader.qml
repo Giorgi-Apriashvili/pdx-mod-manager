@@ -17,6 +17,8 @@ Rectangle {
     property list<real> widths: [44, 30, 360, 90, 150]
     // Widest each column may get (the mods pane keeps Name at its minimum).
     property list<real> maximums: [400, 400, 400, 400, 400]
+    // What Enter on an edge gives its column (Name stretches).
+    property list<real> defaults: [44, 30, 0, 90, 150]
     property string sortMode: "order"
     // The edge that is in the Tab order; the last one used from the keyboard.
     property int currentEdge: 0
@@ -25,6 +27,9 @@ Rectangle {
     signal resizeFinished()
     signal resetRequested(int column)
     signal sortRequested(string mode)
+    // The header was hidden (an empty or no playset) while an edge had the
+    // focus; the owner moves it on, so keys never resize hidden columns.
+    signal focusReleased()
 
     readonly property var titles: [qsTr("#"), qsTr("On"), qsTr("Name"), qsTr("Source"), qsTr("Status")]
     // What screen readers call the columns.
@@ -35,6 +40,20 @@ Rectangle {
     // the following column.
     function targetOf(edge: int): int {
         return edge < 2 ? edge : edge + 1
+    }
+
+    function edgeHasFocus(): bool {
+        for (let i = 0; i < 4; ++i) {
+            const cell = cells.itemAt(i) as HeaderCell
+            if (cell && cell.keyHandle.activeFocus)
+                return true
+        }
+        return false
+    }
+
+    function checkFocus() {
+        if (!visible && edgeHasFocus())
+            focusReleased()
     }
 
     // The edge takes over the Tab stop once it has the focus (onActiveFocusChanged).
@@ -48,6 +67,7 @@ Rectangle {
 
     implicitHeight: 24
     color: Theme.header
+    onVisibleChanged: Qt.callLater(checkFocus)
 
     Rectangle {
         anchors.left: parent.left
@@ -175,11 +195,15 @@ Rectangle {
                 value: root.widths[handle.target] ?? 0
                 minimum: root.minimums[handle.target] ?? 0
                 maximum: Math.max(minimum, root.maximums[handle.target] ?? 0)
+                defaultValue: root.defaults[handle.target] ?? 0
                 side: handle.direction
                 hasNeighbors: true
                 onActiveFocusChanged: {
-                    if (activeFocus)
-                        root.currentEdge = cell.index
+                    if (!activeFocus)
+                        return
+                    root.currentEdge = cell.index
+                    // Given back by a dialog that emptied the playset meanwhile.
+                    Qt.callLater(root.checkFocus)
                 }
                 onResizeRequested: width => {
                     root.resized(handle.target, width)
