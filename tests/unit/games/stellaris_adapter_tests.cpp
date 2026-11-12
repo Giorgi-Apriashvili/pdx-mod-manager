@@ -605,6 +605,7 @@ TEST_CASE("Stellaris launch plan writes the minimum configuration", "[games][ste
         inst, mods, {"1000000001", "local_tweaks", "1000000002", "1000000003", "1000000006"});
     CHECK(plan.game == "stellaris");
     CHECK(samePath(plan.executable, f.install() / "stellaris.exe"));
+    // The executable's folder, which for Stellaris is the installation folder.
     CHECK(samePath(plan.workingDirectory, f.install()));
     CHECK(plan.arguments == std::vector<std::string>{"-gdpr-compliant"});
     CHECK(plan.environment == std::vector<std::pair<std::string, std::string>>{
@@ -834,6 +835,19 @@ TEST_CASE("Stellaris launch plan refuses what it cannot launch", "[games][stella
 
     // Nothing was written by any of this.
     CHECK_FALSE(fs::exists(f.userData() / "mod" / "ugc_1000000003.mod"));
+}
+
+TEST_CASE("Stellaris launches start in the executable's folder", "[games][stellaris]") {
+    StellarisFixture f;
+    GameInstallation inst = f.discovered();
+    // An executable in a subfolder of the installation (CK3 keeps its own in
+    // binaries/): the launch starts there, as the Paradox launcher does.
+    const fs::path subfolder = f.install() / "bin";
+    test::writeText(subfolder / "stellaris.exe", "placeholder");
+    inst.executablePath = subfolder / "stellaris.exe";
+    const LaunchPlan plan = f.plan(inst, f.scan(inst), {});
+    CHECK(samePath(plan.executable, subfolder / "stellaris.exe"));
+    CHECK(samePath(plan.workingDirectory, subfolder));
 }
 
 TEST_CASE("Manual Stellaris installations get no Steam environment", "[games][stellaris]") {

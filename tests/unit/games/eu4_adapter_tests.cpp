@@ -156,6 +156,8 @@ TEST_CASE("EU4 current configuration and launch plan", "[games][eu4]") {
                                       f.mod(mods, "zipped_local"), f.mod(mods, "2000000003")};
     auto plan = f.adapter.buildLaunchPlan(inst, ordered);
     REQUIRE(plan.ok());
+    // The executable's folder, which for EU4 is the installation folder.
+    CHECK(samePath(plan->workingDirectory, f.install()));
     CHECK(plan->arguments == std::vector<std::string>{"-gdpr-compliant"});
     CHECK(plan->environment == std::vector<std::pair<std::string, std::string>>{
                                    {"SteamAppId", "236850"}, {"SteamGameId", "236850"}});

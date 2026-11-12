@@ -1010,7 +1010,12 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     LaunchPlan plan;
     plan.game = std::string(m_traits.key);
     plan.executable = installation.executablePath;
-    plan.workingDirectory = installation.installPath;
+    // The executable's folder, as the Paradox launcher does: the installation
+    // folder for Stellaris and EU4, <install>/binaries for CK3 (where its
+    // steam_appid.txt lies).
+    plan.workingDirectory = installation.executablePath.has_parent_path()
+                                ? installation.executablePath.parent_path()
+                                : installation.installPath;
     // Also filtered here: installations stored before a flag was dropped.
     plan.arguments = launchArguments(installation.defaultArguments);
     if (installation.distribution == DistributionSource::Steam &&

@@ -33,6 +33,9 @@
 // User data: a folder chosen by the user, else an absolute path in
 // <install>/userdir.txt (games with GameTraits::userDirFile), else
 // launcher-settings.json "gameDataPath", else the OS default.
+//
+// Launch: the executable from launcher-settings.json (else
+// GameTraits::executable), started in its own folder.
 
 #include "games/game_adapter.hpp"
 
