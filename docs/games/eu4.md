@@ -59,7 +59,9 @@ EU4-specific behaviour handled since the first version:
   folder becomes `contentPath`; a regenerated descriptor uses
   `archive="<absolute zip>"` instead of `path=`. A zipped Workshop item
   without any registration cannot be described (its descriptor is inside
-  the archive) and is reported `Broken`.
+  the archive) and is reported `Broken`, also when a `.mod` file lies next to
+  the archive (the rule that a sole `.mod` file describes a Workshop item
+  without `descriptor.mod` does not apply to such folders).
 - **Relative paths.** `path="mod/<folder>"` and `archive="mod/<file>.zip"`
   are resolved against the user-data folder.
 
@@ -114,7 +116,7 @@ Used fields on v1.37.5.0 (validation as described in
 | `<install>/launcher-settings.json` (or `launcher/launcher-settings.json`) | yes | never |
 | `<install>/userdir.txt` | yes | never |
 | Steam `libraryfolders.vdf`, `appmanifest_236850.acf`, `appworkshop_236850.acf` | yes | never |
-| `<library>/steamapps/workshop/content/236850/<id>/descriptor.mod` | yes | never |
+| `<library>/steamapps/workshop/content/236850/<id>/descriptor.mod`, else its only `*.mod` | yes | never |
 | `<user data>/mod/*.mod` | yes | `mod/ugc_<id>.mod` only, when missing or pointing elsewhere, and never over another mod's registration |
 | `<user data>/dlc_load.json` | yes | when its content would change; `disabled_dlcs` and unknown keys preserved |
 | `<user data>/launcher-v2.sqlite` | **never** | **never** |
@@ -146,7 +148,7 @@ with the real descriptors.
 ## Launch
 
 Executable from `launcher-settings.json` `exePath` (`./eu4.exe`, validated as
-for Stellaris), falling back to `eu4.exe` without arguments. The working directory is the installation folder. Steam
+for Stellaris), falling back to `eu4.exe` without arguments. The working directory is the executable's folder, which for EU4 is the installation folder. Steam
 installations get `SteamAppId=236850` and `SteamGameId=236850`.
 
 **Arguments**: `exeArgs` without `-enabletelemetry`. The manager never enables

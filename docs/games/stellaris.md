@@ -68,8 +68,8 @@ How Stellaris interprets the file is unverified.
 ## launcher-settings.json
 
 Read from `<install>/launcher-settings.json`, falling back to
-`<install>/launcher/launcher-settings.json` (older layout). Used fields on
-v4.5.2:
+`<install>/launcher/launcher-settings.json` (where Crusader Kings III keeps
+it). Used fields on v4.5.2:
 
 | Field | Value on v4.5.2 | Use |
 | --- | --- | --- |
@@ -98,7 +98,7 @@ discovery does the same, while manual inspection reports the error.
 | --- | --- | --- |
 | `<install>/launcher-settings.json`, `<install>/userdir.txt` | yes | never |
 | `<steam>/steamapps/libraryfolders.vdf`, `appmanifest_281990.acf`, `workshop/appworkshop_281990.acf` | yes | never |
-| `<library>/steamapps/workshop/content/281990/<id>/descriptor.mod` | yes | never |
+| `<library>/steamapps/workshop/content/281990/<id>/descriptor.mod`, else its only `*.mod` | yes | never |
 | `<user data>/mod/*.mod` | yes | `mod/ugc_<id>.mod` only, when missing or pointing at another folder, and never over another mod's registration |
 | `<user data>/dlc_load.json` | yes | when its content would change (the same JSON in another layout is left as is) |
 | `<user data>/launcher-v2.sqlite` | **never** | **never** |
@@ -120,6 +120,11 @@ Nothing is ever written below a Steam folder or the game installation.
 - A Workshop content folder without a registration is added with an empty
   `descriptorPath` and `descriptorRef = "mod/ugc_<id>.mod"`; that descriptor
   is generated at launch.
+- A Workshop content folder is described by its `descriptor.mod`, else by its
+  only `*.mod` file (since 2026-11-13, for every game; some items ship
+  `<Name>.mod` instead, seen for Crusader Kings III). With no `.mod` file, or
+  several, the item is `Broken` and the problem names the files. A folder
+  that holds a `.zip` stays a legacy zipped item (see [`eu4.md`](eu4.md)).
 - Several registrations of one Workshop item: `ugc_<id>.mod` is used, the
   others are reported as problems.
 - Several descriptor files with one `<file stem>`: Windows allows names with
@@ -189,7 +194,9 @@ mod's content exists, and that local mods have a registered descriptor in
   code ever reaches the arguments. `-enabletelemetry` (requested by EU4's
   launcher settings, not by Stellaris's) is always removed, silently, so the
   manager never enables the game's telemetry on the user's behalf;
-- working directory: the installation folder;
+- working directory: the executable's folder, which for Stellaris is the
+  installation folder (every game starts in its executable's folder, as the
+  Paradox launcher does; for Crusader Kings III that is `binaries/`);
 - environment: `SteamAppId=281990` and `SteamGameId=281990` for Steam
   installations. The install folder also contains `steam_appid.txt`. The
   Steam client must be running: bypassing the Paradox launcher does not

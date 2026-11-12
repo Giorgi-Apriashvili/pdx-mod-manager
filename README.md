@@ -8,8 +8,9 @@ a copyable code (`PMM1.…`), acquires missing Steam Workshop mods through the
 user's own Steam client, and starts the game directly with the selected mods,
 without the Paradox launcher.
 
-The first release targets **Stellaris** and **Europa Universalis IV** on Windows
-10 and 11. Linux, macOS, the Steam Deck and Proton are not supported
+It supports **Stellaris** and **Europa Universalis IV**, and in the next release
+**Crusader Kings III**, on Windows 10 and 11. Linux, macOS, the Steam Deck and
+Proton are not supported
 ([ADR 0009](docs/adr/0009-windows-only.md)). It needs no server, account or
 telemetry.
 
@@ -25,7 +26,9 @@ telemetry.
 > [support matrix](docs/support-matrix.md) and the
 > [development status](docs/development-status.md). The in-app update works
 > between published releases: on 2026-11-07 an installed 0.1.0 updated itself to
-> 0.1.1.
+> 0.1.1. Crusader Kings III support is unreleased and has been checked read-only
+> only: its launch, Workshop downloads and load order have not been run against
+> the game yet ([CK3 adapter](docs/games/ck3.md)).
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -42,6 +45,7 @@ reason documented.
 | Desktop application (Qt Quick): games, playsets, search and filters, drag-and-drop and keyboard reordering, undo, import and export, downloads, Play with its blockers | Implemented; run read-only against the real games on Windows 11 | [Application](docs/app.md), [UI contract](docs/ui-contract.md) |
 | Accessibility: keyboard navigation, visible focus, accessible names, WCAG AA contrast, high-DPI | Implemented; checked with UI Automation and at scale factors 1.5 and 2 | [Accessibility](docs/accessibility.md); no screen-reader listening test yet |
 | Stellaris and EU4: installation and user-data detection, mod inventory, current configuration, launch plan (executable, arguments, environment, configuration writes) | **Verified** read-only, 2026-10-29, Stellaris 4.5.2 and EU4 1.37.5, Steam, Windows 11 | [Real-data evidence](docs/evidence/real-scan-2026-10-29.md); registered Workshop items without content show as Missing |
+| Crusader Kings III (unreleased): installation and user-data detection, mod inventory, current configuration, launch plan, share-code round trip | **Verified** read-only, 2026-11-13, CK3 1.20.1.2, Steam, Windows 11 | [CK3 adapter](docs/games/ck3.md); direct launch, Workshop downloads and which mod wins a shared file are **not verified** |
 | Share codes: `PMM1` encoding, strict validation, size limits, frozen regression fixtures | Implemented | [Protocol](docs/share-code-protocol.md), versioned independently (protocol 1, schema 1) |
 | Share-code round trip between two clean profiles (identities, order, enabled flags) | **Verified** read-only, 2026-10-29 and 2026-10-30, both games, Windows 11 | [Round-trip evidence](docs/evidence/app-round-trip-2026-10-30.md) |
 | Playset editing, filtering rules, launch readiness, dependency checks, import planning | Implemented | `src/core`, `src/services` |
@@ -56,7 +60,7 @@ reason documented.
 | Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked; not code signed |
 | Updates: a daily check (can be turned off) and a button, verify the installer's SHA-256, install and restart | **Verified** 2026-11-07 with a real update from 0.1.0 to 0.1.1, and again from 0.1.1 to 0.1.2 | [Updates](docs/updates.md): the owner's installed 0.1.0 found the published 0.1.1, and **Update and restart** installed it. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch. The values every released copy relies on are frozen and checked in CI ([compatibility contract](docs/updates.md#compatibility-contract-frozen-since-010)) |
 | GitHub releases from a workflow | **Verified** 2026-11-06: 0.1.0 published by it | [Releasing](docs/releasing.md), [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030) |
-| Hearts of Iron IV, Crusader Kings III, Victoria 3 | Unsupported | Known to the catalog only; their share codes are rejected as "not supported by this version" |
+| Hearts of Iron IV, Victoria 3 | Unsupported | Known to the catalog only; their share codes are rejected as "not supported by this version" |
 
 ## Prerequisites
 
@@ -211,7 +215,7 @@ folder that contains `bin\` below about 170 characters;
 [packaging](docs/packaging.md)).
 
 Options: `--profile <dir>` keeps every application file (database, journal,
-logs, cache) in `<dir>`; `--game <key>` selects `stellaris` or `eu4`;
+logs, cache) in `<dir>`; `--game <key>` selects `ck3`, `eu4` or `stellaris`;
 `--no-steam` never starts the Steam helper; `--read-only` never writes game
 files or launches a game; `--verbose` writes debug logs. One instance runs per
 profile. Hidden verification switches (`--self-test`, `--screenshot`) drive
@@ -256,7 +260,7 @@ src/platform/     OS paths, filesystem, processes, Steam discovery, file transac
 src/sharing/      share-code protocol (manifest, codec, envelope)
 src/persistence/  SQLite database, migrations, repositories
 src/providers/    Workshop helper protocol, acquisition state machine, metadata, fingerprints
-src/games/        game adapters: Stellaris and EU4
+src/games/        game adapters: Crusader Kings III, EU4 and Stellaris
 src/services/     Qt-free use cases: games, playsets, sharing, acquisition, launch
 src/app/          Qt application (pmm-app): runtime, services worker, Backend and models
 ui/               QML module Pmm.Ui (presentation only) and its preview tools
@@ -277,7 +281,7 @@ scripts/          developer scripts (formatting, MSVC environment, share-code to
 - [Architecture](docs/architecture.md), [application services](docs/architecture-services.md) and [decision records](docs/adr/README.md)
 - [Desktop application](docs/app.md), [UI contract](docs/ui-contract.md) and [accessibility](docs/accessibility.md)
 - [Support matrix](docs/support-matrix.md) and [feasibility record](docs/feasibility.md)
-- Game adapters: [Stellaris](docs/games/stellaris.md), [Europa Universalis IV](docs/games/eu4.md), [load order](docs/load-order.md)
+- Game adapters: [Stellaris](docs/games/stellaris.md), [Europa Universalis IV](docs/games/eu4.md), [Crusader Kings III](docs/games/ck3.md), [load order](docs/load-order.md)
 - [Share-code protocol](docs/share-code-protocol.md)
 - [Steam Workshop acquisition](docs/steam-workshop.md)
 - [Persistence](docs/persistence.md)

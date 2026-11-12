@@ -20,6 +20,7 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Web API metadata (names, sizes, wrong-game check) | Request builder and parser in `providers`; the app layer's `QtWorkshopMetadataHost` makes the call (tested against a local stub) |
 | Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
 | Europa Universalis IV | Same mechanism expected (the game ships `steam_api64.dll`). EU4 1.37.5 is installed on the development machine, but the helper has **not been run** for it yet |
+| Crusader Kings III | Implemented, **unverified**: the same mechanism, with the Steam API library from `<install>/binaries`, where CK3 keeps it next to `ck3.exe`; the helper has not been run for app 1158310 |
 
 ## 1. Architecture
 
@@ -397,7 +398,8 @@ Not legal advice. These points need review before release.
 ## 10. Platform notes
 
 The helper runs on Windows only ([ADR 0009](adr/0009-windows-only.md)). The 64-bit helper loads
-`steam_api64.dll` from the game root (verified for Stellaris). A 32-bit `steam_api.dll` would need
+`steam_api64.dll` from the game root, `bin`, `binaries` or `win64`, the first found (the root
+verified for Stellaris and EU4; Crusader Kings III keeps it in `binaries`, unverified). A 32-bit `steam_api.dll` would need
 a 32-bit helper build; none of the target games needs it. CI builds `pmm-steam-helper` and runs
 `pmm_providers_tests`, which include the end-to-end helper tests against the fake library.
 

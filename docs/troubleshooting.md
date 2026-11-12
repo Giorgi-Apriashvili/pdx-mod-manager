@@ -235,6 +235,12 @@ launcher:
   variables the manager sets. If the game quits and restarts through Steam
   (which then shows the launcher), report it with the diagnostics; this
   behaviour is not yet verified ([support matrix](support-matrix.md)).
+- Crusader Kings III: the manager starts `binaries\ck3.exe` in the
+  `binaries` folder, where the game keeps its `steam_appid.txt`, with the
+  arguments from `launcher\launcher-settings.json`. A direct start of
+  Crusader Kings III has not been tried yet; if the game quits, restarts
+  through Steam or opens the launcher, report it with the diagnostics
+  ([CK3 adapter](games/ck3.md)).
 
 ## The game does not start (process start failures)
 

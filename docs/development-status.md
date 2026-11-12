@@ -28,6 +28,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Platform: files, paths, processes, Steam discovery, file transactions | `src/platform` | done, tested | |
 | Workshop provider and `pmm-steam-helper` | `src/providers`, `tools/steam-helper`, [`steam-workshop.md`](steam-workshop.md) | done; session and item state verified read-only; subscribe and download tested against the fake Steam API only | [probe](evidence/steam-helper-probe.md) |
 | EU4 and Stellaris adapters | `src/games`, [`games/`](games/), [`load-order.md`](load-order.md) | done; detection, inventory, current configuration and launch plan verified read-only | [real scan](evidence/real-scan-2026-10-29.md) |
+| Crusader Kings III adapter (for the next release) | `src/games/ck3.{hpp,cpp}`, [`games/ck3.md`](games/ck3.md), [`load-order.md`](load-order.md#crusader-kings-iii) | done 2026-11-13 on `agent/ck3`, for the owner's review (not merged). Owner's decisions of 2026-11-12/13: the game's own Steam API library is loaded as for the other games, the catalog lists the supported games alphabetically (`ck3`, `eu4`, `stellaris`), the load order ships unverified (`loadOrderVerifiedInGame = false`) until a probe run approved by the owner. Also for every game: launches start in the executable's folder (unchanged for Stellaris and EU4), and a Workshop folder without `descriptor.mod` is described by its only `.mod` file. Detection, inventory, current configuration, launch plan and a share-code round trip verified read-only on 1.20.1.2; **launch, Workshop acquisition and load order not run** | [CK3 adapter](games/ck3.md#real-machine-evidence) |
 | Qt-free services (games, playsets, sharing, acquisition, launch) | `src/services`, [`architecture-services.md`](architecture-services.md) | done, tested | |
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
@@ -42,7 +43,51 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; passed on GitHub in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). Since 2026-11-07 the check reads the code of the sources, without their comments, and also checks the relaunch after an update run: 56 source checks, 112 test cases | |
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
-| In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
+| In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder only | |
+
+## Test status (2026-11-13, Crusader Kings III, `agent/ck3`)
+
+Local runs only, with fakes, fixtures and new scratch profiles; no game, no
+launcher and no Steam client was started, nothing under Steam, the game
+folders or `Documents/Paradox Interactive` was written (the CK3 `dlc_load.json`
+and `mod/*.mod` kept their timestamps of 2026-07-06), and the launcher's
+databases and `playsets_backup` were not opened.
+
+- `debug` preset: **0 warnings**, **560/560 tests pass**, by label: core 51,
+  sharing 55, persistence 72, platform 59, providers 61, games 66, services
+  89, application 111, ui-preview 1.
+- New: `ck3_adapter_tests.cpp` (11 cases on the fixture
+  `tests/fixtures/games/ck3`: discovery through `launcher/` and
+  `binaries/`, both wrong-game directions, the fallback executable,
+  `game/userdir.txt` only, the identity rules, the current configuration,
+  exact launch plans with the working directory `binaries/`, regenerated
+  descriptors identical to the launcher's, items without `descriptor.mod`,
+  the `supported_version` rule, process names and load-order information);
+  Stellaris cases for the working directory and the sole `.mod` file; a CK3
+  share-code round trip, the golden fixture `05-ck3-basic` (checked with
+  Python's `zlib`, `base64` and `hashlib`), catalog order and registry
+  checks. Changed: the unsupported example of the share-code tests is now
+  `vic3`.
+- Against the code without the two shared changes (working directory and
+  sole `.mod` file), the new checks fail: 4 test cases (working directory,
+  launch plan, items without `descriptor.mod`, the Stellaris sole `.mod`
+  case), and the regeneration of a sole `.mod` in an author's key order.
+- `pmm_games_tests`, `pmm_sharing_tests`, the catalog tests of
+  `pmm_core_tests` and the preview tests passed 10 times each.
+- `pmm_games_tests "[.real]"` (read-only): CK3 1.20.1.2 11 mods, 9 enabled,
+  0 unresolved, 0 writes, 7 of 11 regenerated descriptors identical (the
+  other 4 registrations are older than their content); the Stellaris and EU4
+  output was identical, line for line, to a run of the code before these
+  changes. Stellaris on the machine is now "Cygnus v4.5.4 (1b4f)", build
+  26557690 (39 mods), and was not otherwise tested.
+- The application read-only with new scratch profiles: `--game ck3
+  --screenshot` (CK3 first in the games column, Play blocked by the read-only
+  mode), and the scripted share-code round trip for CK3 with byte-identical
+  dumps (9 entries).
+- `tools/probe-mods/probe_mods.py create` into scratch folders: the default,
+  `--game stellaris` and `--game eu4` output is byte-identical to the previous
+  version; `--game ck3` writes CK3 events with a BOM; `analyze` on a
+  synthetic CK3-style log.
 
 ## Test status (2026-11-12, accessibility item 6b-e, `agent/accessibility-6`)
 
@@ -637,6 +682,15 @@ Packaging ([`packaging.md`](packaging.md)):
    Play focusable while blocked, screenshot and test tooling; see Open items >
    Accessibility). Part a, the listening pass with NVDA and Narrator, stays
    with the owner.
+8. Done 2026-11-13 on `agent/ck3`, for the owner's review (not merged):
+   Crusader Kings III support, phase 1 (code, tests, fixtures, docs, the
+   probe tool), verified read-only. Next, each with the owner's approval: the
+   probe run and a direct launch on 1.20.1.2
+   ([load order](load-order.md#crusader-kings-iii),
+   [validation](validation.md) section 3), then a Workshop download for app
+   1158310; then the traits, the support matrix and the CHANGELOG's
+   load-order sentence. The release number (probably 0.2.0) is decided
+   later.
 
 ## Working rules
 
@@ -666,4 +720,6 @@ launcher arguments include `-enabletelemetry`, which direct launches drop.
 The helper initialised the Steam API in Stellaris's app context and read item
 state correctly. For both games the launch plan for the launcher's current
 selection writes nothing, and regenerated Workshop descriptors are identical
-to the launcher's.
+to the launcher's. Crusader Kings III "1.20.1.2 (Crozier)" (build 26046173,
+11 Workshop mods) was read on 2026-11-13: the same holds, except for 4
+registrations older than their Workshop content ([CK3](games/ck3.md)).
