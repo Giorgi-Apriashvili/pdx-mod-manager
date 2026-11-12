@@ -24,10 +24,13 @@ Rectangle {
     readonly property list<real> defaultColumns: [44, 30, 0, 90, 150]
     property list<real> columns: defaultColumns
     readonly property real gripWidth: 18
-    readonly property real minNameWidth: 160
+    // With the default widths, Name keeps 128 pixels in the narrowest column (460).
+    readonly property real minNameWidth: 120
     readonly property real fixedWidth: gripWidth + columns[0] + columns[1] + columns[3] + columns[4]
     readonly property real nameWidth: Math.max(minNameWidth, modList.width - fixedWidth)
     readonly property list<real> effectiveWidths: [columns[0], columns[1], nameWidth, columns[3], columns[4]]
+    // Widest each column can get without squeezing Name below its minimum.
+    readonly property list<real> columnMaximums: columns.map(w => Math.max(24, modList.width - (fixedWidth - w) - minNameWidth))
     readonly property var filterOptions: [
         { value: "all", text: qsTr("All mods") },
         { value: "enabled", text: qsTr("Enabled") },
@@ -98,6 +101,13 @@ Rectangle {
         const c = columns.map(w => Math.round(w))
         c[2] = Math.round(nameWidth)
         Backend.settings.columnWidths = c
+    }
+
+    // Mouse drag or keyboard; never squeezes the stretching Name column below its minimum.
+    function resizeColumn(column: int, width: real) {
+        const c = columns.slice()
+        c[column] = Math.max(24, Math.min(width, columnMaximums[column]))
+        columns = c
     }
 
     function optionIndex(options: var, value: string): int {
@@ -480,16 +490,34 @@ Rectangle {
             color: Theme.pane
 
             RowLayout {
+                id: headerRow
+                // Too narrow for the controls at their usual widths: the filter
+                // and sort drop their "Show:" and "Sort:" prefixes and get
+                // narrower, and the playset selector and search share the rest.
+                readonly property bool narrow: width < 230 + 120 + 2 * 150 + 4 * spacing
+                // As wide as the longest option needs (with the padding and the
+                // arrow), but at most a quarter of the row; 104 in the narrowest
+                // column.
+                readonly property real narrowOptionWidth: Math.max(104, Math.min(optionMetrics.widest + 36,
+                                                                                  Math.floor((width - 3 * spacing) / 4)))
                 anchors.fill: parent
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10
                 spacing: 6
 
+                FontMetrics {
+                    id: optionMetrics
+                    readonly property real widest: Math.max(...root.filterOptions.concat(root.sortOptions).map(
+                                                                option => optionMetrics.advanceWidth(option.text)))
+                    font: filterCombo.font
+                }
+
                 AppComboBox {
                     id: playsetCombo
                     objectName: "playsetSelector"
-                    Layout.preferredWidth: 230
-                    Layout.minimumWidth: 140
+                    Layout.preferredWidth: headerRow.narrow ? Math.floor((headerRow.width - 2 * headerRow.narrowOptionWidth
+                                                                          - 3 * headerRow.spacing) / 2)
+                                                            : 230
                     enabled: root.hasGame && Backend.playsets.count > 0
                     model: Backend.playsets
                     textRole: "name"
@@ -506,7 +534,7 @@ Rectangle {
                     id: searchField
                     objectName: "searchField"
                     Layout.fillWidth: true
-                    Layout.minimumWidth: 120
+                    Layout.minimumWidth: headerRow.narrow ? 0 : 120
                     Layout.maximumWidth: 420
                     iconName: "search"
                     clearable: true
@@ -531,6 +559,7 @@ Rectangle {
                 }
 
                 Item {
+                    visible: !headerRow.narrow
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                 }
@@ -538,12 +567,12 @@ Rectangle {
                 AppComboBox {
                     id: filterCombo
                     objectName: "statusFilter"
-                    Layout.preferredWidth: 150
+                    Layout.preferredWidth: headerRow.narrow ? headerRow.narrowOptionWidth : 150
                     enabled: root.canEdit
                     textRole: "text"
                     valueRole: "value"
                     model: root.filterOptions
-                    displayText: qsTr("Show: %1").arg(currentText)
+                    displayText: headerRow.narrow ? currentText : qsTr("Show: %1").arg(currentText)
                     currentIndex: root.optionIndex(root.filterOptions, Backend.modView.statusFilter)
                     accessibleName: qsTr("Status filter")
                     toolTipText: qsTr("Filter the list by state")
@@ -553,12 +582,12 @@ Rectangle {
                 AppComboBox {
                     id: sortCombo
                     objectName: "sortSelector"
-                    Layout.preferredWidth: 150
+                    Layout.preferredWidth: headerRow.narrow ? headerRow.narrowOptionWidth : 150
                     enabled: root.canEdit
                     textRole: "text"
                     valueRole: "value"
                     model: root.sortOptions
-                    displayText: qsTr("Sort: %1").arg(currentText)
+                    displayText: headerRow.narrow ? currentText : qsTr("Sort: %1").arg(currentText)
                     currentIndex: root.optionIndex(root.sortOptions, Backend.modView.sortMode)
                     accessibleName: qsTr("Browse sort")
                     toolTipText: qsTr("Sort for browsing; the load order itself is not changed")
@@ -582,42 +611,62 @@ Rectangle {
             color: Theme.pane
 
             RowLayout {
+                id: toolbarRow
+                objectName: "modsToolbar"
+                // Icons only when the labels do not fit; the names stay the
+                // accessible names and the tool tips say what each one does.
+                readonly property bool compact: width < addButton.labelledWidth + enableButton.labelledWidth
+                                                        + disableButton.labelledWidth + removeButton.labelledWidth
+                                                        + upButton.labelledWidth + downButton.labelledWidth
+                                                        + 2 * Theme.controlHeight + 2 * separator.implicitWidth
+                                                        + (selectedText.visible ? selectedText.implicitWidth : 0)
+                                                        + 11 * spacing
                 anchors.fill: parent
                 anchors.leftMargin: 8
                 anchors.rightMargin: 8
                 spacing: 2
 
                 AppButton {
+                    id: addButton
                     text: qsTr("Add mods…")
                     iconName: "plus"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.canEdit
                     toolTipText: qsTr("Add installed mods to this playset (Ctrl+Shift+A)")
                     onClicked: root.addModsRequested()
                 }
-                ToolSeparator {}
+                ToolSeparator {
+                    id: separator
+                }
                 AppButton {
+                    id: enableButton
                     text: qsTr("Enable")
                     iconName: "check"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.hasTarget
                     toolTipText: qsTr("Enable the selected mods (Space toggles)")
                     Accessible.name: qsTr("Enable selected mods")
                     onClicked: root.setEnabledSelected(true)
                 }
                 AppButton {
+                    id: disableButton
                     text: qsTr("Disable")
                     iconName: "minus"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.hasTarget
                     toolTipText: qsTr("Disable the selected mods (Space toggles)")
                     Accessible.name: qsTr("Disable selected mods")
                     onClicked: root.setEnabledSelected(false)
                 }
                 AppButton {
+                    id: removeButton
                     text: qsTr("Remove")
                     iconName: "trash"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.hasTarget
                     toolTipText: qsTr("Remove the selected mods from this playset (Delete). They stay installed.")
                     Accessible.name: qsTr("Remove selected mods from playset")
@@ -625,9 +674,11 @@ Rectangle {
                 }
                 ToolSeparator {}
                 AppButton {
+                    id: upButton
                     text: qsTr("Move up")
                     iconName: "arrow-up"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.canMoveUp
                     toolTipText: Backend.modView.reorderAllowed ? qsTr("Load earlier (Alt+Up or Ctrl+Up)")
                                                                 : Backend.modView.reorderBlockedReason
@@ -635,9 +686,11 @@ Rectangle {
                     onClicked: root.moveSelection(-1)
                 }
                 AppButton {
+                    id: downButton
                     text: qsTr("Move down")
                     iconName: "arrow-down"
                     variant: "flat"
+                    display: toolbarRow.compact ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
                     enabled: root.canMoveDown
                     toolTipText: Backend.modView.reorderAllowed ? qsTr("Load later (Alt+Down or Ctrl+Down)")
                                                                 : Backend.modView.reorderBlockedReason
@@ -650,6 +703,7 @@ Rectangle {
                 }
 
                 Text {
+                    id: selectedText
                     visible: root.selectedCount > 1
                     text: qsTr("%1 selected").arg(Theme.formatCount(root.selectedCount))
                     Accessible.role: Accessible.StaticText
@@ -735,16 +789,18 @@ Rectangle {
             visible: root.canEdit && Backend.mods.count > 0
             gripWidth: root.gripWidth
             widths: root.effectiveWidths
+            maximums: root.columnMaximums
+            defaults: root.defaultColumns
             sortMode: Backend.modView.sortMode
+            // The list, or without a playset (no list) the first control.
+            onFocusReleased: modList.visible ? root.focusList() : root.focusFirst()
             onSortRequested: mode => Backend.modView.sortMode = mode
-            onResized: (column, width) => {
-                const c = root.columns.slice()
-                // Never squeeze the stretching Name column below its minimum.
-                const others = root.fixedWidth - c[column]
-                c[column] = Math.max(24, Math.min(width, modList.width - others - root.minNameWidth))
-                root.columns = c
-            }
+            onResized: (column, width) => root.resizeColumn(column, width)
             onResizeFinished: root.saveColumns()
+            onResetRequested: column => {
+                root.resizeColumn(column, root.defaultColumns[column])
+                root.saveColumns()
+            }
         }
 
         // Table
@@ -1073,45 +1129,83 @@ Rectangle {
             }
 
             RowLayout {
+                id: footerRow
+                objectName: "modsFooter"
+                // A narrow mods column shows the counts without their words
+                // (each keeps them in its tool tip and accessible name). The
+                // counts give way first, so "Showing N of M" and "Scanning…"
+                // stay in view whatever the font.
+                readonly property bool compact: width < [countStat, enabledStat, readyStat, missingStat, warningStat,
+                                                         showingStat, scanningStat]
+                                                        .filter(stat => stat.visible)
+                                                        .reduce((sum, stat) => sum + stat.fullWidth + 14, 0)
                 anchors.fill: parent
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10
                 spacing: 14
                 visible: root.canEdit
 
-                FooterStat {
-                    text: qsTr("%1 mods").arg(Theme.formatCount(Backend.mods.count))
-                    strong: true
-                }
-                FooterStat {
-                    iconName: "check"
-                    iconColor: Theme.accent
-                    text: qsTr("%1 enabled").arg(Theme.formatCount(Backend.mods.enabledCount))
-                }
-                FooterStat {
-                    iconName: "check-circle"
-                    iconColor: Theme.success
-                    text: qsTr("%1 ready").arg(Theme.formatCount(Backend.mods.readyCount))
-                }
-                FooterStat {
-                    iconName: "circle-alert"
-                    iconColor: Backend.mods.missingCount > 0 ? Theme.danger : Theme.textFaint
-                    text: qsTr("%1 missing").arg(Theme.formatCount(Backend.mods.missingCount))
-                }
-                FooterStat {
-                    iconName: "triangle-alert"
-                    iconColor: Backend.mods.warningCount > 0 ? Theme.warning : Theme.textFaint
-                    text: qsTr("%1 with warnings").arg(Theme.formatCount(Backend.mods.warningCount))
-                }
                 Item {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumWidth: 0
+                    clip: counts.width > width
+
+                    Row {
+                        id: counts
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: footerRow.compact ? 10 : 14
+
+                        FooterStat {
+                            id: countStat
+                            text: qsTr("%1 mods").arg(Theme.formatCount(Backend.mods.count))
+                            strong: true
+                        }
+                        FooterStat {
+                            id: enabledStat
+                            iconName: "check"
+                            iconColor: Theme.accent
+                            text: qsTr("%1 enabled").arg(Theme.formatCount(Backend.mods.enabledCount))
+                            shortText: Theme.formatCount(Backend.mods.enabledCount)
+                            compact: footerRow.compact
+                        }
+                        FooterStat {
+                            id: readyStat
+                            iconName: "check-circle"
+                            iconColor: Theme.success
+                            text: qsTr("%1 ready").arg(Theme.formatCount(Backend.mods.readyCount))
+                            shortText: Theme.formatCount(Backend.mods.readyCount)
+                            compact: footerRow.compact
+                        }
+                        FooterStat {
+                            id: missingStat
+                            iconName: "circle-alert"
+                            iconColor: Backend.mods.missingCount > 0 ? Theme.danger : Theme.textFaint
+                            text: qsTr("%1 missing").arg(Theme.formatCount(Backend.mods.missingCount))
+                            shortText: Theme.formatCount(Backend.mods.missingCount)
+                            compact: footerRow.compact
+                        }
+                        FooterStat {
+                            id: warningStat
+                            iconName: "triangle-alert"
+                            iconColor: Backend.mods.warningCount > 0 ? Theme.warning : Theme.textFaint
+                            text: qsTr("%1 with warnings").arg(Theme.formatCount(Backend.mods.warningCount))
+                            shortText: Theme.formatCount(Backend.mods.warningCount)
+                            compact: footerRow.compact
+                        }
+                    }
                 }
                 FooterStat {
+                    id: showingStat
+                    objectName: "showingStat"
+                    Layout.minimumWidth: implicitWidth
                     visible: modList.count !== Backend.mods.count
                     text: qsTr("Showing %1 of %2").arg(Theme.formatCount(modList.count))
                                                    .arg(Theme.formatCount(Backend.mods.count))
                 }
                 FooterStat {
+                    id: scanningStat
+                    Layout.minimumWidth: implicitWidth
                     visible: Backend.games.scanning
                     text: qsTr("Scanning…")
                 }

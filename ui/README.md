@@ -59,12 +59,31 @@ Things the QML relies on beyond the tables in the contract:
 - `ModFilterModel.index(row, 0)` (inherited from `QAbstractItemModel`) feeds an
   `ItemSelectionModel` for multi-select.
 - Object names for automation: `gamesPane`, `modsPane`, `sidePane`,
-  `modList`, `searchField`, `statusFilter`, `sortSelector`,
-  `playsetSelector`, `columnHeader`, `dragHandleArea`, `playButton`,
-  `interruptedBanner`, `discardInterruptedButton`, `settingsButton`,
-  `importDialog`, `importNameField`, `importConfirmButton`, `confirmDialog`,
-  `confirmButton`, `cancelButton`, `settingsDialog`, `shortcutsDialog`,
-  `shortcutList`.
+  `gamesDivider`, `sideDivider` (the keyboard column dividers), `sidePage`
+  (the actions column's scroll area), `modList`, `searchField`,
+  `statusFilter`, `sortSelector`, `playsetSelector`, `columnHeader`,
+  `modsToolbar` (its `compact` is true while it shows icons only),
+  `modsFooter` (`compact`: counts without their words), `showingStat`,
+  `dragHandleArea`, `playButton`, `interruptedBanner`,
+  `discardInterruptedButton`, `settingsButton`, `importDialog`,
+  `importNameField`, `importConfirmButton`, `confirmDialog`,
+  `confirmScroller` (its scrolling text), `confirmButton`, `cancelButton`,
+  `settingsDialog`, `shortcutsDialog`, `shortcutList`.
+- The window's minimum size is 900x440 (it fits a 1920x1080 screen at
+  200 %); `docs/accessibility.md` ("Smallest window") describes how the
+  columns, the toolbar, the actions column and the dialogs adapt.
+  `AppButton` elides a label that does not fit, hides it with
+  `display: AbstractButton.IconOnly` (its `labelledWidth` is the width with
+  the label), and with `available: false` looks disabled but keeps the focus
+  and still emits `clicked()` (Play while it is blocked).
+- `ResizeHandle` is the keyboard side of a column divider: a focusable
+  separator (arrows, Shift, Home, End, Enter) that asks its owner for a width,
+  never for the one the column already has (so a squeezed column keeps its
+  stored width), and announces the new width once `value` has it; the mouse
+  stays with the SplitView handle or the header edge underneath. After a drag,
+  `Main.qml` keeps the chosen width of a column the drag could not widen.
+- `FooterStat` shows `shortText` instead of `text` while `compact`; `text`
+  stays its accessible name and tool tip.
 
 ## Interaction reference
 
@@ -84,13 +103,18 @@ Things the QML relies on beyond the tables in the contract:
 | F5, Ctrl+, | Rescan / settings |
 | Shift+F10, Menu key, right click | Row context menu |
 | Enter / Space, Esc | Activate the focused button; close a dialog or menu (focus returns) |
+| Left / Right (Shift), Home / End, Enter | On a column divider or table column edge: resize, narrowest / widest, default width |
+| Ctrl+Left / Ctrl+Right | On a table column edge: previous / next edge |
 | F1 | Keyboard shortcuts list |
 
 Reordering (drag handle, Move up/down, Alt/Ctrl+Up/Down) is only possible in the
 unfiltered load-order view (`modView.reorderAllowed`); otherwise a slim banner
 shows `reorderBlockedReason` with a "Show load order" action. Column widths are
-dragged in the header; Name takes the remaining width. Window geometry, pane
-widths and column widths are written to `Backend.settings` and saved on close.
+dragged in the header or set from the keyboard (one Tab stop before the list);
+Name takes the remaining width. The column dividers are dragged or reached
+with Tab at the edge of the games and actions columns. Window geometry, pane
+widths (as chosen, not as squeezed by a small window) and column widths are
+written to `Backend.settings` and saved on close.
 
 ## Preview without the application
 
@@ -104,7 +128,7 @@ Nothing is read from or written to disk.
 export QT_ROOT_DIR=C:/Qt/6.10.3/msvc2022_64   # or put qml/qmllint on PATH
 ui/dev/preview.sh                # interactive window
 ui/dev/preview.sh --screenshot   # regenerate docs/screenshots/*.png (1400x860)
-ui/dev/preview.sh --test         # QML smoke tests (qmltestrunner, dev/tests)
+ui/dev/preview.sh --test         # QML tests (qmltestrunner, dev/tests; also in ctest, label ui-preview)
 ui/dev/preview.sh --lint         # qmllint on every module file
 python3 ui/dev/check_contrast.py # WCAG contrast of the Theme.qml colour pairs
 ```
@@ -115,9 +139,24 @@ edits show up on the next run. (The qmldir that the CMake build writes declares
 the static `pmm_uiplugin`, which the stock `qml` tool cannot load.) New QML
 files therefore only need to be added to `CMakeLists.txt`.
 
-The screenshot and test runs open a real window for a few seconds; the
-`offscreen` platform has no fonts on Windows. Screenshots are taken at a fixed
-scale factor of 1 so they are exactly 1400x860 regardless of the display.
+The screenshot runs open a real window for a few seconds; the `offscreen`
+platform has no fonts on Windows. Screenshots are taken at a fixed scale
+factor of 1 so they are exactly 1400x860 regardless of the display, or at an
+explicitly set `QT_SCALE_FACTOR`; the real application's `--screenshot` does
+the same ([`docs/app.md`](../docs/app.md#hidden-verification-switches)). The
+PNGs are the window's size times the scale factor only while that fits the
+screen: Windows shrinks a taller window without a warning, so with
+`QT_SCALE_FACTOR=2` the 1400x860 layout needs a screen of at least 2800x1760
+pixels (on a 2560x1440 screen the captures come out 2800x1422, the window
+1400x711). The real application's `--window-size` picks a size that fits,
+such as `--window-size 1x1` for the smallest window (1800x880 at 2).
+
+The tests also run on the `offscreen` platform (`scripts/check.sh` sets it),
+where Qt finds no fonts on Windows; they check behaviour, not text layout,
+which the screenshot runs and the real window show. ctest runs them as `pmm_ui_preview` (label `ui-preview`) when Qt's
+`qmltestrunner` is found: `tests/app/CMakeLists.txt` writes the same qmldir
+into `<build>/ui-preview` at configure time, so `scripts/check.sh` and the
+release's CI run them without bash.
 
 ## Screenshots
 

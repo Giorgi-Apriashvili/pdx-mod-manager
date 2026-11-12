@@ -16,6 +16,11 @@ ApplicationWindow {
     readonly property int defaultHeight: 860
     readonly property int defaultLeftWidth: 200
     readonly property int defaultRightWidth: 300
+    // Narrowest columns that still show every control. The mods column keeps
+    // its minimum; the outer columns give way first when the window narrows.
+    readonly property int gamesMinimumWidth: 160
+    readonly property int modsMinimumWidth: 460
+    readonly property int sideMinimumWidth: 250
     property bool geometryRestored: false
     property string nameMode
 
@@ -145,15 +150,48 @@ ApplicationWindow {
             s.windowMaximized = maximized
     }
 
+    // The widths the user chose (dragging or the keyboard), not the ones a
+    // narrow window squeezes the columns to.
     function storePaneWidths() {
-        Backend.settings.leftPaneWidth = Math.round(gamesPane.width)
-        Backend.settings.rightPaneWidth = Math.round(sidePane.width)
+        Backend.settings.leftPaneWidth = Math.round(gamesPane.SplitView.preferredWidth)
+        Backend.settings.rightPaneWidth = Math.round(sidePane.SplitView.preferredWidth)
+    }
+
+    // The width to keep for a column moved to `width` from `chosen`: a column
+    // that a narrow window squeezes sits at its maximum, so moving it to that
+    // maximum (End, Right on the games divider, a drag towards it) changes
+    // nothing on screen and keeps the wider chosen width.
+    function chosenWidth(pane: Item, width: real, chosen: real): real {
+        return width >= pane.SplitView.maximumWidth - 0.5 && width < chosen ? chosen : width
+    }
+
+    // After a drag of a divider, which set the column's preferred width.
+    function keepChosenWidth(pane: Item, chosen: real) {
+        const width = chosenWidth(pane, pane.SplitView.preferredWidth, chosen)
+        if (width !== pane.SplitView.preferredWidth)
+            pane.SplitView.preferredWidth = width
+    }
+
+    // A column divider moved from the keyboard, like a drag of its handle.
+    function setPaneWidth(pane: Item, width: real) {
+        pane.SplitView.preferredWidth = chosenWidth(pane, width, pane.SplitView.preferredWidth)
+        storePaneWidths()
+    }
+
+    // Enter on a divider: the default width, stored even while squeezed.
+    function resetPaneWidth(pane: Item, width: real) {
+        pane.SplitView.preferredWidth = width
+        storePaneWidths()
     }
 
     width: defaultWidth
     height: defaultHeight
-    minimumWidth: 980
-    minimumHeight: 600
+    // Fits a maximized window on a 1920x1080 screen at 200 % (about 960x470
+    // logical pixels for the window's content) and on 1366x768 at 150 % (about
+    // 911x441): the three column minimums and the dividers take 872 pixels, and
+    // at 440 the actions column scrolls as a whole instead of hiding Play.
+    minimumWidth: 900
+    minimumHeight: 440
     visible: true
     title: Backend.games.currentName.length > 0
            ? qsTr("%1 – Paradox Mod Manager").arg(Backend.games.currentName)
@@ -231,19 +269,33 @@ ApplicationWindow {
         anchors.topMargin: updateBanner.visible ? updateBanner.height + 12 : 0
         orientation: Qt.Horizontal
 
+        // The chosen widths when a drag starts: SplitView sets the dragged
+        // column's preferred width, which a drag towards the limit of a
+        // squeezed column would lower to the squeezed width.
+        property real gamesChosen
+        property real sideChosen
+
         onResizingChanged: {
-            if (!resizing)
-                window.storePaneWidths()
+            if (resizing) {
+                gamesChosen = gamesPane.SplitView.preferredWidth
+                sideChosen = sidePane.SplitView.preferredWidth
+                return
+            }
+            window.keepChosenWidth(gamesPane, gamesChosen)
+            window.keepChosenWidth(sidePane, sideChosen)
+            window.storePaneWidths()
         }
 
+        // The mouse side of a divider. The keyboard reaches each divider through
+        // the ResizeHandle at the edge of the column it resizes (GamesPane,
+        // SidePane), which is also what screen readers see.
         handle: Rectangle {
             id: splitHandle
             implicitWidth: 1
             implicitHeight: 1
             color: SplitHandle.pressed ? Theme.accent
                  : SplitHandle.hovered ? Theme.borderStrong : Theme.divider
-            Accessible.role: Accessible.Separator
-            Accessible.name: qsTr("Resize columns")
+            Accessible.ignored: true
 
             // 1 px divider with a wider grab area.
             containmentMask: Item {
@@ -258,17 +310,25 @@ ApplicationWindow {
             objectName: "gamesPane"
             SplitView.preferredWidth: Backend.settings.leftPaneWidth > 0 ? Backend.settings.leftPaneWidth
                                                                          : window.defaultLeftWidth
-            SplitView.minimumWidth: 160
-            SplitView.maximumWidth: 360
+            SplitView.minimumWidth: window.gamesMinimumWidth
+            // Leaves the other two columns their minimums.
+            SplitView.maximumWidth: Math.max(window.gamesMinimumWidth,
+                                             Math.min(360, split.width - window.modsMinimumWidth
+                                                           - window.sideMinimumWidth - 2))
+            divider.minimum: SplitView.minimumWidth
+            divider.maximum: SplitView.maximumWidth
+            divider.defaultValue: window.defaultLeftWidth
             onLocateRequested: window.openLocate()
             onSettingsRequested: window.openSettings()
+            onWidthRequested: width => window.setPaneWidth(gamesPane, width)
+            onWidthResetRequested: window.resetPaneWidth(gamesPane, window.defaultLeftWidth)
         }
 
         ModsPane {
             id: modsPane
             objectName: "modsPane"
             SplitView.fillWidth: true
-            SplitView.minimumWidth: 460
+            SplitView.minimumWidth: window.modsMinimumWidth
             onAddModsRequested: window.openAddMods()
             onImportRequested: window.openImport("")
             onNewPlaysetRequested: window.askName("new")
@@ -288,8 +348,16 @@ ApplicationWindow {
             objectName: "sidePane"
             SplitView.preferredWidth: Backend.settings.rightPaneWidth > 0 ? Backend.settings.rightPaneWidth
                                                                           : window.defaultRightWidth
-            SplitView.minimumWidth: 270
-            SplitView.maximumWidth: 480
+            SplitView.minimumWidth: window.sideMinimumWidth
+            // Leaves the mods column its minimum next to the games column.
+            SplitView.maximumWidth: Math.max(window.sideMinimumWidth,
+                                             Math.min(480, split.width - gamesPane.width
+                                                           - window.modsMinimumWidth - 2))
+            divider.minimum: SplitView.minimumWidth
+            divider.maximum: SplitView.maximumWidth
+            divider.defaultValue: window.defaultRightWidth
+            onWidthRequested: width => window.setPaneWidth(sidePane, width)
+            onWidthResetRequested: window.resetPaneWidth(sidePane, window.defaultRightWidth)
             onImportRequested: window.openImport("")
             onExportRequested: window.openExport()
             onDiscardInterruptedRequested: window.askDiscardInterrupted()

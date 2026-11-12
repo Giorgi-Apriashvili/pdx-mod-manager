@@ -2,16 +2,16 @@
 # The checks to run before pushing. GitHub runs CI only for a release
 # (docs/releasing.md), so these are what keeps main green.
 #
-#   scripts/check.sh           quick: the debug build with Qt and every test in it,
+#   scripts/check.sh           quick: the debug build with Qt and every test in it
+#                              (the QML preview tests too, label ui-preview),
 #                              formatting, QML lint, the update contract's sources
 #                              and the UI contrast check (a few minutes)
 #   scripts/check.sh --full    everything CI runs: also ASan and clang-cl with UBSan
-#                              on the Qt-free libraries, the tests of the contract
-#                              check and the QML preview tests; plus clang-tidy on
-#                              the C++ files changed since origin/main, and the `ci`
-#                              preset (warnings as errors) built and tested from a
-#                              fresh checkout of HEAD, which catches files that were
-#                              never committed
+#                              on the Qt-free libraries and the tests of the contract
+#                              check; plus clang-tidy on the C++ files changed since
+#                              origin/main, and the `ci` preset (warnings as errors)
+#                              built and tested from a fresh checkout of HEAD, which
+#                              catches files that were never committed
 #
 # Git Bash on Windows. QT_ROOT_DIR defaults to C:/Qt/6.10.3/msvc2022_64. Stops at
 # the first failing step.
@@ -60,6 +60,11 @@ build() {
 step "debug build (Qt application and every library)"
 CC=cl CXX=cl build debug debug
 step "tests (debug)"
+# The QML preview tests are registered only when Qt's qmltestrunner is found.
+if ! ctest --test-dir build/debug -N -L ui-preview | tr -d '\r' | grep -q '^Total Tests: [1-9]'; then
+  echo "the QML preview tests (label ui-preview) are not registered: qmltestrunner not found in $QT_ROOT_DIR/bin" >&2
+  exit 1
+fi
 ctest --test-dir build/debug -j "$jobs" --output-on-failure
 step "formatting"
 bash scripts/check-format.sh
@@ -81,8 +86,6 @@ if $full; then
 
   step "tests of the update contract check"
   bash scripts/test-update-contract.sh
-  step "QML preview tests"
-  bash ui/dev/preview.sh --test
 
   step "clang-tidy (C++ files changed since origin/main)"
   mapfile -t changed < <(

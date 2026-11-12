@@ -1,5 +1,6 @@
 # Continuous integration: build and test on Windows with MSVC (with Qt, including
-# the application tests pmm_app_tests), ASan, and clang-cl warnings and UBSan on the
+# the application tests pmm_app_tests and the QML preview tests, label
+# ui-preview), ASan, and clang-cl warnings and UBSan on the
 # Qt-free libraries, a clang-format 22 check, the update contract check
 # (packaging/update-contract.txt) and the UI contrast check. Packages and releases
 # are in release.yml, which also runs this workflow first.
@@ -68,13 +69,16 @@ jobs:
       - name: Build
         run: cmake --build --preset ci
 
-      # The application tests must be part of every run.
+      # The application tests and the QML preview tests (registered only when
+      # qmltestrunner is found) must be part of every run.
       - name: Check that the application tests are registered
         shell: bash
         run: |
-          count="$(ctest --preset ci -N -L pmm_app_tests | tr -d '\r' | sed -n 's/^Total Tests: *//p')"
-          echo "pmm_app_tests: ${count:-0} tests"
-          test "${count:-0}" -gt 0
+          for label in pmm_app_tests ui-preview; do
+            count="$(ctest --preset ci -N -L "$label" | tr -d '\r' | sed -n 's/^Total Tests: *//p')"
+            echo "$label: ${count:-0} tests"
+            test "${count:-0}" -gt 0
+          done
 
       - name: Test
         run: ctest --preset ci --output-on-failure --output-junit ctest-junit.xml

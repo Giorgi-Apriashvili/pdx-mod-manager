@@ -80,6 +80,8 @@ CommandLine parseCommandLine(const QGuiApplication& app) {
     QCommandLineOption screenshot(QStringLiteral("screenshot"), QString(), QStringLiteral("png"));
     QCommandLineOption delay(QStringLiteral("screenshot-delay-ms"), QString(),
                              QStringLiteral("ms"));
+    QCommandLineOption windowSize(QStringLiteral("window-size"), QString(),
+                                  QStringLiteral("width>x<height"));
     QCommandLineOption theme(QStringLiteral("theme"), QString(), QStringLiteral("theme"));
     QCommandLineOption open(QStringLiteral("open"), QString(), QStringLiteral("what"));
     QCommandLineOption selectRow(QStringLiteral("select-row"), QString(), QStringLiteral("row"));
@@ -87,11 +89,11 @@ CommandLine parseCommandLine(const QGuiApplication& app) {
     QCommandLineOption search(QStringLiteral("search"), QString(), QStringLiteral("text"));
     QCommandLineOption selfTest(QStringLiteral("self-test"), QString(), QStringLiteral("steps"));
     QCommandLineOption liveTest(QStringLiteral("live-test"), QString(), QStringLiteral("steps"));
-    for (QCommandLineOption* hidden :
-         {&screenshot, &delay, &theme, &open, &selectRow, &filter, &search, &selfTest, &liveTest})
+    for (QCommandLineOption* hidden : {&screenshot, &delay, &windowSize, &theme, &open, &selectRow,
+                                       &filter, &search, &selfTest, &liveTest})
         hidden->setFlags(QCommandLineOption::HiddenFromHelp);
-    parser.addOptions({profile, verbose, noSteam, readOnly, game, screenshot, delay, theme, open,
-                       selectRow, filter, search, selfTest, liveTest});
+    parser.addOptions({profile, verbose, noSteam, readOnly, game, screenshot, delay, windowSize,
+                       theme, open, selectRow, filter, search, selfTest, liveTest});
     parser.process(app);
 
     CommandLine line;
@@ -106,6 +108,11 @@ CommandLine parseCommandLine(const QGuiApplication& app) {
     v.screenshot = parser.value(screenshot);
     if (parser.isSet(delay))
         v.screenshotDelayMs = parser.value(delay).toInt();
+    if (parser.isSet(windowSize)) {
+        const QStringList parts = parser.value(windowSize).split(QLatin1Char('x'));
+        if (parts.size() == 2)
+            v.windowSize = QSize(parts[0].toInt(), parts[1].toInt());
+    }
     v.theme = parser.value(theme);
     v.open = parser.values(open);
     if (parser.isSet(selectRow))
@@ -179,8 +186,12 @@ int main(int argc, char* argv[]) {
     // An update run waits for this (docs/updates.md); held until the process ends.
     const RunningInstanceSignal runningInstance;
     if (argumentGiven(argc, argv, "--screenshot")) {
-        // Reproducible captures: exactly the window's logical size.
-        qputenv("QT_SCALE_FACTOR", "1");
+        // Reproducible captures, whatever the display's scaling: the window's
+        // logical size times QT_SCALE_FACTOR when it is set (2 for a 200 %
+        // capture; Windows shrinks a window that does not fit the screen),
+        // else exactly the logical size.
+        if (qEnvironmentVariableIsEmpty("QT_SCALE_FACTOR"))
+            qputenv("QT_SCALE_FACTOR", "1");
         qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
     }
     QGuiApplication::setOrganizationName(QStringLiteral("ParadoxModManager"));

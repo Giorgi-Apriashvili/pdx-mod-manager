@@ -34,9 +34,17 @@ AppDialog {
             [qsTr("Shift+F10, Menu key"), qsTr("Context menu of the row")],
             [qsTr("Esc in the search field"), qsTr("Clear the search; again: back to the list")]
         ] },
+        { title: qsTr("Column widths"), rows: [
+            [qsTr("Tab"), qsTr("Reaches the divider at the edge of the games and of the actions column, and the table's column edges (one stop, before the list)")],
+            [qsTr("Left, Right"), qsTr("Move the focused divider or column edge; with Shift in larger steps")],
+            [qsTr("Home, End"), qsTr("Narrowest / widest column")],
+            [qsTr("Enter"), qsTr("Default width")],
+            [qsTr("Ctrl+Left, Ctrl+Right"), qsTr("Previous / next column edge of the table")]
+        ] },
         { title: qsTr("Games, dialogs and menus"), rows: [
             [qsTr("Up, Down"), qsTr("Next / previous game, list row or menu item")],
             [qsTr("Enter, Space"), qsTr("Select the game, activate the button or menu item")],
+            [qsTr("Up, Down, PgUp, PgDn, Home, End"), qsTr("Scroll a confirmation whose text does not fit")],
             [qsTr("Esc"), qsTr("Close the dialog or menu; focus returns where it was")]
         ] }
     ]

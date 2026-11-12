@@ -12,12 +12,15 @@ QtObject {
     property FakeModListModel mods
     property FakePlaysetsModel playsets
     property bool steamRunning: true
+    // More reasons after these, e.g. more than the Play section lists.
+    property list<string> extraBlockers: []
     readonly property bool canPlay: blockers.length === 0 && !busy
     readonly property list<string> blockers: (steamRunning ? [] : ["Steam is not running. Start Steam and sign in, then launch Stellaris."])
         .concat(mods && mods.blockingCount > 0
             ? [mods.blockingCount + (mods.blockingCount === 1 ? " enabled mod is" : " enabled mods are")
                + " not ready (missing, downloading or broken). Disable them or wait for downloads."]
             : [])
+        .concat(extraBlockers)
     readonly property list<string> warnings: playsets && playsets.activeId < 0
         ? ["No playset is selected, so the game starts without mods."]
         : mods && mods.warningCount > 0 ? [mods.warningCount + " mods report compatibility warnings."] : []
@@ -33,12 +36,21 @@ QtObject {
     property list<string> discardFolders: []
     readonly property bool canDiscardInterrupted: discardableFiles.length > 0
 
+    // Launches started (tests check that a blocked Play starts none).
+    property int playCount: 0
+
     signal launched(int pid)
     signal launchFailed(string message)
 
     function play() {
-        if (!canPlay)
+        if (busy)
             return
+        // As the real one: never launches while blocked, and says why.
+        if (!canPlay) {
+            notifications.post("warning", "The game cannot be started yet", blockers.join("\n"))
+            return
+        }
+        ++playCount
         busy = true
         // What the launch uses, read while "started" is shown.
         startedWithPlayset = !!playsets && playsets.activeId >= 0

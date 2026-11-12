@@ -45,6 +45,7 @@ qt_add_qml_module(pmm_ui
     controls/LinkButton.qml
     controls/MessageLine.qml
     controls/PreviewCell.qml
+    controls/ResizeHandle.qml
     controls/SectionHeader.qml
     controls/Spinner.qml
     controls/StatTile.qml

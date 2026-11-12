@@ -8,13 +8,13 @@ what is still missing.
 
 | Requirement | State |
 | --- | --- |
-| Keyboard navigation | Every action can be reached without a mouse: Tab order across the three columns, F6 between columns, list keys, shortcuts, keyboard context menu, Escape for dialogs and menus |
+| Keyboard navigation | Every action can be reached without a mouse: Tab order across the three columns, F6 between columns, list keys, shortcuts, keyboard context menu, Escape for dialogs and menus, column dividers and table columns resized with the arrow keys, Play reachable while it is unavailable |
 | Visible focus | 2 px focus ring in both themes, at least 3:1 against its surroundings; shown for keyboard focus only |
 | Accessible labels | Roles and names that make sense out of context ("Enable *mod*", "Move up in load order"), descriptions from the tool tips, announcements for changes that happen without a focus change |
 | Move Up / Move Down | Toolbar buttons, context menu items, Alt+Up / Alt+Down and Ctrl+Up / Ctrl+Down, each announced with the new position |
 | Status without colour | Every status has its own glyph shape and a text; banners and messages have an icon, text and a level word in the accessible name |
 | Contrast | WCAG 2.x AA in the light and the dark theme: 4.5:1 for text, 3:1 for focus rings, control outlines and status glyphs (138 colour pairs checked) |
-| High-DPI | Logical pixel sizes and vector icons; checked at scale factors 1.5 and 2 with the real application |
+| High-DPI | Logical pixel sizes and vector icons; the smallest window, 900x440, fits a 1920x1080 screen at 200 %; checked at scale factors 1.5 and 2 with the real application |
 
 ## Keyboard
 
@@ -22,12 +22,23 @@ what is still missing.
 
 - **Tab / Shift+Tab** move left to right and top to bottom: the buttons of the
   update banner above the columns while it is shown, the games column
-  (selectable games, Rescan, Locate installation, Settings), the mods column
-  (playset, search, status filter, sort, toolbar, banner actions, the mod
-  list), then the actions column (Import / Export code, playset actions,
-  detail and download actions, Play, links). Disabled and hidden controls are
-  skipped. The Dismiss buttons of visible notifications are in the Tab order
-  as well.
+  (selectable games, Rescan, Locate installation, Settings, the divider to
+  the mods column), the mods column (playset, search, status filter, sort,
+  toolbar, banner actions, the table's column edges, the mod list), then the
+  actions column (the divider to the mods column, Import / Export code,
+  playset actions, detail and download actions, Play, links). Disabled and
+  hidden controls are skipped. The Dismiss buttons of visible notifications
+  are in the Tab order as well.
+- **Play** stays in the Tab order while it is unavailable (the WAI-ARIA
+  `aria-disabled` pattern): it looks disabled, its name ends in
+  "unavailable", its description gives the reasons, and Enter, Space or a
+  click post them as a notification ("The game cannot be started yet")
+  instead of starting the game; holding Enter posts it once. The reasons are
+  listed right above Play, so its tool tip stays closed, and lists only the
+  reasons behind "…and N more" when there are more than four. It keeps the
+  focus while a launch it started runs, with "starting" instead of
+  "unavailable" in its name. Qt does not focus disabled controls, so Play is
+  never disabled; the QML only calls `play()` when it can start the game.
 - **F6 / Shift+F6** jump to the next / previous column: the selected game,
   the mod list, or the first enabled control of the actions column.
 - Keyboard focus starts in the mod list.
@@ -46,6 +57,42 @@ what is still missing.
 - When **Recover** or **Discard this record** goes away while it has the
   focus (its banner closes after a recovery or a discard, or the discard link
   once it was used), the focus moves to the mod list.
+- When the table header hides while one of its column edges has the focus
+  (a new or emptied playset, or no playset), the focus moves to the mod list,
+  or without a playset to the first control of the mods column, so arrow keys
+  never resize columns that are not shown.
+
+### Column widths
+
+The two column dividers and the four column edges of the mod table follow the
+WAI-ARIA window splitter pattern: each is a focusable separator whose value is
+the width of the column it resizes.
+
+- **Left / Right** move the divider (10 pixels; with **Shift** 50), **Home**
+  and **End** give the column its narrowest and widest width, **Enter** its
+  default width (200 games, 300 actions; 44, 30, 90 and 150 for #, On,
+  Source and Status). Left of Name an edge resizes the column on its left;
+  right of Name it resizes the column on its right, since Name takes the
+  remaining width, so the divider always moves the way the arrow points.
+- The widths are stored exactly as after dragging (`Backend.settings`
+  `leftPaneWidth`, `rightPaneWidth`, `columnWidths`), and the new width is
+  announced once the column has it (a divider's width is applied with the
+  next frame). A key that cannot change the width (the column is at its
+  limit, or a narrow window squeezes it) changes and stores nothing and
+  announces the current width; so does a drag towards a squeezed column's
+  limit, and the chosen widths come back in a wider window. Enter stores
+  the default width even while a narrow window shows the column narrower.
+- Tab order: the column dividers are two stops, each at the edge of the
+  column it resizes (last in the games column, first in the actions column),
+  where Tab crosses that divider anyway. The four column edges are a single
+  stop right before the mod list, with roving focus: **Ctrl+Left /
+  Ctrl+Right** move to the previous / next edge, and Tab and Shift+Tab come
+  back to the edge used last. That adds three stops in all.
+  F6 stays a jump between the three columns; making the dividers F6 stops
+  would make that frequent jump slower for a rare task, and a shortcut alone
+  would leave screen-reader users without a separator to find.
+- The dividers draw the focus ring around the divider; in the table header,
+  the edge line also turns to the accent colour.
 
 ### Shortcuts
 
@@ -76,9 +123,15 @@ Settings → Keyboard shortcuts).
 | Shift+F10, Menu key | Context menu of the row (opens on its first item) |
 | Down (in the search field) | Go to the list |
 | Esc (in the search field) | Clear the search; a second Esc goes back to the list |
+| **Column widths** (on a column divider or a table column edge) | |
+| Left, Right | Move the divider; with Shift in larger steps |
+| Home, End | Narrowest / widest column |
+| Enter | Default width |
+| Ctrl+Left, Ctrl+Right | Previous / next column edge of the table |
 | **Games, dialogs and menus** | |
 | Up, Down | Next / previous game, list row or menu item |
-| Enter, Space | Select the game, activate the focused button, link or menu item |
+| Enter, Space | Select the game, activate the focused button, link or menu item (once per press: holding the key does not repeat it) |
+| Up, Down, PgUp, PgDn, Home, End (in a confirmation) | Scroll its text when it does not fit |
 | Esc | Close the dialog or menu |
 
 Reordering is only possible in the unfiltered load-order view. Otherwise the
@@ -92,6 +145,10 @@ banner's "Show load order" link restores the view.
   deselects it.
 - **Import preview** and **Keyboard shortcuts**: the lists are read-only but
   focusable, so the entries can be read row by row and paged.
+- **Confirmations** have nothing focusable but their buttons. When the text is
+  taller than the dialog (a long list of files in a small window), Up, Down,
+  PgUp, PgDn, Home and End on the buttons scroll it; the scroll bar has its
+  own room beside the text.
 
 ### Focus when a dialog opens
 
@@ -115,13 +172,19 @@ banner's "Show load order" link restores the view.
   outside the control. Filled controls (accent buttons, checked boxes and
   radio buttons) get a 1 px gap so the ring never merges with the fill.
 - Text inputs draw a 2 px border in the focus colour.
+- A focused column divider or table column edge draws the 2 px ring around
+  the divider.
+- Play keeps its ring while it is unavailable; its faded fill and label say
+  that it cannot start the game.
 - The current row of a focused list has a 2 px ring inside the row. A
   focused mod list without a current row is outlined as a whole (not at
   start-up, where focus is placed there programmatically).
 - Rings follow Qt's `visualFocus`: they appear for keyboard focus, not after
   a mouse click.
 - Tool tips also open on keyboard focus (after 0.6 s), so shortcut hints and
-  the reasons why Play is blocked are visible without a mouse.
+  the reasons why Play is blocked are visible without a mouse (and, since Play
+  is no longer disabled, on hover too). Toolbar buttons that show only their
+  icon in a narrow window keep their tool tips.
 
 ![Keyboard focus on Import code with its tool tip](screenshots/a11y-focus-light.png)
 
@@ -149,6 +212,9 @@ through the `Accessible` attached properties.
 | Update banner | group, button, link | "Paradox Mod Manager 1.2.3 is available." (and why this session cannot install); "Update and restart" or "Open release page"; "Not now" |
 | Update check box in Settings | check box | "Check for updates automatically" (what it contacts, and when) |
 | Problems and warnings | static text | "Problem: …", "Warning: …" |
+| Play | button | "Play Stellaris" ("Starts the game with this playset"); while unavailable "Play Stellaris, unavailable" ("Blocked: *reasons*"); during a launch, the launch step |
+| Column divider | separator | "Games column width: 200 pixels", "Actions column width: 300 pixels" (the keys) |
+| Column edge in the table header | separator | "Status column width: 150 pixels" (the keys, Ctrl+Left / Ctrl+Right for the other edges) |
 | Section headers, dialog titles, empty-state titles, selected mod name | heading | the text |
 | Dialogs | dialog / window | the title |
 
@@ -172,6 +238,10 @@ Changes that happen without a focus change are spoken with
   preview, launch failure, interrupted configuration change);
 - launch progress ("Checking installation and mods…", "Starting
   Stellaris…", "Launch failed.");
+- Enter, Space or a click on an unavailable Play: the notification "The game
+  cannot be started yet" with the reasons (a warning, so it interrupts);
+- the new width after each key on a column divider or column edge ("310
+  pixels", polite); the separator's name changes with it;
 - each step of an update in Settings ("Version 1.2.3 is available.", errors),
   not every percent of the download;
 - the update banner when it appears and at each step of the update it started,
@@ -237,6 +307,62 @@ outlines and checked fills. Disabled controls are exempt and stay faded.
     focus rings; the Add mods dialog was also checked.
   - 2: Windows limits the window to the screen, so it ran at 1400x710
     logical pixels (2800x1421). The layout still fits; the lists scroll.
+- Since 2026-11-12 `--screenshot` keeps an explicitly set `QT_SCALE_FACTOR`
+  (without one it still uses 1), and `--window-size <w>x<h>` sets the
+  window's logical size ([`app.md`](app.md#hidden-verification-switches)),
+  so high-DPI captures are reproducible:
+  `QT_SCALE_FACTOR=2 pmm-app --profile <new folder> --screenshot shot.png --window-size 1x1`
+  captures the smallest window at 1800x880 pixels.
+
+### Smallest window
+
+The window's minimum size is 900x440 logical pixels (980x600 before
+2026-11-12). A maximized window on a 1920x1080 screen at 200 % has about
+960x470 logical pixels for its content (960x540 less the taskbar and the
+title bar), on 1366x768 at 150 % about 911x441. The column minimums are 160
+(games), 460 (mods) and 250 (actions): 872 pixels with the dividers. When the
+window narrows, the actions column and then the games column give way down to
+their minimums, so the mods column keeps 460; the widths chosen by dragging or
+with the keyboard are stored, not the squeezed ones (a key or drag that would
+widen a squeezed column changes nothing), and come back in a wider window.
+
+In a small window:
+
+- the toolbar above the mod list shows icons only when its labels do not fit
+  (the names stay in the tool tips and for screen readers); the status filter
+  and sort lists drop their "Show:" and "Sort:" prefixes and share the header
+  row with the playset selector and the search field, as wide as their
+  longest option needs while there is room (at least 104 pixels); Name keeps
+  at least 120 pixels;
+- the footer below the mod list shows its counts without their words (each
+  keeps them in its tool tip and accessible name) when the full texts do not
+  fit, and the counts give way first, so "Showing N of M" and "Scanning…"
+  stay in view;
+- the four playset buttons wrap onto two rows, and button labels that do not
+  fit are elided instead of running over the button's edge;
+- the actions column scrolls as a whole when the share buttons, the playset
+  section, 90 pixels of details and the Play section with its banners and
+  reasons do not fit. Tab scrolls the focused control into view, so Play and
+  its reasons are always reachable;
+- dialogs are never taller than the window less 32 pixels; Settings, the
+  import preview, confirmations (also from the keyboard) and the lists in
+  dialogs scroll.
+
+Checked on 2026-11-12 (Windows 11, 2560x1440 screen at 100 %): the preview
+with the fake backend at 900x440 in both themes, with Play blocked (mods not
+ready; also with Steam not running and an interrupted change, where the
+actions column scrolls) and with Play available (no playset), and every
+dialog; and the real application, read-only, with a new scratch profile and a
+playset from Stellaris's configuration, at `--window-size 1x1` with
+`QT_SCALE_FACTOR` 1 (900x440) and 2 (1800x880), light and dark. Play with
+its reason (the read-only blocker) was visible. A review of that state found
+the footer's "Showing N of M" pushed under the actions column with a filter
+on (as it already was at the old minimum), "With warnings" cut short in the
+narrow header even with room to spare, the blocked Play's tool tip covering
+its reasons, and a long confirmation's scroll bar over its text. After the
+fixes the same captures, also at 911x512 with `QT_SCALE_FACTOR` 1.5 and at
+1120x700, and the real application with `--filter disabled` at 900x440
+(scale 1 and 2), showed nothing clipped or covered.
 
 ![Real application at scale factor 1.5](screenshots/a11y-scale-150.png)
 
@@ -246,7 +372,9 @@ outlines and checked fills. Disabled controls are exempt and stay faded.
 
 Automated:
 
-- `ui/dev/preview.sh --test` (fake backend, 25 tests): besides the editing
+- `ui/dev/preview.sh --test` (fake backend, 33 tests; ctest runs them too, as
+  `pmm_ui_preview` with the label `ui-preview`, so `scripts/check.sh` and the
+  release's CI include them): besides the editing
   tests, Tab visits the actions, games and mods columns in that order and
   returns to the list; F6 / Shift+F6; Enter opens Settings from its button,
   Tab stays inside the dialog and Esc returns focus to the button; Esc on the
@@ -256,13 +384,38 @@ Automated:
   the current row; the update banner leaves focus in the list, Tab reaches "Not
   now" and Enter there hides the banner and returns focus to the list;
   discarding an interrupted change from the keyboard (Enter on the link, Tab
-  from Cancel to Discard, Enter) returns focus to the list.
+  from Cancel to Discard, Enter) returns focus to the list; Tab reaches a
+  blocked Play, whose name and description say why and whose tool tip lists
+  only the reasons behind "…and N more", Enter, Space and a click post the
+  reasons and start nothing, and once nothing blocks the same key starts the
+  game, with "starting" in Play's name while it runs; the column edges and
+  the dividers resize with the arrow keys, Shift, Home, End and Enter, and
+  the widths are stored; a column edge hidden with the header (Ctrl+N, or
+  no playset) gives up the focus; the smallest window fits its columns, the
+  toolbar shows icons, the footer keeps "Showing N of M" and "Scanning…"
+  inside the column, and Tab scrolls Play into view while the actions
+  column scrolls; in a squeezed window, divider keys and drags that would
+  widen a column store nothing and the chosen widths come back; a long
+  confirmation scrolls from the keyboard and leaves room for its scroll bar.
 - `ctest --preset debug -R Pmm.Ui` (real Backend, offscreen window, key events
   through `QTest`): Tab order, F6, Alt+Up/Down and Ctrl+Up/Down with undo, Esc
   on the confirmation, the context menu and the shortcuts list with focus
   return, without QML warnings. The `[qml][update]` cases: the Updates section
   and its check box with the keyboard at the smallest window size, the update
-  banner's names, Tab order, Enter and "Not now".
+  banner's names, Tab order, Enter and "Not now". Since 2026-11-12: a blocked
+  Play reached with Tab (name, description, tool tip; Enter, Space and a
+  click post the reasons and start no process, a held Enter posts them
+  once; the same key launches once Steam runs), keyboard resizing of both
+  dividers and the column edges with the stored widths, the announcements
+  of those keys (recorded through `QAccessible::installUpdateHandler` with
+  the offscreen platform's accessibility switched on: no width is spoken
+  before the column has it, each key speaks the new width once, and in the
+  smallest window a key that cannot widen a squeezed column speaks its
+  width and keeps the stored one), the smallest window (column geometry,
+  the header row inside the mods column, the icon-only toolbar, the
+  footer's "Showing 1 of 2" inside the column, the scrolling actions column
+  with Play scrolled into view by Tab), and restoring a window saved at the
+  smallest size.
 - `python3 ui/dev/check_contrast.py`: 138 colour pairs.
 
 UI Automation inspection on 2026-10-29 (Windows `System.Windows.Automation`
@@ -285,13 +438,17 @@ were checked to run without errors, not heard.
 
 ## Known gaps
 
-- No screen-reader listening test yet (see above).
-- The Play button cannot take focus while it is disabled (Qt does not focus
-  disabled controls). The blocking reasons are static texts right above it
-  and in its description, reachable with screen-reader navigation, not with
-  Tab.
-- Column widths and the column dividers can only be resized with the mouse.
-  The defaults work; Name takes the remaining width.
+- No screen-reader listening test yet (see above). It should also settle
+  how the new pieces sound: Play's "unavailable" and "starting" names and
+  its notification, and whether the separators' width is read once or twice
+  (their name changes and an announcement follows each key; one of the two
+  may have to go).
+- Play cannot report UI Automation's disabled state while it keeps the focus
+  (Qt Quick sets it only for disabled items), so "unavailable" is part of its
+  name instead.
+- The column dividers and edges are separators without a UI Automation range
+  value (Qt Quick gives one only to sliders, spin boxes, scroll bars, dials
+  and progress bars): the width is in their name and announced.
 - Drag and drop has keyboard equivalents (Alt+Up/Down, Move to top / bottom
   in the context menu) but no keyboard pick-up-and-drop.
 - Ctrl+Up/Down move rows, so the current row cannot move without changing
@@ -300,8 +457,10 @@ were checked to run without errors, not heard.
 - Windows high-contrast themes and system colours are not followed; the
   application uses its own light and dark palettes.
 - Text size follows display scaling only, not a separate text-size setting.
-- The minimum window size, 980x600 logical pixels, is larger than a
-  1920x1080 screen at 200 % (960x540).
+- The smallest window, 900x440, fits a maximized window at 200 % on
+  1920x1080 and at 150 % on 1366x768 with Windows' standard 48-pixel
+  taskbar; a taller taskbar or title bar leaves a few pixels of the footer
+  below the screen at 1366x768.
 - UI Automation reports static texts as keyboard-focusable (Qt marks
   static text focusable so touch screen readers can reach it); they are not
   in the Tab order. Dialog footers come before the dialog content in the UI

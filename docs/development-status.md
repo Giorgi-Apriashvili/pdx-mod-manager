@@ -35,7 +35,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Play requires the Steam client for Steam installations (for 0.1.1) | `src/services/launch_service`, `src/platform/steam`, `src/app/gui/backend`, `src/app/core/view_data`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`app.md`](app.md), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/require-steam`. Owner's decision of 2026-11-06: games could be started directly with Steam closed; Play now requires the Steam client for Steam installations (`DistributionSource::Steam`: found through Steam's app manifest, or located by hand inside a Steam library). A copy from another store located by hand is not blocked. The check uses the process list the running-instance check already reads (`steam.exe`, or the pid in `HKCU\Software\Valve\Steam\ActiveProcess` without a readable name); an unreadable list is a warning. While Steam, the game or the Paradox launcher blocks, the Backend re-checks every 3 s without the write probes, so Play follows on its own. Tested with fakes only; **not run against a real game or Steam** (a live run needs the owner's approval). Limitations: whether Steam runs is detected, whether it is signed in is not; the process list covers every Windows session, so another signed-in user's Steam counts as running | |
 | Discard an interrupted change that Recover cannot undo (for the next release) | `src/platform/file_transaction`, `src/services/launch_service`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, `ui/dialogs/ConfirmDialog.qml`, [`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup), [ADR 0005](adr/0005-journaled-config-writes.md) | done 2026-11-07 on `agent/discard-interrupted`. Recovery skips the backups of targets already original (or absent and absent before); `abandon()` gives up an interrupted transaction (`abandoned`, no file changed, folder and backups kept, pruned like any finished one but counted from when it was abandoned); after a Recover that failed with `IntegrityCheckFailed` the banner offers "Discard this record", and Play is available afterwards when nothing else blocks. Tested with fakes only; **not run against a real game** | |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
-| Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there | UI Automation inspection, contrast check, scale factors 1.5 and 2 |
+| Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there; 2026-11-12 on `agent/accessibility-6`: the smallest window fits 1920x1080 at 200 %, keyboard resizing of the columns, Play focusable while blocked, preview tests in ctest | UI Automation inspection, contrast check, scale factors 1.5 and 2, captures of the smallest window at 100 % and 200 % |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
 | Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; verified by the extended smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | [installer](evidence/installer-2026-10-30.md) |
 | Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **a real update verified** on 2026-11-07: the owner's installed 0.1.0 updated itself to [0.1.1](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1). 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
@@ -43,6 +43,112 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; not yet used against a running game | |
+
+## Test status (2026-11-12, accessibility item 6b-e, `agent/accessibility-6`)
+
+Local runs only, with fakes, a hermetic profile and new scratch profiles; no
+game was started, nothing under Steam, the game folders or
+`Documents/Paradox Interactive` was written, and the real profile was not
+used.
+
+- `debug` preset: **0 warnings**, **544/544 tests pass**, by label (some
+  tests carry two): core 50, sharing 54, persistence 72, platform 59,
+  providers 61, games 53, services 89, application 110, ui-preview 1 (the 30
+  fake-backend QML tests in one ctest test, new).
+- New tests in `qml_tests.cpp`: a blocked Play reached with Tab (its name,
+  description and tool tip; Enter, Space and a click post the reasons and
+  start no process; the same key launches once Steam runs, and Play keeps the
+  focus); both column dividers and the table's column edges resized from the
+  keyboard (arrows, Shift, Home, End, Enter, Ctrl+Left/Right, the stored
+  widths, roles and names); the smallest window, 900x440, with an interrupted
+  change and the read-only blocker (columns side by side at their minimums,
+  the header row inside the mods column, the actions column scrolling and
+  Play scrolled into view by Tab); a window saved at 900x440 and 1000x520
+  restored, at 899x440 and 900x439 ignored. Changed: the checks of a disabled
+  Play now check that it is unavailable, and the Updates harness waits until
+  the window's content has its new size (before, at 980x600, the Settings
+  check passed without the dialog having been laid out at that size). New
+  preview tests: a13 (blocked Play), a14 and a15 (column edges and dividers),
+  b1 (the smallest window, a squeezed column's stored width), b2 (a dragged
+  divider's stored width); test_8 checks the unavailable Play.
+- Against the QML before these changes (the new tests and fakes kept), every
+  new and changed test fails: the four new `qml_tests.cpp` cases, the two
+  changed Play cases, and preview tests 8, a13, a14, a15, b1 and b2 (b2 only
+  as a consequence of b1 leaving the window narrow; it guards the stored
+  widths of a drag). `ctest -L ui-preview` reports the failing run as failed.
+- Every `[qml]` case of `pmm_app_tests` (20, including the new and changed
+  ones) and the 30 preview tests passed 10 times each (200 and 300 runs).
+- `scripts/check-format.sh`: 238 files OK. QML lint
+  (`ui/dev/preview.sh --lint`): clean. `scripts/check.sh --full` on the
+  branch's last commit: passed (ASan, clang-cl with UBSan, clang-tidy on the
+  changed C++ files, and the `ci` preset from a fresh checkout, which runs the
+  preview tests through ctest too).
+- Screenshots (scratch only; `docs/screenshots/*` unchanged, since the
+  documented 1400x860 layout renders the same apart from animations): the
+  preview at 900x440 at scale factors 1 and 2 in both themes, with Play
+  blocked (also with Steam not running and an interrupted change, the actions
+  column scrolling), with Play available (no playset), focus on the blocked
+  Play, on both dividers and on a column edge, the update banner, and every
+  dialog; the real application read-only with a new scratch profile
+  (`--self-test config --select-row 2 --window-size 1x1`), light and dark, at
+  900x440 and, with `QT_SCALE_FACTOR=2`, 1800x880. The minimum size and the
+  `QT_SCALE_FACTOR` capture were not checked on a real 200 % display.
+
+Review fixes (same day, same branch):
+
+- Fixed: the dividers announced the old width (the announcement ran before
+  the split view applied the new one; it now waits for the width, or speaks
+  at once when a key changes nothing); a key or drag that could not widen a
+  squeezed column stored the squeezed width (now nothing is stored, and
+  Enter still stores the default); a column edge kept the focus when the
+  header hid (Ctrl+N, no playset), and arrows resized hidden columns (the
+  focus now moves to the list, or the column's first control); the footer's
+  "Showing N of M" was pushed under the actions column in a narrow mods
+  column (the counts now drop their words and give way first); the narrow
+  header cut "With warnings" short with room to spare (the option lists are
+  as wide as their longest option, up to a quarter of the row); a blocked
+  Play's tool tip covered its reasons (it now lists only the ones behind
+  "…and N more"); Play's name said "unavailable" during a launch it started
+  ("starting" now); holding Enter repeated a button's action (auto-repeat is
+  ignored); a long confirmation's scroll bar covered its text and the text
+  could not be scrolled from the keyboard (room for the bar; Up, Down, PgUp,
+  PgDn, Home and End scroll it); `scripts/check.sh` passed without the
+  preview tests when `qmltestrunner` was missing (it now fails, and CMake
+  only takes the kit's own `qmltestrunner`); the docs promised exact
+  `QT_SCALE_FACTOR` captures of windows that do not fit the screen.
+- `debug` preset: **545/545 tests pass** (application 111, ui-preview 1 with
+  the 33 fake-backend QML tests).
+- New tests: in `qml_tests.cpp`, the announcements of divider and column
+  edge keys, recorded with `QAccessible::installUpdateHandler` after
+  switching on the offscreen platform's accessibility (which needs
+  `Qt6::GuiPrivate` in the test target): nothing is spoken before the
+  column has its new width, then the width once; keys at a limit and on a
+  squeezed column in the smallest window speak the current width and keep
+  the stored one, which comes back in a wider window. Changed: the blocked
+  Play case checks that held Enter posts nothing more and that the tool tip
+  is empty; the smallest-window case checks the icon-only toolbar (and its
+  labels at 1400 wide) and that "Showing 1 of 2" stays inside the mods
+  column. Preview tests: a16 (a hidden column edge gives up the focus), b3
+  (squeezed columns keep the chosen widths, keys and drags), b4 (a long
+  confirmation scrolls from the keyboard and leaves room for its bar); a13
+  checks the tool tip with two and with six reasons and the "starting" name;
+  b1 checks the toolbar, both header option lists and the footer.
+- Against the code before the fixes, the new checks fail: the announcement
+  case (stale "300 pixels" and the like), the held Enter (6 posts instead of
+  3), a13, a16, b1 (the footer), b3 (250 stored instead of 300 after Left on
+  the squeezed actions divider; with only `Main.qml` reverted, 188 instead
+  of 200 after a drag), b4.
+- The changed `[qml]` cases and the preview tests passed 10 times each.
+- Screenshots (scratch only; `docs/screenshots/*` unchanged, since the
+  documented 1400x860 layout is unchanged): the preview at 900x440 at scale
+  factors 1 (light, dark) and 2, at 911x512 at 1.5 (dark), 1120x700 and
+  1400x860, with a filter and a scan running, a search, a blocked Play with
+  the focus (two and five reasons), the actions divider focused, and the
+  discard confirmation with 14 and 40 files, scrolled to its end; the real
+  application read-only with new scratch profiles
+  (`--self-test config --filter disabled --window-size 1x1`) at scale 1 and
+  2. One of these real-application runs ended with a crash at shutdown after
+  writing its capture, as noted under Open items; 13 more runs did not.
 
 ## Test status (2026-11-07, discard an unrecoverable change, `agent/discard-interrupted`)
 
@@ -423,13 +529,20 @@ Services and application:
 
 Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
-- Screen-reader listening pass with NVDA and Narrator.
-- The minimum window size (980x600) does not fit a 1920x1080 screen at 200 %.
-- Keyboard resizing of the column dividers and table columns; a focusable
-  summary of the Play blockers.
-- `--screenshot` forces scale factor 1; keeping an explicit
-  `QT_SCALE_FACTOR` would make high-DPI captures reproducible.
-- `ui/dev/preview.sh --test` is not part of ctest or CI.
+- Screen-reader listening pass with NVDA and Narrator (backlog item 6a, the
+  owner's). It should also settle how Play's "unavailable" and "starting"
+  names, its notification and the separators' widths (name change plus
+  announcement; one of the two may have to go) sound.
+- Done 2026-11-12 on `agent/accessibility-6` (owner's go-ahead of 2026-11-12,
+  backlog item 6b-e; not merged): the minimum window size is 900x440 and fits
+  a 1920x1080 screen at 200 % (it was 980x600); the column dividers and the
+  table's column edges resize from the keyboard (WAI-ARIA window splitter,
+  two Tab stops at the columns' edges and one for the four column edges);
+  Play stays focusable while it is blocked (aria-disabled: its name, its
+  description and a notification give the reasons); `--screenshot` keeps an
+  explicit `QT_SCALE_FACTOR` and `--window-size` sets the window's size; the
+  preview tests run in ctest (label `ui-preview`), so the release's CI runs
+  them.
 
 Packaging ([`packaging.md`](packaging.md)):
 
@@ -518,6 +631,11 @@ Packaging ([`packaging.md`](packaging.md)):
    with backlog items 1-5: discarding an interrupted change that Recover cannot
    undo, imports with downloads off, all-or-nothing edits, descriptor files that
    share a mod id, and the update contract check matching code only.
+7. Done 2026-11-12 on `agent/accessibility-6`, for the owner's review (not
+   merged): backlog item 6, parts b-e (smallest window, keyboard resizing,
+   Play focusable while blocked, screenshot and test tooling; see Open items >
+   Accessibility). Part a, the listening pass with NVDA and Narrator, stays
+   with the owner.
 
 ## Working rules
 

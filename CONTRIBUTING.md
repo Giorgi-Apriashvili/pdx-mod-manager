@@ -15,10 +15,11 @@ prerequisites and commands are in the [README](README.md); the structure is in
 
    ```sh
    bash scripts/check.sh          # small changes: the debug build with Qt and every
-                                  # test, formatting, QML lint, update contract, contrast
+                                  # test (the QML preview tests too), formatting,
+                                  # QML lint, update contract, contrast
    bash scripts/check.sh --full   # larger changes and every release: also ASan and
-                                  # clang-cl with UBSan, the QML preview tests, clang-tidy
-                                  # on changed files, and a build of HEAD from a fresh checkout
+                                  # clang-cl with UBSan, clang-tidy on changed files,
+                                  # and a build of HEAD from a fresh checkout
    ```
 
    `--full` runs everything the release's CI runs (build and tests with MSVC and

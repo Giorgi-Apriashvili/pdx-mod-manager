@@ -18,8 +18,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <QAccessible>
 #include <QDate>
 #include <QDir>
+#include <QKeyEvent>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QQmlApplicationEngine>
@@ -29,15 +31,21 @@
 #include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSignalSpy>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTest>
 #include <QUrl>
+#include <QtGui/private/qguiapplication_p.h>
+#include <QtGui/qpa/qplatformaccessibility.h>
+#include <QtGui/qpa/qplatformintegration.h>
 #include <QtQml/qqml.h>
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 Q_IMPORT_QML_PLUGIN(Pmm_UiPlugin)
@@ -521,6 +529,8 @@ struct UpdatesHarness {
         window->resize(window->minimumSize());
         window->requestActivate();
         REQUIRE(QTest::qWaitForWindowActive(window));
+        // The content follows the new size a little later.
+        REQUIRE(waitUntil([&] { return window->contentItem()->size() == QSizeF(window->size()); }));
     }
 
     void close() {
@@ -718,7 +728,7 @@ TEST_CASE("Play is available without a playset and says the game starts without 
             return QQmlExpression(qmlContext(play), play, QString::fromLatin1(expression))
                 .evaluate();
         };
-        CHECK(play->isEnabled());
+        CHECK(play->property("available").toBool());
         CHECK(evaluate("Accessible.description").toString() == "Starts the game without mods");
         CHECK(evaluate("toolTipText").toString().contains("without mods"));
         CHECK(evaluate("root.warningLines.join('|')").toString() ==
@@ -737,7 +747,7 @@ TEST_CASE("Play is available without a playset and says the game starts without 
             return evaluate("Accessible.description").toString() ==
                    "Starts the game with this playset";
         }));
-        CHECK(play->isEnabled());
+        CHECK(play->property("available").toBool());
         CHECK(evaluate("root.stateText('started')").toString() ==
               "Stellaris is running without mods.");
         backend.launcher()->play();
@@ -799,17 +809,678 @@ TEST_CASE("Play says Steam is not running and becomes available once it runs", "
         };
         const QString blocker =
             QStringLiteral("Steam is not running. Start Steam and sign in, then launch Stellaris.");
-        CHECK_FALSE(play->isEnabled());
+        CHECK_FALSE(play->property("available").toBool());
+        CHECK(play->isEnabled()); // focusable, so the keyboard reaches the reasons
         CHECK(evaluate("root.blockerLines.join('|')").toString() == blocker);
-        CHECK(evaluate("toolTipText").toString() == blocker);
+        // The reason is on screen above Play; no tool tip covers it.
+        CHECK(evaluate("toolTipText").toString().isEmpty());
         CHECK(evaluate("Accessible.description").toString() == "Blocked: " + blocker);
 
         // Steam starts; nothing else happens in the window.
         *steam = true;
-        REQUIRE(waitUntil([&] { return play->isEnabled(); }));
+        REQUIRE(waitUntil([&] { return play->property("available").toBool(); }));
         CHECK(evaluate("root.blockerLines.length").toInt() == 0);
         CHECK(evaluate("Accessible.description").toString() == "Starts the game without mods");
 
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+namespace {
+
+// The QML expression in `object`'s context (its component's ids, `root`, ...).
+QVariant evaluateIn(QObject* object, const QString& expression) {
+    return QQmlExpression(qmlContext(object), object, expression).evaluate();
+}
+
+// The item's rectangle in `ancestor`'s coordinates.
+QRectF rectIn(const QQuickItem* item, const QQuickItem* ancestor) {
+    return item->mapRectToItem(ancestor, QRectF(0, 0, item->width(), item->height()));
+}
+
+// Presses Tab until `item` has the focus; false if it never gets it.
+bool tabTo(QQuickWindow* window, QObject* item, int limit) {
+    for (int i = 0; i < limit && !hasActiveFocus(item); ++i) {
+        QTest::keyClick(window, Qt::Key_Tab);
+        QCoreApplication::processEvents();
+    }
+    return hasActiveFocus(item);
+}
+
+// Records the texts of Accessible.announce() while it exists. Qt sends
+// accessibility events only while accessibility is active, which on Windows
+// takes a screen reader; this switches it on for the offscreen platform.
+class Announcements {
+public:
+    Announcements() : m_platform(QGuiApplicationPrivate::platformIntegration()->accessibility()) {
+        REQUIRE(m_platform);
+        texts().clear();
+        m_previous = QAccessible::installUpdateHandler(&Announcements::record);
+        m_platform->setActive(true);
+    }
+    ~Announcements() {
+        m_platform->setActive(false);
+        QAccessible::installUpdateHandler(m_previous);
+    }
+    Announcements(const Announcements&) = delete;
+    Announcements& operator=(const Announcements&) = delete;
+
+    // The texts announced since the last call.
+    static QStringList take() { return std::exchange(texts(), {}); }
+
+private:
+    static QStringList& texts() {
+        static QStringList list;
+        return list;
+    }
+    static void record(QAccessibleEvent* event) {
+        if (event->type() == QAccessible::Announcement)
+            texts().append(static_cast<QAccessibleAnnouncementEvent*>(event)->message());
+    }
+
+    QPlatformAccessibility* m_platform;
+    QAccessible::UpdateHandler m_previous = nullptr;
+};
+
+} // namespace
+
+TEST_CASE("A blocked Play is reachable with Tab, says why, and launches once it is allowed",
+          "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    auto steam = std::make_shared<std::atomic<bool>>(false);
+    auto launches = std::make_shared<std::atomic<int>>(0);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    const auto hermetic = options.runtime.configureContext;
+    options.runtime.configureContext = [hermetic, steam,
+                                        launches](services::ServiceContext& context) {
+        hermetic(context);
+        context.listProcesses = [steam] {
+            std::vector<platform::RunningProcess> processes{{7, "explorer.exe", {}}};
+            if (*steam)
+                processes.push_back(steamClient());
+            return Result<std::vector<platform::RunningProcess>>(std::move(processes));
+        };
+        // Counts the launches; nothing is executed.
+        context.startProcess = [launches](const platform::ProcessSpec&) {
+            ++*launches;
+            return Result<platform::StartedProcess>(platform::StartedProcess{4242});
+        };
+    };
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        BackendOptions backendOptions;
+        backendOptions.launchRecheckMs = 50;
+        Backend backend(runner, backendOptions);
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Blocked"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 1 && !backend.mods()->busy(); }));
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+
+        auto* play = window->findChild<QQuickItem*>(QStringLiteral("playButton"));
+        REQUIRE(play);
+        const auto evaluate = [&](const char* expression) {
+            return evaluateIn(play, QString::fromLatin1(expression));
+        };
+        const auto key = [&](Qt::Key k) {
+            QTest::keyClick(window, k);
+            QCoreApplication::processEvents();
+        };
+        const QString blocker =
+            QStringLiteral("Steam is not running. Start Steam and sign in, then launch Stellaris.");
+        REQUIRE(waitUntil(
+            [&] { return evaluate("root.blockerLines.join('|')").toString() == blocker; }));
+        CHECK_FALSE(play->property("available").toBool());
+
+        // From the mod list, Tab reaches it like any other button.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(tabTo(window, play, 40));
+        CHECK(evaluate("Accessible.name").toString() == "Play Stellaris, unavailable");
+        CHECK(evaluate("Accessible.description").toString() == "Blocked: " + blocker);
+        CHECK(evaluate("toolTipText").toString().isEmpty()); // the reason is on screen
+
+        // Enter, Space and a click show the reasons instead of launching.
+        QSignalSpy posted(backend.notifications(), &NotificationCenter::posted);
+        key(Qt::Key_Return);
+        key(Qt::Key_Space);
+        const QPoint center =
+            play->mapToScene(QPointF(play->width() / 2, play->height() / 2)).toPoint();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center);
+        REQUIRE(posted.size() == 3);
+        for (const QList<QVariant>& arguments : posted) {
+            CHECK(arguments.at(0).toString() == "warning");
+            CHECK(arguments.at(1).toString() == "The game cannot be started yet");
+            CHECK(arguments.at(2).toString() == blocker);
+        }
+        // Holding Enter: its auto-repeated presses post nothing more.
+        for (int i = 0; i < 3; ++i) {
+            QKeyEvent repeat(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QString(), true);
+            QCoreApplication::sendEvent(window, &repeat);
+        }
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Return, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &release);
+        QCoreApplication::processEvents();
+        CHECK(posted.size() == 3);
+        waitUntil([] { return false; }, std::chrono::milliseconds(300));
+        CHECK(*launches == 0);
+        CHECK(backend.launcher()->state() == QLatin1String("idle"));
+        CHECK(play->hasActiveFocus());
+
+        // Steam starts: Play becomes available where the focus already is, and
+        // the same key launches.
+        *steam = true;
+        REQUIRE(waitUntil([&] { return play->property("available").toBool(); }));
+        CHECK(play->hasActiveFocus());
+        CHECK(evaluate("Accessible.name").toString() == "Play Stellaris");
+        CHECK(evaluate("Accessible.description").toString() == "Starts the game with this playset");
+        posted.clear();
+        key(Qt::Key_Return);
+        REQUIRE(waitUntil([&] { return backend.launcher()->state() == QLatin1String("started"); }));
+        CHECK(*launches == 1);
+        for (const QList<QVariant>& arguments : posted)
+            CHECK(arguments.at(1).toString() != "The game cannot be started yet");
+        // It kept the focus while the launch ran.
+        CHECK(play->hasActiveFocus());
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("Column dividers and table column edges resize from the keyboard", "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addLocalMod("beta", "Beta");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Widths"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001", "local:beta"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        REQUIRE(window->width() == 1400);
+
+        AppSettings* settings = backend.settings();
+        auto* list = window->findChild<QQuickItem*>(QStringLiteral("modList"));
+        auto* side = window->findChild<QQuickItem*>(QStringLiteral("sidePane"));
+        auto* games = window->findChild<QQuickItem*>(QStringLiteral("gamesPane"));
+        auto* sideDivider = window->findChild<QQuickItem*>(QStringLiteral("sideDivider"));
+        auto* gamesDivider = window->findChild<QQuickItem*>(QStringLiteral("gamesDivider"));
+        REQUIRE(list);
+        REQUIRE(side);
+        REQUIRE(games);
+        REQUIRE(sideDivider);
+        REQUIRE(gamesDivider);
+        const auto key = [&](Qt::Key k, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+            QTest::keyClick(window, k, modifiers);
+            QCoreApplication::processEvents();
+        };
+        const auto focusedName = [&] {
+            QQuickItem* item = window->activeFocusItem();
+            return item ? evaluateIn(item, QStringLiteral("Accessible.name")).toString()
+                        : QString();
+        };
+        const auto isSeparator = [&](QQuickItem* item) {
+            return evaluateIn(item, QStringLiteral("Accessible.role === Accessible.Separator"))
+                .toBool();
+        };
+        const auto widthIs = [](QQuickItem* item, qreal width) {
+            return waitUntil([&] { return qFuzzyCompare(item->width(), width); });
+        };
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(hasActiveFocus(list));
+
+        // After the list, Tab reaches the divider of the actions column. Left
+        // moves it left, so the column gets wider; Shift takes larger steps.
+        key(Qt::Key_Tab);
+        REQUIRE(hasActiveFocus(sideDivider));
+        CHECK(isSeparator(sideDivider));
+        CHECK(focusedName() == "Actions column width: 300 pixels");
+        key(Qt::Key_Left);
+        CHECK(widthIs(side, 310));
+        CHECK(settings->rightPaneWidth() == 310);
+        CHECK(focusedName() == "Actions column width: 310 pixels");
+        key(Qt::Key_Right, Qt::ShiftModifier);
+        CHECK(widthIs(side, 260));
+        CHECK(settings->rightPaneWidth() == 260);
+        key(Qt::Key_Home);
+        CHECK(widthIs(side, 250));
+        CHECK(settings->rightPaneWidth() == 250);
+        key(Qt::Key_End);
+        CHECK(widthIs(side, 480));
+        CHECK(settings->rightPaneWidth() == 480);
+        key(Qt::Key_Return);
+        CHECK(widthIs(side, 300));
+        CHECK(settings->rightPaneWidth() == 300);
+
+        // The games column's divider is the last stop of that column.
+        key(Qt::Key_F6);
+        REQUIRE(tabTo(window, gamesDivider, 10));
+        CHECK(isSeparator(gamesDivider));
+        CHECK(focusedName() == "Games column width: 200 pixels");
+        key(Qt::Key_Right);
+        CHECK(widthIs(games, 210));
+        CHECK(settings->leftPaneWidth() == 210);
+        key(Qt::Key_Home);
+        CHECK(widthIs(games, 160));
+        key(Qt::Key_End);
+        CHECK(widthIs(games, 360));
+        CHECK(settings->leftPaneWidth() == 360);
+        key(Qt::Key_Return);
+        CHECK(widthIs(games, 200));
+        CHECK(settings->leftPaneWidth() == 200);
+        key(Qt::Key_Tab);
+        CHECK(focusedPane(window) == "modsPane");
+
+        // The table's column edges are one stop, right before the list.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        key(Qt::Key_Tab, Qt::ShiftModifier);
+        REQUIRE(window->activeFocusItem());
+        CHECK(isSeparator(window->activeFocusItem()));
+        CHECK(focusedName() == "Position column width: 44 pixels");
+        key(Qt::Key_Right);
+        CHECK(settings->columnWidths().value(0) == 54);
+        key(Qt::Key_Right, Qt::ShiftModifier);
+        CHECK(settings->columnWidths().value(0) == 104);
+        key(Qt::Key_Home);
+        CHECK(settings->columnWidths().value(0) == 32);
+        key(Qt::Key_Return);
+        CHECK(settings->columnWidths().value(0) == 44);
+        // Ctrl+Right moves to the next edges. Right of Name an edge resizes the
+        // column after it: Left widens Status, End leaves Name its minimum.
+        key(Qt::Key_Right, Qt::ControlModifier);
+        CHECK(focusedName() == "Enabled column width: 30 pixels");
+        key(Qt::Key_Right, Qt::ControlModifier);
+        key(Qt::Key_Right, Qt::ControlModifier);
+        CHECK(focusedName() == "Status column width: 150 pixels");
+        key(Qt::Key_Left);
+        CHECK(settings->columnWidths().value(4) == 160);
+        key(Qt::Key_End);
+        CHECK(settings->columnWidths().value(4) > 160);
+        CHECK(settings->columnWidths().value(2) == 120); // Name at its minimum
+        key(Qt::Key_Return);
+        CHECK(settings->columnWidths().value(4) == 150);
+        key(Qt::Key_Tab);
+        CHECK(hasActiveFocus(list));
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE(
+    "A divider key announces the width the column gets, and a squeezed column keeps its width",
+    "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addLocalMod("beta", "Beta");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Spoken"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001", "local:beta"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        REQUIRE(window->width() == 1400);
+
+        AppSettings* settings = backend.settings();
+        auto* list = window->findChild<QQuickItem*>(QStringLiteral("modList"));
+        auto* side = window->findChild<QQuickItem*>(QStringLiteral("sidePane"));
+        auto* games = window->findChild<QQuickItem*>(QStringLiteral("gamesPane"));
+        auto* sideDivider = window->findChild<QQuickItem*>(QStringLiteral("sideDivider"));
+        auto* gamesDivider = window->findChild<QQuickItem*>(QStringLiteral("gamesDivider"));
+        REQUIRE(list);
+        REQUIRE(side);
+        REQUIRE(games);
+        REQUIRE(sideDivider);
+        REQUIRE(gamesDivider);
+        Announcements announcements;
+        // The key, then only the queued calls (Qt.callLater), not the next
+        // frame, in which the split view applies a divider's new width.
+        const auto press = [&](Qt::Key k, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+            QTest::keyClick(window, k, modifiers);
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+        };
+        // Nothing is spoken before the width is applied, then it is spoken once.
+        const auto spoken = [&](const std::function<bool()>& applied, int width) {
+            const QStringList expected{QStringLiteral("%1 pixels").arg(width)};
+            INFO("expected: " << expected.join("").toStdString());
+            QStringList texts = Announcements::take();
+            INFO("before the width was applied: " << texts.join(" | ").toStdString());
+            CHECK((texts.isEmpty() || texts == expected));
+            CHECK(waitUntil(applied));
+            CHECK(waitUntil([&] {
+                texts += Announcements::take();
+                return !texts.isEmpty();
+            }));
+            INFO("in all: " << texts.join(" | ").toStdString());
+            CHECK(texts == expected);
+        };
+        const auto widthIs = [](QQuickItem* item, qreal width) {
+            return [item, width] { return qFuzzyCompare(item->width(), width); };
+        };
+
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        QTest::keyClick(window, Qt::Key_Tab);
+        REQUIRE(hasActiveFocus(sideDivider));
+        Announcements::take();
+        press(Qt::Key_Left);
+        spoken(widthIs(side, 310), 310);
+        press(Qt::Key_Left, Qt::ShiftModifier);
+        spoken(widthIs(side, 360), 360);
+        press(Qt::Key_Return);
+        spoken(widthIs(side, 300), 300);
+        press(Qt::Key_Home);
+        spoken(widthIs(side, 250), 250);
+        // Already at the narrowest: nothing changes, and the width is spoken.
+        press(Qt::Key_Home);
+        spoken(widthIs(side, 250), 250);
+        press(Qt::Key_Return);
+        spoken(widthIs(side, 300), 300);
+
+        QTest::keyClick(window, Qt::Key_F6);
+        REQUIRE(tabTo(window, gamesDivider, 10));
+        Announcements::take();
+        press(Qt::Key_Right);
+        spoken(widthIs(games, 210), 210);
+        press(Qt::Key_Return);
+        spoken(widthIs(games, 200), 200);
+
+        // A column edge applies its width at once.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        QTest::keyClick(window, Qt::Key_Tab, Qt::ShiftModifier);
+        Announcements::take();
+        press(Qt::Key_Right);
+        spoken([&] { return settings->columnWidths().value(0) == 54; }, 54);
+        press(Qt::Key_Return);
+        spoken([&] { return settings->columnWidths().value(0) == 44; }, 44);
+
+        // The smallest window squeezes the outer columns below their chosen
+        // widths: a key that would widen one changes nothing, says the width it
+        // has, and leaves the chosen width stored.
+        window->resize(window->minimumSize());
+        REQUIRE(waitUntil([&] { return side->width() == 250 && games->width() < 200; }));
+        const qreal squeezed = games->width();
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        QTest::keyClick(window, Qt::Key_Tab);
+        REQUIRE(hasActiveFocus(sideDivider));
+        Announcements::take();
+        press(Qt::Key_Left);
+        spoken(widthIs(side, 250), 250);
+        press(Qt::Key_End);
+        spoken(widthIs(side, 250), 250);
+        CHECK(settings->rightPaneWidth() == 300);
+        QTest::keyClick(window, Qt::Key_F6);
+        REQUIRE(tabTo(window, gamesDivider, 10));
+        Announcements::take();
+        press(Qt::Key_Right);
+        spoken(widthIs(games, squeezed), static_cast<int>(squeezed));
+        CHECK(settings->leftPaneWidth() == 200);
+        // Enter on a squeezed column stores the default, as wide as it can be.
+        press(Qt::Key_Left);
+        spoken(widthIs(games, squeezed - 10), static_cast<int>(squeezed) - 10);
+        CHECK(settings->leftPaneWidth() == static_cast<int>(squeezed) - 10);
+        press(Qt::Key_Return);
+        spoken(widthIs(games, squeezed), static_cast<int>(squeezed));
+        CHECK(settings->leftPaneWidth() == 200);
+
+        // In a wider window the chosen widths come back.
+        window->resize(1400, 860);
+        CHECK(waitUntil(widthIs(games, 200)));
+        CHECK(waitUntil(widthIs(side, 300)));
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("The smallest window fits a 200 % screen and keeps Play reachable", "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addLocalMod("beta", "Beta");
+    FakeAdapter adapter(world);
+    const fs::path profile = temp.path() / "profile";
+    // A launch that crashed while writing: its banner, Recover and a blocker
+    // make the actions column taller than the smallest window.
+    const fs::path target = world.userData / "load_order.txt";
+    writeText(target, "before");
+    {
+        platform::FileTransactionManager journal(profile / "transactions");
+        platform::FileTransactionFaults crash;
+        crash.crashAfterWrites = std::size_t{1};
+        journal.setFaultsForTesting(crash);
+        REQUIRE_FALSE(journal.apply("launch stellaris without mods", {{target, "after"}}).ok());
+    }
+    RunnerOptions options;
+    options.runtime = hermeticOptions(profile, adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        BackendOptions backendOptions;
+        backendOptions.readOnly = true; // one more reason next to Play
+        Backend backend(runner, backendOptions);
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Small"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001", "local:beta"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 2 && !backend.mods()->busy(); }));
+
+        // 1920x1080 at 200 % leaves a maximized window about 960x470 logical
+        // pixels, 1366x768 at 150 % about 911x441.
+        CHECK(window->minimumSize() == QSize(900, 440));
+        window->resize(window->minimumSize());
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        REQUIRE(waitUntil([&] { return window->width() == 900 && window->height() == 440; }));
+
+        const auto item = [&](const char* name) {
+            auto* found = window->findChild<QQuickItem*>(QLatin1String(name));
+            REQUIRE(found);
+            return found;
+        };
+        QQuickItem* games = item("gamesPane");
+        QQuickItem* mods = item("modsPane");
+        QQuickItem* side = item("sidePane");
+        QQuickItem* content = window->contentItem();
+        // The columns keep their minimums and fit side by side.
+        REQUIRE(waitUntil([&] { return rectIn(side, content).right() <= 900.5; }));
+        CHECK(games->width() >= 160);
+        CHECK(mods->width() >= 460);
+        CHECK(side->width() >= 250);
+        CHECK(rectIn(games, content).right() <= rectIn(mods, content).left() + 0.5);
+        CHECK(rectIn(mods, content).right() <= rectIn(side, content).left() + 0.5);
+        // The mods column's header controls stay inside it.
+        for (const char* name :
+             {"playsetSelector", "searchField", "statusFilter", "sortSelector"}) {
+            INFO(name);
+            const QRectF rect = rectIn(item(name), mods);
+            CHECK(rect.left() >= 0);
+            CHECK(rect.right() <= mods->width() + 0.5);
+            CHECK(rect.width() >= 90);
+        }
+        // The table's columns fit the list: Name keeps its minimum.
+        CHECK(evaluateIn(item("modList"),
+                         QStringLiteral("root.fixedWidth + root.nameWidth <= modList.width + 0.5"))
+                  .toBool());
+        // The toolbar shows icons only, no button below its own width.
+        QQuickItem* toolbar = item("modsToolbar");
+        const auto buttonsFit = [&] {
+            int buttons = 0;
+            for (QQuickItem* child : toolbar->childItems()) {
+                if (!child->isVisible() || !child->property("labelledWidth").isValid())
+                    continue;
+                ++buttons;
+                INFO(evaluateIn(child, QStringLiteral("Accessible.name")).toString().toStdString());
+                CHECK(child->width() >= child->implicitWidth() - 0.5);
+            }
+            CHECK(buttons >= 6);
+        };
+        CHECK(toolbar->property("compact").toBool());
+        buttonsFit();
+        // Filtered, the footer's "Showing 1 of 2" stays inside the column.
+        backend.modView()->setSearch(QStringLiteral("Alpha"));
+        QQuickItem* showing = item("showingStat");
+        REQUIRE(waitUntil([&] { return showing->isVisible(); }));
+        CHECK(showing->property("text").toString() == "Showing 1 of 2");
+        CHECK(rectIn(showing, mods).left() >= 0);
+        CHECK(rectIn(showing, mods).right() <= mods->width() + 0.5);
+        backend.modView()->setSearch(QString());
+
+        // The actions column scrolls as a whole; Tab reaches Play and scrolls it
+        // into view, with its reasons.
+        QQuickItem* page = item("sidePage");
+        QQuickItem* play = item("playButton");
+        CHECK(item("interruptedBanner")->isVisible());
+        CHECK(page->property("interactive").toBool());
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(tabTo(window, play, 40));
+        CHECK(waitUntil([&] {
+            const QRectF rect = rectIn(play, side);
+            return rect.top() >= 0 && rect.bottom() <= side->height() + 0.5;
+        }));
+        const QString description =
+            evaluateIn(play, QStringLiteral("Accessible.description")).toString();
+        INFO(description.toStdString());
+        CHECK(description.startsWith("Blocked: "));
+        CHECK(description.contains("Read-only verification mode"));
+        CHECK(description.contains("interrupted"));
+
+        // A taller window shows everything again without scrolling, and the
+        // toolbar's labels come back.
+        window->resize(1400, 860);
+        CHECK(waitUntil([&] { return !page->property("interactive").toBool(); }));
+        CHECK(rectIn(play, content).bottom() <= 860.5);
+        CHECK(waitUntil([&] { return !toolbar->property("compact").toBool(); }));
+        buttonsFit();
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("A window saved at the smallest size is restored at that size", "[app][qml]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    // Below the minimum, the saved size is ignored and the default is used.
+    const auto [saved, restored] = GENERATE(table<QSize, QSize>({
+        {QSize(900, 440), QSize(900, 440)},
+        {QSize(1000, 520), QSize(1000, 520)},
+        {QSize(899, 440), QSize(1400, 860)},
+        {QSize(900, 439), QSize(1400, 860)},
+    }));
+    INFO("saved " << saved.width() << "x" << saved.height());
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        backend.settings()->setWindowX(40);
+        backend.settings()->setWindowY(40);
+        backend.settings()->setWindowWidth(saved.width());
+        backend.settings()->setWindowHeight(saved.height());
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        CHECK(window->size() == restored);
         window->close();
         backend.shutdown();
     }
@@ -872,7 +1543,7 @@ TEST_CASE(
         REQUIRE(play);
         REQUIRE(confirm);
         CHECK(banner->isVisible());
-        CHECK_FALSE(play->isEnabled());
+        CHECK_FALSE(play->property("available").toBool());
 
         // Offered only once Recover has failed for good.
         CHECK_FALSE(discard->isVisible());
@@ -924,7 +1595,7 @@ TEST_CASE(
         REQUIRE(waitUntil([&] { return confirmButton->hasActiveFocus(); }));
         key(Qt::Key_Return);
         REQUIRE(waitUntil([&] { return !banner->isVisible(); }));
-        REQUIRE(waitUntil([&] { return play->isEnabled(); }));
+        REQUIRE(waitUntil([&] { return play->property("available").toBool(); }));
         REQUIRE(waitUntil([&] {
             QQuickItem* item = window->activeFocusItem();
             return item && item->objectName() == "modList";

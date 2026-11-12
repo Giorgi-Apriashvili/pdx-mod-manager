@@ -15,8 +15,10 @@ Dialog {
     parent: Overlay.overlay
     anchors.centerIn: parent
     width: Math.min(preferredWidth, parent ? parent.width - 32 : preferredWidth)
-    height: preferredHeight > 0 ? Math.min(preferredHeight, parent ? parent.height - 32 : preferredHeight)
-                                : implicitHeight
+    // Never taller than the window (the smallest one is 440 pixels high); the
+    // content of a dialog that can get taller scrolls.
+    height: Math.min(preferredHeight > 0 ? preferredHeight : implicitHeight,
+                     parent ? parent.height - 32 : implicitHeight)
     modal: true
     focus: true
     padding: 14
