@@ -1,5 +1,6 @@
 // Adapter registry and the real discovery environment.
 
+#include "games/ck3.hpp"
 #include "games/eu4.hpp"
 #include "games/game_adapter.hpp"
 #include "games/stellaris.hpp"
@@ -22,8 +23,9 @@ DiscoveryEnvironment DiscoveryEnvironment::current() {
 
 std::span<const std::unique_ptr<GameAdapter>> adapters() {
     // Catalog order.
-    static const std::array<std::unique_ptr<GameAdapter>, 2> kAdapters{
-        std::make_unique<Eu4Adapter>(), std::make_unique<StellarisAdapter>()};
+    static const std::array<std::unique_ptr<GameAdapter>, 3> kAdapters{
+        std::make_unique<Ck3Adapter>(), std::make_unique<Eu4Adapter>(),
+        std::make_unique<StellarisAdapter>()};
     return kAdapters;
 }
 

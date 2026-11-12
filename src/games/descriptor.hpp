@@ -4,7 +4,7 @@
 // descriptor.mod inside mod content. Parses them into core ModDescriptor and
 // regenerates them deterministically.
 //
-// Accepted syntax (what EU4 and Stellaris descriptors use):
+// Accepted syntax (what CK3, EU4 and Stellaris descriptors use):
 //   key="quoted value"   key=bare_value   key={ "item" item ... }
 //   # comments to the end of the line, optional UTF-8 BOM, LF or CRLF.
 // In quoted strings only \" and \\ are escapes; any other backslash is kept

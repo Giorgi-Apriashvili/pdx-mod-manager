@@ -105,7 +105,7 @@ public:
                                                            const InstalledMod& mod) const = 0;
 };
 
-// Registry of implemented adapters (EU4, Stellaris).
+// Registry of implemented adapters (CK3, EU4, Stellaris), in catalog order.
 std::span<const std::unique_ptr<GameAdapter>> adapters();
 const GameAdapter* findAdapter(std::string_view gameKey);
 

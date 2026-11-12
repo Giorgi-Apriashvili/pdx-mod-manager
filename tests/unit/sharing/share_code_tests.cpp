@@ -30,7 +30,7 @@ namespace {
 // Golden codes produced by this encoder (zlib 1.3.1). Never regenerate an
 // existing fixture: a mismatch means the protocol output changed.
 const char* const kGoldenFixtures[] = {"01-stellaris-basic", "02-eu4-unicode-local",
-                                       "03-minimal-empty"};
+                                       "03-minimal-empty", "05-ck3-basic"};
 
 Error decodeError(std::string_view input) {
     auto r = decodeShareCode(input);
@@ -221,6 +221,14 @@ TEST_CASE("Golden fixture content is what it claims", "[sharing][code][fixtures]
     auto empty = decodeShareCode(test::readFixture("v1/03-minimal-empty.code"));
     REQUIRE(empty.ok());
     CHECK(empty->mods.empty());
+
+    auto ck3 = decodeShareCode(test::readFixture("v1/05-ck3-basic.code"));
+    REQUIRE(ck3.ok());
+    CHECK(ck3->game == "ck3");
+    CHECK(ck3->gameVersionHint == "1.20.1.2");
+    REQUIRE(ck3->mods.size() == 3);
+    CHECK(ck3->mods[1].source == "local");
+    CHECK_FALSE(ck3->mods[2].enabled);
 }
 
 TEST_CASE("Codes from other encoders with non-canonical JSON decode", "[sharing][code][fixtures]") {
@@ -534,8 +542,21 @@ TEST_CASE("encodeShareCode validates before encoding", "[sharing][code]") {
     m.mods.push_back(m.mods[0]);
     CHECK(encodeShareCode(m).error().code == ErrorCode::ValidationFailed);
     m = test::sampleManifest();
-    m.game = "ck3";
+    m.game = "vic3";
     CHECK(encodeShareCode(m).error().code == ErrorCode::UnsupportedGame);
+}
+
+TEST_CASE("Crusader Kings III playsets round-trip", "[sharing][code]") {
+    // A game newly marked supported in the catalog: the format is unchanged.
+    Manifest m = test::sampleManifest();
+    m.game = "ck3";
+    m.gameVersionHint = "1.20.1.2";
+    auto code = encodeShareCode(m);
+    REQUIRE(code.ok());
+    CHECK_THAT(*code, StartsWith("PMM1."));
+    auto decoded = decodeShareCode(*code);
+    REQUIRE(decoded.ok());
+    CHECK(*decoded == m);
 }
 
 TEST_CASE("Decompressed size is capped at exactly 8 MiB", "[sharing][code][limits]") {

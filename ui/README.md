@@ -120,8 +120,9 @@ written to `Backend.settings` and saved on close.
 
 `dev/Pmm/Backend` is a QML-only stand-in for the whole contract surface:
 2,000 synthetic mods in all states (missing, queued, downloading, failed,
-unavailable, broken, warnings), Stellaris installed, EU4 not found, three
-unsupported games, download jobs, history snapshots and an import preview.
+unavailable, broken, warnings), Stellaris installed, EU4 and Crusader Kings III
+not found, two unsupported games, download jobs, history snapshots and an
+import preview.
 Nothing is read from or written to disk.
 
 ```sh

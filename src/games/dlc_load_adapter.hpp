@@ -2,13 +2,15 @@
 
 // Shared implementation for games whose mod configuration is
 // "<user data>/dlc_load.json + <user data>/mod/*.mod" (the scheme the Paradox
-// launcher v2 uses for Stellaris and EU4, observed on both).
+// launcher v2 uses for Stellaris, EU4 and Crusader Kings III, observed on all
+// three).
 // Everything that may differ per game is a GameTraits field; each game keeps
 // its own adapter class so that it can diverge once evidence requires it.
 //
-// Files read: <install>/launcher-settings.json (or launcher/...),
-// <install>/userdir.txt, Steam libraryfolders.vdf, appmanifest_<app>.acf,
-// appworkshop_<app>.acf, the content descriptor of
+// Files read: <install>/launcher-settings.json (or launcher/...), the
+// GameTraits::userDirFile (<install>/userdir.txt, CK3:
+// <install>/game/userdir.txt), Steam libraryfolders.vdf,
+// appmanifest_<app>.acf, appworkshop_<app>.acf, the content descriptor of
 // <library>/steamapps/workshop/content/<app>/<id> (see contentDescriptorFile),
 // <user data>/mod/*.mod and <user data>/dlc_load.json.
 // Files written (through LaunchPlan::configWrites only): dlc_load.json and
@@ -30,12 +32,13 @@
 // installed mod: it is left out of the inventory, so that the item reads as
 // missing and can be acquired. A local mod without its folder stays Broken.
 //
-// User data: a folder chosen by the user, else an absolute path in
-// <install>/userdir.txt (games with GameTraits::userDirFile), else
-// launcher-settings.json "gameDataPath", else the OS default.
+// User data: a folder chosen by the user, else an absolute path in the
+// GameTraits::userDirFile, else launcher-settings.json "gameDataPath", else
+// the OS default.
 //
 // Launch: the executable from launcher-settings.json (else
-// GameTraits::executable), started in its own folder.
+// GameTraits::executable), started in its own folder (the installation folder
+// for Stellaris and EU4, <install>/binaries for CK3).
 
 #include "games/game_adapter.hpp"
 
@@ -55,8 +58,9 @@ struct GameTraits {
     std::string_view executable;
     // Processes that rewrite the configuration (the Paradox launcher).
     std::span<const std::string_view> launcherProcesses;
-    // File in the installation folder that relocates the user-data folder
-    // ("userdir.txt"); empty when the game has no such file.
+    // Path relative to the installation folder of the file that relocates
+    // the user-data folder ("userdir.txt", CK3: "game/userdir.txt"); empty
+    // when the game has no such file.
     std::string_view userDirFile;
     // launcher-settings.json arguments that are never passed on the user's
     // behalf, compared ASCII case-insensitively ("-enabletelemetry").
