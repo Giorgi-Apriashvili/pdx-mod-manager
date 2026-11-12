@@ -188,7 +188,8 @@ int main(int argc, char* argv[]) {
     if (argumentGiven(argc, argv, "--screenshot")) {
         // Reproducible captures, whatever the display's scaling: the window's
         // logical size times QT_SCALE_FACTOR when it is set (2 for a 200 %
-        // capture), else exactly the logical size.
+        // capture; Windows shrinks a window that does not fit the screen),
+        // else exactly the logical size.
         if (qEnvironmentVariableIsEmpty("QT_SCALE_FACTOR"))
             qputenv("QT_SCALE_FACTOR", "1");
         qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");

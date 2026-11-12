@@ -60,6 +60,11 @@ build() {
 step "debug build (Qt application and every library)"
 CC=cl CXX=cl build debug debug
 step "tests (debug)"
+# The QML preview tests are registered only when Qt's qmltestrunner is found.
+if ! ctest --test-dir build/debug -N -L ui-preview | tr -d '\r' | grep -q '^Total Tests: [1-9]'; then
+  echo "the QML preview tests (label ui-preview) are not registered: qmltestrunner not found in $QT_ROOT_DIR/bin" >&2
+  exit 1
+fi
 ctest --test-dir build/debug -j "$jobs" --output-on-failure
 step "formatting"
 bash scripts/check-format.sh
