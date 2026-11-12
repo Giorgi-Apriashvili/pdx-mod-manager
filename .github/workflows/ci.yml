@@ -68,13 +68,16 @@ jobs:
       - name: Build
         run: cmake --build --preset ci
 
-      # The application tests must be part of every run.
+      # The application tests and the QML preview tests (registered only when
+      # qmltestrunner is found) must be part of every run.
       - name: Check that the application tests are registered
         shell: bash
         run: |
-          count="$(ctest --preset ci -N -L pmm_app_tests | tr -d '\r' | sed -n 's/^Total Tests: *//p')"
-          echo "pmm_app_tests: ${count:-0} tests"
-          test "${count:-0}" -gt 0
+          for label in pmm_app_tests ui-preview; do
+            count="$(ctest --preset ci -N -L "$label" | tr -d '\r' | sed -n 's/^Total Tests: *//p')"
+            echo "$label: ${count:-0} tests"
+            test "${count:-0}" -gt 0
+          done
 
       - name: Test
         run: ctest --preset ci --output-on-failure --output-junit ctest-junit.xml

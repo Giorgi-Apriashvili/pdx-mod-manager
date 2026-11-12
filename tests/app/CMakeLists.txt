@@ -44,3 +44,44 @@ catch_discover_tests(pmm_app_tests
   PROPERTIES
     LABELS pmm_app_tests
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# The QML tests against the fake backend (ui/dev/tests, label ui-preview): the
+# run of `ui/dev/preview.sh --test`, without bash. Like preview.sh, a qmldir
+# that lists the QML_FILES of ui/CMakeLists.txt points the module Pmm.Ui at the
+# sources, so no build of the module is needed. Registered only when Qt's
+# qmltestrunner is there.
+find_program(PMM_QMLTESTRUNNER qmltestrunner HINTS "${_pmm_qt_bin}")
+if(PMM_QMLTESTRUNNER)
+  set(_pmm_preview_module "${CMAKE_BINARY_DIR}/ui-preview/Pmm/Ui")
+  file(STRINGS "${PROJECT_SOURCE_DIR}/ui/CMakeLists.txt" _pmm_ui_lines)
+  set(_pmm_qmldir "module Pmm.Ui\n")
+  set(_pmm_in_files FALSE)
+  foreach(_pmm_line IN LISTS _pmm_ui_lines)
+    if(_pmm_line MATCHES "QML_FILES")
+      set(_pmm_in_files TRUE)
+    elseif(_pmm_in_files AND _pmm_line MATCHES "^\\)")
+      set(_pmm_in_files FALSE)
+    elseif(_pmm_in_files AND _pmm_line MATCHES "^[ \t]*([^ \t]+\\.(qml|js))[ \t]*$")
+      set(_pmm_file "${CMAKE_MATCH_1}")
+      get_filename_component(_pmm_type "${_pmm_file}" NAME_WE)
+      file(RELATIVE_PATH _pmm_path "${_pmm_preview_module}" "${PROJECT_SOURCE_DIR}/ui/${_pmm_file}")
+      if(_pmm_type STREQUAL "Theme")
+        string(APPEND _pmm_qmldir "singleton ")
+      endif()
+      string(APPEND _pmm_qmldir "${_pmm_type} 1.0 ${_pmm_path}\n")
+    endif()
+  endforeach()
+  file(CONFIGURE OUTPUT "${_pmm_preview_module}/qmldir" CONTENT "${_pmm_qmldir}" @ONLY)
+  add_test(NAME pmm_ui_preview
+    COMMAND "${PMM_QMLTESTRUNNER}"
+      -import "${CMAKE_BINARY_DIR}/ui-preview"
+      -import "${PROJECT_SOURCE_DIR}/ui/dev"
+      -input "${PROJECT_SOURCE_DIR}/ui/dev/tests")
+  set_tests_properties(pmm_ui_preview PROPERTIES
+    LABELS ui-preview
+    TIMEOUT 600
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_FORCE_STDERR_LOGGING=1"
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_pmm_qt_bin}")
+else()
+  message(STATUS "qmltestrunner not found: the ui-preview tests are not registered")
+endif()
