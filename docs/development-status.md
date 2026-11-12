@@ -92,6 +92,27 @@ databases and `playsets_backup` were not opened.
   clang-cl with UBSan 448/448 each, clang-tidy on the 12 changed C++ files
   after one finding was fixed, the `ci` preset from a fresh checkout
   560/560).
+- Review fixes (`ffca05e`): the content check after a Workshop download
+  accepts a sole `.mod` file (providers cases for none, one, two, empty,
+  `descriptor.mod` first and `.zip`; a services case that downloads such an
+  item to Ready; a services case that compares the check with the scan on
+  8 folder layouts); a registered folder with a stray `.zip` stays the
+  content (a CK3 and a Stellaris case); CK3's temporary load-order note; the
+  hint for a CK3 subfolder chosen by hand. With the previous
+  `acquisition.cpp` and `dlc_load_adapter.cpp`, the new checks fail (3
+  games, 1 providers and 2 services test cases). `debug`:
+  **0 warnings**, **565/565 tests pass**, by label: core 51, sharing 55,
+  persistence 72, platform 59, providers 62, games 68, services 91,
+  application 111, ui-preview 1. `pmm_games_tests "[.real]"` (read-only):
+  the Stellaris, EU4 and CK3 output is identical, line for line, to a run
+  of the code before the fixes. A scratch program ran the download's
+  content check read-only over the 11 CK3 Workshop folders: 11 accepted
+  (10 with the code before). The application read-only with a new scratch
+  profile (`--game ck3 --self-test config --screenshot`) shows the CK3
+  load-order note. `scripts/check.sh --full` on `ffca05e`: passed (ASan and
+  clang-cl with UBSan 453/453 each, clang-tidy on the 17 C++ files changed
+  since `origin/main` without findings, the `ci` preset from a fresh
+  checkout 565/565).
 
 ## Test status (2026-11-12, accessibility item 6b-e, `agent/accessibility-6`)
 

@@ -298,6 +298,10 @@ Reading it:
   content (see Mods); for each, only `version`, `name` or `tags` differ.
 - `workshopAcquisition 1` only says that the helper would find
   `binaries/steam_api64.dll`; Workshop acquisition for CK3 has not been run.
+  The content check that ends a download (`verifyWorkshopContent()`), run
+  read-only over the 11 content folders by a scratch program on the same
+  day, accepts all 11; the code before the sole-`.mod` fix in that check
+  rejected the item without `descriptor.mod`.
 - The replay copies the registered descriptors with the Steam library
   replaced by an empty one: the 9 Workshop references keep their identity and
   read as not installed.
@@ -308,7 +312,8 @@ Reading it:
 The application, read-only with new scratch profiles on the same day:
 `pmm-app --profile <new> --read-only --game ck3 --screenshot <png>` shows
 "Crusader Kings III, Installed · 1.20.1.2" first in the games column and Play
-blocked by the read-only mode; `--self-test
+blocked by the read-only mode; with `--self-test config` added, the mods
+pane shows the "not yet verified" load-order note above the 9 entries; `--self-test
 "config,disable:1,move:0:3,export:<code>,dump:a.json"` created a playset of 9
 entries from the game's configuration, and a second new profile imported the
 code (9 entries, 8 enabled, 9 installed, 0 missing) with a byte-identical
