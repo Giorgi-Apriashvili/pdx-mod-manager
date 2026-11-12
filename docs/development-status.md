@@ -546,8 +546,9 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 Packaging ([`packaging.md`](packaging.md)):
 
-- 0.1.0 and 0.1.1 are published, and on 2026-11-07 the owner's installed 0.1.0
-  updated itself to 0.1.1 with **Update and restart**. The
+- 0.1.0, 0.1.1 and 0.1.2 are published. On 2026-11-07 the owner's installed 0.1.0
+  updated itself to 0.1.1 with **Update and restart**, and that copy then updated
+  itself to 0.1.2 (reported 2026-11-12). The
   owner installed 0.1.0 with the wizard on 2026-11-06, and it worked; on that
   computer neither the browser nor SmartScreen warned, which may come from its
   settings, so the documented warnings stay.

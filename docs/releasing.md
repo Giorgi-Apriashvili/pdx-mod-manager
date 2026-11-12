@@ -9,7 +9,7 @@ anyone else, and it publishes nothing for pull requests.
 dry run of the same checks ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). 0.1.1 followed on 2026-11-07
 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42313402701)), without a separate dry run because
 it changed neither the updater nor the packaging. On 2026-11-07 the owner's
-installed 0.1.0 updated itself to 0.1.1, the first real update. 0.1.2 was the
+installed 0.1.0 updated itself to 0.1.1, the first real update, and later to 0.1.2. 0.1.2 was the
 first release started by pushing its tag ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42359177117)), the procedure since
 2026-11-07.
 
