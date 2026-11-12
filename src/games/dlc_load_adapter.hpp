@@ -8,8 +8,8 @@
 //
 // Files read: <install>/launcher-settings.json (or launcher/...),
 // <install>/userdir.txt, Steam libraryfolders.vdf, appmanifest_<app>.acf,
-// appworkshop_<app>.acf,
-// <library>/steamapps/workshop/content/<app>/<id>/descriptor.mod,
+// appworkshop_<app>.acf, the content descriptor of
+// <library>/steamapps/workshop/content/<app>/<id> (see contentDescriptorFile),
 // <user data>/mod/*.mod and <user data>/dlc_load.json.
 // Files written (through LaunchPlan::configWrites only): dlc_load.json and
 // mod/ugc_<id>.mod for Workshop items that are not (correctly) registered.
@@ -120,6 +120,13 @@ std::optional<std::string> workshopIdFromPath(const fs::path& path, std::string_
 
 // "mod/ugc_123.mod" style reference for a descriptor file name.
 std::string descriptorReference(const fs::path& descriptorFile);
+
+// The descriptor of a Workshop content folder: its descriptor.mod, else the
+// only *.mod file directly inside it (Workshop items whose author shipped
+// "<Name>.mod" instead, observed for CK3). nullopt when there is neither,
+// when several *.mod files leave it open which one describes the mod, or when
+// the folder holds a .zip (a legacy zipped item, described inside its archive).
+std::optional<fs::path> contentDescriptorFile(const fs::path& folder);
 
 // The user-data folder named by a userdir.txt file: its first non-empty line,
 // without surrounding whitespace and one pair of quotes, lexically

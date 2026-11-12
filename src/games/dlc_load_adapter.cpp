@@ -118,6 +118,27 @@ std::optional<fs::path> legacyArchive(const fs::path& folder) {
     return std::nullopt;
 }
 
+// The *.mod files directly inside a folder, in file name order.
+std::vector<fs::path> modFilesIn(const fs::path& folder) {
+    std::vector<fs::path> files = sortedEntries(folder, false);
+    std::erase_if(files, [](const fs::path& file) { return !hasExtension(file, ".mod"); });
+    return files;
+}
+
+// Why a Workshop folder without a legacy archive has no content descriptor.
+std::string missingContentDescriptor(const fs::path& folder) {
+    const std::vector<fs::path> files = modFilesIn(folder);
+    if (files.size() < 2)
+        return "The Workshop folder has no descriptor.mod.";
+    std::string names;
+    for (std::size_t i = 0; i < files.size(); ++i) {
+        names += i == 0 ? "" : i + 1 == files.size() ? " and " : ", ";
+        names += sanitizeUtf8(pathToUtf8(files[i].filename()));
+    }
+    return "The Workshop folder has no descriptor.mod, and its " + std::to_string(files.size()) +
+           " .mod files (" + names + ") leave it open which one describes the mod.";
+}
+
 // A registered descriptor in <user data>/mod.
 struct Registration {
     fs::path file;
@@ -348,12 +369,11 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
     std::string contentProblem;
     if (folder != nullptr) {
         contentPath = *folder;
-        const fs::path descriptorFile = *folder / kContentDescriptor;
         if (reg != nullptr && reg->declaredArchive && isRegularFile(reg->declared) &&
             platform::isWithin(reg->declared, *folder)) {
             contentPath = reg->declared;
-        } else if (isRegularFile(descriptorFile)) {
-            Result<ModDescriptor> parsed = readDescriptor(descriptorFile);
+        } else if (const std::optional<fs::path> descriptorFile = contentDescriptorFile(*folder)) {
+            Result<ModDescriptor> parsed = readDescriptor(*descriptorFile);
             if (parsed)
                 contentDescriptor = std::move(parsed).value();
             else
@@ -363,7 +383,7 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
             contentProblem = "The legacy (zipped) Workshop item has no descriptor.mod outside "
                              "its archive.";
         } else {
-            contentProblem = "The Workshop folder has no descriptor.mod.";
+            contentProblem = missingContentDescriptor(*folder);
         }
     } else {
         contentPath = reg->declared;
@@ -581,6 +601,20 @@ std::optional<std::string> workshopIdFromPath(const fs::path& path, std::string_
 
 std::string descriptorReference(const fs::path& descriptorFile) {
     return std::string(kModFolder) + "/" + pathToUtf8(descriptorFile.filename());
+}
+
+std::optional<fs::path> contentDescriptorFile(const fs::path& folder) {
+    const fs::path descriptor = folder / kContentDescriptor;
+    if (isRegularFile(descriptor))
+        return descriptor;
+    // A legacy zipped item keeps its descriptor inside the archive; a .mod
+    // next to the archive may describe the archive, not the folder.
+    if (legacyArchive(folder))
+        return std::nullopt;
+    std::vector<fs::path> files = modFilesIn(folder);
+    if (files.size() != 1)
+        return std::nullopt;
+    return std::move(files.front());
 }
 
 DlcLoadJsonAdapter::DlcLoadJsonAdapter(const GameTraits& traits)
@@ -1097,8 +1131,10 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
         // so the generated descriptor gets the actual location.
         std::optional<DescriptorDocument> basis;
         if (!archive) {
-            if (auto parsed = readDescriptorDocument(mod.contentPath / kContentDescriptor); parsed)
-                basis = std::move(parsed).value();
+            if (const std::optional<fs::path> file = contentDescriptorFile(mod.contentPath)) {
+                if (auto parsed = readDescriptorDocument(*file); parsed)
+                    basis = std::move(parsed).value();
+            }
         }
         if (!basis)
             basis = registeredDocument;

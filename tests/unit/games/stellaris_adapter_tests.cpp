@@ -398,6 +398,82 @@ TEST_CASE("Stellaris scan handles unusual registrations", "[games][stellaris]") 
     CHECK(f.adapter.scanMods(noUserData).error().code == ErrorCode::InvalidArgument);
 }
 
+TEST_CASE("Stellaris Workshop folders without descriptor.mod use a sole .mod file",
+          "[games][stellaris]") {
+    StellarisFixture f;
+    const GameInstallation inst = f.discovered();
+    const fs::path folder = f.content("1000000010");
+    const fs::path ugcFile = f.userData() / "mod" / "ugc_1000000010.mod";
+    test::writeText(folder / "common" / "example.txt", "example = yes\n");
+    const auto scanned = [&] {
+        const std::vector<InstalledMod> mods = f.scan(inst);
+        return f.mod(mods, "1000000010");
+    };
+
+    SECTION("no .mod file") {
+        const InstalledMod none = scanned();
+        CHECK(none.state == InstallState::Broken);
+        CHECK(none.problems ==
+              std::vector<std::string>{"The Workshop folder has no descriptor.mod."});
+        CHECK(f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{none}).error().code ==
+              ErrorCode::NotFound);
+    }
+    SECTION("exactly one .mod file") {
+        test::writeText(folder / "Example_Sole.MOD",
+                        "name=\"Example Sole\"\nsupported_version=\"v4.5.*\"\n"
+                        "path=\"C:/Users/Author/Documents/Paradox Interactive/Stellaris/mod/"
+                        "Example Sole\"\nremote_file_id=\"1000000010\"");
+        const InstalledMod sole = scanned();
+        CHECK(sole.state == InstallState::Ready);
+        CHECK(sole.problems.empty());
+        CHECK(sole.descriptorPath.empty());
+        CHECK(sole.descriptorRef == "mod/ugc_1000000010.mod");
+        CHECK(sole.descriptor.name == "Example Sole");
+        CHECK(samePath(sole.contentPath, folder));
+
+        // Registered from that file at launch, with the actual location.
+        const LaunchPlan plan = f.plan(inst, {sole}, {"1000000010"});
+        const ConfigWrite* write = findWrite(plan, ugcFile);
+        REQUIRE(write != nullptr);
+        CHECK(write->contents == "name=\"Example Sole\"\nsupported_version=\"v4.5.*\"\npath=\"" +
+                                     f.generic(std::string(kContent) + "1000000010") +
+                                     "\"\nremote_file_id=\"1000000010\"");
+        apply(plan);
+        const InstalledMod registered = scanned();
+        CHECK(registered.state == InstallState::Ready);
+        CHECK(registered.problems.empty());
+        CHECK(samePath(registered.descriptorPath, ugcFile));
+        CHECK(f.plan(inst, {registered}, {"1000000010"}).configWrites.empty());
+    }
+    SECTION("two .mod files") {
+        test::writeText(folder / "b.mod", "name=\"B\"");
+        test::writeText(folder / "A.mod", "name=\"A\"");
+        const InstalledMod two = scanned();
+        CHECK(two.state == InstallState::Broken);
+        CHECK(two.problems ==
+              std::vector<std::string>{"The Workshop folder has no descriptor.mod, and its 2 .mod "
+                                       "files (A.mod and b.mod) leave it open which one describes "
+                                       "the mod."});
+        CHECK(f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{two}).error().code ==
+              ErrorCode::NotFound);
+    }
+    SECTION("descriptor.mod wins over other .mod files") {
+        test::writeText(folder / "descriptor.mod", "name=\"From descriptor.mod\"");
+        test::writeText(folder / "Other.mod", "name=\"Other\"");
+        const InstalledMod both = scanned();
+        CHECK(both.state == InstallState::Ready);
+        CHECK(both.descriptor.name == "From descriptor.mod");
+    }
+    SECTION("a folder with an archive stays a legacy zipped item") {
+        test::writeText(folder / "legacy.zip", "PK placeholder");
+        test::writeText(folder / "legacy.mod", "name=\"Legacy\"\narchive=\"mod/legacy.zip\"");
+        const InstalledMod legacy = scanned();
+        CHECK(legacy.state == InstallState::Broken);
+        CHECK(test::containsText(legacy.problems, "legacy (zipped)"));
+        CHECK(samePath(legacy.contentPath, folder / "legacy.zip"));
+    }
+}
+
 TEST_CASE("Stellaris scan keeps mods with unstorable paths as broken", "[games][stellaris]") {
     StellarisFixture f;
     const GameInstallation inst = f.discovered();
