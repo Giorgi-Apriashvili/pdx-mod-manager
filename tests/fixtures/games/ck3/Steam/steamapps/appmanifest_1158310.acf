@@ -1,0 +1,16 @@
+"AppState"
+{
+	"appid"		"1158310"
+	"Universe"		"1"
+	"name"		"Crusader Kings III"
+	"StateFlags"		"4"
+	"installdir"		"Crusader Kings III"
+	"LastUpdated"		"1792996440"
+	"SizeOnDisk"		"52713473011"
+	"buildid"		"26046173"
+	"LastOwner"		"76561190000000001"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

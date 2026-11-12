@@ -1,14 +1,16 @@
-// Hidden tests ("[.real]") that run the EU4 and Stellaris adapters against the
-// REAL installations of the machine they run on and print a redacted summary.
-// They are strictly read-only: discovery, scanning and reading dlc_load.json
-// only read files, and buildLaunchPlan() only computes the writes it would
-// make (nothing is applied, nothing is started). The replay step copies the
-// registered descriptors into a temporary folder and works on the copy. Run
-// explicitly:
+// Hidden tests ("[.real]") that run the CK3, EU4 and Stellaris adapters against
+// the REAL installations of the machine they run on and print a redacted
+// summary. They are strictly read-only: discovery, scanning and reading
+// dlc_load.json only read files, and buildLaunchPlan() only computes the writes
+// it would make (nothing is applied, nothing is started). The replay step
+// copies the registered descriptors into a temporary folder and works on the
+// copy. Run explicitly:
 //   pmm_games_tests "[.real]" -s
-// Results of a run are recorded in docs/evidence/real-scan-2026-10-29.md.
+// Results of a run are recorded in docs/evidence/real-scan-2026-10-29.md (EU4,
+// Stellaris) and docs/games/ck3.md (CK3).
 
 #include "core/log.hpp"
+#include "games/ck3.hpp"
 #include "games/descriptor.hpp"
 #include "games/eu4.hpp"
 #include "games/stellaris.hpp"
@@ -20,6 +22,7 @@
 
 #include <iostream>
 #include <map>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -64,18 +67,29 @@ void printSteamState(const DlcLoadJsonAdapter& adapter, const GameInstallation& 
                   << installed << " installed, " << pending << " with a pending update)\n";
     }
     std::error_code ec;
-    const fs::path userDir = inst.installPath / "userdir.txt";
+    // The file the adapter reads (<install>/userdir.txt, CK3:
+    // <install>/game/userdir.txt), named when it is not the usual one.
+    const std::string userDirName(adapter.traits().userDirFile);
+    const fs::path userDir = inst.installPath / platform::pathFromUtf8(userDirName);
+    const std::string probed = userDirName == "userdir.txt" ? "" : " (" + userDirName + ")";
     if (!fs::is_regular_file(userDir, ec)) {
-        std::cout << "userdir.txt:    absent\n";
+        std::cout << "userdir.txt:    absent" << probed << "\n";
     } else if (auto read = readUserDirFile(userDir); !read) {
-        std::cout << "userdir.txt:    ignored (" << read.error().message << ")\n";
+        std::cout << "userdir.txt:    ignored (" << read.error().message << ")" << probed << "\n";
     } else {
-        std::cout << "userdir.txt:    " << (*read ? shown(**read) : std::string("empty")) << "\n";
+        std::cout << "userdir.txt:    " << (*read ? shown(**read) : std::string("empty")) << probed
+                  << "\n";
     }
-    std::cout << "steam_appid.txt: "
-              << (fs::is_regular_file(inst.installPath / "steam_appid.txt", ec) ? "present"
-                                                                                : "absent")
-              << "\n";
+    // In the installation folder (Stellaris), or next to the executable (CK3:
+    // binaries/), which is the working directory of a launch.
+    const fs::path exeFolder = inst.executablePath.parent_path();
+    std::string appIdFile = "absent";
+    if (fs::is_regular_file(inst.installPath / "steam_appid.txt", ec))
+        appIdFile = "present";
+    else if (fs::is_regular_file(exeFolder / "steam_appid.txt", ec))
+        appIdFile = "present in the executable's folder (" +
+                    platform::toGenericUtf8(exeFolder.lexically_relative(inst.installPath)) + ")";
+    std::cout << "steam_appid.txt: " << appIdFile << "\n";
 }
 
 void runRealScan(const DlcLoadJsonAdapter& adapter) {
@@ -192,7 +206,8 @@ void runRealScan(const DlcLoadJsonAdapter& adapter) {
         CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
 
     // Regenerating each launcher-written Workshop registration from its
-    // content descriptor must give the same bytes.
+    // content descriptor (descriptor.mod, else a sole <Name>.mod) must give
+    // the same bytes.
     int compared = 0;
     int identical = 0;
     for (const InstalledMod& mod : mods) {
@@ -200,7 +215,10 @@ void runRealScan(const DlcLoadJsonAdapter& adapter) {
         if (mod.identity.source != source::SteamWorkshop || mod.descriptorPath.empty() ||
             !fs::is_directory(mod.contentPath, ec))
             continue;
-        auto content = readDescriptorDocument(mod.contentPath / "descriptor.mod");
+        const std::optional<fs::path> contentFile = contentDescriptorFile(mod.contentPath);
+        if (!contentFile)
+            continue;
+        auto content = readDescriptorDocument(*contentFile);
         auto registered = platform::readFile(mod.descriptorPath);
         if (!content || !registered)
             continue;
@@ -279,4 +297,9 @@ TEST_CASE("Real Stellaris installation (read-only)", "[.real]") {
 TEST_CASE("Real EU4 installation (read-only)", "[.real]") {
     runRealScan(Eu4Adapter());
     replayWithoutWorkshopContent(Eu4Adapter());
+}
+
+TEST_CASE("Real CK3 installation (read-only)", "[.real]") {
+    runRealScan(Ck3Adapter());
+    replayWithoutWorkshopContent(Ck3Adapter());
 }

@@ -29,7 +29,7 @@ struct GameRowData {
     QString installPath;  // display
     QString userDataPath; // display
     QString scanError;
-    QString loadOrderNote; // set when the playset order is not the game's order
+    QString loadOrderNote; // set when the game may not apply the playset order as written
     int modCount = 0;
 };
 

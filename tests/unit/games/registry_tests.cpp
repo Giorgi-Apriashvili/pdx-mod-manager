@@ -1,4 +1,5 @@
 #include "core/catalog.hpp"
+#include "games/ck3.hpp"
 #include "games/dlc_load_adapter.hpp"
 #include "games/eu4.hpp"
 #include "games/game_adapter.hpp"
@@ -8,39 +9,57 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
+#include <string_view>
+#include <vector>
 
 using namespace pmm;
 using namespace pmm::games;
 using test::u8path;
 
-TEST_CASE("The registry lists the EU4 and Stellaris adapters in catalog order",
+TEST_CASE("The registry lists the CK3, EU4 and Stellaris adapters in catalog order",
           "[games][registry]") {
     const auto list = adapters();
-    REQUIRE(list.size() == 2);
-    CHECK(list[0]->key() == "eu4");
-    CHECK(list[1]->key() == "stellaris");
+    REQUIRE(list.size() == 3);
+    CHECK(list[0]->key() == "ck3");
+    CHECK(list[1]->key() == "eu4");
+    CHECK(list[2]->key() == "stellaris");
     for (const auto& adapter : list) {
         const GameCatalogEntry* entry = findGame(adapter->key());
         REQUIRE(entry != nullptr);
         CHECK(&adapter->catalog() == entry);
         CHECK(entry->adapterAvailable);
     }
-    CHECK(findAdapter("stellaris") == list[1].get());
-    CHECK(findAdapter("eu4") == list[0].get());
+    CHECK(findAdapter("ck3") == list[0].get());
+    CHECK(findAdapter("eu4") == list[1].get());
+    CHECK(findAdapter("stellaris") == list[2].get());
     CHECK(findAdapter("hoi4") == nullptr); // known game, no adapter
     CHECK(findAdapter("") == nullptr);
+
+    // Every game the catalog calls supported has its adapter, in the same order.
+    std::vector<std::string_view> supported;
+    for (const GameCatalogEntry& entry : gameCatalog()) {
+        if (entry.adapterAvailable)
+            supported.push_back(entry.key);
+    }
+    REQUIRE(supported.size() == list.size());
+    for (std::size_t i = 0; i < list.size(); ++i)
+        CHECK(list[i]->key() == supported[i]);
 }
 
 TEST_CASE("Game traits agree with the catalog", "[games][registry]") {
-    for (const GameTraits* traits : {&stellarisTraits(), &eu4Traits()}) {
+    for (const GameTraits* traits : {&ck3Traits(), &stellarisTraits(), &eu4Traits()}) {
         const GameCatalogEntry* entry = findGame(traits->key);
         REQUIRE(entry != nullptr);
         CHECK(traits->steamAppId == entry->steamAppId);
         CHECK(traits->userDataFolder == entry->userDataFolder);
         CHECK(traits->launcherGameId == traits->key);
     }
+    CHECK(ck3Traits().rejectsEarlyWildcards);
     CHECK(stellarisTraits().rejectsEarlyWildcards);
     CHECK_FALSE(eu4Traits().rejectsEarlyWildcards);
+    CHECK(ck3Traits().executable == "binaries/ck3.exe");
+    CHECK(ck3Traits().userDirFile == "game/userdir.txt");
+    CHECK_FALSE(ck3Traits().loadOrderVerifiedInGame);
 }
 
 TEST_CASE("The real discovery environment describes this process", "[games][registry]") {

@@ -1,5 +1,6 @@
 pmm_add_test(pmm_games_tests
   SOURCES
+    ck3_adapter_tests.cpp
     descriptor_tests.cpp
     eu4_adapter_tests.cpp
     launcher_settings_tests.cpp

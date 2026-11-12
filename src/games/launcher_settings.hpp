@@ -2,8 +2,9 @@
 
 // The game's own launcher-settings.json, which the Paradox launcher reads to
 // learn the game version, the user-data folder and how to start the game.
-// Modern layout: <install>/launcher-settings.json; older installations keep it
-// in <install>/launcher/launcher-settings.json.
+// Stellaris and EU4 keep it in <install>/launcher-settings.json; Crusader Kings
+// III keeps it in <install>/launcher/launcher-settings.json, with an exePath
+// ("../binaries/ck3.exe") relative to that folder.
 //
 // The file is local data written by the game's installer, but it decides what
 // gets executed, so it is validated like any other input: fields must have the
@@ -40,7 +41,8 @@ inline constexpr std::size_t kMaxLauncherArgumentBytes = 4096;
 // characters, or too many/too long arguments. Unknown fields are ignored.
 Result<LauncherSettings> parseLauncherSettings(std::string_view json);
 
-// The first existing candidate, modern layout first.
+// The first existing candidate: <install>/launcher-settings.json, then
+// <install>/launcher/launcher-settings.json.
 std::optional<fs::path> findLauncherSettings(const fs::path& installDir);
 
 // NotFound when neither location has the file.

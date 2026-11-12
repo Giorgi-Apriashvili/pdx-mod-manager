@@ -570,6 +570,51 @@ private:
     const AcquisitionPolicy& m_policy;
 };
 
+// `extension` is ".mod" or ".zip"; compared ASCII case-insensitively.
+bool hasExtension(const fs::path& file, std::string_view extension) {
+    const std::optional<std::string> text = internal::pathToUtf8(file.extension());
+    return text && text->size() == extension.size() &&
+           std::equal(text->begin(), text->end(), extension.begin(), [](char a, char b) {
+               return (a >= 'A' && a <= 'Z' ? static_cast<char>(a - 'A' + 'a') : a) == b;
+           });
+}
+
+// The file that describes a Workshop content folder: its descriptor.mod, else
+// its only *.mod file, unless a .zip marks a legacy zipped item. This is the
+// rule of games::contentDescriptorFile() (src/games/dlc_load_adapter.cpp),
+// which this library does not link; keep the two in step (a test in
+// tests/unit/services/acquisition_tests.cpp compares them). `ambiguous`
+// receives the number of *.mod files when several leave it open (no
+// descriptor.mod, no .zip), else 0.
+std::optional<fs::path> contentDescriptor(const fs::path& folder, std::size_t& ambiguous) {
+    ambiguous = 0;
+    std::error_code ec;
+    fs::path descriptor = folder / "descriptor.mod";
+    if (fs::is_regular_file(descriptor, ec))
+        return descriptor;
+    std::optional<fs::path> only;
+    std::size_t modFiles = 0;
+    bool archive = false;
+    for (fs::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec)) {
+        std::error_code typeError;
+        if (!it->is_regular_file(typeError))
+            continue;
+        if (hasExtension(it->path(), ".zip")) {
+            archive = true;
+        } else if (hasExtension(it->path(), ".mod")) {
+            ++modFiles;
+            only = it->path();
+        }
+    }
+    if (archive)
+        return std::nullopt;
+    if (modFiles > 1)
+        ambiguous = modFiles;
+    if (modFiles != 1)
+        return std::nullopt;
+    return only;
+}
+
 } // namespace
 
 const char* toString(AwaitStep step) noexcept {
@@ -723,15 +768,24 @@ Status verifyWorkshopContent(const fs::path& installPath) {
         return makeError(ErrorCode::ValidationFailed,
                          "the content path is neither a folder nor a file", shown);
     }
-    const fs::path descriptor = installPath / "descriptor.mod";
-    const auto dst = fs::status(descriptor, ec);
-    if (ec || !fs::is_regular_file(dst)) {
+    std::size_t ambiguous = 0;
+    const std::optional<fs::path> descriptor = contentDescriptor(installPath, ambiguous);
+    if (!descriptor) {
+        if (ambiguous > 0) {
+            return makeError(ErrorCode::ValidationFailed,
+                             "descriptor.mod is missing from the downloaded content, and its " +
+                                 std::to_string(ambiguous) +
+                                 " .mod files leave it open which one describes the mod",
+                             shown);
+        }
         return makeError(ErrorCode::ValidationFailed,
                          "descriptor.mod is missing from the downloaded content", shown);
     }
-    const auto size = fs::file_size(descriptor, ec);
-    if (ec || size == 0)
-        return makeError(ErrorCode::ValidationFailed, "descriptor.mod is empty", shown);
+    const auto size = fs::file_size(*descriptor, ec);
+    if (ec || size == 0) {
+        return makeError(ErrorCode::ValidationFailed,
+                         internal::displayPath(descriptor->filename()) + " is empty", shown);
+    }
     return {};
 }
 

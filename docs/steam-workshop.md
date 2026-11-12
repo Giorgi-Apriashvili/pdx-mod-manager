@@ -19,7 +19,8 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Manual fallback (open Workshop page, then rescan) | Implemented. **Limited**: does not satisfy automatic download |
 | Web API metadata (names, sizes, wrong-game check) | Request builder and parser in `providers`; the app layer's `QtWorkshopMetadataHost` makes the call (tested against a local stub) |
 | Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
-| Europa Universalis IV | Same mechanism expected (the game ships `steam_api64.dll`). EU4 1.37.5 is installed on the development machine, but the helper has **not been run** for it yet |
+| Europa Universalis IV | **Verified live** 2026-10-30 with EU4 1.37.5: the helper session in EU4's app context, with the `steam_api64.dll` from the game root, and subscribe and download (see the "Subscribe" row and the [evidence](evidence/live-validation-2026-10-30.md)) |
+| Crusader Kings III | Implemented, **unverified**: the same mechanism, with the Steam API library from `<install>/binaries`, where CK3 keeps it next to `ck3.exe`; the helper has not been run for app 1158310 |
 
 ## 1. Architecture
 
@@ -262,8 +263,10 @@ its transitions and the helper.
 - Map helper events with `observationFromHelperEvent()` and actions with `helperCommandFor()`.
   Batch `QueryState` actions from several jobs into one `state` command.
 - Hold Subscribe and RequestDownload behind the identity gate (above).
-- Run `verifyWorkshopContent()` (a non-empty `descriptor.mod` in the folder, or a non-empty
-  single file for legacy items) on a worker thread, then feed `ContentVerified`.
+- Run `verifyWorkshopContent()` on a worker thread, then feed `ContentVerified`: a non-empty
+  `descriptor.mod` in the folder, else exactly one other `.mod` file there, non-empty, and no
+  `.zip` (the rule of `games::contentDescriptorFile()`, since 2026-11-13; some items ship
+  `<Name>.mod`), or a non-empty single file for legacy items.
 - Feed `Tick` about once per second. Save `context.job` when `persist` is set; progress-only
   changes may be coalesced.
 - On start-up, call `startAcquisition()` for every stored non-terminal job.
@@ -332,7 +335,7 @@ reported as 2. A result that takes longer than 120 s is reported as 16 (Timeout)
 | Web API gives no verdict within 15 s (offline, blocked) | NeedsUserAction (timeout) | nothing was subscribed; Retry asks the Web API again, or use the manual fallback |
 | Offline / timeouts / Steam busy | Failed, retried with backoff | after 3 runs: "Automatic retries are exhausted" |
 | Download stalls (no progress for 5 min) | Failed (timeout) | check Steam's Downloads page (paused, disk space), retry |
-| Installed content unusable (no `descriptor.mod`) | Failed (validation_failed) | verify files in Steam or resubscribe there, retry |
+| Installed content unusable (no `descriptor.mod` and not exactly one other `.mod` file) | Failed (validation_failed) | verify files in Steam or resubscribe there, retry |
 | Unsubscribed in Steam during the download | NeedsUserAction | retry to subscribe again |
 | Cancel | Cancelled | the message says whether a subscription or download already happened and remains in Steam |
 | Application restarted mid-job | resumes in the stored state, re-queries Steam first | no blind re-subscribe |
@@ -397,9 +400,11 @@ Not legal advice. These points need review before release.
 ## 10. Platform notes
 
 The helper runs on Windows only ([ADR 0009](adr/0009-windows-only.md)). The 64-bit helper loads
-`steam_api64.dll` from the game root (verified for Stellaris). A 32-bit `steam_api.dll` would need
-a 32-bit helper build; none of the target games needs it. CI builds `pmm-steam-helper` and runs
-`pmm_providers_tests`, which include the end-to-end helper tests against the fake library.
+`steam_api64.dll` from the game root, `bin`, `binaries` or `win64`, the first found (the root
+verified for Stellaris and EU4; Crusader Kings III keeps it in `binaries`, unverified). A
+32-bit `steam_api.dll` would need a 32-bit helper build; none of the target games needs it. CI
+builds `pmm-steam-helper` and runs `pmm_providers_tests`, which include the end-to-end helper
+tests against the fake library.
 
 ## 11. Not verified yet, and how to verify it
 

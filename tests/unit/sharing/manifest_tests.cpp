@@ -347,6 +347,8 @@ TEST_CASE("Games and sources are validated against the catalog", "[sharing][mani
     CHECK(s.error().code == ErrorCode::UnsupportedGame);
     CHECK_THAT(s.error().message, ContainsSubstring("Hearts of Iron IV"));
 
+    m.game = "ck3";
+    CHECK(validateManifest(m).ok());
     m.game = "eu4";
     CHECK(validateManifest(m).ok());
     m.mods[1].source = "paradox-mods";

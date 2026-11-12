@@ -4,8 +4,8 @@ What works for which game and store, and how we know. The application runs on
 Windows only ([ADR 0009](adr/0009-windows-only.md)). Support for a combination
 depends on the game's own executable and a validated integration (spec section 1).
 
-Last reviewed: 2026-11-06 (installed Stellaris version), after the live validation of
-2026-10-30; application 0.1.0 (in development).
+Last reviewed: 2026-11-13 (Crusader Kings III added, read-only checks only), after
+the live validation of 2026-10-30; application 0.1.2 plus unreleased changes.
 
 ## Status legend
 
@@ -55,6 +55,13 @@ tested. Results:
   the previous configuration; for EU4 a real Workshop subscription and
   download through the application, restart persistence of a pending job, and
   the failure cases ([evidence](evidence/live-validation-2026-10-30.md)).
+- Crusader Kings III "1.20.1.2 (Crozier)" build 26046173, 2026-11-13, read-only:
+  installation, user data, executable, arguments, environment, mod inventory
+  (11 mods), the current `dlc_load.json`, compatibility warnings, the launch
+  plan for the launcher's selection, which writes nothing, and a share-code
+  round trip between two new profiles of the application
+  ([CK3 adapter](games/ck3.md#real-machine-evidence)). The game was not
+  started.
 
 Not observed yet: other stores and Steam's own offline mode.
 
@@ -117,11 +124,35 @@ name sorts first wins ([evidence](evidence/live-validation-2026-10-30.md); [EU4 
 | Play only while the Steam client runs (from 0.1.1) | Implemented, unverified: tested with fakes only (2026-11-06); checks that Steam runs, not that it is signed in ([validation](validation.md) step 6, item 7) | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
 | In-game verification of enabled mods and order | **Verified (2026-10-30, 1.37.5)** with probe mods: enabled mods loaded, disabled not; **the playset order does not decide file overrides** (the mod whose name sorts first wins) ([evidence](evidence/live-validation-2026-10-30.md)) | Unverified |
 
+## Crusader Kings III (Steam app 1158310)
+
+Differences from Stellaris and EU4: the executable is `binaries/ck3.exe` and
+`launcher-settings.json` lies in `launcher/`; `steam_appid.txt` lies in
+`binaries/`, where direct launches start; `userdir.txt` is read from
+`<install>/game/` (documented by the CK3 wiki, unverified); only
+`supported_version="1.*"` was reported invalid (1.19 build); one Workshop item
+ships `<Name>.mod` instead of `descriptor.mod`. **Which mod wins a shared file
+has not been checked in the game** ([CK3 adapter](games/ck3.md)).
+
+| Capability | Windows · Steam | Other stores |
+| --- | --- | --- |
+| Detect installation and user data | **Verified (2026-11-13, 1.20.1.2)** read-only; `game/userdir.txt` implemented, unverified | Implemented, unverified (manual location) |
+| Mod inventory | **Verified (2026-11-13, 1.20.1.2)** read-only: 11 mods, including an item without `descriptor.mod`; registered Workshop items without content read as missing (replay) | Implemented, unverified (local mods only) |
+| Playsets | **Verified (2026-11-13, 1.20.1.2)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
+| Share codes | **Verified (2026-11-13, 1.20.1.2)** read-only between two new profiles on one machine. Releases up to 0.1.2 reject codes for `ck3` as not supported | Implemented, unverified |
+| Generated configuration | **Verified (2026-11-13, 1.20.1.2)** computed, not written: no write for the launcher's selection; 7 of 11 regenerated descriptors identical, 4 registrations older than their content | Implemented, unverified |
+| Workshop: Steam session and item state | Implemented, unverified | Unsupported: requires the game on a Steam account |
+| Workshop: subscribe and download | Implemented, unverified | Unsupported: requires the game on a Steam account |
+| Workshop: manual fallback | Implemented, unverified | Unsupported |
+| Direct launch without the Paradox launcher | Implemented, unverified (working directory `binaries/`, as the launcher uses) | Implemented, unverified |
+| Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
+| In-game verification of enabled mods and order | **Unverified**: the playset order is written to `enabled_mods`; which mod wins a shared file has not been measured, and a note above a CK3 playset says so ([load order](load-order.md#crusader-kings-iii)) | Unverified |
+
 ## Other combinations
 
 | Combination | Status | Reason |
 | --- | --- | --- |
-| Hearts of Iron IV, Crusader Kings III, Victoria 3 | Unsupported | In the game catalog only (`adapterAvailable = false`); share codes for them are rejected with `UnsupportedGame`. The adapter interface is designed for them; no adapter exists. |
+| Hearts of Iron IV, Victoria 3 | Unsupported | In the game catalog only (`adapterAvailable = false`); share codes for them are rejected with `UnsupportedGame`. The adapter interface is designed for them; no adapter exists. |
 | EU4 versions before the Paradox launcher v2 (mods in `settings.txt`) | Unsupported | Not detected as such; their mods would not be enabled ([EU4 adapter](games/eu4.md)). |
 | Workshop acquisition with Steam offline or not signed in | Unsupported (by design) | Installed content is still accepted; network operations wait until Steam is online. |
 | Mods from Paradox Mods (mods.paradoxplaza.com) or other non-Steam sources | Unsupported | No provider exists; such mods can be used as local mods. |

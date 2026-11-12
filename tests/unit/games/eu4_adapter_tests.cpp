@@ -156,6 +156,8 @@ TEST_CASE("EU4 current configuration and launch plan", "[games][eu4]") {
                                       f.mod(mods, "zipped_local"), f.mod(mods, "2000000003")};
     auto plan = f.adapter.buildLaunchPlan(inst, ordered);
     REQUIRE(plan.ok());
+    // The executable's folder, which for EU4 is the installation folder.
+    CHECK(samePath(plan->workingDirectory, f.install()));
     CHECK(plan->arguments == std::vector<std::string>{"-gdpr-compliant"});
     CHECK(plan->environment == std::vector<std::pair<std::string, std::string>>{
                                    {"SteamAppId", "236850"}, {"SteamGameId", "236850"}});
@@ -289,8 +291,7 @@ TEST_CASE("Launch arguments never enable the game's telemetry", "[games][eu4]") 
 TEST_CASE("EU4 after a reinstall: registered Workshop items without content are not installed",
           "[games][eu4]") {
     Eu4Fixture f("eu4-reinstalled");
-    std::vector<LogRecord> logged;
-    setLogSink([&](const LogRecord& record) { logged.push_back(record); });
+    const test::LogCapture capture;
 
     // StateFlags 4 with BytesToDownload > 0 is a complete installation.
     const GameInstallation inst = f.discovered();
@@ -314,7 +315,7 @@ TEST_CASE("EU4 after a reinstall: registered Workshop items without content are 
 
     // The registrations stay visible in the log for diagnostics.
     int notes = 0;
-    for (const LogRecord& record : logged) {
+    for (const LogRecord& record : capture.records()) {
         if (record.message.find("is not downloaded") == std::string::npos)
             continue;
         ++notes;
@@ -326,7 +327,6 @@ TEST_CASE("EU4 after a reinstall: registered Workshop items without content are 
         }
     }
     CHECK(notes == 4); // 3000000001, ...02, ...03 and the unreadable ...05
-    setLogSink({});
 
     // dlc_load.json keeps Workshop identities for items that are not installed.
     auto entries = f.adapter.readCurrentConfiguration(inst, mods);

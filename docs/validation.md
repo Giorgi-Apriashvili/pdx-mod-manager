@@ -1,7 +1,8 @@
 # Manual end-to-end validation
 
 This is the acceptance procedure from spec section 10 ("Manual end-to-end
-acceptance") for **Stellaris** and **Europa Universalis IV**. Automated tests
+acceptance") for **Stellaris**, **Europa Universalis IV** and **Crusader Kings
+III**. Automated tests
 cannot cover it: it needs a real game installation, a Steam account that owns
 the game, and observation of the running game.
 
@@ -12,6 +13,8 @@ game or talk to Steam and have not been run; they need the explicit approval
 of the machine's owner. Record only what you observed; a failed or skipped
 step is a valid result and must be written down as such. The
 [support matrix](support-matrix.md) is updated only from rows in that table.
+For Crusader Kings III only the read-only steps have been run (2026-11-13);
+its probe run is prepared below and needs the owner's approval.
 
 The procedure uses the desktop application `pmm-app` and the UI described in
 [`ui-contract.md`](ui-contract.md) (Import code, Export code, Play, ...).
@@ -78,18 +81,19 @@ subscriptions afterwards in the Steam client if wanted.
 
 ### Paths used below
 
-| Placeholder | Stellaris | Europa Universalis IV |
-| --- | --- | --- |
-| `<appid>` | `281990` | `236850` |
-| `<install>` | `<Steam library>/steamapps/common/Stellaris` | `<Steam library>/steamapps/common/Europa Universalis IV` |
-| `<exe>` | `stellaris.exe` | `eu4.exe` (observed) |
-| `<userdata>` | `Documents\Paradox Interactive\Stellaris` | `Documents\Paradox Interactive\Europa Universalis IV`, unless `<install>/userdir.txt` names another folder |
-| Version source | `<install>/launcher-settings.json` (`version`, `rawVersion`) and `buildid` in `steamapps/appmanifest_<appid>.acf` | same files (observed: `rawVersion` `v1.37.5.0`) |
-| Arguments the game's launcher passes (`exeArgs`) | `-gdpr-compliant` | `-enabletelemetry -gdpr-compliant`; direct launches are designed to drop `-enabletelemetry` |
-| `steam_appid.txt` in `<install>` | present | **absent**: a direct start relies on `SteamAppId`/`SteamGameId` set by the manager |
-| Load-order file | `<userdata>/dlc_load.json`, `enabled_mods` (observed) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only; not yet with a game started by the manager) |
-| `supported_version` format for probes | `v4.5.*` (match `rawVersion`) | `v1.37.*.*` (four components, as in installed descriptors) |
-| Paradox launcher processes | `Paradox Launcher.exe`, `bootstrapper-v2.exe`, and `dowser.exe` (in the game folder) | same |
+| Placeholder | Stellaris | Europa Universalis IV | Crusader Kings III |
+| --- | --- | --- | --- |
+| `<appid>` | `281990` | `236850` | `1158310` |
+| `<install>` | `<Steam library>/steamapps/common/Stellaris` | `<Steam library>/steamapps/common/Europa Universalis IV` | `<Steam library>/steamapps/common/Crusader Kings III` |
+| `<exe>` | `stellaris.exe` | `eu4.exe` (observed) | `ck3.exe`, in `<install>/binaries` (observed) |
+| `<exe path>` | `<install>\stellaris.exe` | `<install>\eu4.exe` | `<install>\binaries\ck3.exe` |
+| `<userdata>` | `Documents\Paradox Interactive\Stellaris` | `Documents\Paradox Interactive\Europa Universalis IV`, unless `<install>/userdir.txt` names another folder | `Documents\Paradox Interactive\Crusader Kings III`, unless `<install>/game/userdir.txt` names another folder (none ships) |
+| Version source | `<install>/launcher-settings.json` (`version`, `rawVersion`) and `buildid` in `steamapps/appmanifest_<appid>.acf` | same files (observed: `rawVersion` `v1.37.5.0`) | `<install>/launcher/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.20.1.2`, no `v`) |
+| Arguments the game's launcher passes (`exeArgs`) | `-gdpr-compliant` | `-enabletelemetry -gdpr-compliant`; direct launches are designed to drop `-enabletelemetry` | `-gdpr-compliant` (the launcher adds its own session arguments, which a direct start does not pass) |
+| `steam_appid.txt` in `<install>` | present | **absent**: a direct start relies on `SteamAppId`/`SteamGameId` set by the manager | in `<install>/binaries`, the folder a direct start runs in |
+| Load-order file | `<userdata>/dlc_load.json`, `enabled_mods` (observed) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only; not yet with a game started by the manager) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only) |
+| `supported_version` format for probes | `v4.5.*` (match `rawVersion`) | `v1.37.*.*` (four components, as in installed descriptors) | `1.20.*` (no `v`; never `1.*`, which CK3 reports as invalid) |
+| Paradox launcher processes | `Paradox Launcher.exe`, `bootstrapper-v2.exe`, and `dowser.exe` (in the game folder) | same | same; `dowser.exe` lies in `<install>/launcher` |
 
 ## 2. Record the environment
 
@@ -98,7 +102,7 @@ Capture these for the results row:
 ```sh
 # OS
 Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version   # PowerShell
-# Game version and Steam build
+# Game version and Steam build (CK3: "<install>/launcher/launcher-settings.json")
 python -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); print(d.get('version'), d.get('rawVersion'), d.get('distPlatform'))" "<install>/launcher-settings.json"
 grep buildid "<Steam library>/steamapps/appmanifest_<appid>.acf"
 ```
@@ -108,10 +112,18 @@ grep buildid "<Steam library>/steamapps/appmanifest_<appid>.acf"
 ```sh
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --supported-version "v4.5.*"     # Stellaris 4.5.x
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --supported-version "v1.37.*.*"  # EU4 1.37.x
+python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game ck3 --supported-version "1.20.*"  # CK3 1.20.x
+python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game ck3 --names b --supported-version "1.20"  # CK3: then b again
 ```
 
 This writes `mod/pmm_probe_{a,b,c}` folders and `mod/pmm_probe_{a,b,c}.mod`
 descriptors into the game's user mod folder. They contain no gameplay content.
+`--game ck3` writes CK3's event syntax (Stellaris and EU4 share the default
+one). For CK3, run the read-only `pmm_games_tests "[.real]" -s` first and keep
+its output as the baseline, and leave the other mods out of the probe playset
+(see [load order](load-order.md#crusader-kings-iii)). The second CK3 command
+rewrites probe b, which stays disabled, with `supported_version="1.20"`, a
+two-part pattern without a wildcard whose treatment by CK3 is not known.
 Remove them at the end with `probe_mods.py remove "<userdata>/mod"`.
 
 ## 4. Procedure
@@ -222,13 +234,16 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
    - EU4 only (no `steam_appid.txt`): the game does not quit and restart
      itself through Steam; record the process list a few seconds after the
      start, and whether Steam shows the game as running;
+   - CK3 only (started in `<install>/binaries`, where its `steam_appid.txt`
+     lies): the same observations; also record whether DLC shows as enabled
+     in the main menu;
    - `<userdata>/dlc_load.json` `enabled_mods` lists exactly the four enabled
      entries and nothing else, in the order the adapter documents in its
      `LoadOrderInfo`. With the launcher's observed convention (playset
      position 0 first) that is `mod/pmm_probe_c.mod`, `mod/ugc_<W1>.mod`,
-     `mod/pmm_probe_a.mod`, `mod/ugc_<W3>.mod`; both games' existing files use
-     the `mod/ugc_<id>.mod` naming for Workshop items. `disabled_dlcs` is
-     unchanged from before the launch.
+     `mod/pmm_probe_a.mod`, `mod/ugc_<W3>.mod`; all three games' existing
+     files use the `mod/ugc_<id>.mod` naming for Workshop items.
+     `disabled_dlcs` is unchanged from before the launch.
 3. Wait for the main menu, quit the game, then analyse its log:
 
    ```sh
@@ -256,8 +271,8 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
    game not running, exit Steam (**Steam > Exit**) and wait until
    `tasklist /FI "IMAGENAME eq steam.exe"` lists nothing, then switch back to
    the manager. Expected: **Play** is unavailable and says "Steam is not
-   running. Start Steam and sign in, then launch Stellaris." (or EU4's
-   name); pressing it starts
+   running. Start Steam and sign in, then launch Stellaris." (or the other
+   game's name); pressing it starts
    nothing and writes nothing (`dlc_load.json` unchanged). Then start Steam
    and sign in without touching the manager. Expected: Play becomes available
    within about 3 s after `steam.exe` appears, without a click; pressing it
@@ -308,7 +323,7 @@ python scripts/share-code.py encode disabled-unavailable.json > disabled-unavail
 | Offline use | Steam: *Go Offline*, or disconnect the network, then start the manager | Playsets and inventory available; acquisition explains that Steam is offline or not signed in; record whether a ready playset still launches | Go online |
 | Bad share code | Paste (a) the code without its last character, (b) the code with `PMM1.` changed to `PMM2.`, (c) arbitrary text, (d) the code with a space inserted | (a) truncated or damaged, (b) created by a newer version, (c) not a share code, (d) rejected; no playset, no job, no file written | none |
 | Configuration permission failure | Hash `dlc_load.json` (`certutil -hashfile dlc_load.json SHA256`); `attrib +R "<userdata>\dlc_load.json"`; press Play | Launch refused with a permission message before the game starts; hash unchanged; no interrupted transaction left behind | `attrib -R ...` |
-| Process-start failure | Deny execution of the game executable temporarily (may need an elevated prompt): `icacls "<install>\<exe>" /deny "%USERNAME%:(X)"`; press Play | Error that the game could not be started, with the OS error in the details and diagnostics; no Paradox launcher; record whether the configuration written for this launch was restored automatically or offered for restore | `icacls "<install>\<exe>" /remove:d "%USERNAME%"`; if in doubt, Steam *Verify integrity of game files* |
+| Process-start failure | Deny execution of the game executable temporarily (may need an elevated prompt): `icacls "<exe path>" /deny "%USERNAME%:(X)"`; press Play | Error that the game could not be started, with the OS error in the details and diagnostics; no Paradox launcher; record whether the configuration written for this launch was restored automatically or offered for restore | `icacls "<exe path>" /remove:d "%USERNAME%"`; if in doubt, Steam *Verify integrity of game files* |
 
 Afterwards: remove the probes (`probe_mods.py remove "<userdata>/mod"`), and
 use **Restore pre-launch configuration** if you want the game's previous
@@ -337,3 +352,4 @@ One row per game, Windows version and distribution combination (repeat rows for 
 | Europa Universalis IV | v1.37.5.0 (15918133) | Windows 11 23H2 | Steam | 0.1.0-dev (`66d91d4`) | 2026-10-30 | 1 read-only, without the probe mods ([real scan](evidence/real-scan-2026-10-29.md)); 2, 3, 5 read-only, scripted variant | partial: 4, 6-9 not run | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Europa Universalis IV | v1.37.5.0 (15918133) | Windows 11 23H2 | Steam | 0.1.0-dev (`91b973e`; failure cases `19e4705`) | 2026-10-30 | 1-6, 8, 9 live with probe mods (one machine, isolated profiles A and B; `--live-test`) | pass; step 6 shows that EU4 ignores the `enabled_mods` order for file overrides (name order decides); step 7 run for Stellaris only | [live validation](evidence/live-validation-2026-10-30.md) |
 | Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (`19e4705`) | 2026-10-30 | 1-7 live (probe mods; step 4 with a separate approval, build `f809e91`; `--live-test`) | pass; 8-9 run for EU4 only (same code paths); step 7 found a stale Play blocker, fixed in `19e4705` and rerun | [live validation](evidence/live-validation-2026-10-30.md) |
+| Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (branch `agent/ck3`, `e16268a`) | 2026-11-13 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles, playset from the game's configuration) | partial: 4, 6-9 not run (need the owner's approval) | [CK3 adapter](games/ck3.md#real-machine-evidence) |

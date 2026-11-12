@@ -225,6 +225,57 @@ TEST_CASE("An imported missing mod is subscribed, downloaded, verified and resca
     CHECK_FALSE(r.snapshotJob(snapshot, kItem).canRetry);
 }
 
+TEST_CASE("A download that ships its own .mod file instead of descriptor.mod is ready",
+          "[services][acquisition]") {
+    // As a Crusader Kings III item on the development machine does.
+    Rig r;
+    r.steam.items[kItem].name = "Example Steel";
+    r.steam.items[kItem].contentFile = "Example_Steel.mod";
+    const std::int64_t id = r.acquire({workshopEntry(kItem, "Example Steel")});
+    const std::vector<GameState> rescans = r.settle();
+
+    const AcquisitionJob job = r.job(kItem);
+    CHECK(job.state == AcquisitionState::Installed);
+    CHECK(job.errorCode.empty());
+    CHECK(rescans.size() == 1);
+    CHECK(fs::exists(r.w.workshop / u8(kItem) / "Example_Steel.mod"));
+    CHECK_FALSE(fs::exists(r.w.workshop / u8(kItem) / "descriptor.mod"));
+    const PlaysetView view = require(loadPlaysetView(r.w.ctx, id, r.c().liveJobs(kGame)));
+    CHECK(view.rows[0].readiness.status == EntryStatus::Ready);
+    CHECK(view.launch.canLaunch);
+}
+
+TEST_CASE("The download check accepts the Workshop folders the game adapters describe",
+          "[services][acquisition]") {
+    // providers::verifyWorkshopContent() repeats games::contentDescriptorFile()'s
+    // rule, as providers does not link games.
+    struct Layout {
+        const char* name;
+        std::vector<const char*> files;
+        bool described;
+    };
+    const std::vector<Layout> layouts{
+        {"descriptor.mod", {"descriptor.mod"}, true},
+        {"descriptor.mod and another .mod", {"descriptor.mod", "Other.mod"}, true},
+        {"descriptor.mod and a .zip", {"descriptor.mod", "legacy.zip"}, true},
+        {"one .mod", {"Example_Steel.mod"}, true},
+        {"one upper-case .MOD", {"Example.MOD"}, true},
+        {"two .mod", {"A.mod", "b.mod"}, false},
+        {"no .mod", {"readme.txt"}, false},
+        {"one .mod and a .zip", {"legacy.mod", "legacy.ZIP"}, false},
+    };
+    TempDir dir;
+    for (const Layout& layout : layouts) {
+        INFO(layout.name);
+        const fs::path folder = dir.path() / u8(layout.name);
+        writeText(folder / "common" / "x.txt", "x");
+        for (const char* file : layout.files)
+            writeText(folder / u8(file), "name=\"Example\"");
+        CHECK(games::contentDescriptorFile(folder).has_value() == layout.described);
+        CHECK(providers::verifyWorkshopContent(folder).ok() == layout.described);
+    }
+}
+
 TEST_CASE("Content Steam already installed is verified, never downloaded again",
           "[services][acquisition]") {
     Rig r;

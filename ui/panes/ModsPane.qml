@@ -760,7 +760,8 @@ Rectangle {
             Layout.fillWidth: true
             Layout.margins: 6
             Layout.bottomMargin: 0
-            // The game does not apply the playset order as written (EU4).
+            // The game does not apply the playset order as written (EU4), or
+            // that it does is not verified yet (CK3).
             visible: root.canEdit && Backend.games.currentLoadOrderNote.length > 0
                      && Backend.mods.count > 1
                      && root.loadOrderNoteHiddenFor !== Backend.games.currentKey

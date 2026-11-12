@@ -1,6 +1,7 @@
 # Game adapters: Clausewitz descriptors, launcher-settings.json, and the
-# dlc_load.json-based EU4 and Stellaris adapters.
+# dlc_load.json-based CK3, EU4 and Stellaris adapters.
 add_library(pmm_games STATIC
+  ck3.cpp
   descriptor.cpp
   dlc_load_adapter.cpp
   eu4.cpp

@@ -14,12 +14,28 @@ logs/error.log together with the file they came from.
 
 EU4 1.37 does not report unknown triggers inside scripted triggers that are
 never used (observed 2026-10-30), but it parses every event file at start-up,
-so the event files carry the same trigger names.
+so the event files carry the same trigger names. `analyze` finds a trigger
+name anywhere in a line, so either source is enough.
+
+The event syntax depends on the game (--game):
+
+  stellaris, eu4  country_event = { id = <ns>.1 ... is_triggered_only = yes }
+                  (the default; both games, in-game checked on 2026-10-30)
+  ck3             <ns>.1 = { type = character_event  hidden = yes ... }, the
+                  CK3 form (no CK3 event file uses country_event). The files
+                  start with a UTF-8 BOM, as every event and scripted-trigger
+                  file of CK3 1.20.1.2 does. CK3's error.log reports unknown
+                  triggers in common/scripted_triggers (seen on a 1.19 build);
+                  whether it reports them in unused scripted triggers is
+                  unknown. Not yet used against a running game.
 
 Usage:
-  probe_mods.py create <mod-dir> [--names a b c] [--supported-version v4.5.*]
+  probe_mods.py create <mod-dir> [--game ck3] [--names a b c] [--supported-version v4.5.*]
       Writes probe folders and .mod descriptors into the game's user mod
       directory (e.g. "Documents/Paradox Interactive/Stellaris/mod").
+      --supported-version must use the game's version format and must not
+      make the game report it as invalid: "v4.5.*" for Stellaris, "1.20.*"
+      for CK3 (never "1.*").
   probe_mods.py analyze <error.log> --enabled c a [--disabled b]
       Reads the game's error.log after it reached the main menu and reports
       which probes loaded and which one won the shared file, as JSON.
@@ -40,6 +56,7 @@ from pathlib import Path
 
 DEFAULT_NAMES = ["a", "b", "c"]
 NAME_RE = re.compile(r"^[a-z0-9]{1,16}$")
+GAMES = ["stellaris", "eu4", "ck3"]
 
 
 def probe_folder(name: str) -> str:
@@ -59,9 +76,18 @@ def descriptor(name: str, path: Path | None, supported_version: str | None) -> s
     return "\n".join(lines) + "\n"
 
 
-def probe_event(namespace: str, trigger: str) -> str:
-    # Never fires (triggered only, unknown trigger); the game reports the
-    # unknown trigger with the file it came from while loading events.
+def probe_event(namespace: str, trigger: str, game: str) -> str:
+    # Never fires (triggered only or hidden, unknown trigger); the game reports
+    # the unknown trigger with the file it came from while loading events.
+    if game == "ck3":
+        return (
+            f"namespace = {namespace}\n\n"
+            f"{namespace}.1 = {{\n"
+            "\ttype = character_event\n"
+            "\thidden = yes\n"
+            f"\ttrigger = {{\n\t\t{trigger} = yes\n\t}}\n"
+            "}\n"
+        )
     return (
         f"namespace = {namespace}\n\n"
         "country_event = {\n"
@@ -75,9 +101,16 @@ def probe_event(namespace: str, trigger: str) -> str:
     )
 
 
-def create(mod_dir: Path, names: list[str], supported_version: str | None) -> dict:
+def script_encoding(game: str) -> str:
+    # CK3's own script files all start with a UTF-8 BOM; Stellaris and EU4
+    # probes are written without one, as checked in game.
+    return "utf-8-sig" if game == "ck3" else "utf-8"
+
+
+def create(mod_dir: Path, names: list[str], supported_version: str | None, game: str) -> dict:
     if not mod_dir.is_dir():
         raise SystemExit(f"mod directory does not exist: {mod_dir}")
+    encoding = script_encoding(game)
     created = []
     for name in names:
         folder = mod_dir / probe_folder(name)
@@ -85,19 +118,19 @@ def create(mod_dir: Path, names: list[str], supported_version: str | None) -> di
         triggers.mkdir(parents=True, exist_ok=True)
         (triggers / f"pmm_probe_only_{name}.txt").write_text(
             f"pmm_probe_only_{name}_trigger = {{\n\tpmm_probe_loaded_{name} = yes\n}}\n",
-            encoding="utf-8",
+            encoding=encoding,
         )
         (triggers / "pmm_probe_shared.txt").write_text(
             f"pmm_probe_shared_trigger = {{\n\tpmm_probe_shared_from_{name} = yes\n}}\n",
-            encoding="utf-8",
+            encoding=encoding,
         )
         events = folder / "events"
         events.mkdir(parents=True, exist_ok=True)
         (events / f"pmm_probe_only_{name}.txt").write_text(
-            probe_event(f"pmm_probe_{name}", f"pmm_probe_loaded_{name}"), encoding="utf-8"
+            probe_event(f"pmm_probe_{name}", f"pmm_probe_loaded_{name}", game), encoding=encoding
         )
         (events / "pmm_probe_shared.txt").write_text(
-            probe_event("pmm_probe_shared", f"pmm_probe_shared_from_{name}"), encoding="utf-8"
+            probe_event("pmm_probe_shared", f"pmm_probe_shared_from_{name}", game), encoding=encoding
         )
         (folder / "descriptor.mod").write_text(descriptor(name, None, supported_version), encoding="utf-8")
         (mod_dir / f"{probe_folder(name)}.mod").write_text(
@@ -167,6 +200,9 @@ def main(argv: list[str]) -> int:
     p_create.add_argument("mod_dir", type=Path)
     p_create.add_argument("--names", nargs="+", default=DEFAULT_NAMES)
     p_create.add_argument("--supported-version", help='e.g. "v4.5.*"; must match the game version format')
+    p_create.add_argument(
+        "--game", choices=GAMES, default="stellaris", help="event syntax (stellaris and eu4 share one)"
+    )
     p_remove = sub.add_parser("remove")
     p_remove.add_argument("mod_dir", type=Path)
     p_remove.add_argument("--names", nargs="+", default=DEFAULT_NAMES)
@@ -177,7 +213,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "create":
-        out = create(args.mod_dir, validated_names(args.names), args.supported_version)
+        out = create(args.mod_dir, validated_names(args.names), args.supported_version, args.game)
     elif args.command == "remove":
         out = remove(args.mod_dir, validated_names(args.names))
     else:

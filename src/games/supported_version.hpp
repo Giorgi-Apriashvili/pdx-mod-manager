@@ -1,7 +1,8 @@
 #pragma once
 
 // Comparison of a descriptor's supported_version pattern ("v4.5.*", "4.4.*",
-// "v1.37.*.*", "*") with an installed game version ("v4.5.2", "1.37.5.0").
+// "v1.37.*.*", "1.20.*", "*") with an installed game version ("v4.5.2",
+// "1.37.5.0", "1.20.1.2").
 //
 // Pattern: optional leading 'v', then dot-separated components that are
 // decimal numbers or '*'. A '*' matches any value; components missing from
@@ -11,9 +12,15 @@
 // Stellaris additionally rejects wildcards in the major or minor position:
 // its logs/error.log reports "Invalid supported_version" for "v4.*.*", "v4.*"
 // and "*", but not for "v4.5.*", "4.0.*" or "v4.1.7" (observed on the
-// development machine, see docs/games/stellaris.md). No such rule is known for
-// EU4: its error.log files on that machine contain no such messages, although
-// v1.37.*.* and v1.37.* descriptors are registered.
+// development machine, see docs/games/stellaris.md). Crusader Kings III does
+// the same: the error.log of a 1.19 build reports "1.*", and not "1.19.*",
+// "1.16.*" or "1.19.0.6" (see docs/games/ck3.md; its rule for "*" and "1.*.*"
+// is inferred from Stellaris, and that a two-part pattern without a wildcard
+// such as "1.20" is valid is assumed: no descriptor there had one, so the
+// error.log cannot tell "a wildcard before the patch" from "fewer than three
+// parts"). No such rule is known for EU4: its error.log
+// files on that machine contain no such messages, although v1.37.*.* and
+// v1.37.* descriptors are registered.
 
 #include <cstdint>
 #include <optional>

@@ -806,3 +806,69 @@ TEST_CASE("Workshop content check requires a usable descriptor", "[providers][ac
     pmm::test::writeFile(base / "empty_legacy.zip", "");
     CHECK_FALSE(verifyWorkshopContent(base / "empty_legacy.zip").ok());
 }
+
+TEST_CASE("Workshop content without descriptor.mod is described by its only .mod file",
+          "[providers][acquisition]") {
+    pmm::test::TempDir dir("verify-sole");
+    const fs::path base = dir.path() / pmm::test::u8path("Ünïcødé dir");
+    const auto folder = [&](std::string_view id) {
+        const fs::path path = base / pmm::test::u8path(std::string(id));
+        pmm::test::writeFile(path / "common" / "x.txt", "x");
+        return path;
+    };
+
+    // "<Name>.mod" instead of descriptor.mod (seen for Crusader Kings III); the
+    // extension in any case.
+    const fs::path sole = folder("1");
+    pmm::test::writeFile(sole / pmm::test::u8path("Example_Stëel.MOD"), "name=\"Example Steel\"");
+    CHECK(verifyWorkshopContent(sole).ok());
+
+    const fs::path none = folder("2");
+    pmm::test::writeFile(none / "readme.txt", "no descriptor");
+    auto missing = verifyWorkshopContent(none);
+    REQUIRE_FALSE(missing.ok());
+    CHECK(missing.error().message == "descriptor.mod is missing from the downloaded content");
+
+    const fs::path two = folder("3");
+    pmm::test::writeFile(two / "A.mod", "name=\"A\"");
+    pmm::test::writeFile(two / "b.mod", "name=\"B\"");
+    auto ambiguous = verifyWorkshopContent(two);
+    REQUIRE_FALSE(ambiguous.ok());
+    CHECK(ambiguous.error().code == ErrorCode::ValidationFailed);
+    CHECK(ambiguous.error().message ==
+          "descriptor.mod is missing from the downloaded content, and its 2 .mod files leave it "
+          "open which one describes the mod");
+
+    const fs::path emptySole = folder("4");
+    pmm::test::writeFile(emptySole / "Example.mod", "");
+    auto empty = verifyWorkshopContent(emptySole);
+    REQUIRE_FALSE(empty.ok());
+    CHECK(empty.error().message == "Example.mod is empty");
+
+    // descriptor.mod wins, also when it is the empty one.
+    const fs::path both = folder("5");
+    pmm::test::writeFile(both / "descriptor.mod", "name=\"From descriptor.mod\"");
+    pmm::test::writeFile(both / "Other.mod", "name=\"Other\"");
+    CHECK(verifyWorkshopContent(both).ok());
+    const fs::path emptyDescriptor = folder("6");
+    pmm::test::writeFile(emptyDescriptor / "descriptor.mod", "");
+    pmm::test::writeFile(emptyDescriptor / "Other.mod", "name=\"Other\"");
+    auto emptyWins = verifyWorkshopContent(emptyDescriptor);
+    REQUIRE_FALSE(emptyWins.ok());
+    CHECK(emptyWins.error().message == "descriptor.mod is empty");
+
+    // A .zip marks a legacy zipped item, described inside its archive.
+    const fs::path legacy = folder("7");
+    pmm::test::writeFile(legacy / "legacy.zip", "PK\x03\x04");
+    pmm::test::writeFile(legacy / "legacy.mod", "name=\"Legacy\"");
+    auto zipped = verifyWorkshopContent(legacy);
+    REQUIRE_FALSE(zipped.ok());
+    CHECK(zipped.error().message == "descriptor.mod is missing from the downloaded content");
+
+    // A folder named like a .mod file is not one.
+    const fs::path directory = folder("8");
+    fs::create_directories(directory / "Folder.mod");
+    CHECK_FALSE(verifyWorkshopContent(directory).ok());
+    pmm::test::writeFile(directory / "Real.mod", "name=\"Real\"");
+    CHECK(verifyWorkshopContent(directory).ok());
+}

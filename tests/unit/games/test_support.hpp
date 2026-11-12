@@ -6,6 +6,7 @@
 // temporary root, so that paths inside descriptors and Steam files point into
 // the copy.
 
+#include "core/log.hpp"
 #include "core/model.hpp"
 #include "games/game_adapter.hpp"
 #include "platform/fs.hpp"
@@ -137,5 +138,23 @@ inline bool containsText(const std::vector<std::string>& lines, std::string_view
         return line.find(needle) != std::string::npos;
     });
 }
+
+// Captures log records for the lifetime of the object; the sink is reset also
+// when a failed REQUIRE ends the test case early.
+class LogCapture {
+public:
+    LogCapture() {
+        setLogSink([this](const LogRecord& record) { m_records.push_back(record); });
+    }
+    ~LogCapture() { setLogSink({}); }
+    LogCapture(const LogCapture&) = delete;
+    LogCapture& operator=(const LogCapture&) = delete;
+
+    const std::vector<LogRecord>& records() const noexcept { return m_records; }
+    void clear() noexcept { m_records.clear(); }
+
+private:
+    std::vector<LogRecord> m_records;
+};
 
 } // namespace pmm::test
