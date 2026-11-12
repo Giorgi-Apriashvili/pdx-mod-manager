@@ -121,7 +121,8 @@ AppDialog {
 
         ColumnLayout {
             id: content
-            width: page.width
+            // Room for the scroll bar while there is one.
+            width: page.width - (page.interactive ? 12 : 0)
             height: Math.max(page.height, implicitHeight)
             spacing: 8
 
