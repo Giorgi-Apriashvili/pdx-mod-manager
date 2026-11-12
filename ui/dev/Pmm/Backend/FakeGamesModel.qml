@@ -14,12 +14,13 @@ ListModel {
     signal gameSelected(string key)
     signal configurationImported()
 
+    // Catalog order: the supported games alphabetically, then the others.
     ListElement {
-        key: "stellaris"; name: "Stellaris"; supported: true; installed: true; manualLocation: false
-        statusText: "Installed \u00b7 v4.5.2"; version: "4.5.2"
-        installPath: "C:/Games/Steam/steamapps/common/Stellaris"
-        userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Stellaris"
-        loadOrderNote: ""
+        key: "ck3"; name: "Crusader Kings III"; supported: true; installed: false; manualLocation: false
+        statusText: "Not found"; version: ""
+        installPath: ""
+        userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Crusader Kings III"
+        loadOrderNote: "It is not yet verified that Crusader Kings III follows this order when two mods change the same file."
     }
     ListElement {
         key: "eu4"; name: "Europa Universalis IV"; supported: true; installed: false; manualLocation: false
@@ -29,10 +30,10 @@ ListModel {
         loadOrderNote: "Europa Universalis IV does not use this order when two mods change the same file: the mod whose name comes first alphabetically wins. The order is still saved, shared and written for the game."
     }
     ListElement {
-        key: "ck3"; name: "Crusader Kings III"; supported: true; installed: false; manualLocation: false
-        statusText: "Not found"; version: ""
-        installPath: ""
-        userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Crusader Kings III"
+        key: "stellaris"; name: "Stellaris"; supported: true; installed: true; manualLocation: false
+        statusText: "Installed \u00b7 v4.5.2"; version: "4.5.2"
+        installPath: "C:/Games/Steam/steamapps/common/Stellaris"
+        userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Stellaris"
         loadOrderNote: ""
     }
     ListElement {

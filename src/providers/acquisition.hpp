@@ -199,7 +199,9 @@ std::optional<Observation> observationFromHelperEvent(const HelperEvent& event,
 std::optional<HelperCommand> helperCommandFor(const Action& action);
 
 // The agreed content check for VerifyContent (performs filesystem I/O): a
-// directory must contain a non-empty regular "descriptor.mod"; a single file
+// directory must contain a non-empty regular "descriptor.mod", or else exactly
+// one *.mod file, non-empty, and no .zip (the rule of
+// games::contentDescriptorFile(); some items ship "<Name>.mod"); a single file
 // (legacy Workshop item) must be non-empty.
 Status verifyWorkshopContent(const std::filesystem::path& installPath);
 

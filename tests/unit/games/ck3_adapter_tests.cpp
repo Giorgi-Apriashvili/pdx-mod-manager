@@ -126,6 +126,16 @@ TEST_CASE("Crusader Kings III is discovered through the injected Steam environme
     CHECK(manual->manuallyConfigured);
     CHECK(samePath(manual->executablePath, f.binaries() / "ck3.exe"));
     CHECK(manual->version == "1.20.1.2");
+
+    // binaries/ (which holds ck3.exe) or launcher/ chosen by mistake.
+    for (const fs::path& subfolder : {f.binaries(), f.install() / "launcher"}) {
+        auto wrong = f.adapter.inspectInstallation(subfolder, {}, f.env);
+        REQUIRE_FALSE(wrong.ok());
+        CHECK(wrong.error().code == ErrorCode::NotFound);
+        CHECK(wrong.error().message ==
+              "The selected folder does not contain the Crusader Kings III executable "
+              "(binaries/ck3.exe). Choose the folder above it, \"Crusader Kings III\", instead.");
+    }
 }
 
 TEST_CASE("Crusader Kings III and the other games are told apart", "[games][ck3]") {
@@ -181,8 +191,7 @@ TEST_CASE("Crusader Kings III falls back to binaries/ck3.exe without launcher-se
 
 TEST_CASE("Crusader Kings III reads game/userdir.txt, not the root userdir.txt", "[games][ck3]") {
     Ck3Fixture f;
-    std::vector<LogRecord> records;
-    setLogSink([&](const LogRecord& record) { records.push_back(record); });
+    test::LogCapture capture;
     const fs::path userDirFile = f.install() / "game" / "userdir.txt";
     const fs::path custom = f.path("Custom Data/CK3 dätä");
     fs::create_directories(custom);
@@ -206,17 +215,16 @@ TEST_CASE("Crusader Kings III reads game/userdir.txt, not the root userdir.txt",
     CHECK(samePath(chosen->userDataPath, f.userData()));
 
     // A relative path is ignored with a warning; gameDataPath comes next.
-    records.clear();
+    capture.clear();
     test::writeText(userDirFile, "Custom Data/CK3 dätä/");
     CHECK(samePath(f.discovered().userDataPath, f.userData()));
-    CHECK(logged(records, "Ignoring the game's userdir.txt"));
+    CHECK(logged(capture.records(), "Ignoring the game's userdir.txt"));
     const fs::path settings = f.install() / "launcher" / "launcher-settings.json";
     test::writeText(settings, test::replaceAll(test::readText(settings),
                                                "Paradox Interactive/Crusader Kings III\"",
                                                "Paradox Interactive/CK3 Elsewhere\""));
     CHECK(samePath(f.discovered().userDataPath,
                    f.path("Documents/Paradox Interactive/CK3 Elsewhere")));
-    setLogSink({});
 }
 
 TEST_CASE("Crusader Kings III scan applies the identity rules", "[games][ck3]") {
@@ -434,6 +442,31 @@ TEST_CASE("CK3 Workshop folders without descriptor.mod", "[games][ck3]") {
     }
 }
 
+TEST_CASE("A registered CK3 Workshop folder stays the content next to a stray .zip",
+          "[games][ck3]") {
+    Ck3Fixture f;
+    const GameInstallation inst = f.discovered();
+    // Registered with path=<folder>; ships Example_Steel.mod, no descriptor.mod.
+    const fs::path folder = f.content("4000000003");
+    const fs::path registration = f.userData() / "mod" / "ugc_4000000003.mod";
+    test::writeText(folder / "sources.zip", "PK placeholder");
+
+    const std::vector<InstalledMod> mods = f.scan(inst);
+    const InstalledMod& registered = f.mod(mods, "4000000003");
+    CHECK(registered.state == InstallState::Ready);
+    CHECK(registered.problems.empty());
+    CHECK(samePath(registered.contentPath, folder));
+    // The launcher's registration is reused, not rewritten to archive=.
+    CHECK(findWrite(f.plan(inst, mods, {"4000000003"}), registration) == nullptr);
+
+    // Unregistered, the .zip makes it a legacy zipped item, as before.
+    fs::remove(registration);
+    const std::vector<InstalledMod> rescanned = f.scan(inst);
+    const InstalledMod& unregistered = f.mod(rescanned, "4000000003");
+    CHECK(unregistered.state == InstallState::Broken);
+    CHECK(samePath(unregistered.contentPath, folder / "sources.zip"));
+}
+
 TEST_CASE("Crusader Kings III compatibility warnings follow supported_version", "[games][ck3]") {
     Ck3Fixture f;
     const GameInstallation inst = f.discovered();
@@ -482,10 +515,11 @@ TEST_CASE("Crusader Kings III process names and load-order information", "[games
           u8path("/docs/Paradox Interactive/Crusader Kings III"));
 
     // Not probed in game yet: the playset order is written, but which mod
-    // wins a shared file is not claimed.
+    // wins a shared file is not claimed, and users are told so.
     const LoadOrderInfo info = adapter.loadOrderInfo();
     CHECK_FALSE(info.verifiedInGame);
-    CHECK(info.userNote.empty());
+    CHECK(info.userNote == "It is not yet verified that Crusader Kings III follows this order "
+                           "when two mods change the same file.");
     CHECK(info.summary.find("index 0 first") != std::string::npos);
     CHECK(info.summary.find("not verified for Crusader Kings III") != std::string::npos);
     CHECK(info.evidence.find("docs/games/ck3.md") != std::string::npos);

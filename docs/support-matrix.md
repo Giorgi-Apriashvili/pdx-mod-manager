@@ -146,7 +146,7 @@ has not been checked in the game** ([CK3 adapter](games/ck3.md)).
 | Workshop: manual fallback | Implemented, unverified | Unsupported |
 | Direct launch without the Paradox launcher | Implemented, unverified (working directory `binaries/`, as the launcher uses) | Implemented, unverified |
 | Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
-| In-game verification of enabled mods and order | **Unverified**: the playset order is written to `enabled_mods`; which mod wins a shared file has not been measured ([load order](load-order.md#crusader-kings-iii)) | Unverified |
+| In-game verification of enabled mods and order | **Unverified**: the playset order is written to `enabled_mods`; which mod wins a shared file has not been measured, and a note above a CK3 playset says so ([load order](load-order.md#crusader-kings-iii)) | Unverified |
 
 ## Other combinations
 

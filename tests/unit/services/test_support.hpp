@@ -8,6 +8,7 @@
 // Nothing here touches a real game, Steam folder, process or the network.
 
 #include "core/model.hpp"
+#include "games/dlc_load_adapter.hpp"
 #include "games/game_adapter.hpp"
 #include "persistence/database.hpp"
 #include "persistence/testing.hpp"
@@ -210,7 +211,14 @@ public:
                 mod.descriptorRef = sourceKey == source::SteamWorkshop ? "mod/ugc_" + id + ".mod"
                                                                        : "mod/" + id + ".mod";
                 mod.contentUpdatedAt = platform::lastWriteUnixSeconds(it->path());
-                auto text = platform::readFile(it->path() / "descriptor.mod");
+                // Workshop folders follow the real adapters' rule (descriptor.mod,
+                // else the only *.mod file).
+                fs::path descriptorFile = it->path() / "descriptor.mod";
+                if (sourceKey == source::SteamWorkshop) {
+                    if (auto file = games::contentDescriptorFile(it->path()))
+                        descriptorFile = std::move(*file);
+                }
+                auto text = platform::readFile(descriptorFile);
                 if (text && !text.value().empty()) {
                     mod.descriptor = parseDescriptor(text.value());
                 } else {
@@ -289,6 +297,7 @@ public:
         bool acceptDownload = true;
         int steps = 2; // state polls while downloading
         bool writeContent = true;
+        std::string contentFile = "descriptor.mod"; // the file writeContent writes
         std::string name = "Downloaded Example";
     };
     struct Exit {
@@ -419,7 +428,7 @@ private:
             if (item.downloaded >= item.total) {
                 item.flags = (item.flags & ~Downloading) | Installed;
                 if (item.writeContent)
-                    writeText(m_workshop / u8(id) / "descriptor.mod",
+                    writeText(m_workshop / u8(id) / u8(item.contentFile),
                               "name=\"" + item.name + "\"\nremote_file_id=\"" + id + "\"\n");
             }
         }

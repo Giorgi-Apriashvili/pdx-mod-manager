@@ -25,7 +25,7 @@ last run, on 2026-07-06, of a 1.19 build.
 | Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, disabled and moved entries, exported and imported into a new profile with byte-identical dumps | Unverified |
 | `supported_version` warnings (CK3 wildcard rule) | Implemented: the rule comes from the error.log of a 1.19 build; unverified on 1.20.1.2 | Same code |
 | Direct launch (bypassing the launcher) | Implemented, unverified | Unverified, no Steam environment |
-| Workshop subscribe and download (helper in CK3's app context) | Implemented, unverified | Unsupported: requires the game on a Steam account |
+| Workshop subscribe and download (helper in CK3's app context) | Implemented, unverified (the content check after a download accepts an item that ships `<Name>.mod`, fixture-tested) | Unsupported: requires the game on a Steam account |
 | Effective order / precedence in game | **Not verified**: the order of `enabled_mods` is written as for Stellaris, but which of two mods that change the same file wins has not been measured ([load order](../load-order.md#crusader-kings-iii)) | Unverified |
 
 No claim is made about achievements or ironman with mods: the sources
@@ -49,7 +49,7 @@ the dropped `-enabletelemetry` argument. Observed differences on 1.20.1.2:
 | `userdir.txt`: none ships; the CK3 wiki documents `<install>/game/userdir.txt` | Trait `userDirFile = "game/userdir.txt"` (see User data) |
 | Only `supported_version="1.*"` was reported as invalid (1.19 build) | `rejectsEarlyWildcards = true`, as for Stellaris |
 | A Workshop item ships `<Name>.mod` instead of `descriptor.mod` | The only `.mod` file describes the item, for every game (see Mods) |
-| Which mod wins a shared file is not measured | `loadOrderVerifiedInGame = false`, no user note |
+| Which mod wins a shared file is not measured | `loadOrderVerifiedInGame = false`, and a temporary user note says so above a CK3 playset |
 
 ## Installation discovery
 
@@ -62,7 +62,9 @@ the dropped `-enabletelemetry` argument. Observed differences on 1.20.1.2:
   `launcher-settings.json` whose `gameId` is not `ck3` is rejected
   (`WrongGame`), and so is a CK3 folder chosen for Stellaris or EU4. Without
   usable launcher settings, the folder must contain `binaries/ck3.exe`; the
-  error names that path.
+  error names that path. When `binaries/` or `launcher/` is chosen by
+  mistake (the folder above it holds `binaries/ck3.exe`), the error also says
+  to choose the folder above it.
 - **Paradox Store, GOG, Microsoft Store**: no automatic discovery; manual
   selection is untested.
 
@@ -146,9 +148,14 @@ Identity rules, states and descriptor generation are those of
   regenerated registration is byte-identical to the launcher's. When a
   content folder has no `descriptor.mod` and **exactly one** `*.mod` file,
   that file describes the item, for every game: an unregistered item is
-  `Ready`, and its `mod/ugc_<id>.mod` is generated from that file. With no
-  `.mod` file, or several, the item is `Broken` and the problem names the
-  files. A folder that holds a `.zip` stays a legacy zipped item.
+  `Ready`, and its `mod/ugc_<id>.mod` is generated from that file. The
+  content check after a Workshop download applies the same rule, so the
+  application can download such an item (on a new machine, for example
+  after importing a share code that lists it). With no `.mod` file the item
+  is `Broken` as before; with several it is `Broken` and the problem names
+  them. A folder that holds a `.zip` stays a legacy zipped item, unless a
+  registration's `path=` names the folder itself (then the folder stays the
+  content and the registration is reused).
 - **Registrations older than their content.** On the development machine 4
   of the 11 registrations carry the metadata of an older version of the item
   (its version, name or tags changed on the Workshop since the launcher last
@@ -171,9 +178,13 @@ for `"1.19.*"`, `"1.18.*"`, `"1.16.*"`, `"1.19.0.6"` or `"1.13.0.3"`; the
 four-part form is valid. The adapter therefore reports a wildcard in the
 major or minor position as a separate, non-blocking warning, as for
 Stellaris. That `"*"` and `"1.*.*"` are rejected too is inferred from
-Stellaris, and the rule is unverified on 1.20.1.2. `debug.log` of the same
-run lists every registered descriptor as `|Enabled` or `|Disabled` and
-mounts the enabled mods in exactly the `enabled_mods` order.
+Stellaris, and the rule is unverified on 1.20.1.2. That a two-part pattern
+without a wildcard (`"1.20"`) is valid is assumed: no descriptor on the
+machine has one, so the report for `"1.*"` cannot tell a wildcard before the
+patch number from fewer than three parts (the probe run checks it).
+`debug.log` of the same run lists every registered descriptor as `|Enabled`
+or `|Disabled` and mounts the enabled mods in exactly the `enabled_mods`
+order.
 
 ## Launch
 
@@ -311,12 +322,14 @@ Each needs the owner's approval, on 1.20.1.2:
 1. The probe procedure of [`../load-order.md`](../load-order.md#crusader-kings-iii)
    ([`../validation.md`](../validation.md) section 3): which mod wins a shared
    file, and that 1.20.1.2 still reads `dlc_load.json`, lists the
-   descriptors as `Enabled`/`Disabled` and rejects `"1.*"`. Then set the
-   traits (`loadOrderSummary`, `loadOrderEvidence`,
-   `loadOrderVerifiedInGame`, perhaps `loadOrderUserNote`) and the
+   descriptors as `Enabled`/`Disabled` and rejects `"1.*"`, and whether it
+   accepts `"1.20"`. Then set the traits (`loadOrderSummary`,
+   `loadOrderEvidence`, `loadOrderVerifiedInGame`, and `loadOrderUserNote`:
+   the temporary "not yet verified" note is removed or replaced) and the
    CHANGELOG's load-order sentence.
 2. A direct launch from the app: no launcher process, no restart through
    Steam, the game stays up with the working directory `binaries/`, the mods
    are active; what happens with Steam closed.
-3. Workshop subscribe and download for app 1158310.
+3. Workshop subscribe and download for app 1158310, ideally including an
+   item that ships `<Name>.mod` instead of `descriptor.mod`.
 4. How CK3 treats a `game/userdir.txt` (absolute and relative).

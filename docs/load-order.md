@@ -30,7 +30,9 @@ not use it for file overrides: when two enabled mods contain the same file,
 the mod whose name sorts first alphabetically wins". Evidence: [live validation](evidence/live-validation-2026-10-30.md).
 CK3: "dlc_load.json enabled_mods, index 0 first; which mod wins when two
 enabled mods contain the same file is not verified for Crusader Kings III",
-with no user note, until the probe run described under
+and the user note "It is not yet verified that Crusader Kings III follows
+this order when two mods change the same file.", which the mods pane shows
+above a CK3 playset, until the probe run described under
 [Crusader Kings III](#crusader-kings-iii) below.
 
 ## Mapping (all three games)
@@ -242,7 +244,11 @@ above:
 - Run the read-only `[.real]` scan first, as a baseline
   ([`games/ck3.md`](games/ck3.md#real-machine-evidence)).
 - Step 2: `python tools/probe-mods/probe_mods.py create "<Documents>/Paradox Interactive/Crusader Kings III/mod" --game ck3 --supported-version "1.20.*"`.
-  Do **not** use `"1.*"`: CK3 reports it as invalid.
+  Do **not** use `"1.*"`: CK3 reports it as invalid. Then
+  `python tools/probe-mods/probe_mods.py create "<Documents>/Paradox Interactive/Crusader Kings III/mod" --game ck3 --names b --supported-version "1.20"`
+  rewrites probe b (disabled in every run) with a two-part pattern without
+  a wildcard, which no descriptor on the machine has: whether CK3 accepts
+  it is not known (the adapter assumes it does).
 - Step 3: make a playset with **only** the probes (c, a, b disabled), so that
   the other mods' errors do not fill `error.log` and the start is faster.
   The same run checks the direct launch: `tasklist /FI "IMAGENAME eq ck3.exe"`
@@ -252,13 +258,19 @@ above:
 - Step 4: on the 1.19 run, the trigger errors and `database_conflicts.log`
   came about 4 minutes after the start; wait for the main menu.
 - Step 5: `python tools/probe-mods/probe_mods.py analyze "<Documents>/Paradox Interactive/Crusader Kings III/logs/error.log" --enabled c a --disabled b`;
-  also check that `error.log` has no `Invalid supported_version` line for a
-  probe and that `debug.log` lists probe b as `|Disabled`.
+  also check that `error.log` has no `Invalid supported_version` line for
+  probes a and c, and that `debug.log` lists probe b as `|Disabled`. Record
+  whether `error.log` reports `Invalid supported_version` for
+  `mod/pmm_probe_b.mod` (`"1.20"`); if it does, `"1.20"` is invalid for CK3
+  and the `supported_version` rule needs a change.
 - Step 8: record the evidence under `docs/evidence/<date>-ck3/` and the result
   table here. Then set the traits in `src/games/ck3.cpp`: if **the later mod
   wins**, the Stellaris wording, `loadOrderVerifiedInGame = true` and no user
-  note; if **the name that sorts first wins**, the EU4 wording and a
-  `loadOrderUserNote`; if neither, stop and report to the owner.
+  note (remove the temporary one); if **the name that sorts first wins**, the
+  EU4 wording and a `loadOrderUserNote` like EU4's; if neither, stop and
+  report to the owner. Update the `userNote` check in
+  `tests/unit/games/ck3_adapter_tests.cpp` and the CK3 row of
+  `ui/dev/Pmm/Backend/FakeGamesModel.qml` with it.
 
 | Run | Probe order in `enabled_mods` | Probe names | Loaded | Shared file won by |
 | --- | --- | --- | --- | --- |

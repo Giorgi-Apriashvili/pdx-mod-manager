@@ -32,7 +32,9 @@ constexpr GameTraits kTraits{
     .loadOrderEvidence = "docs/games/ck3.md (read-only: debug.log mounts the mods in enabled_mods "
                          "order; precedence not probed)",
     .loadOrderVerifiedInGame = false,
-    .loadOrderUserNote = {},
+    // Until the probe run: then removed, or replaced as for EU4.
+    .loadOrderUserNote = "It is not yet verified that Crusader Kings III follows this order when "
+                         "two mods change the same file.",
     .logComponent = "games.ck3",
 };
 

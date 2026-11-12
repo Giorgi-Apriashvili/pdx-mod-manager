@@ -86,6 +86,7 @@ subscriptions afterwards in the Steam client if wanted.
 | `<appid>` | `281990` | `236850` | `1158310` |
 | `<install>` | `<Steam library>/steamapps/common/Stellaris` | `<Steam library>/steamapps/common/Europa Universalis IV` | `<Steam library>/steamapps/common/Crusader Kings III` |
 | `<exe>` | `stellaris.exe` | `eu4.exe` (observed) | `ck3.exe`, in `<install>/binaries` (observed) |
+| `<exe path>` | `<install>\stellaris.exe` | `<install>\eu4.exe` | `<install>\binaries\ck3.exe` |
 | `<userdata>` | `Documents\Paradox Interactive\Stellaris` | `Documents\Paradox Interactive\Europa Universalis IV`, unless `<install>/userdir.txt` names another folder | `Documents\Paradox Interactive\Crusader Kings III`, unless `<install>/game/userdir.txt` names another folder (none ships) |
 | Version source | `<install>/launcher-settings.json` (`version`, `rawVersion`) and `buildid` in `steamapps/appmanifest_<appid>.acf` | same files (observed: `rawVersion` `v1.37.5.0`) | `<install>/launcher/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.20.1.2`, no `v`) |
 | Arguments the game's launcher passes (`exeArgs`) | `-gdpr-compliant` | `-enabletelemetry -gdpr-compliant`; direct launches are designed to drop `-enabletelemetry` | `-gdpr-compliant` (the launcher adds its own session arguments, which a direct start does not pass) |
@@ -112,6 +113,7 @@ grep buildid "<Steam library>/steamapps/appmanifest_<appid>.acf"
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --supported-version "v4.5.*"     # Stellaris 4.5.x
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --supported-version "v1.37.*.*"  # EU4 1.37.x
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game ck3 --supported-version "1.20.*"  # CK3 1.20.x
+python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game ck3 --names b --supported-version "1.20"  # CK3: then b again
 ```
 
 This writes `mod/pmm_probe_{a,b,c}` folders and `mod/pmm_probe_{a,b,c}.mod`
@@ -119,7 +121,9 @@ descriptors into the game's user mod folder. They contain no gameplay content.
 `--game ck3` writes CK3's event syntax (Stellaris and EU4 share the default
 one). For CK3, run the read-only `pmm_games_tests "[.real]" -s` first and keep
 its output as the baseline, and leave the other mods out of the probe playset
-(see [load order](load-order.md#crusader-kings-iii)).
+(see [load order](load-order.md#crusader-kings-iii)). The second CK3 command
+rewrites probe b, which stays disabled, with `supported_version="1.20"`, a
+two-part pattern without a wildcard whose treatment by CK3 is not known.
 Remove them at the end with `probe_mods.py remove "<userdata>/mod"`.
 
 ## 4. Procedure
@@ -237,9 +241,9 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
      entries and nothing else, in the order the adapter documents in its
      `LoadOrderInfo`. With the launcher's observed convention (playset
      position 0 first) that is `mod/pmm_probe_c.mod`, `mod/ugc_<W1>.mod`,
-     `mod/pmm_probe_a.mod`, `mod/ugc_<W3>.mod`; both games' existing files use
-     the `mod/ugc_<id>.mod` naming for Workshop items. `disabled_dlcs` is
-     unchanged from before the launch.
+     `mod/pmm_probe_a.mod`, `mod/ugc_<W3>.mod`; all three games' existing
+     files use the `mod/ugc_<id>.mod` naming for Workshop items.
+     `disabled_dlcs` is unchanged from before the launch.
 3. Wait for the main menu, quit the game, then analyse its log:
 
    ```sh
@@ -267,8 +271,8 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
    game not running, exit Steam (**Steam > Exit**) and wait until
    `tasklist /FI "IMAGENAME eq steam.exe"` lists nothing, then switch back to
    the manager. Expected: **Play** is unavailable and says "Steam is not
-   running. Start Steam and sign in, then launch Stellaris." (or EU4's
-   name); pressing it starts
+   running. Start Steam and sign in, then launch Stellaris." (or the other
+   game's name); pressing it starts
    nothing and writes nothing (`dlc_load.json` unchanged). Then start Steam
    and sign in without touching the manager. Expected: Play becomes available
    within about 3 s after `steam.exe` appears, without a click; pressing it
@@ -319,7 +323,7 @@ python scripts/share-code.py encode disabled-unavailable.json > disabled-unavail
 | Offline use | Steam: *Go Offline*, or disconnect the network, then start the manager | Playsets and inventory available; acquisition explains that Steam is offline or not signed in; record whether a ready playset still launches | Go online |
 | Bad share code | Paste (a) the code without its last character, (b) the code with `PMM1.` changed to `PMM2.`, (c) arbitrary text, (d) the code with a space inserted | (a) truncated or damaged, (b) created by a newer version, (c) not a share code, (d) rejected; no playset, no job, no file written | none |
 | Configuration permission failure | Hash `dlc_load.json` (`certutil -hashfile dlc_load.json SHA256`); `attrib +R "<userdata>\dlc_load.json"`; press Play | Launch refused with a permission message before the game starts; hash unchanged; no interrupted transaction left behind | `attrib -R ...` |
-| Process-start failure | Deny execution of the game executable temporarily (may need an elevated prompt): `icacls "<install>\<exe>" /deny "%USERNAME%:(X)"`; press Play | Error that the game could not be started, with the OS error in the details and diagnostics; no Paradox launcher; record whether the configuration written for this launch was restored automatically or offered for restore | `icacls "<install>\<exe>" /remove:d "%USERNAME%"`; if in doubt, Steam *Verify integrity of game files* |
+| Process-start failure | Deny execution of the game executable temporarily (may need an elevated prompt): `icacls "<exe path>" /deny "%USERNAME%:(X)"`; press Play | Error that the game could not be started, with the OS error in the details and diagnostics; no Paradox launcher; record whether the configuration written for this launch was restored automatically or offered for restore | `icacls "<exe path>" /remove:d "%USERNAME%"`; if in doubt, Steam *Verify integrity of game files* |
 
 Afterwards: remove the probes (`probe_mods.py remove "<userdata>/mod"`), and
 use **Restore pre-launch configuration** if you want the game's previous

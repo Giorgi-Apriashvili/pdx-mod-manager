@@ -369,6 +369,10 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
     std::string contentProblem;
     if (folder != nullptr) {
         contentPath = *folder;
+        // A registration whose path= names the folder keeps it as the content,
+        // also when a stray .zip lies in it.
+        const bool folderRegistered = reg != nullptr && !reg->declaredArchive &&
+                                      !reg->declared.empty() && samePath(reg->declared, *folder);
         if (reg != nullptr && reg->declaredArchive && isRegularFile(reg->declared) &&
             platform::isWithin(reg->declared, *folder)) {
             contentPath = reg->declared;
@@ -378,7 +382,7 @@ InstalledMod workshopMod(const GameKey& game, const std::string& id, const Regis
                 contentDescriptor = std::move(parsed).value();
             else
                 contentProblem = parsed.error().message;
-        } else if (auto archive = legacyArchive(*folder)) {
+        } else if (auto archive = folderRegistered ? std::nullopt : legacyArchive(*folder)) {
             contentPath = *archive;
             contentProblem = "The legacy (zipped) Workshop item has no descriptor.mod outside "
                              "its archive.";
@@ -732,11 +736,18 @@ Result<GameInstallation> DlcLoadJsonAdapter::describe(const fs::path& installPat
     if (inst.executablePath.empty()) {
         inst.executablePath = inst.installPath / defaultExecutable();
         if (!isRegularFile(inst.executablePath)) {
-            if (mode == Mode::Manual)
-                return makeError(ErrorCode::NotFound,
-                                 "The selected folder does not contain the " + gameName +
-                                     " executable (" + toGenericUtf8(defaultExecutable()) + ").",
+            if (mode == Mode::Manual) {
+                std::string message = "The selected folder does not contain the " + gameName +
+                                      " executable (" + toGenericUtf8(defaultExecutable()) + ").";
+                // A subfolder chosen by mistake, e.g. CK3's binaries/ or launcher/.
+                const fs::path parent = inst.installPath.parent_path();
+                if (inst.installPath.has_relative_path() && parent != inst.installPath &&
+                    isRegularFile(parent / defaultExecutable()))
+                    message += " Choose the folder above it, \"" +
+                               sanitizeUtf8(pathToUtf8(parent.filename())) + "\", instead.";
+                return makeError(ErrorCode::NotFound, std::move(message),
                                  pathToUtf8(inst.executablePath));
+            }
             logWarning(m_traits.logComponent, "The game executable was not found",
                        {{"path", pathToUtf8(inst.executablePath)}});
         }

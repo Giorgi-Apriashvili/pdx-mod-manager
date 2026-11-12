@@ -76,10 +76,13 @@ Roles:
 - `installPath`, `userDataPath` (display only);
 - `manualLocation` (bool: the installation was located manually);
 - `loadOrderNote` (string): set when the game does not apply the playset
-  order as written, empty otherwise. EU4 (observed in-game 2026-10-30): "Europa
-  Universalis IV does not use this order when two mods change the same file:
-  the mod whose name comes first alphabetically wins. The order is still
-  saved, shared and written for the game." The mods pane shows it as a
+  order as written, or while that is not verified for the game; empty
+  otherwise. EU4 (observed in-game 2026-10-30): "Europa Universalis IV does
+  not use this order when two mods change the same file: the mod whose name
+  comes first alphabetically wins. The order is still saved, shared and
+  written for the game." Crusader Kings III, until its probe run: "It is not
+  yet verified that Crusader Kings III follows this order when two mods
+  change the same file." The mods pane shows it as a
   closable info banner above the list (hidden for that game for the rest of
   the session once closed).
 

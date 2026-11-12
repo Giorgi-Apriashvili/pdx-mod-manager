@@ -46,7 +46,8 @@ struct LoadOrderInfo {
     bool verifiedInGame = false; // true only with recorded in-game evidence
     std::string evidence;        // where the evidence is documented
     // Shown to users when the playset order is not the order the game applies
-    // (EU4 picks the winner of a shared file by mod name); empty otherwise.
+    // (EU4 picks the winner of a shared file by mod name), or while that is
+    // not verified for the game (CK3); empty otherwise.
     std::string userNote;
 };
 

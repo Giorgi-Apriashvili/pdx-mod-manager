@@ -194,7 +194,8 @@ release page. What is contacted, verified and protected against is in
 4. `Backend::initialize()` loads the UI settings, the cached game states and
    the initial game's context from the database. The initial game is
    `--game`, else the last selected game, else the first installed supported
-   game in catalog order (`ck3`, `eu4`, `stellaris`). Then the window is created
+   game in catalog order (`ck3`, `eu4`, `stellaris`), else the first supported
+   game (`ck3`, shown as not found). Then the window is created
    (`qmlRegisterSingletonInstance("Pmm.Backend", ...)`,
    `engine.loadFromModule("Pmm.Ui", "Main")`). The first frame already shows
    the last active playset. The engine has no network access: its

@@ -61,7 +61,10 @@ EU4-specific behaviour handled since the first version:
   without any registration cannot be described (its descriptor is inside
   the archive) and is reported `Broken`, also when a `.mod` file lies next to
   the archive (the rule that a sole `.mod` file describes a Workshop item
-  without `descriptor.mod` does not apply to such folders).
+  without `descriptor.mod` does not apply to such folders). A registration
+  whose `path=` names the folder itself keeps the folder as the content,
+  also when a stray `.zip` lies in it (since 2026-11-13; before, the next
+  launch rewrote that registration to `archive=` the `.zip`).
 - **Relative paths.** `path="mod/<folder>"` and `archive="mod/<file>.zip"`
   are resolved against the user-data folder.
 

@@ -474,6 +474,32 @@ TEST_CASE("Stellaris Workshop folders without descriptor.mod use a sole .mod fil
     }
 }
 
+TEST_CASE("A registered Stellaris Workshop folder stays the content next to a stray .zip",
+          "[games][stellaris]") {
+    StellarisFixture f;
+    const GameInstallation inst = f.discovered();
+    // Registered with path=<folder>.
+    const fs::path folder = f.content("1000000001");
+    const fs::path registration = f.userData() / "mod" / "ugc_1000000001.mod";
+    fs::remove(folder / "descriptor.mod");
+    test::writeText(folder / "sources.zip", "PK placeholder");
+
+    const std::vector<InstalledMod> mods = f.scan(inst);
+    const InstalledMod& registered = f.mod(mods, "1000000001");
+    CHECK(registered.state == InstallState::Ready);
+    CHECK(registered.problems.empty());
+    CHECK(samePath(registered.contentPath, folder));
+    // The registration is reused, not rewritten to archive=.
+    CHECK(findWrite(f.plan(inst, mods, {"1000000001"}), registration) == nullptr);
+
+    // Unregistered, the .zip makes it a legacy zipped item, as before.
+    fs::remove(registration);
+    const std::vector<InstalledMod> rescanned = f.scan(inst);
+    const InstalledMod& unregistered = f.mod(rescanned, "1000000001");
+    CHECK(unregistered.state == InstallState::Broken);
+    CHECK(samePath(unregistered.contentPath, folder / "sources.zip"));
+}
+
 TEST_CASE("Stellaris scan keeps mods with unstorable paths as broken", "[games][stellaris]") {
     StellarisFixture f;
     const GameInstallation inst = f.discovered();

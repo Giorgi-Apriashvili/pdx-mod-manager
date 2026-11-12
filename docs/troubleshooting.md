@@ -98,8 +98,9 @@ offline is up to the game and Steam.
   *Downloads* page: downloads may be paused, scheduled, or blocked by low disk
   space; then **Retry**.
 - "Installed content is unusable" means Steam reported the item as installed
-  but the folder has no `descriptor.mod`. Verify the item in Steam or
-  resubscribe there, then **Retry**.
+  but the folder has no `descriptor.mod` (nor exactly one other `.mod` file,
+  which some items ship instead). Verify the item in Steam or resubscribe
+  there, then **Retry**.
 - If automatic acquisition cannot work on your system, use **Open in Steam
   (manual)**: subscribe on the page that opens, then rescan. This fallback is
   limited and does not count as automatic download.

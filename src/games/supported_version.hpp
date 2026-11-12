@@ -15,7 +15,10 @@
 // development machine, see docs/games/stellaris.md). Crusader Kings III does
 // the same: the error.log of a 1.19 build reports "1.*", and not "1.19.*",
 // "1.16.*" or "1.19.0.6" (see docs/games/ck3.md; its rule for "*" and "1.*.*"
-// is inferred from Stellaris). No such rule is known for EU4: its error.log
+// is inferred from Stellaris, and that a two-part pattern without a wildcard
+// such as "1.20" is valid is assumed: no descriptor there had one, so the
+// error.log cannot tell "a wildcard before the patch" from "fewer than three
+// parts"). No such rule is known for EU4: its error.log
 // files on that machine contain no such messages, although v1.37.*.* and
 // v1.37.* descriptors are registered.
 

@@ -122,9 +122,13 @@ Nothing is ever written below a Steam folder or the game installation.
   is generated at launch.
 - A Workshop content folder is described by its `descriptor.mod`, else by its
   only `*.mod` file (since 2026-11-13, for every game; some items ship
-  `<Name>.mod` instead, seen for Crusader Kings III). With no `.mod` file, or
-  several, the item is `Broken` and the problem names the files. A folder
-  that holds a `.zip` stays a legacy zipped item (see [`eu4.md`](eu4.md)).
+  `<Name>.mod` instead, seen for Crusader Kings III). The content check after
+  a Workshop download (`providers::verifyWorkshopContent()`) applies the same
+  rule. With no `.mod` file the item is `Broken` as before; with several it
+  is `Broken` and the problem names them. A folder that holds a `.zip` stays
+  a legacy zipped item (see [`eu4.md`](eu4.md)), unless a registration's
+  `path=` names the folder itself: then the folder stays the content and the
+  registration is reused.
 - Several registrations of one Workshop item: `ugc_<id>.mod` is used, the
   others are reported as problems.
 - Several descriptor files with one `<file stem>`: Windows allows names with
