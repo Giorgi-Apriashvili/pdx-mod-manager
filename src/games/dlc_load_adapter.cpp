@@ -604,7 +604,7 @@ std::string descriptorReference(const fs::path& descriptorFile) {
 }
 
 std::optional<fs::path> contentDescriptorFile(const fs::path& folder) {
-    const fs::path descriptor = folder / kContentDescriptor;
+    fs::path descriptor = folder / kContentDescriptor;
     if (isRegularFile(descriptor))
         return descriptor;
     // A legacy zipped item keeps its descriptor inside the archive; a .mod
