@@ -33,12 +33,21 @@ QtObject {
     property list<string> discardFolders: []
     readonly property bool canDiscardInterrupted: discardableFiles.length > 0
 
+    // Launches started (tests check that a blocked Play starts none).
+    property int playCount: 0
+
     signal launched(int pid)
     signal launchFailed(string message)
 
     function play() {
-        if (!canPlay)
+        if (busy)
             return
+        // As the real one: never launches while blocked, and says why.
+        if (!canPlay) {
+            notifications.post("warning", "The game cannot be started yet", blockers.join("\n"))
+            return
+        }
+        ++playCount
         busy = true
         // What the launch uses, read while "started" is shown.
         startedWithPlayset = !!playsets && playsets.activeId >= 0

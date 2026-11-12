@@ -29,6 +29,14 @@ Rectangle {
     readonly property list<string> warningLines: Theme.lines(launcher.warnings)
     readonly property int maxBlockers: 4
 
+    // Enter, Space or a click on Play while it cannot start the game: the
+    // reasons as a notification, which screen readers announce. Never launches.
+    function explainBlocked() {
+        if (launcher.busy)
+            return // the state line below says what is happening
+        Backend.notifications.post("warning", qsTr("The game cannot be started yet"), blockerLines.join("\n"))
+    }
+
     function checkBannerFocus() {
         if ((recoverButton.activeFocus && !recoverButton.visible)
                 || (discardButton.activeFocus && !discardButton.visible))
@@ -154,14 +162,26 @@ Rectangle {
             iconName: "play"
             text: Backend.games.currentName.length > 0 ? qsTr("Play %1").arg(Backend.games.currentName) : qsTr("Play")
             font.pixelSize: 14
-            enabled: root.playable
-            toolTipText: !root.playable ? (root.blockerLines.length > 0 ? root.blockerLines.join("\n") : "")
+            // Stays focusable while it cannot start the game (aria-disabled):
+            // it looks disabled, its name and description say why, and Enter,
+            // Space or a click show the reasons instead of launching. It also
+            // keeps the focus while a launch it started runs.
+            available: root.playable
+            toolTipText: root.launcher.busy ? ""
+                         : !root.playable ? root.blockerLines.join("\n")
                          : root.hasPlayset ? qsTr("Apply this playset and start the game directly, without the Paradox launcher")
                                            : qsTr("Start the game directly, without mods and without the Paradox launcher")
-            Accessible.description: !root.playable ? qsTr("Blocked: %1").arg(root.blockerLines.join("; "))
+            Accessible.name: root.playable ? text : qsTr("%1, unavailable").arg(text)
+            Accessible.description: root.launcher.busy ? (root.stateText(root.launcher.state) || qsTr("A launch is in progress."))
+                                    : !root.playable ? qsTr("Blocked: %1").arg(root.blockerLines.join("; "))
                                     : root.hasPlayset ? qsTr("Starts the game with this playset")
                                                       : qsTr("Starts the game without mods")
-            onClicked: root.launcher.play()
+            onClicked: {
+                if (root.playable)
+                    root.launcher.play()
+                else
+                    root.explainBlocked()
+            }
 
             Spinner {
                 anchors.right: parent.right

@@ -29,6 +29,7 @@
 #include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSignalSpy>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTest>
@@ -718,7 +719,7 @@ TEST_CASE("Play is available without a playset and says the game starts without 
             return QQmlExpression(qmlContext(play), play, QString::fromLatin1(expression))
                 .evaluate();
         };
-        CHECK(play->isEnabled());
+        CHECK(play->property("available").toBool());
         CHECK(evaluate("Accessible.description").toString() == "Starts the game without mods");
         CHECK(evaluate("toolTipText").toString().contains("without mods"));
         CHECK(evaluate("root.warningLines.join('|')").toString() ==
@@ -737,7 +738,7 @@ TEST_CASE("Play is available without a playset and says the game starts without 
             return evaluate("Accessible.description").toString() ==
                    "Starts the game with this playset";
         }));
-        CHECK(play->isEnabled());
+        CHECK(play->property("available").toBool());
         CHECK(evaluate("root.stateText('started')").toString() ==
               "Stellaris is running without mods.");
         backend.launcher()->play();
@@ -799,16 +800,151 @@ TEST_CASE("Play says Steam is not running and becomes available once it runs", "
         };
         const QString blocker =
             QStringLiteral("Steam is not running. Start Steam and sign in, then launch Stellaris.");
-        CHECK_FALSE(play->isEnabled());
+        CHECK_FALSE(play->property("available").toBool());
+        CHECK(play->isEnabled()); // focusable, so the keyboard reaches the reasons
         CHECK(evaluate("root.blockerLines.join('|')").toString() == blocker);
         CHECK(evaluate("toolTipText").toString() == blocker);
         CHECK(evaluate("Accessible.description").toString() == "Blocked: " + blocker);
 
         // Steam starts; nothing else happens in the window.
         *steam = true;
-        REQUIRE(waitUntil([&] { return play->isEnabled(); }));
+        REQUIRE(waitUntil([&] { return play->property("available").toBool(); }));
         CHECK(evaluate("root.blockerLines.length").toInt() == 0);
         CHECK(evaluate("Accessible.description").toString() == "Starts the game without mods");
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+namespace {
+
+// The QML expression in `object`'s context (its component's ids, `root`, ...).
+QVariant evaluateIn(QObject* object, const QString& expression) {
+    return QQmlExpression(qmlContext(object), object, expression).evaluate();
+}
+
+// Presses Tab until `item` has the focus; false if it never gets it.
+bool tabTo(QQuickWindow* window, QObject* item, int limit) {
+    for (int i = 0; i < limit && !hasActiveFocus(item); ++i) {
+        QTest::keyClick(window, Qt::Key_Tab);
+        QCoreApplication::processEvents();
+    }
+    return hasActiveFocus(item);
+}
+
+} // namespace
+
+TEST_CASE("A blocked Play is reachable with Tab, says why, and launches once it is allowed",
+          "[app][qml][a11y]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    auto steam = std::make_shared<std::atomic<bool>>(false);
+    auto launches = std::make_shared<std::atomic<int>>(0);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    const auto hermetic = options.runtime.configureContext;
+    options.runtime.configureContext = [hermetic, steam,
+                                        launches](services::ServiceContext& context) {
+        hermetic(context);
+        context.listProcesses = [steam] {
+            std::vector<platform::RunningProcess> processes{{7, "explorer.exe", {}}};
+            if (*steam)
+                processes.push_back(steamClient());
+            return Result<std::vector<platform::RunningProcess>>(std::move(processes));
+        };
+        // Counts the launches; nothing is executed.
+        context.startProcess = [launches](const platform::ProcessSpec&) {
+            ++*launches;
+            return Result<platform::StartedProcess>(platform::StartedProcess{4242});
+        };
+    };
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        BackendOptions backendOptions;
+        backendOptions.launchRecheckMs = 50;
+        Backend backend(runner, backendOptions);
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Blocked"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 1 && !backend.mods()->busy(); }));
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+
+        auto* play = window->findChild<QQuickItem*>(QStringLiteral("playButton"));
+        REQUIRE(play);
+        const auto evaluate = [&](const char* expression) {
+            return evaluateIn(play, QString::fromLatin1(expression));
+        };
+        const auto key = [&](Qt::Key k) {
+            QTest::keyClick(window, k);
+            QCoreApplication::processEvents();
+        };
+        const QString blocker =
+            QStringLiteral("Steam is not running. Start Steam and sign in, then launch Stellaris.");
+        REQUIRE(waitUntil(
+            [&] { return evaluate("root.blockerLines.join('|')").toString() == blocker; }));
+        CHECK_FALSE(play->property("available").toBool());
+
+        // From the mod list, Tab reaches it like any other button.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(tabTo(window, play, 40));
+        CHECK(evaluate("Accessible.name").toString() == "Play Stellaris, unavailable");
+        CHECK(evaluate("Accessible.description").toString() == "Blocked: " + blocker);
+        CHECK(evaluate("toolTipText").toString() == blocker);
+
+        // Enter, Space and a click show the reasons instead of launching.
+        QSignalSpy posted(backend.notifications(), &NotificationCenter::posted);
+        key(Qt::Key_Return);
+        key(Qt::Key_Space);
+        const QPoint center =
+            play->mapToScene(QPointF(play->width() / 2, play->height() / 2)).toPoint();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center);
+        REQUIRE(posted.size() == 3);
+        for (const QList<QVariant>& arguments : posted) {
+            CHECK(arguments.at(0).toString() == "warning");
+            CHECK(arguments.at(1).toString() == "The game cannot be started yet");
+            CHECK(arguments.at(2).toString() == blocker);
+        }
+        waitUntil([] { return false; }, std::chrono::milliseconds(300));
+        CHECK(*launches == 0);
+        CHECK(backend.launcher()->state() == QLatin1String("idle"));
+        CHECK(play->hasActiveFocus());
+
+        // Steam starts: Play becomes available where the focus already is, and
+        // the same key launches.
+        *steam = true;
+        REQUIRE(waitUntil([&] { return play->property("available").toBool(); }));
+        CHECK(play->hasActiveFocus());
+        CHECK(evaluate("Accessible.name").toString() == "Play Stellaris");
+        CHECK(evaluate("Accessible.description").toString() == "Starts the game with this playset");
+        posted.clear();
+        key(Qt::Key_Return);
+        REQUIRE(waitUntil([&] { return backend.launcher()->state() == QLatin1String("started"); }));
+        CHECK(*launches == 1);
+        for (const QList<QVariant>& arguments : posted)
+            CHECK(arguments.at(1).toString() != "The game cannot be started yet");
+        // It kept the focus while the launch ran.
+        CHECK(play->hasActiveFocus());
 
         window->close();
         backend.shutdown();
@@ -872,7 +1008,7 @@ TEST_CASE(
         REQUIRE(play);
         REQUIRE(confirm);
         CHECK(banner->isVisible());
-        CHECK_FALSE(play->isEnabled());
+        CHECK_FALSE(play->property("available").toBool());
 
         // Offered only once Recover has failed for good.
         CHECK_FALSE(discard->isVisible());
@@ -924,7 +1060,7 @@ TEST_CASE(
         REQUIRE(waitUntil([&] { return confirmButton->hasActiveFocus(); }));
         key(Qt::Key_Return);
         REQUIRE(waitUntil([&] { return !banner->isVisible(); }));
-        REQUIRE(waitUntil([&] { return play->isEnabled(); }));
+        REQUIRE(waitUntil([&] { return play->property("available").toBool(); }));
         REQUIRE(waitUntil([&] {
             QQuickItem* item = window->activeFocusItem();
             return item && item->objectName() == "modList";

@@ -12,9 +12,14 @@ Button {
     property bool large: false
     property color iconColor: variant === "accent" ? Theme.accentText
                               : variant === "danger" ? Theme.danger : Theme.textMuted
+    // false: drawn like a disabled button, but it keeps the keyboard focus and
+    // still emits clicked(), so the handler can explain why nothing happens
+    // (the WAI-ARIA aria-disabled pattern; Play while it is blocked).
+    property bool available: true
 
     readonly property bool _accent: variant === "accent"
     readonly property bool _flat: variant === "flat"
+    readonly property bool _active: enabled && available
 
     implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset,
                             implicitContentWidth + leftPadding + rightPadding)
@@ -54,7 +59,7 @@ Button {
             id: row
             anchors.centerIn: parent
             spacing: control.spacing
-            opacity: control.enabled ? 1 : 0.45
+            opacity: control._active ? 1 : 0.45
 
             Icon {
                 anchors.verticalCenter: parent.verticalCenter
@@ -81,9 +86,11 @@ Button {
         radius: Theme.radius
         color: {
             if (control._accent)
-                return !control.enabled ? Theme.borderStrong
+                return !control._active ? Theme.borderStrong
                      : control.down ? Theme.accentPressed
                      : control.hovered ? Theme.accentHover : Theme.accent
+            if (!control._active)
+                return control._flat ? "transparent" : Theme.button
             if (control._flat)
                 return control.down ? Theme.buttonPressed
                      : (control.hovered || control.checked) ? Theme.hover : "transparent"

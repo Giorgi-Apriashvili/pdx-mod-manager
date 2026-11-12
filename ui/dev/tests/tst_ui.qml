@@ -196,15 +196,20 @@ Item {
             verify(Theme.dark)
             Backend.settings.theme = "light"
             verify(!Theme.dark)
-            // The fake playset has enabled mods that are not ready.
+            // The fake playset has enabled mods that are not ready: Play is
+            // unavailable, but stays focusable so the keyboard reaches the reasons.
+            const play = named("playButton")
             verify(Backend.launcher.blockers.length > 0)
-            verify(!named("playButton").enabled)
+            verify(!play.available)
+            verify(play.enabled)
+            verify(play.Accessible.name.endsWith(", unavailable"), play.Accessible.name)
             // Without a playset the game starts without mods: Play is not blocked.
             Backend.playsets.activate(-1)
             tryCompare(Backend.mods, "count", 0)
             compare(Backend.launcher.blockers.length, 0)
             compare(Backend.launcher.warnings[0], "No playset is selected, so the game starts without mods.")
-            verify(named("playButton").enabled)
+            verify(play.available)
+            compare(play.Accessible.name, play.text)
         }
 
         function test_8b_discardInterruptedAfterRecoverFails() {
@@ -489,6 +494,63 @@ Item {
             // The focused action went away with the banner: the mod list has the focus.
             tryVerify(() => named("modList").activeFocus)
             verify(!discard.activeFocus)
+        }
+
+        // Tab until `item` has the focus; false if it never gets it.
+        function tabTo(item: Item, limit: int): bool {
+            for (let i = 0; i < limit && !item.activeFocus; ++i)
+                press(Qt.Key_Tab)
+            return item.activeFocus
+        }
+
+        function test_a13_blockedPlayIsReachableAndSaysWhy() {
+            requireFocus()
+            const launcher = Backend.launcher
+            const play = named("playButton")
+            const blocker = launcher.blockers[0]
+            verify(blocker.length > 0)
+            verify(!play.available)
+            verify(tabTo(play, 80), "Tab never reached the blocked Play button")
+            compare(play.Accessible.name, play.text + ", unavailable")
+            verify(play.Accessible.description.startsWith("Blocked: "), play.Accessible.description)
+            verify(play.Accessible.description.indexOf(blocker) >= 0, play.Accessible.description)
+
+            // Enter, Space and a click explain instead of launching.
+            const launches = launcher.playCount
+            notificationSpy.clear()
+            press(Qt.Key_Return)
+            press(Qt.Key_Space)
+            mouseClick(play)
+            compare(launcher.playCount, launches)
+            compare(launcher.state, "idle")
+            compare(notificationSpy.count, 3)
+            compare(notificationSpy.signalArguments[0][0], "warning")
+            compare(notificationSpy.signalArguments[0][1], "The game cannot be started yet")
+            verify(notificationSpy.signalArguments[0][2].indexOf(blocker) >= 0)
+            verify(play.activeFocus)
+
+            // Once nothing blocks (no playset), the same key starts the game, and
+            // the focus stays on Play while the launch runs.
+            Backend.playsets.activate(-1)
+            tryVerify(() => play.available)
+            verify(play.activeFocus)
+            notificationSpy.clear()
+            press(Qt.Key_Return)
+            compare(launcher.playCount, launches + 1)
+            compare(launcher.state, "validating")
+            verify(play.activeFocus)
+            verify(!play.available)
+            press(Qt.Key_Return) // busy: nothing happens, nothing is posted
+            compare(launcher.playCount, launches + 1)
+            compare(notificationSpy.count, 0)
+            tryCompare(launcher, "state", "started", 5000)
+            launcher.state = "idle"
+        }
+
+        SignalSpy {
+            id: notificationSpy
+            target: Backend.notifications
+            signalName: "posted"
         }
 
         name: "PmmUi"
