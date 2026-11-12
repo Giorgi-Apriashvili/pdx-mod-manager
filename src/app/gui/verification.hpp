@@ -5,8 +5,8 @@
 // behaviour against a real installation can be checked and captured:
 //
 //   --screenshot <png>      grab the window once the initial rescan finished,
-//                           after the optional --open/--select-row/--filter
-//                           steps, then quit
+//                           after the optional --window-size/--open/
+//                           --select-row/--filter steps, then quit
 //   --self-test <steps>     scripted share-code round trip (see run())
 //   --live-test <steps>     the same steps plus live ones (play, wait-ready,
 //                           restore, ...) for the manual acceptance procedure
@@ -19,6 +19,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 
@@ -36,6 +37,9 @@ class Backend;
 struct VerificationOptions {
     QString screenshot;
     int screenshotDelayMs = 1500;
+    // Logical size of the window for the capture; the window's minimum size
+    // applies, so 1x1 captures the smallest window. Empty: as restored.
+    QSize windowSize;
     QString theme;    // light | dark
     QStringList open; // export | add-mods | settings | history | locate | import:<code file>
     int selectRow = -1;

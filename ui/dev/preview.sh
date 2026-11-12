@@ -48,8 +48,9 @@ case "${1:-}" in
     --screenshot)
         out="${2:-$repo/docs/screenshots}"
         mkdir -p "$out"
-        # Fixed scale so the PNGs are exactly 1400x860 regardless of the display.
-        export QT_ENABLE_HIGHDPI_SCALING=0 QT_SCALE_FACTOR=1
+        # Fixed scale so the PNGs are exactly 1400x860 regardless of the display,
+        # or that times an explicitly set QT_SCALE_FACTOR (2 for 200 %).
+        export QT_ENABLE_HIGHDPI_SCALING=0 QT_SCALE_FACTOR="${QT_SCALE_FACTOR:-1}"
         "$(tool qml)" -I "$stage" -I "$here" "$here/screenshot.qml" -- "--out=$(cd "$out" && pwd)"
         ;;
     --test)

@@ -583,6 +583,11 @@ std::vector<Verification::Step> Verification::screenshotSteps() {
     if (m_options.screenshot.isEmpty())
         return steps;
     steps.push_back([this](std::function<void()> next) {
+        if (QQuickWindow* w = window(); w && m_options.windowSize.isValid()) {
+            // Never below the window's minimum size, so 1x1 gives the smallest window.
+            w->showNormal();
+            w->resize(m_options.windowSize.expandedTo(w->minimumSize()));
+        }
         if (!m_options.theme.isEmpty())
             m_backend.settings()->setTheme(m_options.theme);
         if (!m_options.statusFilter.isEmpty())
