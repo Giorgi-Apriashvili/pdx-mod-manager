@@ -361,7 +361,14 @@ and the mod rows are refreshed at once.
 
 Invokables:
 
-- `play()`;
+- `play()`: does nothing while `busy`; in a read-only session, or while
+  `canPlay` is false, it posts a warning (that the session is read-only, or
+  the blockers) and starts nothing.
+  The Play button stays focusable while it cannot play (`AppButton.available`
+  is false; [`accessibility.md`](accessibility.md#focus-order)) and calls
+  `play()` only when `canPlay`, a game is ready and nothing is `busy`;
+  otherwise Enter, Space or a click post "The game cannot be started yet"
+  with `blockers` through `Backend.notifications.post()`;
 - `recoverInterrupted() -> bool`, `restoreLastBackup() -> bool`;
 - `discardInterrupted() -> bool`: gives up the changes
   `canDiscardInterrupted` offers, leaving their files as they are, and
@@ -441,8 +448,11 @@ Properties, persisted in the application database's settings table under
 - `effectiveDark` (bool, read-only; follows `QStyleHints::colorScheme` while
   the theme is "system");
 - `windowX`, `windowY`, `windowWidth`, `windowHeight`, `windowMaximized`;
-- `leftPaneWidth`, `rightPaneWidth`;
-- `columnWidths` (list of int);
+- `leftPaneWidth`, `rightPaneWidth`: the widths the user chose by dragging a
+  divider or with the keyboard, also while a small window squeezes the
+  columns (0: the default, 200 and 300);
+- `columnWidths` (list of int): #, On, Name, Source, Status, set by dragging
+  or with the keyboard (Name is informational; it takes the remaining width);
 - `lastGameKey` (read-only, set by selecting a game);
 - `checkUpdatesAutomatically` (bool, on by default): Settings → "Check for
   updates automatically". Stored under `app.updates.checkAutomatically` as soon

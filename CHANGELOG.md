@@ -15,6 +15,15 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+### Added
+
+- **Column widths from the keyboard.** The dividers between the columns and the edges of the mod table's columns can now be moved with the keyboard as well as with the mouse. Tab reaches the divider at the edge of the games column and of the actions column, and the table's column edges as one stop right before the mod list (Ctrl+Left and Ctrl+Right move between the edges). Left and Right move the focused divider, Shift takes larger steps, Home and End give the column its narrowest and widest width and Enter its default width. The widths are kept like dragged ones, and screen readers hear each column's width. F1 lists the keys.
+
+### Changed
+
+- **The window fits a 1920x1080 screen at 200 % scaling.** The smallest window is now 900x440 pixels at 100 % instead of 980x600, so a maximized window fits a 1920x1080 screen at 200 % or a 1366x768 screen at 150 %. In a narrow window the toolbar above the mod list shows icons only (their names stay in the tool tips and for screen readers), the filter and sort lists drop their "Show:" and "Sort:" labels, and the playset buttons wrap onto two rows; when the window is too short for everything in the right-hand column, that column scrolls, so **Play** and the reasons it is unavailable can always be reached. Dialogs no longer grow taller than the window, and the import preview scrolls. The column widths you choose are kept even while a narrow window squeezes the columns.
+- **Play can be reached with Tab while it is unavailable.** **Play** used to be skipped by Tab while something blocked it, so the reasons next to it could only be read with a screen reader's own navigation. It now keeps the keyboard focus: it still looks unavailable, screen readers hear "unavailable" and the reasons, its tool tip shows them, and Enter, Space or a click list them in a notification instead of starting the game. It also keeps the focus while a launch it started runs.
+
 ## [0.1.2] - 2026-11-07
 
 A way out of an interrupted change that cannot be recovered, and fixes for imports and mod list edits. Installed copies update to this version from the update banner or **Settings > Updates**.

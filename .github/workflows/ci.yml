@@ -1,5 +1,6 @@
 # Continuous integration: build and test on Windows with MSVC (with Qt, including
-# the application tests pmm_app_tests), ASan, and clang-cl warnings and UBSan on the
+# the application tests pmm_app_tests and the QML preview tests, label
+# ui-preview), ASan, and clang-cl warnings and UBSan on the
 # Qt-free libraries, a clang-format 22 check, the update contract check
 # (packaging/update-contract.txt) and the UI contrast check. Packages and releases
 # are in release.yml, which also runs this workflow first.

@@ -233,8 +233,9 @@ success.
 
 | Option | Effect |
 | --- | --- |
-| `--screenshot <png>` | When the initial rescan has finished, apply the options below, wait, grab the window (1400x860 at scale factor 1) and quit. |
+| `--screenshot <png>` | When the initial rescan has finished, apply the options below, wait, grab the window and quit. The capture is the window's logical size (1400x860 unless `--window-size` says otherwise) at scale factor 1, whatever the display's scaling, or that size times `QT_SCALE_FACTOR` when the variable is set: `QT_SCALE_FACTOR=2` gives a reproducible 200 % capture. |
 | `--screenshot-delay-ms <n>` | Settle time before the grab (default 1500). |
+| `--window-size <w>x<h>` | Logical size of the window for the capture, never below its minimum (900x440): `--window-size 1x1` captures the smallest window. |
 | `--theme light\|dark` | Theme for the capture. |
 | `--open <what>` | Open `export`, `add-mods`, `settings`, `history`, `locate` or `import:<code file>` before the capture. Can be repeated. |
 | `--select-row <n>`, `--filter <status>`, `--search <text>` | Select a row, or set the mod list filter or search. |
@@ -289,7 +290,11 @@ personal path), the filtered one `--filter disabled --select-row 0`, the
 import preview a new profile with `--open import:code.txt`, and the EU4 one a
 new profile with `--self-test config --select-row 0`. The list only shows its
 focus ring when the window is the active window during the capture; repeat a
-capture that shows the grey inactive selection.
+capture that shows the grey inactive selection. Since Play is no longer
+disabled while it is blocked, its tool tip opens when the mouse pointer
+happens to rest where the window opens; move the pointer away and repeat
+such a capture. For a high-DPI capture of the smallest window, set
+`QT_SCALE_FACTOR=2` and add `--window-size 1x1` (1800x880 pixels).
 
 | File | State |
 | --- | --- |
@@ -318,7 +323,9 @@ cache folder (`ParadoxModManager/Paradox Mod Manager/cache`), even with
 UI settings (theme, window geometry, pane and column widths) are stored in
 the database's settings table under `ui.*`, next to the services' keys
 (`app.lastGameKey`, `game.<key>.activePlaysetId`). The window geometry is
-saved when the window closes and when the application quits. The daily update
+saved when the window closes and when the application quits. The pane widths
+are the ones chosen with the mouse or the keyboard, not the narrower ones a
+small window squeezes the columns to. The daily update
 check keeps its switch and the local date of its last answer under
 `app.updates.checkAutomatically` and `app.updates.lastAutomaticCheck`, written
 as soon as they change.
@@ -373,7 +380,12 @@ platform:
 - the keyboard paths of [`accessibility.md`](accessibility.md) with real key
   events against the real Backend: Tab order across the columns, F6,
   Alt/Ctrl+Up/Down with undo, Esc on dialogs and the context menu with focus
-  return;
+  return; a blocked Play reached with Tab that posts its reasons and starts
+  nothing, then launches with the same key once Steam runs; the column
+  dividers and the table's column edges resized from the keyboard, with the
+  widths stored in the settings; the smallest window (900x440) with its
+  columns side by side and Play scrolled into view, and a window saved at
+  that size restored at it;
 - a source check of `ui/` (`ui_text_tests.cpp`): every text element whose
   text is not a fixed literal uses `textFormat: Text.PlainText`;
 - the QML engine's network access refusing everything but local resources;
@@ -397,5 +409,11 @@ platform:
   release page with its reason in `--profile` and `--no-steam` sessions;
 - `AppRuntime` start-up failures, retention and interrupted transactions;
   the profile lock.
+
+The same `tests/app/CMakeLists.txt` registers the QML tests against the fake
+backend (`ui/dev/tests`, the run of `ui/dev/preview.sh --test`) as
+`pmm_ui_preview` with the label `ui-preview`, on the offscreen platform, when
+Qt's `qmltestrunner` is found; it writes the preview qmldir from the
+`QML_FILES` of `ui/CMakeLists.txt` into `<build>/ui-preview`.
 
 Nothing in these tests touches a real game, Steam folder or the Steam client.
