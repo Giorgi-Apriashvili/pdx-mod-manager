@@ -94,6 +94,62 @@ used.
   900x440 and, with `QT_SCALE_FACTOR=2`, 1800x880. The minimum size and the
   `QT_SCALE_FACTOR` capture were not checked on a real 200 % display.
 
+Review fixes (same day, same branch):
+
+- Fixed: the dividers announced the old width (the announcement ran before
+  the split view applied the new one; it now waits for the width, or speaks
+  at once when a key changes nothing); a key or drag that could not widen a
+  squeezed column stored the squeezed width (now nothing is stored, and
+  Enter still stores the default); a column edge kept the focus when the
+  header hid (Ctrl+N, no playset), and arrows resized hidden columns (the
+  focus now moves to the list, or the column's first control); the footer's
+  "Showing N of M" was pushed under the actions column in a narrow mods
+  column (the counts now drop their words and give way first); the narrow
+  header cut "With warnings" short with room to spare (the option lists are
+  as wide as their longest option, up to a quarter of the row); a blocked
+  Play's tool tip covered its reasons (it now lists only the ones behind
+  "…and N more"); Play's name said "unavailable" during a launch it started
+  ("starting" now); holding Enter repeated a button's action (auto-repeat is
+  ignored); a long confirmation's scroll bar covered its text and the text
+  could not be scrolled from the keyboard (room for the bar; Up, Down, PgUp,
+  PgDn, Home and End scroll it); `scripts/check.sh` passed without the
+  preview tests when `qmltestrunner` was missing (it now fails, and CMake
+  only takes the kit's own `qmltestrunner`); the docs promised exact
+  `QT_SCALE_FACTOR` captures of windows that do not fit the screen.
+- `debug` preset: **545/545 tests pass** (application 111, ui-preview 1 with
+  the 33 fake-backend QML tests).
+- New tests: in `qml_tests.cpp`, the announcements of divider and column
+  edge keys, recorded with `QAccessible::installUpdateHandler` after
+  switching on the offscreen platform's accessibility (which needs
+  `Qt6::GuiPrivate` in the test target): nothing is spoken before the
+  column has its new width, then the width once; keys at a limit and on a
+  squeezed column in the smallest window speak the current width and keep
+  the stored one, which comes back in a wider window. Changed: the blocked
+  Play case checks that held Enter posts nothing more and that the tool tip
+  is empty; the smallest-window case checks the icon-only toolbar (and its
+  labels at 1400 wide) and that "Showing 1 of 2" stays inside the mods
+  column. Preview tests: a16 (a hidden column edge gives up the focus), b3
+  (squeezed columns keep the chosen widths, keys and drags), b4 (a long
+  confirmation scrolls from the keyboard and leaves room for its bar); a13
+  checks the tool tip with two and with six reasons and the "starting" name;
+  b1 checks the toolbar, both header option lists and the footer.
+- Against the code before the fixes, the new checks fail: the announcement
+  case (stale "300 pixels" and the like), the held Enter (6 posts instead of
+  3), a13, a16, b1 (the footer), b3 (250 stored instead of 300 after Left on
+  the squeezed actions divider; with only `Main.qml` reverted, 188 instead
+  of 200 after a drag), b4.
+- The changed `[qml]` cases and the preview tests passed 10 times each.
+- Screenshots (scratch only; `docs/screenshots/*` unchanged, since the
+  documented 1400x860 layout is unchanged): the preview at 900x440 at scale
+  factors 1 (light, dark) and 2, at 911x512 at 1.5 (dark), 1120x700 and
+  1400x860, with a filter and a scan running, a search, a blocked Play with
+  the focus (two and five reasons), the actions divider focused, and the
+  discard confirmation with 14 and 40 files, scrolled to its end; the real
+  application read-only with new scratch profiles
+  (`--self-test config --filter disabled --window-size 1x1`) at scale 1 and
+  2. One of these real-application runs ended with a crash at shutdown after
+  writing its capture, as noted under Open items; 13 more runs did not.
+
 ## Test status (2026-11-07, discard an unrecoverable change, `agent/discard-interrupted`)
 
 Local runs only, with fakes and temporary folders; no game was started and no
@@ -474,9 +530,9 @@ Services and application:
 Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
 
 - Screen-reader listening pass with NVDA and Narrator (backlog item 6a, the
-  owner's). It should also settle how Play's "unavailable" name, its
-  notification and the separators' widths (name change plus announcement)
-  sound.
+  owner's). It should also settle how Play's "unavailable" and "starting"
+  names, its notification and the separators' widths (name change plus
+  announcement; one of the two may have to go) sound.
 - Done 2026-11-12 on `agent/accessibility-6` (owner's go-ahead of 2026-11-12,
   backlog item 6b-e; not merged): the minimum window size is 900x440 and fits
   a 1920x1080 screen at 200 % (it was 980x600); the column dividers and the

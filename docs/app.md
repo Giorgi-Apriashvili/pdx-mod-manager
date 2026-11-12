@@ -233,7 +233,7 @@ success.
 
 | Option | Effect |
 | --- | --- |
-| `--screenshot <png>` | When the initial rescan has finished, apply the options below, wait, grab the window and quit. The capture is the window's logical size (1400x860 unless `--window-size` says otherwise) at scale factor 1, whatever the display's scaling, or that size times `QT_SCALE_FACTOR` when the variable is set: `QT_SCALE_FACTOR=2` gives a reproducible 200 % capture. |
+| `--screenshot <png>` | When the initial rescan has finished, apply the options below, wait, grab the window and quit. The capture is the window's logical size (1400x860 unless `--window-size` says otherwise) at scale factor 1, whatever the display's scaling, or that size times `QT_SCALE_FACTOR` when the variable is set (`QT_SCALE_FACTOR=2` for a 200 % capture). Windows shrinks a window that does not fit the screen without a warning, so the capture has that size only when the scaled window fits: at 2, the 1400x860 default needs a screen of at least 2800x1760 pixels; use `--window-size` for a size that fits (`--window-size 1x1`: the smallest window, 1800x880 pixels). |
 | `--screenshot-delay-ms <n>` | Settle time before the grab (default 1500). |
 | `--window-size <w>x<h>` | Logical size of the window for the capture, never below its minimum (900x440): `--window-size 1x1` captures the smallest window. |
 | `--theme light\|dark` | Theme for the capture. |
@@ -290,11 +290,12 @@ personal path), the filtered one `--filter disabled --select-row 0`, the
 import preview a new profile with `--open import:code.txt`, and the EU4 one a
 new profile with `--self-test config --select-row 0`. The list only shows its
 focus ring when the window is the active window during the capture; repeat a
-capture that shows the grey inactive selection. Since Play is no longer
-disabled while it is blocked, its tool tip opens when the mouse pointer
-happens to rest where the window opens; move the pointer away and repeat
-such a capture. For a high-DPI capture of the smallest window, set
-`QT_SCALE_FACTOR=2` and add `--window-size 1x1` (1800x880 pixels).
+capture that shows the grey inactive selection. Play's tool tip opens when
+the mouse pointer happens to rest where the window opens (while Play is
+available, or blocked by more than the four reasons it lists); move the
+pointer away and repeat such a capture. For a high-DPI capture of the
+smallest window, set `QT_SCALE_FACTOR=2` and add `--window-size 1x1`
+(1800x880 pixels).
 
 | File | State |
 | --- | --- |

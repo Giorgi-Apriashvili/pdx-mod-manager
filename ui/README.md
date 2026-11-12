@@ -62,11 +62,13 @@ Things the QML relies on beyond the tables in the contract:
   `gamesDivider`, `sideDivider` (the keyboard column dividers), `sidePage`
   (the actions column's scroll area), `modList`, `searchField`,
   `statusFilter`, `sortSelector`, `playsetSelector`, `columnHeader`,
+  `modsToolbar` (its `compact` is true while it shows icons only),
+  `modsFooter` (`compact`: counts without their words), `showingStat`,
   `dragHandleArea`, `playButton`, `interruptedBanner`,
   `discardInterruptedButton`, `settingsButton`, `importDialog`,
   `importNameField`, `importConfirmButton`, `confirmDialog`,
-  `confirmButton`, `cancelButton`, `settingsDialog`, `shortcutsDialog`,
-  `shortcutList`.
+  `confirmScroller` (its scrolling text), `confirmButton`, `cancelButton`,
+  `settingsDialog`, `shortcutsDialog`, `shortcutList`.
 - The window's minimum size is 900x440 (it fits a 1920x1080 screen at
   200 %); `docs/accessibility.md` ("Smallest window") describes how the
   columns, the toolbar, the actions column and the dialogs adapt.
@@ -75,8 +77,13 @@ Things the QML relies on beyond the tables in the contract:
   the label), and with `available: false` looks disabled but keeps the focus
   and still emits `clicked()` (Play while it is blocked).
 - `ResizeHandle` is the keyboard side of a column divider: a focusable
-  separator (arrows, Shift, Home, End, Enter) that asks its owner for a width;
-  the mouse stays with the SplitView handle or the header edge underneath.
+  separator (arrows, Shift, Home, End, Enter) that asks its owner for a width,
+  never for the one the column already has (so a squeezed column keeps its
+  stored width), and announces the new width once `value` has it; the mouse
+  stays with the SplitView handle or the header edge underneath. After a drag,
+  `Main.qml` keeps the chosen width of a column the drag could not widen.
+- `FooterStat` shows `shortText` instead of `text` while `compact`; `text`
+  stays its accessible name and tool tip.
 
 ## Interaction reference
 
@@ -135,9 +142,14 @@ files therefore only need to be added to `CMakeLists.txt`.
 The screenshot runs open a real window for a few seconds; the `offscreen`
 platform has no fonts on Windows. Screenshots are taken at a fixed scale
 factor of 1 so they are exactly 1400x860 regardless of the display, or at an
-explicitly set `QT_SCALE_FACTOR` (`QT_SCALE_FACTOR=2` gives 2800x1720
-pixels); the real application's `--screenshot` does the same
-([`docs/app.md`](../docs/app.md#hidden-verification-switches)).
+explicitly set `QT_SCALE_FACTOR`; the real application's `--screenshot` does
+the same ([`docs/app.md`](../docs/app.md#hidden-verification-switches)). The
+PNGs are the window's size times the scale factor only while that fits the
+screen: Windows shrinks a taller window without a warning, so with
+`QT_SCALE_FACTOR=2` the 1400x860 layout needs a screen of at least 2800x1760
+pixels (on a 2560x1440 screen the captures come out 2800x1422, the window
+1400x711). The real application's `--window-size` picks a size that fits,
+such as `--window-size 1x1` for the smallest window (1800x880 at 2).
 
 The tests also run on the `offscreen` platform (`scripts/check.sh` sets it),
 where Qt finds no fonts on Windows; they check behaviour, not text layout,

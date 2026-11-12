@@ -450,7 +450,8 @@ Properties, persisted in the application database's settings table under
 - `windowX`, `windowY`, `windowWidth`, `windowHeight`, `windowMaximized`;
 - `leftPaneWidth`, `rightPaneWidth`: the widths the user chose by dragging a
   divider or with the keyboard, also while a small window squeezes the
-  columns (0: the default, 200 and 300);
+  columns (a key or drag that cannot widen a squeezed column leaves them as
+  they are; 0: the default, 200 and 300);
 - `columnWidths` (list of int): #, On, Name, Source, Status, set by dragging
   or with the keyboard (Name is informational; it takes the remaining width);
 - `lastGameKey` (read-only, set by selecting a game);
