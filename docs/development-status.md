@@ -88,6 +88,10 @@ databases and `playsets_backup` were not opened.
   `--game stellaris` and `--game eu4` output is byte-identical to the previous
   version; `--game ck3` writes CK3 events with a BOM; `analyze` on a
   synthetic CK3-style log.
+- `scripts/check.sh --full` on the branch (`15517c0`): passed (ASan and
+  clang-cl with UBSan 448/448 each, clang-tidy on the 12 changed C++ files
+  after one finding was fixed, the `ci` preset from a fresh checkout
+  560/560).
 
 ## Test status (2026-11-12, accessibility item 6b-e, `agent/accessibility-6`)
 
