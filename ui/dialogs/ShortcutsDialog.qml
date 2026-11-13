@@ -16,7 +16,7 @@ AppDialog {
             [qsTr("Ctrl+F"), qsTr("Search the mod list")],
             [qsTr("Ctrl+Z"), qsTr("Undo the last playset edit")],
             [qsTr("Ctrl+Y, Ctrl+Shift+Z"), qsTr("Redo")],
-            [qsTr("Ctrl+I, Ctrl+E"), qsTr("Import / export a share code")],
+            [qsTr("Ctrl+I, Ctrl+E"), qsTr("Import / export a share code or Workshop ID list")],
             [qsTr("Ctrl+N"), qsTr("New playset")],
             [qsTr("Ctrl+Shift+A"), qsTr("Add installed mods")],
             [qsTr("F5"), qsTr("Rescan games and mods")],

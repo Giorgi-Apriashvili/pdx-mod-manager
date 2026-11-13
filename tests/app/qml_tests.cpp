@@ -2,14 +2,16 @@
 // profile: the window and every dialog load and bind without QML warnings,
 // the main flows work through the window's own functions, and the keyboard
 // paths of docs/accessibility.md work with real key events. Names that look
-// like rich text never make the window fetch anything, and the engine's
-// network access refuses everything but local resources.
+// like rich text (a playset, a mod, a Steam Workshop title from the Web API's
+// local stub) never make the window fetch anything, and the engine's network
+// access refuses everything but local resources.
 
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
 #include "app/gui/network_guard.hpp"
 #include "core/log.hpp"
+#include "http_stub.hpp"
 #include "persistence/settings_repository.hpp"
 #include "platform/file_transaction.hpp"
 #include "test_support.hpp"
@@ -19,6 +21,7 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <QAccessible>
+#include <QClipboard>
 #include <QDate>
 #include <QDir>
 #include <QKeyEvent>
@@ -1875,6 +1878,168 @@ TEST_CASE("Copies and sessions that cannot install offer the release page", "[ap
     h.checkFits();
 
     h.close();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("The import dialog previews a Workshop ID list with Workshop titles as plain text",
+          "[app][qml][idlist]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    // A Workshop title that looks like rich text with a remote image, as the
+    // Web API could return it. The Web API is a local stub.
+    Listener listener;
+    RefusalLog refusals;
+    const QString hostile = QStringLiteral("<img src=\"%1\">").arg(listener.url("title.png"));
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    HttpStub stub;
+    stub.responder = HttpStub::catalog({{"5550001", {utf8(hostile)}}, {"5550002", {"Steam Two"}}});
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = true; // the Web API host; no pmm-steam-helper to start
+    options.metadataEndpoint = stub.url();
+    options.helperExecutable = qpath(temp.path() / "no helper" / "pmm-steam-helper.exe");
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    REQUIRE(runner.metadataEnabled());
+
+    QmlWarnings warnings;
+    {
+        BackendOptions backendOptions;
+        backendOptions.previewLookupDelayMs = 0;
+        Backend backend(runner, backendOptions);
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        OfflineNetworkAccessManagerFactory networkFactory; // as in main()
+        QQmlApplicationEngine engine;
+        engine.setNetworkAccessManagerFactory(&networkFactory);
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        ShareController* sharing = backend.sharing();
+        const auto item = [&](const char* name) {
+            auto* found = window->findChild<QQuickItem*>(QLatin1String(name));
+            REQUIRE(found);
+            return found;
+        };
+
+        QMetaObject::invokeMethod(window, "openImport",
+                                  Q_ARG(QString, QStringLiteral("1001|5550001\n5550002")));
+        REQUIRE(waitUntil([&] {
+            return sharing->hasPreview() && !sharing->busy() &&
+                   sharing->preview().value("lookup") == "done";
+        }));
+        waitUntil([] { return false; }, std::chrono::milliseconds(500)); // the update renders
+        CHECK(item("importPreviewTitle")->property("text") == "Workshop ID list");
+        CHECK(item("importListNote")->isVisible());
+        CHECK_FALSE(item("importLookupLine")->isVisible()); // done: nothing to say
+        CHECK(item("importNameField")->property("text") == "Imported mod list");
+        QQuickItem* entries = item("importEntryList");
+        CHECK(entries->property("count").toInt() == 3);
+        CHECK(evaluateIn(entries, QStringLiteral("model[1].name")).toString() == hostile);
+        CHECK(evaluateIn(entries, QStringLiteral("model[2].name")).toString() == "Steam Two");
+
+        // Confirmed: the mod list shows the title as well.
+        auto* confirm = window->findChild<QObject*>(QStringLiteral("importConfirmButton"));
+        REQUIRE(confirm);
+        CHECK(confirm->property("enabled").toBool());
+        QMetaObject::invokeMethod(confirm, "clicked");
+        REQUIRE(waitUntil([&] {
+            return backend.activePlaysetId() >= 0 && backend.mods()->count() == 3 &&
+                   backend.mods()->playsetId() == backend.activePlaysetId();
+        }));
+        CHECK(backend.mods()->row(1)->entry.nameHint == utf8(hostile));
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 1));
+        waitUntil([] { return false; }, std::chrono::milliseconds(500));
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+    CHECK(refusals.count() == 0);
+    CHECK(listener.connections() == 0);
+}
+
+TEST_CASE("In the smallest window the export dialog scrolls, and Tab reaches the list's copy "
+          "button",
+          "[app][qml][a11y][idlist]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addWorkshopMod("1002", "Beta");
+    world.addLocalMod("gamma", "Gamma");
+    FakeAdapter adapter(world);
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false;
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        backend.playsets()->create(QStringLiteral("Small"));
+        REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+        backend.mods()->addMods({"steam-workshop:1001", "local:gamma", "steam-workshop:1002"});
+        REQUIRE(waitUntil([&] { return backend.mods()->count() == 3 && !backend.mods()->busy(); }));
+
+        window->resize(window->minimumSize());
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        REQUIRE(waitUntil([&] { return window->width() == 900 && window->height() == 440; }));
+        const auto item = [&](const char* name) {
+            auto* found = window->findChild<QQuickItem*>(QLatin1String(name));
+            REQUIRE(found);
+            return found;
+        };
+
+        QMetaObject::invokeMethod(window, "openExport");
+        REQUIRE(waitUntil([&] { return !backend.sharing()->workshopIdList().isEmpty(); }));
+        QQuickItem* scroller = item("exportScroller");
+        QQuickItem* copy = item("copyWorkshopIdListButton");
+        QQuickItem* field = item("workshopIdListField");
+        // The dialog fits the window, and its content scrolls.
+        REQUIRE(waitUntil([&] { return scroller->property("interactive").toBool(); }));
+        const QRectF frame = rectIn(scroller, window->contentItem());
+        CHECK(frame.top() >= 0);
+        CHECK(frame.bottom() <= 440.5);
+        CHECK(evaluateIn(field, QStringLiteral("text")).toString() == "1001|1002");
+        CHECK(evaluateIn(field, QStringLiteral("Accessible.description")).toString() ==
+              "2 enabled Workshop mods in load order. The list does not say which game it is for. "
+              "Left out: 1 local mod. The share code includes it.");
+        REQUIRE(waitUntil([&] { return item("copyShareCodeButton")->hasActiveFocus(); }));
+
+        REQUIRE(tabTo(window, copy, 20));
+        // Revealed: inside the visible part of the scrolled content.
+        CHECK(waitUntil([&] {
+            const QRectF rect = rectIn(copy, scroller);
+            return rect.top() >= 0 && rect.bottom() <= scroller->height() + 0.5;
+        }));
+        QTest::keyClick(window, Qt::Key_Space);
+        REQUIRE(waitUntil([&] { return QGuiApplication::clipboard()->text() == "1001|1002"; }));
+        CHECK(backend.notifications()->latest().value("title") == "Workshop ID list copied");
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
     INFO(warnings.list().join('\n').toStdString());
     CHECK(QmlWarnings::list().isEmpty());
 }

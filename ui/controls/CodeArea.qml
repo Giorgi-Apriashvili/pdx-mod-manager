@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import Pmm.Ui
 
-// Scrollable monospace text area for share codes (wraps anywhere).
+// Scrollable monospace text area for share codes and Workshop ID lists (wraps
+// anywhere).
 ScrollView {
     id: root
 
@@ -42,6 +43,7 @@ ScrollView {
         rightPadding: 14
         Accessible.role: Accessible.EditableText
         Accessible.name: root.Accessible.name
+        Accessible.description: root.Accessible.description
         Keys.onTabPressed: event => {
             // Tab moves focus instead of inserting a tab character.
             nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason)

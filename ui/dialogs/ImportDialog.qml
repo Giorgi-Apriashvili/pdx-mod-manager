@@ -7,8 +7,11 @@ import QtQuick.Dialogs
 import Pmm.Ui
 import Pmm.Backend
 
-// Import a share code: paste or open a file, preview without side effects,
-// then create a new playset (default) or explicitly replace an existing one.
+// Import a share code or a Workshop ID list: paste or open a file, preview
+// without side effects, then create a new playset (default) or explicitly
+// replace an existing one. A list is for the selected game. The names of
+// missing Workshop mods may arrive in a later update of the same preview
+// (same generation), which keeps the typed name and the list's position.
 AppDialog {
     id: dialog
 
@@ -19,9 +22,11 @@ AppDialog {
     property string mode: "new"
     property string loadedFile
     property bool settingText: false
+    // The preview the name field and the entry list were last filled from.
+    property real syncedGeneration: -1
 
-    title: qsTr("Import share code")
-    subtitle: qsTr("Nothing changes until you confirm. Codes contain mod references and order only, never files or paths.")
+    title: qsTr("Import share code or Workshop ID list")
+    subtitle: qsTr("Nothing changes until you confirm. Codes and lists contain mod references and order only, never files or paths.")
     preferredWidth: 780
     preferredHeight: 700
 
@@ -68,9 +73,22 @@ AppDialog {
     }
 
     // `preview` and `hasPreview` change separately; sync once both settled.
+    // A new preview proposes its name; an update of the same one (the names
+    // of missing mods) keeps a typed name, the current entry and the scroll
+    // position.
     function syncFromPreview() {
-        if (previewOk)
-            nameField.text = preview.proposedName || preview.playsetName || ""
+        const update = previewOk && preview.generation === syncedGeneration
+        const index = entryList.currentIndex
+        const contentY = entryList.contentY
+        entryList.model = previewOk ? preview.entries : []
+        if (update) {
+            entryList.currentIndex = Math.min(index, entryList.count - 1)
+            entryList.contentY = contentY
+        } else {
+            syncedGeneration = previewOk ? preview.generation : -1
+            if (previewOk)
+                nameField.text = preview.proposedName || preview.playsetName || ""
+        }
         if (!sameGame && mode === "replace")
             mode = "new"
     }
@@ -84,6 +102,7 @@ AppDialog {
         sharing.clearPreview()
         setCode("")
         loadedFile = ""
+        syncedGeneration = -1
     }
 
     onPreviewChanged: Qt.callLater(syncFromPreview)
@@ -97,9 +116,9 @@ AppDialog {
 
     FileDialog {
         id: openDialog
-        title: qsTr("Open share code file")
+        title: qsTr("Open share code or Workshop ID list")
         fileMode: FileDialog.OpenFile
-        nameFilters: [qsTr("Share code files (*.txt *.pmm)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("Share codes and ID lists (*.txt *.pmm)"), qsTr("All files (*)")]
         onAccepted: {
             previewTimer.stop()
             dialog.setCode("")
@@ -133,7 +152,7 @@ AppDialog {
 
                 Text {
                     Layout.fillWidth: true
-                    text: dialog.loadedFile.length > 0 ? qsTr("Loaded from %1").arg(dialog.loadedFile) : qsTr("Share code")
+                    text: dialog.loadedFile.length > 0 ? qsTr("Loaded from %1").arg(dialog.loadedFile) : qsTr("Share code or Workshop ID list")
                     textFormat: Text.PlainText
                     font.pixelSize: Theme.fontSize
                     font.weight: Font.DemiBold
@@ -154,7 +173,7 @@ AppDialog {
                 AppButton {
                     text: qsTr("Open file…")
                     iconName: "file"
-                    toolTipText: qsTr("Read a share code from a text file")
+                    toolTipText: qsTr("Read a share code or Workshop ID list from a text file")
                     onClicked: openDialog.open()
                 }
             }
@@ -163,8 +182,8 @@ AppDialog {
                 id: codeArea
                 Layout.fillWidth: true
                 Layout.preferredHeight: dialog.sharing.hasPreview ? 64 : 160
-                placeholderText: qsTr("Paste a code starting with PMM1. …")
-                Accessible.name: qsTr("Share code text")
+                placeholderText: qsTr("Paste a share code (PMM1.…) or Workshop IDs, e.g. 3818297502|3149445431")
+                Accessible.name: qsTr("Share code or Workshop ID list text")
                 onTextChanged: {
                     if (!dialog.settingText)
                         previewTimer.restart()
@@ -185,7 +204,9 @@ AppDialog {
                 Layout.fillHeight: true
                 visible: !dialog.sharing.hasPreview
                 verticalAlignment: Text.AlignTop
-                text: qsTr("A preview of the playset appears here as soon as a valid code is pasted.")
+                text: qsTr("A preview of the playset appears here as soon as a valid share code or Workshop ID list is pasted. "
+                           + "Workshop IDs and Steam Workshop links are imported for the game selected in the window.")
+                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSize
                 color: Theme.textMuted
                 wrapMode: Text.Wrap
@@ -205,8 +226,11 @@ AppDialog {
                     spacing: 8
 
                     Text {
+                        objectName: "importPreviewTitle"
                         Layout.fillWidth: true
-                        text: qsTr("“%1”").arg(dialog.preview.playsetName ?? "")
+                        // A list has no name of its own.
+                        text: dialog.preview.format === "idList" ? qsTr("Workshop ID list")
+                                                                 : qsTr("“%1”").arg(dialog.preview.playsetName ?? "")
                         textFormat: Text.PlainText
                         font.pixelSize: Theme.fontSizeTitle
                         font.weight: Font.DemiBold
@@ -264,6 +288,20 @@ AppDialog {
                     }
                 }
                 MessageLine {
+                    objectName: "importListNote"
+                    Layout.fillWidth: true
+                    visible: text.length > 0
+                    level: "info"
+                    text: dialog.preview.listNote ?? ""
+                }
+                MessageLine {
+                    objectName: "importLookupLine"
+                    Layout.fillWidth: true
+                    visible: text.length > 0
+                    level: dialog.preview.lookup === "failed" ? "warning" : "info"
+                    text: dialog.preview.lookupText ?? ""
+                }
+                MessageLine {
                     Layout.fillWidth: true
                     level: "info"
                     textColor: Theme.textMuted
@@ -302,12 +340,15 @@ AppDialog {
 
                         ListView {
                             id: entryList
+                            objectName: "importEntryList"
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
                             reuseItems: true
                             boundsBehavior: Flickable.StopAtBounds
-                            model: dialog.previewOk ? dialog.preview.entries : []
+                            // Set by syncFromPreview(), which keeps the position
+                            // across an update of the same preview.
+                            model: []
                             ScrollBar.vertical: AppScrollBar {}
                             Accessible.role: Accessible.List
                             Accessible.name: qsTr("Entries in load order")

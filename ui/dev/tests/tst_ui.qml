@@ -264,6 +264,88 @@ Item {
             compare(Backend.playsets.activeName, "Federation campaign (imported)")
         }
 
+        // A Workshop ID list: the names of missing mods arrive in a later
+        // update of the same preview, which keeps a typed playset name, the
+        // current entry and the scroll position.
+        function test_9b_importIdListKeepsTypedName() {
+            const sharing = Backend.sharing
+            sharing.autoLookup = false
+            const count = Backend.playsets.count
+            const ids = []
+            for (let i = 0; i < 60; ++i)
+                ids.push(String(3000000001 + i))
+            win.openImport(ids.join("|"))
+            const dialog = named("importDialog")
+            tryVerify(() => dialog.opened)
+            const nameField = findChild(dialog.contentItem, "importNameField")
+            tryCompare(nameField, "text", "Imported mod list")
+            compare(findChild(dialog.contentItem, "importPreviewTitle").text, "Workshop ID list")
+            verify(findChild(dialog.contentItem, "importListNote").visible)
+            const lookupLine = findChild(dialog.contentItem, "importLookupLine")
+            verify(lookupLine.visible)
+            compare(lookupLine.text, "Looking up 40 missing mods on the Steam Workshop…")
+            const list = findChild(dialog.contentItem, "importEntryList")
+            tryCompare(list, "count", 60)
+            compare(list.model[1].name, "3000000002")
+
+            // Before the names arrive, the user names the playset and moves in the list.
+            nameField.text = "Friday list"
+            list.currentIndex = 30
+            list.contentY = 200
+            const generation = sharing.preview.generation
+            sharing.finishLookup()
+            tryCompare(lookupLine, "visible", false)
+            compare(sharing.preview.generation, generation)
+            tryVerify(() => list.model[1].name === "Workshop mod 3000000002")
+            wait(50) // the dialog syncs once the preview settled (Qt.callLater)
+            compare(nameField.text, "Friday list")
+            compare(list.currentIndex, 30)
+            compare(list.contentY, 200)
+
+            const confirm = findChild(dialog.footer, "importConfirmButton")
+            verify(confirm.enabled)
+            mouseClick(confirm)
+            tryVerify(() => !dialog.visible)
+            compare(Backend.playsets.count, count + 1)
+            compare(Backend.playsets.activeName, "Friday list")
+            sharing.autoLookup = true
+        }
+
+        function test_9c_importIdListErrors() {
+            win.openImport("3818297502|12a4")
+            const dialog = named("importDialog")
+            tryVerify(() => dialog.opened)
+            tryVerify(() => Backend.sharing.hasPreview)
+            verify(!Backend.sharing.preview.ok)
+            compare(Backend.sharing.preview.errorTitle, "Not a valid Workshop ID list")
+            const confirm = findChild(dialog.footer, "importConfirmButton")
+            verify(!confirm.enabled)
+            dialog.close()
+            tryVerify(() => !Backend.sharing.hasPreview)
+        }
+
+        function test_9d_exportShowsWorkshopIdList() {
+            win.openExport()
+            const dialog = named("exportDialog")
+            tryVerify(() => dialog.opened)
+            const field = findChild(dialog.contentItem, "workshopIdListField")
+            tryVerify(() => field.text.length > 0)
+            compare(field.text, Backend.sharing.workshopIdList.text)
+            verify(/^[0-9]+(\|[0-9]+)*$/.test(field.text), field.text.substring(0, 40))
+            const note = findChild(dialog.contentItem, "workshopIdListNote")
+            verify(note.text.indexOf(" in load order. The list does not say which game it is for.") > 0, note.text)
+            verify(note.text.indexOf("Left out: ") > 0, note.text)
+            compare(field.Accessible.description, note.text)
+            const copy = findChild(dialog.contentItem, "copyWorkshopIdListButton")
+            verify(copy.enabled)
+            notificationSpy.clear()
+            mouseClick(copy)
+            compare(notificationSpy.count, 1)
+            compare(Backend.notifications.latest.title, "Workshop ID list copied")
+            dialog.close()
+            tryVerify(() => !dialog.visible)
+        }
+
         // --- keyboard and accessibility (docs/accessibility.md) ---------------
 
         // The column (games, mods, side) that holds the keyboard focus, or "".

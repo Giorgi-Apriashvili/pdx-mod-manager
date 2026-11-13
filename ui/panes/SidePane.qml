@@ -79,7 +79,7 @@ Rectangle {
             height: Math.max(page.height, root.fixedHeight + root.minimumMiddleHeight)
             spacing: 0
 
-            // Share codes
+            // Share codes and Workshop ID lists
             RowLayout {
                 id: shareRow
                 Layout.fillWidth: true
@@ -95,7 +95,7 @@ Rectangle {
                     text: qsTr("Import code")
                     iconName: "import"
                     enabled: root.hasGame
-                    toolTipText: qsTr("Import a playset from a share code (Ctrl+I)")
+                    toolTipText: qsTr("Import a playset from a share code or Workshop ID list (Ctrl+I)")
                     onClicked: root.importRequested()
                 }
                 AppButton {
@@ -106,7 +106,7 @@ Rectangle {
                     iconName: "export"
                     iconColor: Theme.accent
                     enabled: root.hasPlayset && root.hasGame
-                    toolTipText: qsTr("Create a share code for the active playset (Ctrl+E)")
+                    toolTipText: qsTr("Create a share code and Workshop ID list for the active playset (Ctrl+E)")
                     onClicked: root.exportRequested()
                 }
             }
