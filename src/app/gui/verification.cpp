@@ -415,8 +415,13 @@ std::vector<Verification::Step> Verification::selfTestSteps() {
                             Qt::SingleShotConnection);
                         if (!sharing->confirmImport(
                                 QStringLiteral("new"), -1,
-                                preview.value(QStringLiteral("proposedName")).toString()))
+                                preview.value(QStringLiteral("proposedName")).toString())) {
                             fail(QStringLiteral("confirmImport was refused"));
+                            return;
+                        }
+                        // Done with the preview: a --live-test run then
+                        // sends no Workshop lookup for it.
+                        sharing->clearPreview();
                     },
                     30000, QStringLiteral("the import preview"));
             });

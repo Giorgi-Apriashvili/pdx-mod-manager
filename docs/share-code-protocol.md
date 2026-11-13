@@ -347,6 +347,9 @@ fragment   = *( %x00-FF except separators )
   does not. Other parameters and a fragment are ignored. A second `id=` is
   refused. Links are only read, never fetched. `steam://` links are not
   accepted (yet).
+* A Steam collection's page has the same form as an item page, so a link to
+  it reads as one entry: the collection itself, not its mods. Nothing in the
+  text tells them apart.
 
 ### Limits and errors
 

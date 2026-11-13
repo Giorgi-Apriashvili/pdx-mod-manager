@@ -99,8 +99,8 @@ entry it could not read:
   `3818297502` or links such as
   `https://steamcommunity.com/sharedfiles/filedetails/?id=3818297502`,
   separated by `|`, commas, spaces or line breaks. Other text between them
-  (names, numbering, a heading) has to go. Links to collections, profiles or
-  other pages are not item links.
+  (names, numbering, a heading) has to go. Links to profiles, search pages or
+  other sites are not item links.
 - **A ";2" suffix.** Lists made for Total War mod managers pin load positions
   as `id;position`. Paradox games load mods in list order, so remove the
   suffixes and put the ids in the order the mods should load.
@@ -116,6 +116,12 @@ preview: missing mods show their Workshop names when the Steam Web API can be
 reached, and items that do not exist say **Not found on Workshop**. Local
 mods, disabled mods and the playset's name are never part of a list; share a
 code for those.
+
+A link to a Steam collection has the same form as an item link
+(`…/filedetails/?id=…`), so it is accepted as one entry: the collection
+itself, shown with its name, not the mods in it. The preview cannot tell a
+collection from a mod; paste the IDs or links of the collection's mods
+instead.
 
 ## Offline use
 

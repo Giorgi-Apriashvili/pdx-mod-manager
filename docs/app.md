@@ -274,7 +274,9 @@ success.
 restriction, for the recorded acceptance runs in
 [validation.md](validation.md): imports queue Workshop downloads (unless
 `--no-steam`), and `play` writes the game configuration and starts the game
-exactly like the Play button. It refuses to run without `--profile`. Each
+exactly like the Play button. An `import:` step drops its preview once it is
+confirmed, so it never looks the missing mods up on the Steam Web API; the
+queued jobs ask as usual. `--live-test` refuses to run without `--profile`. Each
 `[verify]` line carries the time, and every notification, launch state change,
 provider status change and acquisition job transition is printed. Additional
 steps:
