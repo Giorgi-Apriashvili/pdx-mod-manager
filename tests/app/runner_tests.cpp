@@ -261,8 +261,9 @@ TEST_CASE("ServiceRunner looks Workshop items up in batches and answers once", "
     QObject receiver;
     std::vector<WorkshopLookup> answers;
     const auto lookUp = [&](ServiceRunner& runner, std::vector<std::string> wanted) {
-        runner.lookupWorkshopItems(&receiver, kGame, std::move(wanted),
-                                   [&](WorkshopLookup lookup) { answers.push_back(lookup); });
+        runner.lookupWorkshopItems(&receiver, kGame, std::move(wanted), [&](WorkshopLookup lookup) {
+            answers.push_back(std::move(lookup));
+        });
         CHECK(answers.empty()); // queued, like call()
         REQUIRE(waitUntil([&] { return !answers.empty(); }));
         waitUntil([] { return false; }, std::chrono::milliseconds(100));

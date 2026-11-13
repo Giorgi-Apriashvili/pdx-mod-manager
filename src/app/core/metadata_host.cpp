@@ -53,7 +53,7 @@ void QtWorkshopMetadataHost::lookup(const GameKey& gameKey, const std::vector<st
         // Answered later all the same, as a caller expects of a request.
         QMetaObject::invokeMethod(
             this,
-            [completion] {
+            [completion = std::move(completion)] {
                 WorkshopLookupReply reply;
                 reply.error = "no request could be built for the item ids";
                 completion(std::move(reply));

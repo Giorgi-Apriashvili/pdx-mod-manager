@@ -344,7 +344,7 @@ QString ShareController::exportCode() {
             return Exported{runtime.sharing().exportCode(playsetId),
                             runtime.sharing().exportWorkshopIdList(playsetId)};
         },
-        [this, generation](Exported result) {
+        [this, generation](const Exported& result) {
             setBusy(false);
             if (generation != m_exportGeneration)
                 return;

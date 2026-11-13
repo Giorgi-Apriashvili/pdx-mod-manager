@@ -131,8 +131,9 @@ WorkshopItemCheck toCheck(providers::WorkshopItemVerdict verdict) {
     return WorkshopItemCheck::Unavailable;
 }
 
-// The warnings withWorkshopMetadata() adds for the answered missing entries.
-std::vector<std::string> workshopWarnings(const ImportPreview& preview,
+// The warnings withWorkshopMetadata() adds for the answered missing entries;
+// `counts` are the preview plan's.
+std::vector<std::string> workshopWarnings(const ImportPreview& preview, const ImportCounts& counts,
                                           std::span<const std::string> ids) {
     std::size_t notFound = 0;
     std::size_t unavailable = 0;
@@ -182,7 +183,6 @@ std::vector<std::string> workshopWarnings(const ImportPreview& preview,
             countText(banned, "missing Workshop mod is", "missing Workshop mods are") +
             " banned on the Steam Workshop and cannot be downloaded.");
     if (wrongGame > 0) {
-        const ImportCounts& counts = preview.plan->counts;
         const GameCatalogEntry* other =
             otherGames.size() == 1 ? findGame(*otherGames.begin()) : nullptr;
         // Every found item is that game's, and none is installed here (an
@@ -262,7 +262,7 @@ ImportPreview withWorkshopMetadata(ImportPreview preview,
     const auto earlier = static_cast<std::ptrdiff_t>(std::min<std::size_t>(
         preview.workshopWarnings, static_cast<std::size_t>(note - warnings.begin())));
     note = warnings.erase(note - earlier, note);
-    std::vector<std::string> added = workshopWarnings(preview, ids);
+    std::vector<std::string> added = workshopWarnings(preview, plan.counts, ids);
     preview.workshopWarnings = added.size();
     warnings.insert(note, std::make_move_iterator(added.begin()),
                     std::make_move_iterator(added.end()));
