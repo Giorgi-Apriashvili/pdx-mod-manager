@@ -13,8 +13,10 @@ game or talk to Steam and have not been run; they need the explicit approval
 of the machine's owner. Record only what you observed; a failed or skipped
 step is a valid result and must be written down as such. The
 [support matrix](support-matrix.md) is updated only from rows in that table.
-For Crusader Kings III only the read-only steps have been run (2026-11-13);
-its probe run is prepared below and needs the owner's approval.
+For Crusader Kings III the read-only steps and, with the owner's approval,
+the probe run of step 6 (items 1 to 5, with a playset of the probes only)
+were run on 2026-11-13
+([evidence](evidence/2026-11-13-ck3-load-order.md)).
 
 The procedure uses the desktop application `pmm-app` and the UI described in
 [`ui-contract.md`](ui-contract.md) (Import code, Export code, Play, ...).
@@ -123,7 +125,9 @@ one). For CK3, run the read-only `pmm_games_tests "[.real]" -s` first and keep
 its output as the baseline, and leave the other mods out of the probe playset
 (see [load order](load-order.md#crusader-kings-iii)). The second CK3 command
 rewrites probe b, which stays disabled, with `supported_version="1.20"`, a
-two-part pattern without a wildcard whose treatment by CK3 is not known.
+two-part pattern without a wildcard whose treatment by CK3 is not known (the
+run of 2026-11-13 could not tell: started directly, 1.20.1.2 reported
+nothing about descriptors outside `enabled_mods`).
 Remove them at the end with `probe_mods.py remove "<userdata>/mod"`.
 
 ## 4. Procedure
@@ -236,7 +240,8 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
      start, and whether Steam shows the game as running;
    - CK3 only (started in `<install>/binaries`, where its `steam_appid.txt`
      lies): the same observations; also record whether DLC shows as enabled
-     in the main menu;
+     in the main menu (2026-11-13: the same process after 26 s, no restart
+     through Steam; `debug.log` mounted 27 DLC folders);
    - `<userdata>/dlc_load.json` `enabled_mods` lists exactly the four enabled
      entries and nothing else, in the order the adapter documents in its
      `LoadOrderInfo`. With the launcher's observed convention (playset
@@ -244,7 +249,9 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
      `mod/pmm_probe_a.mod`, `mod/ugc_<W3>.mod`; all three games' existing
      files use the `mod/ugc_<id>.mod` naming for Workshop items.
      `disabled_dlcs` is unchanged from before the launch.
-3. Wait for the main menu, quit the game, then analyse its log:
+3. Wait for the main menu (CK3: also for the `debug.log` line `Setup
+   completion (history loaded)`; on 2026-11-13 a run closed before that line
+   crashed while closing), quit the game, then analyse its log:
 
    ```sh
    python tools/probe-mods/probe_mods.py analyze "<userdata>/logs/error.log" --enabled c a --disabled b
@@ -353,3 +360,4 @@ One row per game, Windows version and distribution combination (repeat rows for 
 | Europa Universalis IV | v1.37.5.0 (15918133) | Windows 11 23H2 | Steam | 0.1.0-dev (`91b973e`; failure cases `19e4705`) | 2026-10-30 | 1-6, 8, 9 live with probe mods (one machine, isolated profiles A and B; `--live-test`) | pass; step 6 shows that EU4 ignores the `enabled_mods` order for file overrides (name order decides); step 7 run for Stellaris only | [live validation](evidence/live-validation-2026-10-30.md) |
 | Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (`19e4705`) | 2026-10-30 | 1-7 live (probe mods; step 4 with a separate approval, build `f809e91`; `--live-test`) | pass; 8-9 run for EU4 only (same code paths); step 7 found a stale Play blocker, fixed in `19e4705` and rerun | [live validation](evidence/live-validation-2026-10-30.md) |
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (branch `agent/ck3`, `e16268a`) | 2026-11-13 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles, playset from the game's configuration) | partial: 4, 6-9 not run (need the owner's approval) | [CK3 adapter](games/ck3.md#real-machine-evidence) |
+| Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (`main`, `5013efe`) | 2026-11-13 | 6, items 1-5, live with the probes only (C, A, B disabled, imported from a share code; one isolated profile; `--live-test` with `--no-steam`), two launches, then restore | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, probes loaded as configured, **the later mod in `enabled_mods` wins**, configuration restored. Run 1 crashed while the game was being closed (after the evidence was written); `supported_version="1.20"` undetermined; 4, 6 items 6-7, 7-9 not run | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |

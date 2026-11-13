@@ -25,16 +25,16 @@ constexpr GameTraits kTraits{
     .userDirFile = "game/userdir.txt",
     .droppedArguments = kDroppedArguments,
     // error.log (1.19 build) reports "Invalid supported_version" for "1.*", and
-    // not for "1.19.*", "1.18.*", "1.16.*", "1.19.0.6" or "1.13.0.3".
+    // not for "1.19.*", "1.18.*", "1.16.*", "1.19.0.6" or "1.13.0.3". 1.20.1.2,
+    // started directly, reported nothing about descriptors outside
+    // enabled_mods, so the rule is unconfirmed there.
     .rejectsEarlyWildcards = true,
-    .loadOrderSummary = "dlc_load.json enabled_mods, index 0 first; which mod wins when two "
-                        "enabled mods contain the same file is not verified for Crusader Kings III",
-    .loadOrderEvidence = "docs/games/ck3.md (read-only: debug.log mounts the mods in enabled_mods "
-                         "order; precedence not probed)",
-    .loadOrderVerifiedInGame = false,
-    // Until the probe run: then removed, or replaced as for EU4.
-    .loadOrderUserNote = "It is not yet verified that Crusader Kings III follows this order when "
-                         "two mods change the same file.",
+    .loadOrderSummary = "dlc_load.json enabled_mods, index 0 first; when two enabled mods "
+                        "contain the same file, the one later in the list wins",
+    .loadOrderEvidence = "docs/evidence/2026-11-13-ck3-load-order.md (probe mods, Crusader Kings "
+                         "III 1.20.1.2, Windows 11)",
+    .loadOrderVerifiedInGame = true,
+    .loadOrderUserNote = {}, // the playset order is the order the game applies
     .logComponent = "games.ck3",
 };
 

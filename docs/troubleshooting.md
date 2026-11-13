@@ -238,9 +238,10 @@ launcher:
   behaviour is not yet verified ([support matrix](support-matrix.md)).
 - Crusader Kings III: the manager starts `binaries\ck3.exe` in the
   `binaries` folder, where the game keeps its `steam_appid.txt`, with the
-  arguments from `launcher\launcher-settings.json`. A direct start of
-  Crusader Kings III has not been tried yet; if the game quits, restarts
-  through Steam or opens the launcher, report it with the diagnostics
+  arguments from `launcher\launcher-settings.json`. Crusader Kings III
+  1.20.1.2 started this way on 2026-11-13 stayed up without the launcher and
+  without restarting through Steam; if your copy quits, restarts through
+  Steam or opens the launcher, report it with the diagnostics
   ([CK3 adapter](games/ck3.md)).
 
 ## The game does not start (process start failures)

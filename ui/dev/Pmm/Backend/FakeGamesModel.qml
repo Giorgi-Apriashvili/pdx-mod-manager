@@ -20,7 +20,7 @@ ListModel {
         statusText: "Not found"; version: ""
         installPath: ""
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Crusader Kings III"
-        loadOrderNote: "It is not yet verified that Crusader Kings III follows this order when two mods change the same file."
+        loadOrderNote: ""
     }
     ListElement {
         key: "eu4"; name: "Europa Universalis IV"; supported: true; installed: false; manualLocation: false

@@ -59,7 +59,7 @@ TEST_CASE("Game traits agree with the catalog", "[games][registry]") {
     CHECK_FALSE(eu4Traits().rejectsEarlyWildcards);
     CHECK(ck3Traits().executable == "binaries/ck3.exe");
     CHECK(ck3Traits().userDirFile == "game/userdir.txt");
-    CHECK_FALSE(ck3Traits().loadOrderVerifiedInGame);
+    CHECK(ck3Traits().loadOrderVerifiedInGame);
 }
 
 TEST_CASE("The real discovery environment describes this process", "[games][registry]") {

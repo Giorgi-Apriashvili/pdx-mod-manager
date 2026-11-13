@@ -18,9 +18,12 @@
 // is inferred from Stellaris, and that a two-part pattern without a wildcard
 // such as "1.20" is valid is assumed: no descriptor there had one, so the
 // error.log cannot tell "a wildcard before the patch" from "fewer than three
-// parts"). No such rule is known for EU4: its error.log
-// files on that machine contain no such messages, although v1.37.*.* and
-// v1.37.* descriptors are registered.
+// parts". The probe run on 1.20.1.2 could not settle it either: started
+// directly, the game reported nothing about descriptors outside enabled_mods,
+// so the disabled "1.20" probe was never read; see
+// docs/evidence/2026-11-13-ck3-load-order.md). No such rule is known for EU4:
+// its error.log files on that machine contain no such messages, although
+// v1.37.*.* and v1.37.* descriptors are registered.
 
 #include <cstdint>
 #include <optional>

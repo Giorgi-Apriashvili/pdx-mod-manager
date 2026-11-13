@@ -18,7 +18,7 @@ Investigation environment (2026-10-29): Windows 11 Enterprise 23H2
 |---|---|---|---|
 | Stellaris | 281990 | Installed via Steam, build 25664273, `launcher-settings.json` reports "Cygnus v4.5.2 (9776)" | 27 Workshop items installed, 10 local mods, 2 launcher playsets |
 | Europa Universalis IV | 236850 | Installed via Steam later the same day, build 15918133, `launcher-settings.json` reports "EU4 v1.37.5.0 Inca (491d)" | Right after the install 0 Workshop items on disk (`appworkshop_236850.acf` had `NeedsDownload` = 1); shortly afterwards Steam downloaded the 12 subscribed items. 1 local mod; 12 registered `ugc_*.mod` descriptors and 1 local descriptor left from an earlier installation |
-| Crusader Kings III | 1158310 | Added 2026-11-13 (read-only): installed via Steam, build 26046173, `launcher/launcher-settings.json` reports "1.20.1.2 (Crozier)"; that version has not run on the machine (the logs are from a 1.19 build) | 11 Workshop items installed, no local mods; 11 registered `ugc_*.mod` descriptors, 9 of them enabled. Details: [`games/ck3.md`](games/ck3.md) |
+| Crusader Kings III | 1158310 | Added 2026-11-13 (read-only): installed via Steam, build 26046173, `launcher/launcher-settings.json` reports "1.20.1.2 (Crozier)". The read-only check found the logs of a 1.19 build; on the same day the application started 1.20.1.2 twice for the probe run ([evidence](evidence/2026-11-13-ck3-load-order.md)) | 11 Workshop items installed, no local mods; 11 registered `ugc_*.mod` descriptors, 9 of them enabled. Details: [`games/ck3.md`](games/ck3.md) |
 
 EU4 observations that differ from Stellaris (read-only, 2026-10-29; adapter
 results in [`evidence/real-scan-2026-10-29.md`](evidence/real-scan-2026-10-29.md)):

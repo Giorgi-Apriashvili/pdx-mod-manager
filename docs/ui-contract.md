@@ -80,9 +80,8 @@ Roles:
   otherwise. EU4 (observed in-game 2026-10-30): "Europa Universalis IV does
   not use this order when two mods change the same file: the mod whose name
   comes first alphabetically wins. The order is still saved, shared and
-  written for the game." Crusader Kings III, until its probe run: "It is not
-  yet verified that Crusader Kings III follows this order when two mods
-  change the same file." The mods pane shows it as a
+  written for the game." Stellaris and Crusader Kings III (observed in-game
+  2026-10-30 and 2026-11-13): empty. The mods pane shows it as a
   closable info banner above the list (hidden for that game for the rest of
   the session once closed).
 

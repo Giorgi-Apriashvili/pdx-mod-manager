@@ -28,7 +28,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Platform: files, paths, processes, Steam discovery, file transactions | `src/platform` | done, tested | |
 | Workshop provider and `pmm-steam-helper` | `src/providers`, `tools/steam-helper`, [`steam-workshop.md`](steam-workshop.md) | done; session and item state verified read-only; subscribe and download tested against the fake Steam API only | [probe](evidence/steam-helper-probe.md) |
 | EU4 and Stellaris adapters | `src/games`, [`games/`](games/), [`load-order.md`](load-order.md) | done; detection, inventory, current configuration and launch plan verified read-only | [real scan](evidence/real-scan-2026-10-29.md) |
-| Crusader Kings III adapter (for the next release) | `src/games/ck3.{hpp,cpp}`, [`games/ck3.md`](games/ck3.md), [`load-order.md`](load-order.md#crusader-kings-iii) | done 2026-11-13 on `agent/ck3`, for the owner's review (not merged). Owner's decisions of 2026-11-12/13: the game's own Steam API library is loaded as for the other games, the catalog lists the supported games alphabetically (`ck3`, `eu4`, `stellaris`), the load order ships unverified (`loadOrderVerifiedInGame = false`, and a temporary note above a CK3 playset says so) until a probe run approved by the owner. Also for every game: launches start in the executable's folder (unchanged for Stellaris and EU4), and a Workshop folder without `descriptor.mod` is described by its only `.mod` file, also by the content check after a download. Detection, inventory, current configuration, launch plan and a share-code round trip verified read-only on 1.20.1.2; **launch, Workshop acquisition and load order not run** | [CK3 adapter](games/ck3.md#real-machine-evidence) |
+| Crusader Kings III adapter (for the next release) | `src/games/ck3.{hpp,cpp}`, [`games/ck3.md`](games/ck3.md), [`load-order.md`](load-order.md#crusader-kings-iii) | done 2026-11-13 on `agent/ck3`, merged into `main` (`5013efe`). Owner's decisions of 2026-11-12/13: the game's own Steam API library is loaded as for the other games, the catalog lists the supported games alphabetically (`ck3`, `eu4`, `stellaris`), the load order ships unverified (`loadOrderVerifiedInGame = false`, and a temporary note above a CK3 playset says so) until a probe run approved by the owner. Also for every game: launches start in the executable's folder (unchanged for Stellaris and EU4), and a Workshop folder without `descriptor.mod` is described by its only `.mod` file, also by the content check after a download. Detection, inventory, current configuration, launch plan and a share-code round trip verified read-only on 1.20.1.2. **Probe run done 2026-11-13** with the owner's approval (recorded on `agent/ck3-probe`): two direct launches without the launcher or a restart through Steam, and **the later mod in `enabled_mods` wins**, as in Stellaris; `loadOrderVerifiedInGame = true` and the temporary note removed. **Workshop acquisition not run**; `supported_version="1.20"` still undetermined | [CK3 adapter](games/ck3.md#real-machine-evidence), [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
 | Qt-free services (games, playsets, sharing, acquisition, launch) | `src/services`, [`architecture-services.md`](architecture-services.md) | done, tested | |
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
@@ -43,7 +43,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; passed on GitHub in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). Since 2026-11-07 the check reads the code of the sources, without their comments, and also checks the relaunch after an update run: 56 source checks, 112 test cases | |
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
-| In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder only | |
+| In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13 | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
 
 ## Test status (2026-11-13, Crusader Kings III, `agent/ck3`)
 
@@ -499,7 +499,9 @@ four required jobs.
 ### 1. Live validation: remaining pieces
 
 Done on 2026-10-30 ([results](validation.md#6-results)): EU4 steps 1-6, 8,
-9; Stellaris steps 1-7. Still open, each needing the user's approval:
+9; Stellaris steps 1-7. Done on 2026-11-13: CK3 step 6, items 1-5, with the
+probes only ([CK3 probe run](evidence/2026-11-13-ck3-load-order.md)). Still open, each needing the user's
+approval:
 
 | What | Why open |
 | --- | --- |
@@ -507,14 +509,17 @@ Done on 2026-10-30 ([results](validation.md#6-results)): EU4 steps 1-6, 8,
 | Play with Steam closed (0.1.1; step 6, item 7) | new on 2026-11-06; tested with fakes only |
 | Steam's own offline mode | the Web API was made unreachable instead |
 | EU4 mods with `dependencies` and override precedence | not covered by the probes |
+| CK3 step 4 (Workshop subscribe and download for app 1158310) | not run; ideally with an item that ships `<Name>.mod` |
+| CK3 `supported_version="1.20"` and `"1.*"` on 1.20.1.2 | started directly, 1.20.1.2 did not read descriptors outside `enabled_mods`, so the disabled probe told nothing ([CK3 adapter](games/ck3.md#outstanding-validation)) |
+| CK3 steps 7-9, and step 6 items 6-7 | same code paths as Stellaris and EU4; not run for CK3 |
 
 **EU4 order:** EU4 does not use the playset order for file overrides. The
 adapter's `LoadOrderInfo` says so (`verifiedInGame = true`), and the mods
 pane shows its `userNote` as a closable info banner for EU4 playsets
-(`GamesModel.currentLoadOrderNote`, [ui-contract](ui-contract.md)); CK3
-shows its temporary "not yet verified" note the same way. Not
-done (possible later): a warning when two enabled EU4 mods contain the same
-file.
+(`GamesModel.currentLoadOrderNote`, [ui-contract](ui-contract.md)). CK3's
+temporary "not yet verified" note was removed after its probe run of
+2026-11-13 (the later mod wins, as in Stellaris). Not done (possible later):
+a warning when two enabled EU4 mods contain the same file.
 
 ### 2. Open items from the last review wave
 
@@ -708,15 +713,16 @@ Packaging ([`packaging.md`](packaging.md)):
    Play focusable while blocked, screenshot and test tooling; see Open items >
    Accessibility). Part a, the listening pass with NVDA and Narrator, stays
    with the owner.
-8. Done 2026-11-13 on `agent/ck3`, for the owner's review (not merged):
+8. Done 2026-11-13 on `agent/ck3`, merged into `main` (`5013efe`):
    Crusader Kings III support, phase 1 (code, tests, fixtures, docs, the
-   probe tool), verified read-only. Next, each with the owner's approval: the
-   probe run and a direct launch on 1.20.1.2
-   ([load order](load-order.md#crusader-kings-iii),
-   [validation](validation.md) section 3), then a Workshop download for app
-   1158310; then the traits, the support matrix and the CHANGELOG's
-   load-order sentence. The release number (probably 0.2.0) is decided
-   later.
+   probe tool), verified read-only. Done 2026-11-13 with the owner's
+   approval, recorded on `agent/ck3-probe` for the owner's review: the probe
+   run and two direct launches on 1.20.1.2 ([CK3 probe run](evidence/2026-11-13-ck3-load-order.md)), then the
+   traits (the later mod wins), the support matrix and the CHANGELOG's
+   load-order sentence. Next, each with the owner's approval: a Workshop
+   download for app 1158310 and the other open CK3 items
+   ([CK3 adapter](games/ck3.md#outstanding-validation)). The release number
+   (probably 0.2.0) is decided later.
 
 ## Working rules
 
@@ -748,4 +754,9 @@ state correctly. For both games the launch plan for the launcher's current
 selection writes nothing, and regenerated Workshop descriptors are identical
 to the launcher's. Crusader Kings III "1.20.1.2 (Crozier)" (build 26046173,
 11 Workshop mods) was read on 2026-11-13: the same holds, except for 4
-registrations older than their Workshop content ([CK3](games/ck3.md)).
+registrations older than their Workshop content ([CK3](games/ck3.md)). The
+same day, started directly by the application, it stayed up without the
+launcher or a restart through Steam, loaded exactly the enabled probes, and
+the later mod in `enabled_mods` won a shared file; it listed only the
+`enabled_mods` descriptors in `debug.log`, and one of the two runs crashed
+while being closed ([CK3 probe run](evidence/2026-11-13-ck3-load-order.md)).

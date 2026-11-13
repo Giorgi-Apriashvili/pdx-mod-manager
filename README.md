@@ -26,9 +26,11 @@ telemetry.
 > [support matrix](docs/support-matrix.md) and the
 > [development status](docs/development-status.md). The in-app update works
 > between published releases: on 2026-11-07 an installed 0.1.0 updated itself to
-> 0.1.1. Crusader Kings III support is unreleased and has been checked read-only
-> only: its launch, Workshop downloads and load order have not been run against
-> the game yet ([CK3 adapter](docs/games/ck3.md)).
+> 0.1.1. Crusader Kings III support is unreleased: on 2026-11-13 the application
+> started Crusader Kings III 1.20.1.2 directly with probe mods, and the later mod
+> in the playset won a shared file, as in Stellaris
+> ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md)); Workshop
+> downloads have not been run for it yet ([CK3 adapter](docs/games/ck3.md)).
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -45,7 +47,7 @@ reason documented.
 | Desktop application (Qt Quick): games, playsets, search and filters, drag-and-drop and keyboard reordering, undo, import and export, downloads, Play with its blockers | Implemented; run read-only against the real games on Windows 11 | [Application](docs/app.md), [UI contract](docs/ui-contract.md) |
 | Accessibility: keyboard navigation, visible focus, accessible names, WCAG AA contrast, high-DPI | Implemented; checked with UI Automation and at scale factors 1.5 and 2 | [Accessibility](docs/accessibility.md); no screen-reader listening test yet |
 | Stellaris and EU4: installation and user-data detection, mod inventory, current configuration, launch plan (executable, arguments, environment, configuration writes) | **Verified** read-only, 2026-10-29, Stellaris 4.5.2 and EU4 1.37.5, Steam, Windows 11 | [Real-data evidence](docs/evidence/real-scan-2026-10-29.md); registered Workshop items without content show as Missing |
-| Crusader Kings III (unreleased): installation and user-data detection, mod inventory, current configuration, launch plan, share-code round trip | **Verified** read-only, 2026-11-13, CK3 1.20.1.2, Steam, Windows 11 | [CK3 adapter](docs/games/ck3.md); direct launch, Workshop downloads and which mod wins a shared file are **not verified** |
+| Crusader Kings III (unreleased): installation and user-data detection, mod inventory, current configuration, launch plan, share-code round trip | **Verified** read-only, 2026-11-13, CK3 1.20.1.2, Steam, Windows 11 | [CK3 adapter](docs/games/ck3.md); its direct launch and load order are verified too (rows below); Workshop downloads are **not verified** |
 | Share codes: `PMM1` encoding, strict validation, size limits, frozen regression fixtures | Implemented | [Protocol](docs/share-code-protocol.md), versioned independently (protocol 1, schema 1) |
 | Share-code round trip between two clean profiles (identities, order, enabled flags) | **Verified** read-only, 2026-10-29 and 2026-10-30, both games, Windows 11 | [Round-trip evidence](docs/evidence/app-round-trip-2026-10-30.md) |
 | Playset editing, filtering rules, launch readiness, dependency checks, import planning | Implemented | `src/core`, `src/services` |
@@ -54,8 +56,8 @@ reason documented.
 | Workshop helper: Steam session and item state in the game's app context | **Verified** read-only, 2026-10-29, Stellaris 4.5.2, Windows 11 | [Probe evidence](docs/evidence/steam-helper-probe.md) |
 | Workshop subscribe and download | **Verified** 2026-10-30, EU4 1.37.5 and Stellaris 4.5.2, Windows 11 (one item each, live) | [Live validation](docs/evidence/live-validation-2026-10-30.md): pending job survives a restart; nothing is subscribed until the Web API confirms the item's game |
 | Manual Workshop fallback (open the item in Steam, then rescan) | Implemented, unverified | Limited: does not satisfy automatic download |
-| Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, Windows 11 | No launcher process; EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration. Unreleased (0.1.1), tested with fakes only: a Steam copy starts only while the Steam client runs ([troubleshooting](docs/troubleshooting.md#steam-is-not-running-not-signed-in-or-the-game-is-not-owned)) |
-| In-game verification of loaded mods and order | **Verified** 2026-10-30 with probe mods, both games | Stellaris: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
+| Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, and 2026-11-13, CK3 1.20.1.2 (unreleased), Windows 11 | No launcher process and no restart through Steam ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md)); EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration. Unreleased (0.1.1), tested with fakes only: a Steam copy starts only while the Steam client runs ([troubleshooting](docs/troubleshooting.md#steam-is-not-running-not-signed-in-or-the-game-is-not-owned)) |
+| In-game verification of loaded mods and order | **Verified** with probe mods: 2026-10-30 Stellaris and EU4, 2026-11-13 CK3 1.20.1.2 (unreleased) | Stellaris and Crusader Kings III: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
 | Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md) |
 | Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked; not code signed |
 | Updates: a daily check (can be turned off) and a button, verify the installer's SHA-256, install and restart | **Verified** 2026-11-07 with a real update from 0.1.0 to 0.1.1, and again from 0.1.1 to 0.1.2 | [Updates](docs/updates.md): the owner's installed 0.1.0 found the published 0.1.1, and **Update and restart** installed it. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch. The values every released copy relies on are frozen and checked in CI ([compatibility contract](docs/updates.md#compatibility-contract-frozen-since-010)) |
