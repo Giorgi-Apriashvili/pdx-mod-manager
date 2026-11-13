@@ -807,9 +807,8 @@ Packaging ([`packaging.md`](packaging.md)):
    Workshop ID lists next to the share code, and the names of missing
    Workshop mods in the import preview (owner's decisions of 2026-11-13).
    In 0.2.0 (item 10).
-10. 0.2.0 (owner's approval of 2026-11-13) is being released from this
-    commit, on branch `release-0.2.0` (version, notes, docs and screenshots)
-    until it reaches `main`: Crusader Kings III (item 8), Workshop ID lists
+10. 0.2.0 (owner's approval of 2026-11-13), prepared on `release-0.2.0`
+    (version, notes, docs and screenshots) and merged into `main`: Crusader Kings III (item 8), Workshop ID lists
     and the Workshop names in the import preview (item 9), backlog item 6b-e
     (item 7) and the fallback to a Workshop item's only `.mod` file, with the
     notes of [`../CHANGELOG.md`](../CHANGELOG.md). The publication is
@@ -835,9 +834,9 @@ Packaging ([`packaging.md`](packaging.md)):
 
 See [`feasibility.md`](feasibility.md) and the evidence files: Windows 11,
 Steam, Stellaris 4.5.2 (36 mods) and EU4 1.37.5 (13 mods), the versions tested on
-2026-10-29 and 2026-10-30. Stellaris 4.5.3 ("Cygnus v4.5.3 (4e91)", build
-26325427) is installed now (read-only check, 2026-11-06) and has not been
-tested. EU4 has no
+2026-10-29 and 2026-10-30. Stellaris 4.5.4 ("Cygnus v4.5.4 (1b4f)", build
+26557690) is installed now (read-only scan, 2026-11-13) and has not been
+tested in the game. EU4 has no
 `steam_appid.txt`, so a direct start sets `SteamAppId`/`SteamGameId`; its
 launcher arguments include `-enabletelemetry`, which direct launches drop.
 The helper initialised the Steam API in Stellaris's app context and read item

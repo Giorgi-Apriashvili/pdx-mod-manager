@@ -141,7 +141,7 @@ With the application (Qt):
 export QT_ROOT_DIR=C:/Qt/6.10.3/msvc2022_64       # PowerShell: $env:QT_ROOT_DIR = "C:/Qt/6.10.3/msvc2022_64"
 cmake --preset debug
 cmake --build --preset debug
-ctest --preset debug                              # 467 tests, 65 of them pmm_app_tests
+ctest --preset debug                              # 596 tests, 123 of them pmm_app_tests
 ```
 
 The application tests (`-L pmm_app_tests`) run on Qt's offscreen platform;

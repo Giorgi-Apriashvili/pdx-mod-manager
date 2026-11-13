@@ -37,6 +37,7 @@ Crusader Kings III support, Workshop ID lists next to share codes, the Steam Wor
 
 - **What is verified for Crusader Kings III:** on 2026-11-13, on Windows 11 with Steam and Crusader Kings III 1.20.1.2: finding the game and its mods, playsets, a share-code round trip, and direct launches with the loaded mods and their order checked in the game. Workshop downloads use the same code as for the other games but have not been tried with Crusader Kings III yet, and a copy from another store is untested. The [support matrix](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/v0.2.0/docs/support-matrix.md#crusader-kings-iii-steam-app-1158310) lists every capability with its evidence.
 - **Workshop names in the import preview** were tested against a local stand-in for the Steam Web API only, not yet against Steam itself.
+- **Screen readers:** the new names and announcements (Play "unavailable" and "starting", column widths) were checked through Windows UI Automation only; a listening test with NVDA or Narrator has not been done yet.
 
 ## [0.1.2] - 2026-11-07
 

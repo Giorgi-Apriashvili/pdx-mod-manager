@@ -1,8 +1,8 @@
 import QtQuick
 
-// Stand-in for LaunchController; blockers follow steamRunning (set it to
-// false to preview the Steam blocker, which comes first as in the real one)
-// and the fake mod list. Without a playset nothing else blocks: the game
+// Stand-in for LaunchController; blockers follow the selected game (not
+// found comes first, as in the real one), steamRunning (set it to false to
+// preview the Steam blocker) and the fake mod list. Without a playset nothing else blocks: the game
 // starts without mods. Set hasInterruptedTransaction to preview the Recover
 // banner, and backupMissing as well to make Recover fail and offer Discard.
 QtObject {
@@ -11,11 +11,15 @@ QtObject {
     property FakeNotificationCenter notifications
     property FakeModListModel mods
     property FakePlaysetsModel playsets
+    property FakeGamesModel games
     property bool steamRunning: true
     // More reasons after these, e.g. more than the Play section lists.
     property list<string> extraBlockers: []
     readonly property bool canPlay: blockers.length === 0 && !busy
-    readonly property list<string> blockers: (steamRunning ? [] : ["Steam is not running. Start Steam and sign in, then launch Stellaris."])
+    readonly property list<string> blockers: (games && games.currentName.length > 0 && !games.currentInstalled
+            ? [games.currentName + " has not been found. Rescan, or locate the game folder."]
+            : [])
+        .concat(steamRunning ? [] : ["Steam is not running. Start Steam and sign in, then launch Stellaris."])
         .concat(mods && mods.blockingCount > 0
             ? [mods.blockingCount + (mods.blockingCount === 1 ? " enabled mod is" : " enabled mods are")
                + " not ready (missing, downloading or broken). Disable them or wait for downloads."]
