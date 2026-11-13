@@ -314,7 +314,9 @@ After leading ASCII whitespace (space, tab, CR, LF), text that starts with
 reports a newer protocol version). Anything else is read as a Workshop ID
 list. A text that is neither fails as a list, on its first entry: "This text
 is neither a share code (it starts with "PMM1.") nor a list of Workshop
-IDs: …".
+IDs: …". A first entry that starts with `PMM` (a code behind U+200B, U+FEFF,
+U+00A0 or U+202F) gets "This looks like a share code, but an invisible
+character or a special space comes before "PMM". …" instead.
 
 ### Grammar
 
@@ -332,7 +334,8 @@ item-link  = [ scheme ] [ "www." ] "steamcommunity.com" item-path [ "/" ]
              "?" query [ "#" fragment ]
 scheme     = "http://" / "https://"
 item-path  = "/sharedfiles/filedetails" / "/workshop/filedetails"
-query      = param *( "&" param )    ; exactly one param is %s"id=" item-id
+query      = param *( "&" param )    ; exactly one param starts with %s"id=",
+                                     ; and that param is %s"id=" item-id
 param      = *( %x00-FF except "&", "#" and separators )
 fragment   = *( %x00-FF except separators )
 ```

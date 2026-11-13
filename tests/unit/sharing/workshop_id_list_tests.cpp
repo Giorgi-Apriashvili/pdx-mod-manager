@@ -89,6 +89,19 @@ TEST_CASE("Workshop ID list entries that are not ids are refused by number", "[s
                            "Workshop link.");
         CHECK(e.detail == "entry 1 at byte offset 0");
     }
+    SECTION("the first entry: a share code behind an invisible separator") {
+        for (const char* before : {"\xE2\x80\x8B", "\xEF\xBB\xBF", "\xC2\xA0", " \xE2\x80\x8B"}) {
+            INFO(std::string(before));
+            const Error e = parseError(std::string(before) + "PMM1.abc.def");
+            CHECK(e.code == ErrorCode::ParseError);
+            CHECK(e.message == "This looks like a share code, but an invisible character or a "
+                               "special space comes before \"PMM\". Copy the code again, "
+                               "starting at PMM1.");
+        }
+        // Only the first entry.
+        CHECK_THAT(parseError("101 PMM1.abc.def").message,
+                   StartsWith("Entry 2 of the Workshop ID list, \"PMM1.abc.def\""));
+    }
     SECTION("later entries") {
         for (const char* bad : {"12a4", "0123", "0", "18446744073709551616",
                                 "123456789012345678901", "-5", "+5", "1.0", "１２", "id=5"}) {
@@ -125,9 +138,11 @@ TEST_CASE("Workshop ID list entries that are not ids are refused by number", "[s
         // Also on the first entry, and after a link.
         CHECK_THAT(parseError("3818297502;1").message,
                    StartsWith("Entry 1, \"3818297502;1\", has a"));
+        // A link is quoted far enough to show its id.
         CHECK_THAT(
             parseError("steamcommunity.com/sharedfiles/filedetails/?id=3818297502;7").message,
-            ContainsSubstring("has a \";7\" suffix"));
+            StartsWith("Entry 1, \"steamcommunity.com/sharedfiles/filedetails/?id=3818297502;7\", "
+                       "has a \";7\" suffix"));
         // Not a suffix: the generic message.
         CHECK_THAT(parseError("101|202;x").message, StartsWith("Entry 2 of the Workshop ID list"));
         CHECK_THAT(parseError("101|202;").message, StartsWith("Entry 2 of the Workshop ID list"));

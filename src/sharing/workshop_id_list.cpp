@@ -147,6 +147,14 @@ Error badEntry(std::string_view token, std::size_t entry, std::size_t offset) {
     const std::string where = position(entry, offset);
     const std::string label = "Entry " + std::to_string(entry);
 
+    // A share code after a separator that detectImportTextFormat() does not
+    // skip: U+200B and U+FEFF survive the dialog's trimming.
+    if (entry == 1 && token.substr(0, 3) == "PMM")
+        return makeError(ErrorCode::ParseError,
+                         "This looks like a share code, but an invisible character or a special "
+                         "space comes before \"PMM\". Copy the code again, starting at PMM1.",
+                         where);
+
     // A position suffix as Total War mod managers write it: "<id>;<n>".
     if (const std::size_t semicolon = token.find(';'); semicolon != std::string_view::npos) {
         const std::string_view suffix = token.substr(semicolon + 1);
@@ -154,13 +162,15 @@ Error badEntry(std::string_view token, std::size_t entry, std::size_t offset) {
         for (const char c : suffix)
             digits = digits && isDigit(c);
         if (digits && readEntry(token.substr(0, semicolon)))
-            return makeError(ErrorCode::ParseError,
-                             label + ", " + quotedSnippet(token) + ", has a " +
-                                 quotedSnippet(token.substr(semicolon)) +
-                                 " suffix. Other mod managers use it to pin a load position; "
-                                 "Paradox games load mods in list order, so remove the suffixes "
-                                 "and put the IDs in the order the mods should load.",
-                             where);
+            return makeError(
+                ErrorCode::ParseError,
+                label + ", " +
+                    quotedSnippet(token, looksLikeLink(token) ? kLinkSnippetBytes : kSnippetBytes) +
+                    ", has a " + quotedSnippet(token.substr(semicolon)) +
+                    " suffix. Other mod managers use it to pin a load position; "
+                    "Paradox games load mods in list order, so remove the suffixes "
+                    "and put the IDs in the order the mods should load.",
+                where);
     }
 
     if (looksLikeLink(token)) {
