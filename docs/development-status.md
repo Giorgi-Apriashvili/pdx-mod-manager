@@ -24,6 +24,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Core model, catalog, logging and redaction, SHA-256, UTF-8 | `src/core` | done, tested | |
 | Playset operations, readiness, dependencies, import plan | `src/core` | done, tested | |
 | Share-code protocol v1 and regression fixtures | `src/sharing`, [`share-code-protocol.md`](share-code-protocol.md) | done, tested | |
+| Workshop ID lists and Workshop names in the import preview (for the next release) | `src/sharing/workshop_id_list`, `src/services/share_service`, `src/app/core/metadata_host`, `src/app/gui/share_controller`, `ui/dialogs`, [`share-code-protocol.md`](share-code-protocol.md#8-workshop-id-lists), [`app.md`](app.md#workshop-names-in-the-import-preview) | done 2026-11-13 on `workshop-id-lists`, for review (not merged). Owner's decisions of 2026-11-13 with the lead's defaults D1-D10. The Web API lookup is tested against a local stub only; a real lookup needs a session with Steam (not read-only) and is left to the owner's first use | |
 | SQLite persistence and migrations | `src/persistence`, [`persistence.md`](persistence.md) | done, tested | |
 | Platform: files, paths, processes, Steam discovery, file transactions | `src/platform` | done, tested | |
 | Workshop provider and `pmm-steam-helper` | `src/providers`, `tools/steam-helper`, [`steam-workshop.md`](steam-workshop.md) | done; session and item state verified read-only; subscribe and download tested against the fake Steam API only | [probe](evidence/steam-helper-probe.md) |
@@ -44,6 +45,63 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13 | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
+
+## Test status (2026-11-13, Workshop ID lists, `workshop-id-lists`)
+
+Owner's decisions of 2026-11-13 (plan "Workshop ID lists for sharing
+playsets", defaults D1-D10): a plain Workshop ID list next to the unchanged
+share code, exported as the enabled Workshop mods in load order separated by
+`|` ([protocol section 8](share-code-protocol.md#8-workshop-id-lists)), and
+the names of missing Workshop mods in the import preview from the Steam Web
+API ([app](app.md#workshop-names-in-the-import-preview)). Local runs only,
+with fakes, fixtures, a local HTTP stub for the Web API and new scratch
+profiles; no request reached the real Web API, no game, launcher or Steam
+client was started, nothing under Steam, the game folders or
+`Documents/Paradox Interactive` was written, and the launcher's database was
+not opened. `git diff tests/fixtures` against `main` is empty, and
+`share_code.*` and `codec.*` are unchanged.
+
+- `debug` preset: **0 warnings**, **594/594 tests pass**, by label: core 51,
+  sharing 67, persistence 72, platform 59, providers 63, games 68, services
+  96, application 122, ui-preview 1.
+- New: `workshop_id_list_tests.cpp` (11 cases: the owner's example, every
+  separator including CRLF and the Unicode spaces, every link form, refusals
+  by entry number including the `;N` suffix and foreign links, duplicates as
+  id and link, the 10,000-entry and 2 MiB limits with the size checked first,
+  the export form, manifests for the three games, the playset export's
+  counts, the detection rule); `isValidWorkshopId` boundaries; each verdict of
+  the Web API fixture with the old messages unchanged; 5 share-service cases
+  (list preview and import, format detection and errors, titles replacing the
+  code's hints and stored on import, the warnings and the other-game hint,
+  the list export); `lookup()` against the stub (answered once, never from
+  inside the call, never through the sink, on success, HTTP 500, a malformed
+  reply, a timeout and invalid ids); the runner's batches; 6 Backend cases
+  against the stub (the exact request body for the missing ids, names and
+  "Not found on Workshop" in the preview and the stored names, a stale answer
+  dropped, the cache, 150 ids in 2 requests, 1,001 ids capped at 1,000, no
+  request with `--no-steam` or read-only, a stub that never answers ends
+  "failed" and the import still works, the list export and the clipboard);
+  2 QML cases against the real backend (a hostile Workshop title stays plain
+  text without warnings or fetches; at 900x440 the export dialog scrolls and
+  Tab reaches **Copy Workshop ID list**); 3 QML preview tests (`tst_ui.qml`
+  `test_9b`-`test_9d`). The preview test
+  of a typed playset name that survives the late names update fails on the
+  previous `syncFromPreview()`.
+- The new and changed tests passed 10 times each (the sharing, providers and
+  services cases, the metadata host, runner and Backend cases, every `[qml]`
+  case and the 36 QML preview tests).
+- The application read-only with new scratch profiles against the real
+  Stellaris installation: `--self-test "config,ids:…,export:…,dump:…"` wrote
+  `1880071041|3711052920|…` (7 enabled Workshop mods, 7 local left out),
+  identical to `scripts/share-code.py ids` on the exported code; importing the
+  list into a new profile gave exactly those 7 entries, enabled, in order.
+  Captures of the import dialog with the list (header "Workshop ID list", the
+  list note, "not looked up … in read-only mode") and of the export dialog at
+  1400x860 (light and dark) and at 900x440 (it scrolls).
+- `scripts/check.sh --full` on `b74796e`: passed in 11 minutes (ASan and
+  clang-cl with UBSan 471/471 each, clang-tidy on the 16 C++ files changed
+  since `origin/main` without findings after 3 were fixed, the `ci` preset
+  from a fresh checkout 594/594).
 
 ## Test status (2026-11-13, Crusader Kings III probe run, `agent/ck3-probe`)
 
@@ -744,6 +802,11 @@ Packaging ([`packaging.md`](packaging.md)):
    download for app 1158310 and the other open CK3 items
    ([CK3 adapter](games/ck3.md#outstanding-validation)). The release number
    (probably 0.2.0) is decided later.
+9. Done 2026-11-13 on `workshop-id-lists`, for review (not merged): Workshop
+   ID lists next to the share code, and the names of missing Workshop mods
+   in the import preview (owner's decisions of 2026-11-13). Next: the two
+   reviews, then the merge; the release follows with CK3 (0.2.0), with the
+   owner's OK.
 
 ## Working rules
 
