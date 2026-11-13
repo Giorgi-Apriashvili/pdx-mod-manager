@@ -45,6 +45,27 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13 | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
 
+## Test status (2026-11-13, Crusader Kings III probe run, `agent/ck3-probe`)
+
+The live run itself is recorded in the
+[CK3 probe run](evidence/2026-11-13-ck3-load-order.md): two direct launches of
+1.20.1.2 by the debug build of `main` (`5013efe`) with a scratch profile,
+`--live-test` and `--no-steam`, approved by the owner; the configuration
+restored and the probes removed afterwards. The branch then records it:
+CK3's traits (`loadOrderSummary` with Stellaris's wording, `loadOrderEvidence`,
+`loadOrderVerifiedInGame = true`, no `loadOrderUserNote`), their checks in
+`ck3_adapter_tests.cpp` and `registry_tests.cpp`, the CK3 row of the
+preview's `FakeGamesModel.qml`, and the docs. No game was started and no game
+file was written for these checks.
+
+- `debug` preset: **0 warnings**, **565/565 tests pass**, by label: core 51,
+  sharing 55, persistence 72, platform 59, providers 62, games 68, services
+  91, application 111, ui-preview 1.
+- `scripts/check.sh --full` on `c664177`: passed in 7 minutes (ASan 453/453,
+  clang-cl with UBSan 453/453, clang-tidy on the 3 C++ files changed since
+  `origin/main` without findings, the `ci` preset from a fresh checkout
+  565/565).
+
 ## Test status (2026-11-13, Crusader Kings III, `agent/ck3`)
 
 Local runs only, with fakes, fixtures and new scratch profiles; no game, no
