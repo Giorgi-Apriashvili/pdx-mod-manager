@@ -59,10 +59,18 @@ struct WorkshopItemMetadata {
 // body is larger than kMaxPublishedFileDetailsResponseBytes.
 Result<std::vector<WorkshopItemMetadata>> parsePublishedFileDetailsResponse(std::string_view body);
 
+// What the reply says about an item for the game with Steam AppId
+// `expectedAppId`, checked in this order: not found (result 9), another
+// non-OK result (no details), banned, a consumer_app_id other than
+// `expectedAppId` (another game), else Ok.
+enum class WorkshopItemVerdict { Ok, NotFound, NoDetails, Banned, WrongGame };
+WorkshopItemVerdict classifyWorkshopItemForGame(const WorkshopItemMetadata& item,
+                                                std::string_view expectedAppId) noexcept;
+
 // Checks that an item can be acquired for the game with Steam AppId
-// `expectedAppId`: not found (result 9) -> ItemUnavailable; other non-OK
-// result -> ItemUnavailable with the EResult in detail; banned ->
-// ItemUnavailable; consumer_app_id mismatch -> WrongGame.
+// `expectedAppId` (classifyWorkshopItemForGame()): not found (result 9) ->
+// ItemUnavailable; other non-OK result -> ItemUnavailable with the EResult in
+// detail; banned -> ItemUnavailable; consumer_app_id mismatch -> WrongGame.
 Status validateWorkshopItemForGame(const WorkshopItemMetadata& item,
                                    std::string_view expectedAppId);
 

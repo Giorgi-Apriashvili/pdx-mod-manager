@@ -106,7 +106,7 @@ Settings → Keyboard shortcuts).
 | Ctrl+F | Search the mod list |
 | Ctrl+Z | Undo the last playset edit |
 | Ctrl+Y, Ctrl+Shift+Z | Redo |
-| Ctrl+I, Ctrl+E | Import / export a share code |
+| Ctrl+I, Ctrl+E | Import / export a share code or Workshop ID list |
 | Ctrl+N | New playset |
 | Ctrl+Shift+A | Add installed mods |
 | F5 | Rescan games and mods |
@@ -144,7 +144,9 @@ banner's "Show load order" link restores the view.
   Down, Home, End, PgUp and PgDn move the current row; Space selects or
   deselects it.
 - **Import preview** and **Keyboard shortcuts**: the lists are read-only but
-  focusable, so the entries can be read row by row and paged.
+  focusable, so the entries can be read row by row and paged. When the names
+  of missing Workshop mods arrive after the preview, the preview's list keeps
+  its current entry and scroll position, and a typed playset name stays.
 - **Confirmations** have nothing focusable but their buttons. When the text is
   taller than the dialog (a long list of files in a small window), Up, Down,
   PgUp, PgDn, Home and End on the buttons scroll it; the scroll bar has its
@@ -154,8 +156,8 @@ banner's "Show load order" link restores the view.
 
 | Dialog | Focus |
 | --- | --- |
-| Import share code | the share code text |
-| Export share code | Copy |
+| Import share code or Workshop ID list | the text field |
+| Export share code | Copy (the share code); Tab reaches the Workshop ID list and its own copy button |
 | Add mods | the filter field |
 | Settings | the selected theme option |
 | Playset history | Close (Shift+Tab reaches the Restore buttons) |
@@ -345,8 +347,9 @@ In a small window:
   reasons do not fit. Tab scrolls the focused control into view, so Play and
   its reasons are always reachable;
 - dialogs are never taller than the window less 32 pixels; Settings, the
-  import preview, confirmations (also from the keyboard) and the lists in
-  dialogs scroll.
+  import preview, the export dialog (with its Workshop ID list), confirmations
+  (also from the keyboard) and the lists in dialogs scroll, and Tab scrolls
+  the focused control into view.
 
 Checked on 2026-11-12 (Windows 11, 2560x1440 screen at 100 %): the preview
 with the fake backend at 900x440 in both themes, with Play blocked (mods not

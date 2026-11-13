@@ -67,7 +67,9 @@ layer implements:
   `onMetadata()`. A failed request (offline) may go unanswered; jobs that
   would subscribe then wait for the user after
   `CoordinatorOptions::identityTimeoutMs`. Passing no metadata host disables
-  the Web API checks, including the identity gate.
+  the Web API checks, including the identity gate. The application's host
+  also answers the import preview's lookups, which never reach the
+  coordinator ([app](app.md#workshop-names-in-the-import-preview)).
 
 `CoordinatorOptions::helperExecutable` names the helper binary shipped next to
 the application. When that file is missing, jobs are told so instead of failing
@@ -186,9 +188,24 @@ database rows.
   be computed, the entry carries none. `gameVersionHint` is the installed game
   version. Hints are trimmed to what the manifest accepts.
   Identities, order and enabled flags are copied verbatim.
-- `previewImport(text)`: decodes, validates and builds the `ImportPlan` against
-  the cached inventory of the manifest's game. It is read-only: no database
-  write, no job, no download.
+- `exportWorkshopIdList(playsetId)`: the Workshop ID list
+  ([protocol section 8](share-code-protocol.md#8-workshop-id-lists)): the
+  enabled Workshop entries in order, joined by `|`, and how many local and
+  disabled entries it left out.
+- `previewImport(text, idListGame)`: text starting with `PMM` is decoded as a
+  share code; anything else is parsed as a Workshop ID list and mapped to a
+  manifest for `idListGame` (the selected game; without one the preview fails
+  with "Select a game first"). Both then validate and build the `ImportPlan`
+  against the cached inventory of the manifest's game; `ImportPreview`
+  records the format and the game's Steam app id. It is read-only: no
+  database write, no job, no download.
+- `workshopIdsToLookUp(preview)` and `withWorkshopMetadata(preview, items)`
+  (free, pure functions): the missing Workshop entries to ask the Web API
+  about, and the preview with its answers. A title replaces the text's name
+  hint in the manifest and the plan, so `applyImport()` stores it; items that
+  were not found, gave no details, are banned or belong to another game get a
+  per-entry verdict and a plan warning. The application asks; the service
+  never does.
 - `applyImport(preview, mode, target, name, options)`: see the import flow
   below. `ImportOptions::queueAcquisition` (default true) is false when
   Workshop downloads are off; the import then creates and reuses no job,
@@ -307,11 +324,15 @@ stripped.
 ## Data flow: import
 
 ```text
- text --previewImport--> decodeShareCode (all protocol checks)
+ text --previewImport--> "PMM..."? decodeShareCode (all protocol checks)
+                          else parseWorkshopIdList -> manifestFromWorkshopIds(selected game)
                           -> adapter for the game injected?
                           -> buildImportPlan(entries, cached inventory, playset names)
-                          => ImportPreview {manifest | error, plan, gameInstalled}
+                          => ImportPreview {format, manifest | error, plan, gameInstalled}
                              (nothing written)
+ app (optional, after 600 ms): Web API for workshopIdsToLookUp(preview)
+                          -> withWorkshopMetadata(preview, items): titles, verdicts
+                             (the same preview; still nothing written)
 
  user confirms --applyImport(preview, New | Replace, target, name, options)-->
    validate: preview ok, validateManifest again, adapter, target exists and

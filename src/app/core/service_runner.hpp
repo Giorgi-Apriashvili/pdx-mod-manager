@@ -12,25 +12,30 @@
 // receiver's thread - receivers live on the runner's own (GUI) thread - and
 // is dropped if the receiver was destroyed meanwhile. Coordinator activity
 // that nobody asked for (helper events, metadata, ticks) is announced through
-// acquisitionChanged().
+// acquisitionChanged(). lookupWorkshopItems() asks the Web API host for the
+// import preview and answers only its caller, never the coordinator.
 //
 // shutdown() (also run by the destructor) stops the tick, persists progress
 // and closes every helper session (coordinator.shutdown(), then the hosts),
 // destroys the runtime on the worker and joins the thread.
 
 #include "app/core/app_runtime.hpp"
+#include "providers/web_metadata.hpp"
 
 #include <QObject>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QThread>
+#include <QUrl>
 
 #include <chrono>
+#include <cstddef>
 #include <functional>
 #include <future>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -39,6 +44,13 @@ namespace pmm::app {
 
 class RunnerWorker;
 
+// The answer to ServiceRunner::lookupWorkshopItems().
+struct WorkshopLookup {
+    bool available = false;                             // the session has a Web API host
+    std::vector<providers::WorkshopItemMetadata> items; // of the answered batches
+    std::size_t unanswered = 0;                         // ids of batches without an answer
+};
+
 struct RunnerOptions {
     RuntimeOptions runtime;
     // Workshop downloads through pmm-steam-helper. Off (--no-steam): no
@@ -46,6 +58,10 @@ struct RunnerOptions {
     bool steam = true;
     bool metadata = true;     // Web API names / wrong-game checks
     QString helperExecutable; // empty: QtWorkshopSessionHost::defaultHelperPath()
+    // Test seams for the Web API host: the endpoint (empty:
+    // QtWorkshopMetadataHost::defaultEndpoint()) and the transfer timeout.
+    QUrl metadataEndpoint;
+    std::chrono::milliseconds metadataTimeout{15000};
     std::chrono::milliseconds tickInterval{1000};
     // Test seam for CoordinatorOptions (content verification, timeouts).
     std::function<void(services::CoordinatorOptions&)> configureCoordinator;
@@ -75,6 +91,18 @@ public:
     void shutdown();
     bool isRunning() const noexcept { return m_running; }
     bool steamEnabled() const noexcept { return m_steamActive; }
+    // Started with Steam and the Web API host: not --no-steam (which
+    // --read-only implies), metadata on.
+    bool metadataEnabled() const noexcept { return m_metadataActive; }
+
+    // Asks the Web API host about `ids` on the worker, in batches of
+    // providers::kMaxPublishedFileDetailsItems, and answers once, when every
+    // batch has been answered or has failed, or at shutdown(), which counts
+    // the batches still waiting as unanswered: `done` runs queued on the
+    // receiver's thread like call()'s, and is dropped if the receiver was
+    // destroyed meanwhile. Without a host the answer has `available` false.
+    void lookupWorkshopItems(QObject* receiver, GameKey game, std::vector<std::string> ids,
+                             std::function<void(WorkshopLookup)> done);
 
     template <class Fn, class Done> void call(QObject* receiver, Fn fn, Done done) {
         using R = std::invoke_result_t<Fn&, AppRuntime&>;
@@ -160,6 +188,7 @@ private:
     RunnerWorker* m_worker = nullptr;
     bool m_running = false;
     bool m_steamActive = false;
+    bool m_metadataActive = false;
 };
 
 } // namespace pmm::app

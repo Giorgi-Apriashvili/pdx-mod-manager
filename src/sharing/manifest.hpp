@@ -50,6 +50,11 @@ struct Manifest {
     bool operator==(const Manifest&) const = default;
 };
 
+// A canonical Steam Workshop id: 1 to kMaxWorkshopIdDigits decimal digits
+// without a leading zero, at most 2^64 - 1 (the rule for mods[].id of
+// "steam-workshop" entries).
+bool isValidWorkshopId(std::string_view id) noexcept;
+
 // Checks every semantic rule of schema v1. Error messages start with the JSON
 // path of the offending field, e.g. "mods[3].id: ...". Error codes:
 // UnsupportedVersion (schemaVersion != 1), UnsupportedGame (known game without

@@ -115,6 +115,58 @@ TEST_CASE("Details response fixture parses found, missing, wrong-game and banned
     CHECK(deniedCheck.error().detail == "EResult 15 (AccessDenied)");
 }
 
+TEST_CASE("Each item of the fixture gets its verdict, and the messages stay as they were",
+          "[providers][web][fixture]") {
+    auto parsed = parsePublishedFileDetailsResponse(
+        readFixture("providers/published_file_details_response.json"));
+    REQUIRE(parsed.ok());
+    const auto& items = *parsed;
+    REQUIRE(items.size() == 5);
+    using enum WorkshopItemVerdict;
+    CHECK(classifyWorkshopItemForGame(items[0], "281990") == Ok);
+    CHECK(classifyWorkshopItemForGame(items[1], "281990") == NotFound);
+    CHECK(classifyWorkshopItemForGame(items[2], "281990") == WrongGame);
+    CHECK(classifyWorkshopItemForGame(items[2], "394360") == Ok);
+    CHECK(classifyWorkshopItemForGame(items[3], "281990") == Banned);
+    CHECK(classifyWorkshopItemForGame(items[4], "281990") == NoDetails);
+    // The order of the checks: not found before banned, banned before another game.
+    WorkshopItemMetadata item = items[3];
+    CHECK(classifyWorkshopItemForGame(item, "394360") == Banned);
+    item.resultCode = 9;
+    item.found = false;
+    CHECK(classifyWorkshopItemForGame(item, "281990") == NotFound);
+    item.resultCode = 15;
+    CHECK(classifyWorkshopItemForGame(item, "281990") == NoDetails);
+
+    // validateWorkshopItemForGame() keeps its exact messages.
+    const auto error = [&](std::size_t index) {
+        const Status status = validateWorkshopItemForGame(items[index], "281990");
+        REQUIRE_FALSE(status.ok());
+        return status.error();
+    };
+    Error e = error(1);
+    CHECK(e.code == ErrorCode::ItemUnavailable);
+    CHECK(e.message == "Workshop item 1 was not found. It may have been deleted, or it is private "
+                       "or friends-only.");
+    CHECK(e.detail == "EResult 9 (FileNotFound)");
+    e = error(2);
+    CHECK(e.code == ErrorCode::WrongGame);
+    CHECK(e.message == "Workshop item 2000000002 (Example Hearts of Iron IV mod) belongs to a "
+                       "different game (Steam app 394360).");
+    CHECK(e.detail == "expected app 281990");
+    e = error(3);
+    CHECK(e.code == ErrorCode::ItemUnavailable);
+    CHECK(e.message ==
+          "Workshop item 3000000003 (Example banned mod) has been banned from the Workshop.");
+    CHECK(e.detail == "Example reason");
+    e = error(4);
+    CHECK(e.code == ErrorCode::ItemUnavailable);
+    CHECK(e.message == "Steam returned no details for Workshop item 4000000004: Access to the "
+                       "Workshop item was denied (it may be private, friends-only or hidden).");
+    CHECK(e.detail == "EResult 15 (AccessDenied)");
+    CHECK(validateWorkshopItemForGame(items[0], "281990").ok());
+}
+
 TEST_CASE("Details response parsing fails safely on malformed replies", "[providers][web]") {
     struct Row {
         const char* body;

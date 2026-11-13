@@ -82,6 +82,47 @@ nothing is dropped or reordered silently.
   parental controls, too many subscriptions); the job then says so and offers
   **Retry**.
 
+The import preview often says so before anything is saved: for Workshop mods
+that are not installed it asks the Steam Web API and marks items as **Not
+found on Workshop**, **Banned on Workshop** or **Another game's mod**. If
+every mod of a Workshop ID list belongs to one other game, the preview names
+that game: select it in the games column and paste the list again.
+
+## An ID list is not accepted
+
+**Import code** reads text that starts with `PMM` as a share code and anything
+else as a Workshop ID list
+([format](share-code-protocol.md#8-workshop-id-lists)). The preview names the
+entry it could not read:
+
+- **Not a Workshop ID or a Steam Workshop link.** Entries are item ids such as
+  `3818297502` or links such as
+  `https://steamcommunity.com/sharedfiles/filedetails/?id=3818297502`,
+  separated by `|`, commas, spaces or line breaks. Other text between them
+  (names, numbering, a heading) has to go. Links to profiles, search pages or
+  other sites are not item links.
+- **A ";2" suffix.** Lists made for Total War mod managers pin load positions
+  as `id;position`. Paradox games load mods in list order, so remove the
+  suffixes and put the ids in the order the mods should load.
+- **Listed twice.** A playset holds each mod once; remove one of the two
+  entries the message names.
+- **Select a game first.** A list does not say which game it is for: select
+  the game in the games column, then paste the list again. Every mod is
+  imported enabled, in list order.
+- **More than 10000 entries** or **too large (2 MiB)**: split the list.
+
+A list has no checksum, so one that was cut short still reads. Check the
+preview: missing mods show their Workshop names when the Steam Web API can be
+reached, and items that do not exist say **Not found on Workshop**. Local
+mods, disabled mods and the playset's name are never part of a list; share a
+code for those.
+
+A link to a Steam collection has the same form as an item link
+(`…/filedetails/?id=…`), so it is accepted as one entry: the collection
+itself, shown with its name, not the mods in it. The preview cannot tell a
+collection from a mod; paste the IDs or links of the collection's mods
+instead.
+
 ## Offline use
 
 Without a network connection, or with Steam in offline mode, the manager still

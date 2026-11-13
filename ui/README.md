@@ -66,7 +66,11 @@ Things the QML relies on beyond the tables in the contract:
   `modsFooter` (`compact`: counts without their words), `showingStat`,
   `dragHandleArea`, `playButton`, `interruptedBanner`,
   `discardInterruptedButton`, `settingsButton`, `importDialog`,
-  `importNameField`, `importConfirmButton`, `confirmDialog`,
+  `importNameField`, `importConfirmButton`, `importPreviewTitle`,
+  `importListNote`, `importLookupLine`, `importEntryList`, `exportDialog`,
+  `exportScroller` (its scrolling content), `copyShareCodeButton`,
+  `workshopIdListField`, `workshopIdListNote`, `copyWorkshopIdListButton`,
+  `confirmDialog`,
   `confirmScroller` (its scrolling text), `confirmButton`, `cancelButton`,
   `settingsDialog`, `shortcutsDialog`, `shortcutList`.
 - The window's minimum size is 900x440 (it fits a 1920x1080 screen at
@@ -98,7 +102,7 @@ Things the QML relies on beyond the tables in the contract:
 | Ctrl+A | Select all visible rows |
 | Ctrl+F, Esc | Focus search; Esc clears it, a second Esc returns to the list |
 | Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y | Undo / redo playset edits |
-| Ctrl+I, Ctrl+E | Import / export a share code |
+| Ctrl+I, Ctrl+E | Import / export a share code or Workshop ID list |
 | Ctrl+N, Ctrl+Shift+A | New playset / add mods |
 | F5, Ctrl+, | Rescan / settings |
 | Shift+F10, Menu key, right click | Row context menu |
@@ -122,7 +126,10 @@ written to `Backend.settings` and saved on close.
 2,000 synthetic mods in all states (missing, queued, downloading, failed,
 unavailable, broken, warnings), Stellaris installed, EU4 and Crusader Kings III
 not found, two unsupported games, download jobs, history snapshots and an
-import preview.
+import preview. A pasted Workshop ID list (any text not starting with `PMM`)
+is previewed with its missing mods shown by ID; about a second later
+(`autoLookup`, or at once with `Backend.sharing.finishLookup()`) their
+Workshop names arrive in the same preview.
 Nothing is read from or written to disk.
 
 ```sh

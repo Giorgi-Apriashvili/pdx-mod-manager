@@ -1,5 +1,6 @@
 #include "services/share_service.hpp"
 
+#include "core/catalog.hpp"
 #include "core/log.hpp"
 #include "core/utf8.hpp"
 #include "persistence/acquisition_job_repository.hpp"
@@ -12,7 +13,9 @@
 #include "sharing/utf8.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <map>
+#include <set>
 #include <utility>
 
 namespace pmm::services {
@@ -45,6 +48,24 @@ std::string fitHint(std::string_view text, std::size_t maxBytes) {
     if (out.size() > maxBytes)
         out = detail::trimmed(utf8Prefix(out, maxBytes));
     return out;
+}
+
+// A Workshop title fitted as a name hint. Steam titles reach the preview and
+// the stored playset without anyone typing them, so also the characters that
+// reorder or break the text around them (sharing::layoutControlLength())
+// become spaces.
+std::string fitTitle(std::string_view title) {
+    std::string text;
+    text.reserve(title.size());
+    for (std::size_t i = 0; i < title.size();) {
+        if (const std::size_t length = sharing::layoutControlLength(title, i); length > 0) {
+            text += ' ';
+            i += length;
+        } else {
+            text += title[i++];
+        }
+    }
+    return fitHint(text, sharing::kMaxNameHintBytes);
 }
 
 bool isFingerprint(std::string_view text) {
@@ -83,7 +104,183 @@ Error notSaved(const Error& error) {
                  error.detail);
 }
 
+// "share code" or "Workshop ID list", for messages.
+std::string textName(sharing::ImportTextFormat format) {
+    return format == sharing::ImportTextFormat::ShareCode ? "share code" : "Workshop ID list";
+}
+
+Error cannotManage(sharing::ImportTextFormat format, const GameKey& game) {
+    const std::string name = gameDisplayName(game);
+    if (format == sharing::ImportTextFormat::ShareCode)
+        return Error(ErrorCode::UnsupportedGame,
+                     "This share code is for " + name +
+                         ", which this build of Paradox Mod Manager cannot manage.");
+    return Error(ErrorCode::UnsupportedGame,
+                 "This build of Paradox Mod Manager cannot manage " + name +
+                     ", so the Workshop ID list cannot be imported for it.");
+}
+
+std::string countText(std::size_t count, const char* singular, const char* plural) {
+    return std::to_string(count) + " " + (count == 1 ? singular : plural);
+}
+
+// The catalog game whose Steam app is `appId`, or "".
+GameKey gameForAppId(std::string_view appId) {
+    for (const GameCatalogEntry& entry : gameCatalog()) {
+        if (!appId.empty() && entry.steamAppId == appId)
+            return GameKey(entry.key);
+    }
+    return {};
+}
+
+WorkshopItemCheck toCheck(providers::WorkshopItemVerdict verdict) {
+    switch (verdict) {
+    case providers::WorkshopItemVerdict::Ok:
+        return WorkshopItemCheck::Ok;
+    case providers::WorkshopItemVerdict::NotFound:
+        return WorkshopItemCheck::NotFound;
+    case providers::WorkshopItemVerdict::NoDetails:
+        return WorkshopItemCheck::Unavailable;
+    case providers::WorkshopItemVerdict::Banned:
+        return WorkshopItemCheck::Banned;
+    case providers::WorkshopItemVerdict::WrongGame:
+        return WorkshopItemCheck::WrongGame;
+    }
+    return WorkshopItemCheck::Unavailable;
+}
+
+// The warnings withWorkshopMetadata() adds for the answered missing entries;
+// `counts` are the preview plan's.
+std::vector<std::string> workshopWarnings(const ImportPreview& preview, const ImportCounts& counts,
+                                          std::span<const std::string> ids) {
+    std::size_t notFound = 0;
+    std::size_t unavailable = 0;
+    std::size_t banned = 0;
+    std::size_t wrongGame = 0;
+    std::size_t found = 0;
+    std::set<GameKey> otherGames;
+    for (const std::string& id : ids) {
+        const auto it = preview.workshop.find(id);
+        if (it == preview.workshop.end())
+            continue;
+        switch (it->second.check) {
+        case WorkshopItemCheck::Ok:
+            ++found;
+            break;
+        case WorkshopItemCheck::NotFound:
+            ++notFound;
+            break;
+        case WorkshopItemCheck::Unavailable:
+            ++unavailable;
+            break;
+        case WorkshopItemCheck::Banned:
+            ++found;
+            ++banned;
+            break;
+        case WorkshopItemCheck::WrongGame:
+            ++found;
+            ++wrongGame;
+            otherGames.insert(it->second.otherGame);
+            break;
+        }
+    }
+
+    std::vector<std::string> warnings;
+    if (notFound > 0)
+        warnings.push_back(
+            countText(notFound, "missing Workshop mod was", "missing Workshop mods were") +
+            " not found on the Steam Workshop. " + (notFound == 1 ? "It" : "They") +
+            " may have been deleted, or " + (notFound == 1 ? "it is" : "they are") +
+            " private or friends-only.");
+    if (unavailable > 0)
+        warnings.push_back("Steam gave no details for " +
+                           countText(unavailable, "missing Workshop mod", "missing Workshop mods") +
+                           ", so " + (unavailable == 1 ? "it" : "they") + " may not download.");
+    if (banned > 0)
+        warnings.push_back(
+            countText(banned, "missing Workshop mod is", "missing Workshop mods are") +
+            " banned on the Steam Workshop and cannot be downloaded.");
+    if (wrongGame > 0) {
+        const GameCatalogEntry* other =
+            otherGames.size() == 1 ? findGame(*otherGames.begin()) : nullptr;
+        // Every found item is that game's, and none is installed here (an
+        // installed entry shows the list is, at least partly, this game's).
+        if (preview.format == sharing::ImportTextFormat::WorkshopIdList && other &&
+            wrongGame == found && counts.installed == 0 && counts.broken == 0) {
+            const std::string name(other->displayName);
+            warnings.push_back("These are " + name + " mods, not " + preview.gameName +
+                               " mods: select " + name + " and paste the list again.");
+        } else {
+            warnings.push_back(
+                countText(wrongGame, "missing Workshop mod is", "missing Workshop mods are") +
+                " for another game, not " + preview.gameName + ".");
+        }
+    }
+    return warnings;
+}
+
 } // namespace
+
+std::vector<std::string> workshopIdsToLookUp(const ImportPreview& preview) {
+    std::vector<std::string> ids;
+    if (!preview.ok() || !preview.plan)
+        return ids;
+    std::set<std::string_view> seen;
+    for (const ImportPlanEntry& entry : preview.plan->entries) {
+        if (entry.status == ImportEntryStatus::Missing &&
+            entry.entry.identity.source == source::SteamWorkshop &&
+            seen.insert(entry.entry.identity.id).second)
+            ids.push_back(entry.entry.identity.id);
+    }
+    return ids;
+}
+
+ImportPreview withWorkshopMetadata(ImportPreview preview,
+                                   std::span<const providers::WorkshopItemMetadata> items) {
+    if (!preview.ok() || !preview.manifest || !preview.plan)
+        return preview;
+    const std::vector<std::string> ids = workshopIdsToLookUp(preview);
+    const std::set<std::string_view> missing(ids.begin(), ids.end());
+    for (const providers::WorkshopItemMetadata& item : items) {
+        if (missing.count(item.id) == 0)
+            continue;
+        PreviewWorkshopItem answer;
+        answer.check = toCheck(providers::classifyWorkshopItemForGame(item, preview.steamAppId));
+        if (item.found)
+            answer.title = fitTitle(item.title);
+        if (answer.check == WorkshopItemCheck::WrongGame)
+            answer.otherGame = gameForAppId(item.consumerAppId);
+        preview.workshop.insert_or_assign(item.id, std::move(answer));
+    }
+
+    // The title replaces the text's own hint, in what is shown and stored.
+    sharing::Manifest& manifest = *preview.manifest;
+    ImportPlan& plan = *preview.plan;
+    for (std::size_t i = 0; i < manifest.mods.size() && i < plan.entries.size(); ++i) {
+        sharing::ManifestEntry& mod = manifest.mods[i];
+        ImportPlanEntry& entry = plan.entries[i];
+        if (entry.status != ImportEntryStatus::Missing || mod.source != source::SteamWorkshop)
+            continue;
+        const auto it = preview.workshop.find(mod.id);
+        if (it == preview.workshop.end() || it->second.title.empty())
+            continue;
+        mod.nameHint = it->second.title;
+        entry.entry.nameHint = it->second.title;
+    }
+
+    // Before the standing note, replacing those of an earlier call.
+    std::vector<std::string>& warnings = plan.warnings;
+    auto note = std::find(warnings.begin(), warnings.end(),
+                          std::string_view(kIdenticalContentNotGuaranteed));
+    const auto earlier = static_cast<std::ptrdiff_t>(std::min<std::size_t>(
+        preview.workshopWarnings, static_cast<std::size_t>(note - warnings.begin())));
+    note = warnings.erase(note - earlier, note);
+    std::vector<std::string> added = workshopWarnings(preview, plan.counts, ids);
+    preview.workshopWarnings = added.size();
+    warnings.insert(note, std::make_move_iterator(added.begin()),
+                    std::make_move_iterator(added.end()));
+    return preview;
+}
 
 Result<std::string> ShareService::exportCode(std::int64_t playsetId) {
     persistence::PlaysetRepository playsets(m_ctx.database);
@@ -166,19 +363,61 @@ Result<std::string> ShareService::exportCode(std::int64_t playsetId) {
     return sharing::encodeShareCode(manifest.value());
 }
 
-ImportPreview ShareService::previewImport(std::string_view text) {
-    ImportPreview preview;
-    auto manifest = sharing::decodeShareCode(text);
-    if (!manifest) {
-        preview.error = std::move(manifest).error();
-        return preview;
+Result<sharing::WorkshopIdListExport> ShareService::exportWorkshopIdList(std::int64_t playsetId) {
+    persistence::PlaysetRepository playsets(m_ctx.database);
+    auto playset = playsets.get(playsetId);
+    if (!playset)
+        return std::move(playset).error();
+    Playset exported = std::move(playset).value();
+    for (PlaysetEntry& entry : exported.entries)
+        entry.identity.game = exported.game; // as exportCode() shares them
+    return sharing::workshopIdListFromPlayset(exported);
+}
+
+ImportPreview ShareService::previewImport(std::string_view text, const GameKey& idListGame) {
+    const sharing::ImportTextFormat format = sharing::detectImportTextFormat(text);
+    ImportPreview failed;
+    failed.format = format;
+    if (format == sharing::ImportTextFormat::ShareCode) {
+        auto manifest = sharing::decodeShareCode(text);
+        if (!manifest) {
+            failed.error = std::move(manifest).error();
+            return failed;
+        }
+        return buildPreview(std::move(manifest).value(), format);
     }
-    const GameKey game = manifest.value().game;
+
+    auto ids = sharing::parseWorkshopIdList(text);
+    if (!ids) {
+        failed.error = std::move(ids).error();
+        return failed;
+    }
+    if (idListGame.empty()) {
+        failed.error = Error(ErrorCode::InvalidArgument,
+                             "Select a game first: a Workshop ID list does not say which game it "
+                             "is for.");
+        return failed;
+    }
+    if (!m_ctx.adapterFor(idListGame)) {
+        failed.error = cannotManage(format, idListGame);
+        return failed;
+    }
+    auto manifest = sharing::manifestFromWorkshopIds(idListGame, ids.value());
+    if (!manifest) {
+        failed.error = std::move(manifest).error();
+        return failed;
+    }
+    return buildPreview(std::move(manifest).value(), format);
+}
+
+ImportPreview ShareService::buildPreview(sharing::Manifest manifest,
+                                         sharing::ImportTextFormat format) {
+    ImportPreview preview;
+    preview.format = format;
+    const GameKey game = manifest.game;
     preview.gameName = gameDisplayName(game);
     if (!m_ctx.adapterFor(game)) {
-        preview.error = Error(ErrorCode::UnsupportedGame,
-                              "This share code is for " + preview.gameName +
-                                  ", which this build of Paradox Mod Manager cannot manage.");
+        preview.error = cannotManage(format, game);
         return preview;
     }
 
@@ -203,12 +442,16 @@ ImportPreview ShareService::previewImport(std::string_view text) {
     if (installation.value()) {
         preview.gameInstalled = true;
         preview.installedGameVersion = installation.value()->version;
+        preview.steamAppId = installation.value()->steamAppId;
+    }
+    if (preview.steamAppId.empty()) {
+        if (const GameCatalogEntry* entry = findGame(game))
+            preview.steamAppId = std::string(entry->steamAppId);
     }
     const std::vector<std::string> names = detail::names(existing.value());
     ImportPlan plan = buildImportPlan(
-        game, manifest.value().playsetName, sharing::playsetEntriesFromManifest(manifest.value()),
-        detail::toMap(mods.value()), names, preview.installedGameVersion,
-        manifest.value().gameVersionHint);
+        game, manifest.playsetName, sharing::playsetEntriesFromManifest(manifest),
+        detail::toMap(mods.value()), names, preview.installedGameVersion, manifest.gameVersionHint);
     if (!preview.gameInstalled) {
         plan.warnings.insert(
             plan.warnings.begin(),
@@ -216,7 +459,7 @@ ImportPreview ShareService::previewImport(std::string_view text) {
                                "mod is treated as missing. The playset can still be saved; locate "
                                "or install the game, then rescan.");
     }
-    preview.manifest = std::move(manifest).value();
+    preview.manifest = std::move(manifest);
     preview.plan = std::move(plan);
     return preview;
 }
@@ -229,15 +472,14 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
         return notSaved(*preview.error);
     if (!preview.manifest)
         return makeError(ErrorCode::InvalidArgument,
-                         "There is nothing to import. Paste a share code and preview it first.");
+                         "There is nothing to import. Paste a share code or a Workshop ID list "
+                         "and preview it first.");
     const sharing::Manifest& manifest = *preview.manifest;
     if (Status valid = sharing::validateManifest(manifest); !valid)
         return notSaved(valid.error());
     const GameKey& game = manifest.game;
     if (!m_ctx.adapterFor(game))
-        return makeError(ErrorCode::UnsupportedGame,
-                         "This share code is for " + gameDisplayName(game) +
-                             ", which this build of Paradox Mod Manager cannot manage.");
+        return cannotManage(preview.format, game);
 
     persistence::PlaysetRepository playsets(m_ctx.database);
     persistence::InstallationRepository installations(m_ctx.database);
@@ -262,8 +504,9 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
                         manifest.gameVersionHint);
     const std::vector<PlaysetEntry> entries = plan.toPlayset().entries;
     if (entries != requested)
-        return makeError(ErrorCode::Internal,
-                         "The import plan does not match the share code; nothing was saved.");
+        return makeError(ErrorCode::Internal, "The import plan does not match the " +
+                                                  textName(preview.format) +
+                                                  "; nothing was saved.");
 
     AppliedImport applied;
     applied.mode = mode;
@@ -295,8 +538,8 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
         target = std::move(loaded).value();
         if (target.game != game)
             return makeError(ErrorCode::WrongGame,
-                             "The share code is for " + gameDisplayName(game) +
-                                 ", but the chosen playset belongs to " +
+                             "The " + textName(preview.format) + " is for " +
+                                 gameDisplayName(game) + ", but the chosen playset belongs to " +
                                  gameDisplayName(target.game) + "; nothing was changed.");
         applied.playsetName = target.name;
         if (!newName.empty() && newName != target.name) {
@@ -352,6 +595,7 @@ Result<AppliedImport> ShareService::applyImport(const ImportPreview& preview, Im
 
     logInfo(kComponent, "share code imported",
             {{"game", game},
+             {"format", preview.format == sharing::ImportTextFormat::ShareCode ? "code" : "list"},
              {"playset", std::to_string(applied.playsetId)},
              {"mode", mode == ImportMode::New ? "new" : "replace"},
              {"entries", std::to_string(entries.size())},

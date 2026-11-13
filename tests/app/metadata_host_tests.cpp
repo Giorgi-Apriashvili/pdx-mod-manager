@@ -1,16 +1,14 @@
-// QtWorkshopMetadataHost against a local HTTP stub (QTcpServer): the request
-// body, a parsed answer, HTTP errors, malformed replies and timeouts. No
-// request leaves the machine.
+// QtWorkshopMetadataHost against a local HTTP stub (QTcpServer, http_stub.hpp):
+// the request body, a parsed answer, HTTP errors, malformed replies and
+// timeouts, for the coordinator's requests and the import preview's lookups.
+// No request leaves the machine.
 
 #include "app/core/metadata_host.hpp"
+#include "http_stub.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <QTcpServer>
-#include <QTcpSocket>
-
-#include <memory>
 #include <optional>
 #include <vector>
 
@@ -25,57 +23,6 @@ const QByteArray kReply = R"({"response":{"result":1,"resultcount":1,"publishedf
 "consumer_app_id":281990,"filename":"","file_size":"2048","title":"Example Workshop Mod",
 "time_created":1465842499,"time_updated":1782489192,"visibility":0,"banned":0,"ban_reason":"",
 "tags":[{"tag":"Gameplay"}]}]}})";
-
-// Answers every HTTP request with a canned response (or never answers).
-class HttpStub : public QObject {
-public:
-    std::optional<QByteArray> response; // full HTTP response; nullopt: never answer
-    QByteArray lastRequest;
-    int requests = 0;
-
-    HttpStub() {
-        REQUIRE(m_server.listen(QHostAddress::LocalHost, 0));
-        QObject::connect(&m_server, &QTcpServer::newConnection, this, [this] {
-            while (QTcpSocket* socket = m_server.nextPendingConnection()) {
-                auto buffer = std::make_shared<QByteArray>();
-                QObject::connect(socket, &QTcpSocket::readyRead, this, [this, socket, buffer] {
-                    buffer->append(socket->readAll());
-                    const qsizetype headerEnd = buffer->indexOf("\r\n\r\n");
-                    if (headerEnd < 0)
-                        return;
-                    qsizetype length = 0;
-                    for (const QByteArray& line : buffer->left(headerEnd).split('\n')) {
-                        if (line.toLower().startsWith("content-length:"))
-                            length = line.mid(15).trimmed().toLongLong();
-                    }
-                    if (buffer->size() < headerEnd + 4 + length)
-                        return;
-                    lastRequest = *buffer;
-                    ++requests;
-                    if (response) {
-                        socket->write(*response);
-                        socket->disconnectFromHost();
-                    }
-                });
-            }
-        });
-    }
-
-    QUrl url() const {
-        return QUrl(
-            QStringLiteral("http://127.0.0.1:%1/ISteamRemoteStorage/GetPublishedFileDetails/v1/")
-                .arg(m_server.serverPort()));
-    }
-
-    static QByteArray http(int status, const QByteArray& body) {
-        return "HTTP/1.1 " + QByteArray::number(status) +
-               " Status\r\nContent-Type: application/json\r\nContent-Length: " +
-               QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
-    }
-
-private:
-    QTcpServer m_server;
-};
 
 struct Capture {
     int answers = 0;
@@ -120,6 +67,10 @@ TEST_CASE("metadata host posts the request and delivers parsed items", "[app][me
     CHECK(stub.lastRequest.endsWith("itemcount=1&publishedfileids%5B0%5D=123456789"));
     CHECK_FALSE(stub.lastRequest.toLower().contains("key="));
     CHECK_FALSE(stub.lastRequest.toLower().contains("cookie"));
+    // A fixed language, not the system's locale (Qt's default).
+    const QByteArray headers = stub.lastRequest.toLower();
+    CHECK(headers.contains("\r\naccept-language: en\r\n"));
+    CHECK(headers.count("accept-language:") == 1);
 }
 
 TEST_CASE("metadata host leaves failed requests unanswered", "[app][metadata]") {
@@ -164,4 +115,122 @@ TEST_CASE("metadata host endpoint can be overridden by the environment", "[app][
     qunsetenv("PMM_WORKSHOP_METADATA_URL");
     CHECK(QtWorkshopMetadataHost::defaultEndpoint().host() ==
           QStringLiteral("api.steampowered.com"));
+}
+
+// --- lookup(): the import preview's requests ----------------------------------
+
+namespace {
+
+struct Lookups {
+    int answers = 0;
+    std::optional<WorkshopLookupReply> reply;
+    int sinkCalls = 0;
+};
+
+// Calls lookup() and checks that it does not answer from inside the call.
+void lookUp(QtWorkshopMetadataHost& host, Lookups& lookups, const std::vector<std::string>& ids) {
+    host.setSink([&lookups](const GameKey&, const std::vector<providers::WorkshopItemMetadata>&) {
+        ++lookups.sinkCalls;
+    });
+    host.lookup("stellaris", ids, [&lookups](WorkshopLookupReply reply) {
+        ++lookups.answers;
+        lookups.reply = std::move(reply);
+    });
+    CHECK(lookups.answers == 0); // never from inside lookup()
+}
+
+} // namespace
+
+TEST_CASE("metadata host answers a lookup once, with the items, and never through the sink",
+          "[app][metadata]") {
+    HttpStub stub;
+    stub.response = HttpStub::http(200, kReply);
+    QtWorkshopMetadataHost host;
+    host.setEndpoint(stub.url());
+    Lookups lookups;
+    lookUp(host, lookups, {"123456789"});
+    REQUIRE(waitUntil([&] { return lookups.answers > 0; }));
+    // Nothing more arrives.
+    waitUntil([] { return false; }, std::chrono::milliseconds(200));
+    CHECK(lookups.answers == 1);
+    CHECK(lookups.sinkCalls == 0);
+    REQUIRE(lookups.reply->answered);
+    CHECK(lookups.reply->error.empty());
+    REQUIRE(lookups.reply->items.size() == 1);
+    CHECK(lookups.reply->items[0].title == "Example Workshop Mod");
+    CHECK(stub.bodies == QList<QByteArray>{"itemcount=1&publishedfileids%5B0%5D=123456789"});
+    CHECK_FALSE(stub.lastRequest.toLower().contains("cookie"));
+    CHECK(host.pendingRequests() == 0);
+
+    // The coordinator's requests still go to the sink.
+    host.request("stellaris", {"123456789"});
+    REQUIRE(waitUntil([&] { return lookups.sinkCalls == 1; }));
+    CHECK(lookups.answers == 1);
+}
+
+TEST_CASE("metadata host answers a failed lookup once, unanswered", "[app][metadata]") {
+    HttpStub stub;
+    QtWorkshopMetadataHost host;
+    host.setEndpoint(stub.url());
+    std::vector<std::string> ids{"123456789"};
+    int expectedRequests = 1;
+
+    SECTION("HTTP error") {
+        stub.response = HttpStub::http(500, "{}");
+    }
+    SECTION("malformed reply") {
+        stub.response = HttpStub::http(200, "not json");
+    }
+    SECTION("timeout") {
+        host.setTimeout(std::chrono::milliseconds(300));
+    }
+    SECTION("invalid ids, without a request") {
+        stub.response = HttpStub::http(200, kReply);
+        ids = {"not-an-id"};
+        expectedRequests = 0;
+    }
+    SECTION("no ids, without a request") {
+        stub.response = HttpStub::http(200, kReply);
+        ids.clear();
+        expectedRequests = 0;
+    }
+
+    Lookups lookups;
+    lookUp(host, lookups, ids);
+    REQUIRE(waitUntil([&] { return lookups.answers > 0; }, std::chrono::seconds(10)));
+    waitUntil([] { return false; }, std::chrono::milliseconds(200));
+    CHECK(lookups.answers == 1);
+    CHECK(lookups.sinkCalls == 0);
+    CHECK_FALSE(lookups.reply->answered);
+    CHECK(lookups.reply->items.empty());
+    CHECK_FALSE(lookups.reply->error.empty());
+    CHECK(stub.requests == expectedRequests);
+    CHECK(host.pendingRequests() == 0);
+}
+
+TEST_CASE("metadata host answers its waiting lookups when it is destroyed", "[app][metadata]") {
+    HttpStub stub;
+    stub.response = HttpStub::http(200, kReply);
+    stub.hold();
+    Lookups lookups;
+    {
+        QtWorkshopMetadataHost host;
+        host.setEndpoint(stub.url());
+        SECTION("a request in flight") {
+            lookUp(host, lookups, {"123456789"});
+            REQUIRE(waitUntil([&] { return stub.waiting() == 1; }));
+        }
+        SECTION("ids no request can be built for") {
+            lookUp(host, lookups, {"not-an-id"});
+        }
+        CHECK(lookups.answers == 0);
+    }
+    CHECK(lookups.answers == 1);
+    REQUIRE(lookups.reply.has_value());
+    CHECK_FALSE(lookups.reply->answered);
+    CHECK_FALSE(lookups.reply->error.empty());
+    // Nothing more arrives, not even once the stub answers.
+    stub.release();
+    waitUntil([] { return false; }, std::chrono::milliseconds(200));
+    CHECK(lookups.answers == 1);
 }

@@ -59,6 +59,7 @@ Backend::Backend(ServiceRunner& runner, BackendOptions options, QObject* parent)
     m_inventory = new InventoryModel(this, this);
     m_details = new ModDetails(m_mods, m_notifications, this);
     m_sharing = new ShareController(this, this);
+    m_sharing->setLookupTimings(m_options.previewLookupDelayMs, m_options.previewLookupTimeoutMs);
     m_acquisition = new AcquisitionController(this, this);
     m_launcher = new LaunchController(this, this);
     m_updates = new UpdateController(updateOptions(m_options), this);

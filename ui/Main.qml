@@ -388,6 +388,7 @@ ApplicationWindow {
     }
     ExportDialog {
         id: exportDialog
+        objectName: "exportDialog"
     }
     AddModsDialog {
         id: addModsDialog

@@ -7,6 +7,9 @@
 
 #include <QTimer>
 
+#include <algorithm>
+#include <iterator>
+
 namespace pmm::app {
 
 // Lives on the worker thread and owns everything that runs there.
@@ -21,8 +24,12 @@ public:
             m_sessions = std::make_unique<QtWorkshopSessionHost>(
                 options.helperExecutable.isEmpty() ? QtWorkshopSessionHost::defaultHelperPath()
                                                    : options.helperExecutable);
-            if (options.metadata)
+            if (options.metadata) {
                 m_metadata = std::make_unique<QtWorkshopMetadataHost>();
+                if (!options.metadataEndpoint.isEmpty())
+                    m_metadata->setEndpoint(options.metadataEndpoint);
+                m_metadata->setTimeout(options.metadataTimeout);
+            }
             hosts.sessions = m_sessions.get();
             hosts.metadata = m_metadata.get();
             hosts.coordinator.helperExecutable = toPath(m_sessions->helperExecutable());
@@ -88,6 +95,7 @@ public:
     }
 
     AppRuntime* runtime() const noexcept { return m_runtime.get(); }
+    QtWorkshopMetadataHost* metadataHost() const noexcept { return m_metadata.get(); }
 
 private:
     ServiceRunner& m_runner;
@@ -119,6 +127,7 @@ RunnerStart ServiceRunner::start() {
     QMetaObject::invokeMethod(
         m_worker, [this, &result] { result = m_worker->startUp(); }, Qt::BlockingQueuedConnection);
     m_steamActive = result.ok && m_options.steam;
+    m_metadataActive = m_steamActive && m_options.metadata;
     return result;
 }
 
@@ -132,12 +141,71 @@ void ServiceRunner::shutdown() {
     m_worker = nullptr; // deleted on the worker when the thread finished
     m_running = false;
     m_steamActive = false;
+    m_metadataActive = false;
 }
 
 void ServiceRunner::dispatch(std::function<void()> task) {
     if (!m_worker || !m_running)
         return;
     QMetaObject::invokeMethod(m_worker, std::move(task), Qt::QueuedConnection);
+}
+
+void ServiceRunner::lookupWorkshopItems(QObject* receiver, GameKey game,
+                                        std::vector<std::string> ids,
+                                        std::function<void(WorkshopLookup)> done) {
+    Q_ASSERT(receiver && receiver->thread() == thread());
+    // Only dereferenced on this object's thread, where the receiver lives.
+    QPointer<QObject> guard(receiver);
+    auto answer = [this, guard, done = std::move(done)](WorkshopLookup lookup) {
+        QMetaObject::invokeMethod(
+            this,
+            [guard, done, lookup = std::move(lookup)]() mutable {
+                if (guard)
+                    done(std::move(lookup));
+            },
+            Qt::QueuedConnection);
+    };
+    if (!m_worker || !m_running) {
+        answer({});
+        return;
+    }
+    dispatch([this, answer = std::move(answer), game = std::move(game), ids = std::move(ids)] {
+        QtWorkshopMetadataHost* host = m_worker ? m_worker->metadataHost() : nullptr;
+        if (!host) {
+            answer({});
+            return;
+        }
+        // Gathered on the worker, where every batch is answered.
+        struct Gathered {
+            WorkshopLookup lookup;
+            std::size_t batches = 0;
+        };
+        auto gathered = std::make_shared<Gathered>();
+        gathered->lookup.available = true;
+        const std::size_t batchSize = providers::kMaxPublishedFileDetailsItems;
+        gathered->batches = (ids.size() + batchSize - 1) / batchSize;
+        if (gathered->batches == 0) {
+            answer(std::move(gathered->lookup));
+            return;
+        }
+        for (std::size_t start = 0; start < ids.size(); start += batchSize) {
+            const std::vector<std::string> batch(
+                ids.begin() + static_cast<std::ptrdiff_t>(start),
+                ids.begin() + static_cast<std::ptrdiff_t>(std::min(ids.size(), start + batchSize)));
+            host->lookup(game, batch,
+                         [gathered, count = batch.size(), answer](WorkshopLookupReply reply) {
+                             WorkshopLookup& lookup = gathered->lookup;
+                             if (reply.answered)
+                                 lookup.items.insert(lookup.items.end(),
+                                                     std::make_move_iterator(reply.items.begin()),
+                                                     std::make_move_iterator(reply.items.end()));
+                             else
+                                 lookup.unanswered += count;
+                             if (--gathered->batches == 0)
+                                 answer(std::move(lookup));
+                         });
+        }
+    });
 }
 
 AppRuntime* ServiceRunner::runtime() const {

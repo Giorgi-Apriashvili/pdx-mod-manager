@@ -48,7 +48,8 @@ struct VerificationOptions {
     // Comma-separated steps: "config" (playset from the game's current
     // configuration), "disable:<row>" and "move:<from>:<to>" (edits through
     // the mod list model), "export:<file>" (write the active playset's code),
-    // "import:<file>" (preview and import a code as a new playset),
+    // "ids:<file>" (write its Workshop ID list), "import:<file>" (preview and
+    // import a code or a Workshop ID list as a new playset),
     // "dump:<file>" (write the active playset's entries as JSON).
     // Live runs add: "game:<key>", "select:<playset name>", "rescan",
     // "locate:<install dir>|<user-data dir>", "blockers", "jobs",

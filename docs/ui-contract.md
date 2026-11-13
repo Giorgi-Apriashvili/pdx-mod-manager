@@ -46,7 +46,7 @@ accepted.
 | `modView` | `ModFilterModel` | proxy over `mods` used by the center ListView |
 | `inventory` | `InventoryModel` | installed mods of the current game ("Add mods" dialog) |
 | `details` | `ModDetails` | selected mod details (right panel) |
-| `sharing` | `ShareController` | export/import share codes |
+| `sharing` | `ShareController` | export/import share codes and Workshop ID lists |
 | `acquisition` | `AcquisitionController` | Workshop downloads |
 | `launcher` | `LaunchController` | Play |
 | `updates` | `UpdateController` | "Check for updates" in Settings, the daily check and its banner ([`updates.md`](updates.md)) |
@@ -239,23 +239,38 @@ folders (an archive's containing folder).
 Properties:
 
 - `lastExportCode` (string);
+- `workshopIdList` (map, set with the code; empty until an export finished):
+  `text` (the ids joined by `|`; empty when the playset has no enabled
+  Workshop mod), `count`, `leftOutLocal`, `leftOutDisabled`, `leftOutText`
+  ("Left out: 2 local mods and 1 disabled mod. The share code includes
+  them."), `note` (the count, "does not say which game", and `leftOutText`),
+  `error` (why the list could not be made; the code may still be there);
 - `preview` (map, see below), `hasPreview` (bool);
-- `busy` (bool: export, preview or import running);
+- `busy` (bool: export, preview or import running; not the Workshop lookup
+  of a preview);
 - `portabilityNote` (string: identical references and order do not
   guarantee identical bytes or multiplayer checksums).
 
 Invokables:
 - `exportCode() -> string`: starts exporting the active playset and returns
-  the current `lastExportCode`, which is cleared first. The code arrives in
-  `lastExportCode` (signal `exported(code)`; empty on failure, with a
-  notification).
+  the current `lastExportCode`, which is cleared first (and `workshopIdList`
+  with it). The code arrives in `lastExportCode` (signal `exported(code)`;
+  empty on failure, with a notification), the list in `workshopIdList`, from
+  the same worker call; a failure of one does not hide the other.
 - `copyExportCode() -> bool`: copies `lastExportCode`. While the export is
   still running, it copies as soon as the code is ready and returns false.
+- `copyWorkshopIdList() -> bool`: copies `workshopIdList.text`; false while
+  it is empty.
 - `exportToFile(url) -> bool`: writes the code (UTF-8, one line).
 - `clipboardText() -> string`
 - `previewImport(text) -> bool`: decodes and validates without side effects
-  (`busy` while running) and then sets `preview`. Returns whether a preview
-  was started.
+  (`busy` while running) and then sets `preview`. Text starting with `PMM` is
+  a share code; anything else is read as a Workshop ID list for the current
+  game ([protocol section 8](share-code-protocol.md#8-workshop-id-lists)).
+  Returns whether a preview was started. Once the preview has settled, the
+  names of its missing Workshop mods are looked up
+  ([app](app.md#workshop-names-in-the-import-preview)) and `preview` is
+  updated again with the same `generation`.
 - `importFromFile(url) -> bool`: reads the file (at most 4 MiB) and calls
   `previewImport`.
 - `confirmImport(mode, targetPlaysetId, name) -> bool`:
@@ -270,11 +285,28 @@ Invokables:
     failure, with a notification.
   - A code for another supported game is imported as a new playset of that
     game (replace is refused), and the window switches to that game.
+  - Workshop titles that the preview has received are stored as the entries'
+    name hints. While they are still on their way the import can be
+    confirmed all the same; it is then stored without them.
 - `clearPreview()`
 
 `preview` map:
 
-- `ok` (bool), `errorTitle`, `errorMessage`;
+- `ok` (bool), `errorTitle`, `errorMessage` (titles name the format: "Not a
+  valid share code", "Not a valid Workshop ID list", ...);
+- `generation` (number): a new preview has a new one; an update that only
+  adds the names of missing mods keeps it, so the dialog keeps a typed name,
+  the current entry and the scroll position;
+- `format` ("code" | "idList"; empty when the file could not be read);
+- `listNote` (lists only: imported for the selected game, every mod enabled,
+  in list order);
+- `lookup` ("off" | "pending" | "done" | "partial" | "failed") and
+  `lookupText` (empty when there is nothing to say: "Looking up 12 missing
+  mods on the Steam Workshop…", "The Steam Workshop could not be reached, so
+  missing mods are shown by ID. You can still import.", or why names are not
+  looked up: read-only, Steam off, more than 1,000 missing mods; for a share
+  code whose missing entries carry names, "shown with the names in the code",
+  or "with the names in the code or by ID" when only some do);
 - `game`, `gameName`, `gameInstalled` (bool);
 - `playsetName`, `proposedName`;
 - `total`, `enabled`, `installed`, `missing`, `missingEnabled`,
@@ -282,8 +314,13 @@ Invokables:
 - `downloads` (bool): false when Workshop downloads are off in this session,
   so the import queues nothing;
 - `warnings` (list; the portability note is not repeated here);
-- `entries` (list of `{position, name, source, providerId, enabled,
-  statusText}`).
+- `entries` (list of `{position, name, source, providerId, enabled, check,
+  statusText}`): `name` is the installed name, else the Workshop title, else
+  the text's hint, else the id; `check` is what the Steam Workshop said about
+  a missing Workshop entry ("" not asked or not answered, "ok", "notFound",
+  "unavailable", "banned", "wrongGame"), and `statusText` then reads "Not
+  found on Workshop", "Unavailable on Workshop", "Banned on Workshop" or
+  "Another game's mod".
 
 ## `AcquisitionController` (QObject)
 

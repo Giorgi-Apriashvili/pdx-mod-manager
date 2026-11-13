@@ -297,12 +297,7 @@ Status checkGame(const std::string& game) {
 }
 
 Status checkWorkshopId(const std::string& path, std::string_view id) {
-    constexpr std::string_view kUint64Max = "18446744073709551615";
-    bool digitsOnly = !id.empty();
-    for (const char c : id)
-        digitsOnly = digitsOnly && c >= '0' && c <= '9';
-    if (!digitsOnly || id.size() > kMaxWorkshopIdDigits || id.front() == '0' ||
-        (id.size() == kUint64Max.size() && id > kUint64Max))
+    if (!isValidWorkshopId(id))
         return invalid(path,
                        "a Steam Workshop id must be a number of 1 to 20 digits without a "
                        "leading zero",
@@ -446,6 +441,15 @@ Result<Manifest> readManifest(const Json& root) {
 }
 
 } // namespace
+
+bool isValidWorkshopId(std::string_view id) noexcept {
+    constexpr std::string_view kUint64Max = "18446744073709551615";
+    bool digitsOnly = !id.empty();
+    for (const char c : id)
+        digitsOnly = digitsOnly && c >= '0' && c <= '9';
+    return digitsOnly && id.size() <= kMaxWorkshopIdDigits && id.front() != '0' &&
+           (id.size() != kUint64Max.size() || id <= kUint64Max);
+}
 
 Status validateManifest(const Manifest& manifest) {
     PMM_TRY(checkSchemaVersion(manifest.schemaVersion));

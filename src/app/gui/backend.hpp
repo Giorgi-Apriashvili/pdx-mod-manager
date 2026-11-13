@@ -45,6 +45,11 @@ struct BackendOptions {
     // While Play is blocked because Steam is not running, or the game or the
     // Paradox launcher is, the processes are checked again at this interval.
     int launchRecheckMs = 3000;
+    // The import preview asks the Steam Web API for the names of missing
+    // Workshop mods this long after the preview settled, and gives up after
+    // the timeout (ShareController::setLookupTimings()).
+    int previewLookupDelayMs = 600;
+    int previewLookupTimeoutMs = 20000;
 };
 
 class Backend : public QObject {

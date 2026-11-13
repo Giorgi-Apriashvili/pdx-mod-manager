@@ -359,10 +359,20 @@ cases where the helper cannot work (incompatible library) or the user prefers it
 `itemcount=N&publishedfileids%5B0%5D=...`, at most 100 ids) and parses the reply into
 `WorkshopItemMetadata`. The reply observed on 2026-10-29 has `file_size` as a string and other
 numbers as JSON numbers. Hidden or missing items come back as `{"publishedfileid":"…","result":9}`.
-The parser accepts both numbers and numeric strings. `validateWorkshopItemForGame()` returns
-`ItemUnavailable` for result 9, other non-OK results and banned items, and `WrongGame` when
-`consumer_app_id` differs from the game's app id. Feed failures to the job as `ItemRejected`.
-The services coordinator does this and uses the verdicts as the identity gate (section 3).
+The parser accepts both numbers and numeric strings. `classifyWorkshopItemForGame()` gives the
+verdict (not found, no details, banned, another game, ok), and `validateWorkshopItemForGame()`
+builds the error from it: `ItemUnavailable` for result 9, other non-OK results and banned items,
+and `WrongGame` when `consumer_app_id` differs from the game's app id. Feed failures to the job as
+`ItemRejected`. The services coordinator does this and uses the verdicts as the identity gate
+(section 3).
+
+The import preview asks too, for the Workshop mods of a share code or a Workshop ID list that are
+not installed: their titles replace the text's name hints, and not-found, banned and other
+games' items are marked before anything is saved
+([app](app.md#workshop-names-in-the-import-preview)). Only the item ids are sent, with fixed
+headers (`Accept-Language: en`, not the system's language), at most 1,000
+per preview, never in sessions without Steam (`--no-steam`, `--read-only`). These answers go to
+the preview only, never to the coordinator: a job's identity gate always rests on its own request.
 
 ## 8. Local mod fingerprints
 
