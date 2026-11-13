@@ -112,11 +112,15 @@ private:
     void resetLookup();
     void startLookup(std::vector<std::string> ids);
     void sendLookup();
-    void lookupAnswered(quint64 generation, WorkshopLookup lookup);
+    void lookupAnswered(quint64 generation, const std::vector<std::string>& asked,
+                        WorkshopLookup lookup);
     void lookupTimedOut();
     // Rebuilds the preview with every answer so far (on the worker).
     void applyLookup();
     void setLookupKeys(QVariantMap& map) const;
+    // How the preview shows missing Workshop mods without a Steam answer, for
+    // the lookup texts: "by ID", or with the names a share code gives them.
+    QString missingShownAs() const;
 
     Backend* m_backend;
     QString m_lastExportCode;

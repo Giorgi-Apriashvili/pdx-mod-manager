@@ -304,7 +304,9 @@ Invokables:
   `lookupText` (empty when there is nothing to say: "Looking up 12 missing
   mods on the Steam Workshop…", "The Steam Workshop could not be reached, so
   missing mods are shown by ID. You can still import.", or why names are not
-  looked up: read-only, Steam off, more than 1,000 missing mods);
+  looked up: read-only, Steam off, more than 1,000 missing mods; for a share
+  code whose missing entries carry names, "shown with the names in the code",
+  or "with the names in the code or by ID" when only some do);
 - `game`, `gameName`, `gameInstalled` (bool);
 - `playsetName`, `proposedName`;
 - `total`, `enabled`, `installed`, `missing`, `missingEnabled`,

@@ -16,6 +16,7 @@
 #include "persistence/settings_repository.hpp"
 #include "platform/file_transaction.hpp"
 #include "platform/steam.hpp"
+#include "sharing/share_code.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -1667,6 +1668,20 @@ TEST_CASE("A stale Workshop answer never reaches a newer preview, and answers ar
     waitUntil([] { return false; }, std::chrono::milliseconds(300));
     CHECK_FALSE(sharing->hasPreview());
     CHECK_FALSE(shownNames.contains("Steam Three"));
+
+    // Items a reply adds for ids nobody asked about are not kept.
+    stub.responder = [](const QByteArray& body) {
+        return HttpStub::catalog({{"5550004", {"Steam Four"}}, {"5550005", {"Unasked Five"}}})(
+            body + "&publishedfileids%5B1%5D=5550005");
+    };
+    sharing->previewImport(QStringLiteral("5550004"));
+    REQUIRE(waitUntil([&] {
+        return lookupState(backend) == "done" &&
+               previewEntry(backend, 0).value("name") == "Steam Four";
+    }));
+    CHECK(stub.requests == 4);
+    sharing->previewImport(QStringLiteral("5550005"));
+    REQUIRE(waitUntil([&] { return stub.requests == 5; }));
     backend.shutdown();
     runner.shutdown();
 }
@@ -1740,8 +1755,31 @@ TEST_CASE("Sessions without Steam or in read-only mode never look Workshop mods 
     REQUIRE(waitUntil([&] { return previewSettled(backend); }));
     waitUntil([] { return false; }, std::chrono::milliseconds(300));
     CHECK(lookupState(backend) == "off");
-    CHECK(sharing->preview().value("lookupText").toString().contains(reason));
+    CHECK(sharing->preview().value("lookupText").toString() ==
+          "Missing mods are shown by ID: they are not looked up on the Steam Workshop " + reason +
+              ".");
     CHECK(previewEntry(backend, 0).value("name") == "5550001");
+
+    // A share code shows the names it gives its missing mods, and says so.
+    pmm::sharing::Manifest manifest;
+    manifest.game = kGame;
+    manifest.playsetName = "Shared";
+    manifest.mods = {{"steam-workshop", "5550002", "Named in the code", true, {}, {}},
+                     {"steam-workshop", "5550003", {}, true, {}, {}}};
+    for (const bool everyName : {false, true}) {
+        if (everyName)
+            manifest.mods.pop_back();
+        const Result<std::string> code = pmm::sharing::encodeShareCode(manifest);
+        REQUIRE(code.ok());
+        sharing->previewImport(qs(code.value()));
+        REQUIRE(waitUntil([&] { return previewSettled(backend); }));
+        CHECK(lookupState(backend) == "off");
+        CHECK(previewEntry(backend, 0).value("name") == "Named in the code");
+        CHECK(sharing->preview().value("lookupText").toString() ==
+              QStringLiteral("Missing mods are shown with the names in the code%1: they are not "
+                             "looked up on the Steam Workshop %2.")
+                  .arg(everyName ? QString() : QStringLiteral(" or by ID"), reason));
+    }
     CHECK(stub.requests == 0);
     backend.shutdown();
     runner.shutdown();

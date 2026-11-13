@@ -20,6 +20,8 @@
 
 #include <algorithm>
 #include <iterator>
+#include <set>
+#include <string_view>
 #include <utility>
 
 namespace pmm::app {
@@ -545,13 +547,26 @@ void ShareController::sendLookup() {
     m_lookup = Lookup::Pending;
     m_lookupDeadline.start();
     const quint64 generation = m_previewGeneration;
-    m_backend->runner().lookupWorkshopItems(this, m_basePreview->manifest->game, m_lookupIds,
-                                            [this, generation](WorkshopLookup lookup) {
-                                                lookupAnswered(generation, std::move(lookup));
-                                            });
+    m_backend->runner().lookupWorkshopItems(
+        this, m_basePreview->manifest->game, m_lookupIds,
+        [this, generation, asked = m_lookupIds](WorkshopLookup lookup) {
+            lookupAnswered(generation, asked, std::move(lookup));
+        });
 }
 
-void ShareController::lookupAnswered(quint64 generation, WorkshopLookup lookup) {
+void ShareController::lookupAnswered(quint64 generation, const std::vector<std::string>& asked,
+                                     WorkshopLookup lookup) {
+    // Only the asked ids, each once (the last answer): a reply cannot add
+    // others to the cache or the preview.
+    const std::set<std::string_view> wanted(asked.begin(), asked.end());
+    std::map<std::string, providers::WorkshopItemMetadata> answered;
+    for (providers::WorkshopItemMetadata& item : lookup.items) {
+        if (wanted.count(item.id) > 0)
+            answered.insert_or_assign(item.id, std::move(item));
+    }
+    lookup.items.clear();
+    for (auto& [id, item] : answered)
+        lookup.items.push_back(std::move(item));
     // Kept even when the preview has moved on: the next one may ask again.
     if (m_lookupCache.size() + lookup.items.size() > kMaxCachedItems)
         m_lookupCache.clear();
@@ -627,11 +642,13 @@ void ShareController::setLookupKeys(QVariantMap& map) const {
         if (!m_basePreview || m_lookupMissing.empty())
             break;
         if (m_backend->readOnly())
-            text = tr("Missing mods are shown by ID: their names are not looked up on the Steam "
-                      "Workshop in read-only mode.");
+            text = tr("Missing mods are shown %1: they are not looked up on the Steam Workshop in "
+                      "read-only mode.")
+                       .arg(missingShownAs());
         else if (!m_backend->runner().metadataEnabled())
-            text = tr("Missing mods are shown by ID: their names are not looked up on the Steam "
-                      "Workshop while Steam is off in this session.");
+            text = tr("Missing mods are shown %1: they are not looked up on the Steam Workshop "
+                      "while Steam is off in this session.")
+                       .arg(missingShownAs());
         break;
     case Lookup::Waiting:
     case Lookup::Pending:
@@ -647,20 +664,39 @@ void ShareController::setLookupKeys(QVariantMap& map) const {
         state = QStringLiteral("partial");
         text = m_lookupSkipped > 0
                    ? tr("At most %1 missing mods are looked up on the Steam Workshop per preview, "
-                        "so %2 shown by ID.")
+                        "so %2 shown %3.")
                          .arg(kMaxLookupIds)
                          .arg(countText(static_cast<qsizetype>(m_lookupSkipped), "is", "are"))
+                         .arg(missingShownAs())
                    : tr("Some missing mods could not be looked up on the Steam Workshop and are "
-                        "shown by ID. You can still import.");
+                        "shown %1. You can still import.")
+                         .arg(missingShownAs());
         break;
     case Lookup::Failed:
         state = QStringLiteral("failed");
-        text = tr("The Steam Workshop could not be reached, so missing mods are shown by ID. You "
-                  "can still import.");
+        text = tr("The Steam Workshop could not be reached, so missing mods are shown %1. You "
+                  "can still import.")
+                   .arg(missingShownAs());
         break;
     }
     map.insert(QStringLiteral("lookup"), state);
     map.insert(QStringLiteral("lookupText"), text);
+}
+
+QString ShareController::missingShownAs() const {
+    // A share code may name its entries; a list never does.
+    bool named = false;
+    bool unnamed = false;
+    if (m_basePreview && m_basePreview->plan) {
+        for (const ImportPlanEntry& entry : m_basePreview->plan->entries) {
+            if (entry.status == ImportEntryStatus::Missing &&
+                entry.entry.identity.source == source::SteamWorkshop)
+                (entry.entry.nameHint.empty() ? unnamed : named) = true;
+        }
+    }
+    if (named && unnamed)
+        return tr("with the names in the code or by ID");
+    return named ? tr("with the names in the code") : tr("by ID");
 }
 
 bool ShareController::confirmImport(const QString& mode, int targetPlaysetId, const QString& name) {
