@@ -153,16 +153,29 @@ Result<std::vector<WorkshopItemMetadata>> parsePublishedFileDetailsResponse(std:
     return items;
 }
 
+WorkshopItemVerdict classifyWorkshopItemForGame(const WorkshopItemMetadata& item,
+                                                std::string_view expectedAppId) noexcept {
+    if (item.resultCode == 9)
+        return WorkshopItemVerdict::NotFound;
+    if (!item.found)
+        return WorkshopItemVerdict::NoDetails;
+    if (item.banned)
+        return WorkshopItemVerdict::Banned;
+    if (item.consumerAppId != expectedAppId)
+        return WorkshopItemVerdict::WrongGame;
+    return WorkshopItemVerdict::Ok;
+}
+
 Status validateWorkshopItemForGame(const WorkshopItemMetadata& item,
                                    std::string_view expectedAppId) {
-    if (item.resultCode == 9) {
+    switch (classifyWorkshopItemForGame(item, expectedAppId)) {
+    case WorkshopItemVerdict::NotFound:
         return makeError(ErrorCode::ItemUnavailable,
                          "Workshop item " + item.id +
                              " was not found. It may have been deleted, or it is private or "
                              "friends-only.",
                          "EResult 9 (FileNotFound)");
-    }
-    if (!item.found) {
+    case WorkshopItemVerdict::NoDetails: {
         const SteamResultInfo info = classifySteamResult(item.resultCode);
         return makeError(ErrorCode::ItemUnavailable,
                          "Steam returned no details for Workshop item " + item.id + ": " +
@@ -170,18 +183,19 @@ Status validateWorkshopItemForGame(const WorkshopItemMetadata& item,
                          "EResult " + std::to_string(item.resultCode) + " (" +
                              std::string(info.name) + ")");
     }
-    if (item.banned) {
+    case WorkshopItemVerdict::Banned:
         return makeError(ErrorCode::ItemUnavailable,
                          "Workshop item " + item.id + " (" + item.title +
                              ") has been banned from the Workshop.",
                          item.banReason);
-    }
-    if (item.consumerAppId != expectedAppId) {
+    case WorkshopItemVerdict::WrongGame:
         return makeError(ErrorCode::WrongGame,
                          "Workshop item " + item.id + " (" + item.title +
                              ") belongs to a different game (Steam app " + item.consumerAppId +
                              ").",
                          "expected app " + std::string(expectedAppId));
+    case WorkshopItemVerdict::Ok:
+        break;
     }
     return {};
 }
