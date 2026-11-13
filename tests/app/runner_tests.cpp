@@ -1,9 +1,10 @@
 // ServiceRunner marshalling and shutdown, and the Backend driving the real
 // services through it: edits are persisted and undoable, playset management,
-// the share-code round trip, start-up failures, Play without a playset, Play
-// following Steam, the game and the launcher on its own, and the downloads
-// view after a launch (the real pmm-steam-helper with the fake Steam API
-// library).
+// the share-code round trip, Workshop ID lists and the names of missing
+// Workshop mods in the import preview (the Web API against a local HTTP
+// stub), start-up failures, Play without a playset, Play following Steam, the
+// game and the launcher on its own, and the downloads view after a launch (the
+// real pmm-steam-helper with the fake Steam API library).
 
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
@@ -19,6 +20,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QPointer>
 #include <QSignalSpy>
 #include <QThread>
@@ -1485,6 +1488,341 @@ TEST_CASE("Importing with downloads off reports the downloads from before as the
                         "when Paradox Mod Manager is restarted normally."));
     CHECK(text.contains("1 missing Workshop mod could not be downloaded before; restart Paradox "
                         "Mod Manager normally, then use Retry in Downloads."));
+    backend.shutdown();
+    runner.shutdown();
+}
+
+// --- Workshop ID lists and Workshop names in the import preview -------------
+// Steam and the Web API are on, against a local HTTP stub: no request leaves
+// the machine, and no helper process is started (there is none to start).
+
+namespace {
+
+// A Backend whose import preview looks missing mods up at once.
+BackendOptions lookupAtOnce() {
+    BackendOptions options;
+    options.previewLookupDelayMs = 0;
+    return options;
+}
+
+QVariantMap previewEntry(Backend& backend, int index) {
+    return backend.sharing()->preview().value("entries").toList().value(index).toMap();
+}
+
+bool previewSettled(Backend& backend) {
+    return backend.sharing()->hasPreview() && !backend.sharing()->busy();
+}
+
+QString lookupState(Backend& backend) {
+    return backend.sharing()->preview().value("lookup").toString();
+}
+
+} // namespace
+
+TEST_CASE("An ID list preview names its missing mods from the Steam Web API and stores the names",
+          "[app][backend][idlist]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    HttpStub stub;
+    stub.responder = HttpStub::catalog({{"1001", {"Alpha on Steam"}}, {"5550001", {"Steam One"}}});
+    ServiceRunner runner(steamRunnerOptions(temp.path() / "profile", adapter, stub));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    REQUIRE(runner.metadataEnabled());
+    Backend backend(runner, lookupAtOnce());
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    ShareController* sharing = backend.sharing();
+
+    sharing->previewImport(QStringLiteral(" 1001|5550001\r\n5550002 "));
+    REQUIRE(waitUntil([&] { return previewSettled(backend); }));
+    QVariantMap preview = sharing->preview();
+    REQUIRE(preview.value("ok").toBool());
+    CHECK(preview.value("format") == "idList");
+    CHECK(preview.value("game") == "stellaris");
+    CHECK(preview.value("proposedName") == "Imported mod list");
+    CHECK(preview.value("listNote") ==
+          "An ID list does not say which game it is for. It is imported for Stellaris, the "
+          "selected game, with every mod enabled, in list order.");
+    const qint64 generation = preview.value("generation").toLongLong();
+    CHECK(generation > 0);
+
+    REQUIRE(waitUntil([&] { return lookupState(backend) == "done"; }));
+    // One request, for the missing mods only.
+    CHECK(stub.bodies ==
+          QList<QByteArray>{
+              "itemcount=2&publishedfileids%5B0%5D=5550001&publishedfileids%5B1%5D=5550002"});
+    preview = sharing->preview();
+    CHECK(preview.value("generation").toLongLong() == generation);
+    CHECK(preview.value("lookupText").toString().isEmpty());
+    CHECK(previewEntry(backend, 0).value("name") == "Alpha"); // installed: its own name
+    CHECK(previewEntry(backend, 0).value("check") == "");
+    CHECK(previewEntry(backend, 1).value("name") == "Steam One");
+    CHECK(previewEntry(backend, 1).value("check") == "ok");
+    CHECK(previewEntry(backend, 1).value("statusText") == "Missing · will download");
+    CHECK(previewEntry(backend, 2).value("name") == "5550002");
+    CHECK(previewEntry(backend, 2).value("check") == "notFound");
+    CHECK(previewEntry(backend, 2).value("statusText") == "Not found on Workshop");
+    CHECK(preview.value("warnings")
+              .toStringList()
+              .contains("1 missing Workshop mod was not found on the Steam Workshop. It may have "
+                        "been deleted, or "
+                        "it is private or friends-only."));
+    CHECK(backend.playsets()->count() == 0); // previewing changes nothing
+
+    REQUIRE(sharing->confirmImport("new", -1, preview.value("proposedName").toString()));
+    REQUIRE(waitUntil([&] {
+        return backend.activePlaysetId() >= 0 &&
+               backend.mods()->playsetId() == backend.activePlaysetId();
+    }));
+    const std::vector<PlaysetEntry> stored = storedEntries(runner, backend.activePlaysetId());
+    REQUIRE(stored.size() == 3);
+    CHECK(ids(stored) == std::vector<std::string>{"1001", "5550001", "5550002"});
+    CHECK(std::all_of(stored.begin(), stored.end(),
+                      [](const PlaysetEntry& entry) { return entry.enabled; }));
+    CHECK(stored[1].nameHint == "Steam One");
+    CHECK(stored[2].nameHint.empty());
+    CHECK(backend.playsets()->activeName() == "Imported mod list");
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("A stale Workshop answer never reaches a newer preview, and answers are cached",
+          "[app][backend][idlist]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    HttpStub stub;
+    stub.responder = HttpStub::catalog(
+        {{"5550001", {"Steam One"}}, {"5550002", {"Steam Two"}}, {"5550003", {"Steam Three"}}});
+    ServiceRunner runner(steamRunnerOptions(temp.path() / "profile", adapter, stub));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    QStringList shownNames; // every name any preview showed
+    Backend backend(runner, lookupAtOnce());
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    ShareController* sharing = backend.sharing();
+    QObject::connect(sharing, &ShareController::previewChanged, [&] {
+        for (const QVariant& entry : sharing->preview().value("entries").toList())
+            shownNames.push_back(entry.toMap().value("name").toString());
+    });
+
+    stub.hold();
+    sharing->previewImport(QStringLiteral("5550001"));
+    REQUIRE(waitUntil([&] { return stub.waiting() == 1; }));
+    CHECK(lookupState(backend) == "pending");
+    CHECK(sharing->preview().value("lookupText") ==
+          "Looking up 1 missing mod on the Steam Workshop…");
+    CHECK_FALSE(sharing->busy()); // the lookup does not hold the dialog
+    const qint64 first = sharing->preview().value("generation").toLongLong();
+    sharing->previewImport(QStringLiteral("5550002"));
+    REQUIRE(waitUntil([&] { return stub.waiting() == 2; }));
+    CHECK(sharing->preview().value("generation").toLongLong() > first);
+    stub.release();
+    REQUIRE(waitUntil([&] { return lookupState(backend) == "done"; }));
+    CHECK(previewEntry(backend, 0).value("name") == "Steam Two");
+    waitUntil([] { return false; }, std::chrono::milliseconds(200));
+    CHECK_FALSE(shownNames.contains("Steam One"));
+    CHECK(previewEntry(backend, 0).value("name") == "Steam Two");
+
+    // Both answers are cached: neither id is asked again.
+    sharing->previewImport(QStringLiteral("5550001,5550002"));
+    REQUIRE(waitUntil([&] {
+        return previewSettled(backend) && lookupState(backend) == "done" &&
+               previewEntry(backend, 1).value("name") == "Steam Two";
+    }));
+    CHECK(previewEntry(backend, 0).value("name") == "Steam One");
+    CHECK(stub.requests == 2);
+
+    // An answer for a cleared preview does not bring it back.
+    stub.hold();
+    sharing->previewImport(QStringLiteral("5550003"));
+    REQUIRE(waitUntil([&] { return stub.waiting() == 1; }));
+    sharing->clearPreview();
+    stub.release();
+    waitUntil([] { return false; }, std::chrono::milliseconds(300));
+    CHECK_FALSE(sharing->hasPreview());
+    CHECK_FALSE(shownNames.contains("Steam Three"));
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("A Workshop lookup without an answer ends failed, and the import still works",
+          "[app][backend][idlist]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    FakeAdapter adapter(world);
+    HttpStub stub; // never answers
+    ServiceRunner runner(steamRunnerOptions(temp.path() / "profile", adapter, stub));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    BackendOptions options = lookupAtOnce();
+    options.previewLookupTimeoutMs = 300;
+    Backend backend(runner, options);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    ShareController* sharing = backend.sharing();
+
+    sharing->previewImport(QStringLiteral("1001|5550001"));
+    REQUIRE(waitUntil([&] { return lookupState(backend) == "failed"; }));
+    CHECK(stub.requests == 1);
+    CHECK(sharing->preview().value("lookupText") ==
+          "The Steam Workshop could not be reached, so missing mods are shown by ID. You can "
+          "still import.");
+    CHECK(previewEntry(backend, 1).value("name") == "5550001");
+    CHECK(previewEntry(backend, 1).value("statusText") == "Missing · will download");
+
+    REQUIRE(sharing->confirmImport("new", -1, QStringLiteral("Without names")));
+    REQUIRE(waitUntil([&] {
+        return backend.activePlaysetId() >= 0 &&
+               backend.mods()->playsetId() == backend.activePlaysetId();
+    }));
+    const std::vector<PlaysetEntry> stored = storedEntries(runner, backend.activePlaysetId());
+    CHECK(ids(stored) == std::vector<std::string>{"1001", "5550001"});
+    CHECK(stored[1].nameHint.empty());
+    CHECK(backend.playsets()->activeName() == "Without names");
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Sessions without Steam or in read-only mode never look Workshop mods up",
+          "[app][backend][idlist]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    HttpStub stub;
+    stub.responder = HttpStub::catalog({{"5550001", {"Steam One"}}});
+    RunnerOptions options = steamRunnerOptions(temp.path() / "profile", adapter, stub);
+    BackendOptions backendOptions = lookupAtOnce();
+    QString reason;
+    SECTION("--no-steam") {
+        options.steam = false;
+        reason = "while Steam is off in this session";
+    }
+    SECTION("read-only") {
+        backendOptions.readOnly = true;
+        reason = "in read-only mode";
+    }
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, backendOptions);
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    ShareController* sharing = backend.sharing();
+
+    sharing->previewImport(QStringLiteral("5550001"));
+    REQUIRE(waitUntil([&] { return previewSettled(backend); }));
+    waitUntil([] { return false; }, std::chrono::milliseconds(300));
+    CHECK(lookupState(backend) == "off");
+    CHECK(sharing->preview().value("lookupText").toString().contains(reason));
+    CHECK(previewEntry(backend, 0).value("name") == "5550001");
+    CHECK(stub.requests == 0);
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("Workshop lookups go in batches of 100, at most 1000 per preview",
+          "[app][backend][idlist]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    HttpStub stub;
+    stub.responder = HttpStub::catalog({{"6000001", {"First"}}});
+    ServiceRunner runner(steamRunnerOptions(temp.path() / "profile", adapter, stub));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, lookupAtOnce());
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    ShareController* sharing = backend.sharing();
+    const auto list = [](int first, int count) {
+        QStringList ids;
+        for (int i = 0; i < count; ++i)
+            ids.push_back(QString::number(first + i));
+        return ids.join(QLatin1Char('|'));
+    };
+
+    sharing->previewImport(list(6000001, 150));
+    REQUIRE(waitUntil([&] { return previewSettled(backend) && lookupState(backend) == "done"; }));
+    CHECK(stub.requests == 2);
+    CHECK(previewEntry(backend, 0).value("name") == "First");
+    // The same list again: answered from the cache.
+    sharing->previewImport(list(6000001, 150) + QStringLiteral("\n"));
+    REQUIRE(waitUntil([&] { return previewSettled(backend) && lookupState(backend) == "done"; }));
+    CHECK(stub.requests == 2);
+
+    // 1001 missing mods: 1000 are looked up, one is shown by its id.
+    sharing->previewImport(list(7000001, 1001));
+    REQUIRE(waitUntil([&] { return previewSettled(backend) && lookupState(backend) == "partial"; },
+                      std::chrono::seconds(30)));
+    CHECK(stub.requests == 12);
+    CHECK(sharing->preview().value("lookupText") ==
+          "At most 1000 missing mods are looked up on the Steam Workshop per preview, so 1 is "
+          "shown by ID.");
+    backend.shutdown();
+    runner.shutdown();
+}
+
+TEST_CASE("The Workshop ID list export holds the enabled Workshop mods and can be copied",
+          "[app][backend][idlist]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("1001", "Alpha");
+    world.addWorkshopMod("1002", "Beta");
+    world.addWorkshopMod("1003", "Gamma");
+    world.addLocalMod("delta", "Delta");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    ShareController* sharing = backend.sharing();
+    CHECK(sharing->workshopIdList().isEmpty());
+    CHECK_FALSE(sharing->copyWorkshopIdList());
+
+    backend.playsets()->create(QStringLiteral("Mixed"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    backend.mods()->addMods(
+        {"steam-workshop:1001", "local:delta", "steam-workshop:1002", "steam-workshop:1003"});
+    REQUIRE(waitUntil([&] { return backend.mods()->count() == 4 && !backend.mods()->busy(); }));
+    backend.mods()->setEnabled(2, false);
+    REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+
+    QSignalSpy listChanged(sharing, &ShareController::workshopIdListChanged);
+    sharing->exportCode();
+    REQUIRE(waitUntil([&] { return !sharing->lastExportCode().isEmpty(); }));
+    CHECK(listChanged.count() >= 1);
+    const QVariantMap list = sharing->workshopIdList();
+    CHECK(list.value("text") == "1001|1003");
+    CHECK(list.value("count") == 2);
+    CHECK(list.value("leftOutLocal") == 1);
+    CHECK(list.value("leftOutDisabled") == 1);
+    CHECK(list.value("leftOutText") ==
+          "Left out: 1 local mod and 1 disabled mod. The share code includes them.");
+    CHECK(list.value("note") == "2 enabled Workshop mods in load order. The list does not say "
+                                "which game it is for. Left out: 1 local mod and 1 disabled mod. "
+                                "The share code includes them.");
+
+    REQUIRE(sharing->copyWorkshopIdList());
+    CHECK(QGuiApplication::clipboard()->text() == "1001|1003");
+    CHECK(backend.notifications()->latest().value("title") == "Workshop ID list copied");
+
+    // A new export starts empty, and the list follows the playset.
+    backend.mods()->setEnabled(2, true);
+    REQUIRE(waitUntil([&] { return !backend.mods()->busy(); }));
+    sharing->exportCode();
+    CHECK(sharing->workshopIdList().isEmpty());
+    REQUIRE(waitUntil([&] { return !sharing->workshopIdList().isEmpty(); }));
+    CHECK(sharing->workshopIdList().value("text") == "1001|1002|1003");
+    CHECK(sharing->workshopIdList().value("leftOutText") ==
+          "Left out: 1 local mod. The share code includes it.");
     backend.shutdown();
     runner.shutdown();
 }
