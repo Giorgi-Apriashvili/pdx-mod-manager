@@ -369,7 +369,8 @@ and `WrongGame` when `consumer_app_id` differs from the game's app id. Feed fail
 The import preview asks too, for the Workshop mods of a share code or a Workshop ID list that are
 not installed: their titles replace the text's name hints, and not-found, banned and other
 games' items are marked before anything is saved
-([app](app.md#workshop-names-in-the-import-preview)). Only the item ids are sent, at most 1,000
+([app](app.md#workshop-names-in-the-import-preview)). Only the item ids are sent, with fixed
+headers (`Accept-Language: en`, not the system's language), at most 1,000
 per preview, never in sessions without Steam (`--no-steam`, `--read-only`). These answers go to
 the preview only, never to the coordinator: a job's identity gate always rests on its own request.
 

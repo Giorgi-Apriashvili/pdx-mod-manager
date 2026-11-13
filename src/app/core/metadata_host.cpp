@@ -98,6 +98,9 @@ bool QtWorkshopMetadataHost::post(const GameKey& gameKey, const std::vector<std:
                       qs(providers::kPublishedFileDetailsContentType));
     request.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
     request.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
+    // Fixed, so that nothing depends on this computer: Qt would send the
+    // system's locale.
+    request.setRawHeader("Accept-Language", "en");
     request.setTransferTimeout(static_cast<int>(m_timeout.count()));
     QNetworkReply* reply = m_network->post(request, QByteArray::fromStdString(body.value()));
     ++m_pending;

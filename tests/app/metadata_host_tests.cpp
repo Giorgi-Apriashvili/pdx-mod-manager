@@ -67,6 +67,10 @@ TEST_CASE("metadata host posts the request and delivers parsed items", "[app][me
     CHECK(stub.lastRequest.endsWith("itemcount=1&publishedfileids%5B0%5D=123456789"));
     CHECK_FALSE(stub.lastRequest.toLower().contains("key="));
     CHECK_FALSE(stub.lastRequest.toLower().contains("cookie"));
+    // A fixed language, not the system's locale (Qt's default).
+    const QByteArray headers = stub.lastRequest.toLower();
+    CHECK(headers.contains("\r\naccept-language: en\r\n"));
+    CHECK(headers.count("accept-language:") == 1);
 }
 
 TEST_CASE("metadata host leaves failed requests unanswered", "[app][metadata]") {

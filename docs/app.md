@@ -120,7 +120,9 @@ written to `<build>/bin`, next to `pmm-steam-helper`, as in the packages.
 `QtWorkshopMetadataHost` posts `providers::buildPublishedFileDetailsRequest()`
 to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/`:
 
-- It sends no API key and no cookies, and collects no telemetry.
+- It sends no API key and no cookies, and collects no telemetry. The headers
+  are fixed, so nothing in a request depends on the computer: it sends
+  `Accept-Language: en` instead of the system's language, which Qt would add.
 - Requests time out after 15 s. Replies larger than the parser's limit are
   aborted.
 - `PMM_WORKSHOP_METADATA_URL` overrides the endpoint (tests, local stubs);
@@ -133,8 +135,10 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
 #### Workshop names in the import preview
 
 When a preview (of a share code or a Workshop ID list) has Workshop mods that
-are not installed, their item ids and nothing else are sent once the preview
-has settled (600 ms after the last change):
+are not installed, their item ids are sent, in the request body, with the
+fixed headers above. That happens once the preview has settled: 600 ms after
+it was built, and the dialog builds it 350 ms after the last change, so about
+a second after typing stops.
 
 - At most 1,000 ids per preview, in requests of at most 100
   (`ServiceRunner::lookupWorkshopItems()`); answers are cached for the

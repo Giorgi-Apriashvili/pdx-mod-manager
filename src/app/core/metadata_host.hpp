@@ -4,7 +4,8 @@
 // the Steam Web API GetPublishedFileDetails endpoint (body built by
 // providers::buildPublishedFileDetailsRequest), parsed with
 // providers::parsePublishedFileDetailsResponse. No API key, no cookies, no
-// telemetry. The endpoint can be overridden with PMM_WORKSHOP_METADATA_URL
+// telemetry, and fixed headers (Accept-Language "en", not the system's
+// locale). The endpoint can be overridden with PMM_WORKSHOP_METADATA_URL
 // (tests, local stubs). Two kinds of requests share it:
 //
 //   request()  for the acquisition coordinator: the answer goes to the sink
