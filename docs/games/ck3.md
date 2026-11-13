@@ -8,11 +8,13 @@ Load order: [`../load-order.md`](../load-order.md#crusader-kings-iii).
 
 Status labels as in [`../feasibility.md`](../feasibility.md). The development
 machine runs Windows 11 with "1.20.1.2 (Crozier)" from Steam (build 26046173).
-It was only read (2026-11-13: the hidden real-machine test, see
+On 2026-11-13 it was first only read (the hidden real-machine test, see
 [Real-machine evidence](#real-machine-evidence), and the application in
-read-only mode). The game has not been started by the application, and
-1.20.1.2 has not run on that machine at all: the logs read below come from the
-last run, on 2026-07-06, of a 1.19 build.
+read-only mode). Then, with the owner's approval, the application started it
+twice directly with probe mods only
+([probe run](../evidence/2026-11-13-ck3-load-order.md)). The game logs quoted
+below as those of a 1.19 build come from its last run before that, on
+2026-07-06; the probe run overwrote them.
 
 | Capability | Windows / Steam | Other stores |
 | --- | --- | --- |
@@ -23,10 +25,10 @@ last run, on 2026-07-06, of a 1.19 build.
 | Read current `dlc_load.json` | **Verified** (read-only): 9 of 9 resolved | Unverified |
 | Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** computed, not written: 0 writes for the launcher's selection; 7 of 11 regenerated descriptors identical to the launcher's, the other 4 differ only in metadata the Workshop changed since (see Mods) | Unverified |
 | Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, disabled and moved entries, exported and imported into a new profile with byte-identical dumps | Unverified |
-| `supported_version` warnings (CK3 wildcard rule) | Implemented: the rule comes from the error.log of a 1.19 build; unverified on 1.20.1.2 | Same code |
-| Direct launch (bypassing the launcher) | Implemented, unverified | Unverified, no Steam environment |
+| `supported_version` warnings (CK3 wildcard rule) | Implemented: the rule comes from the error.log of a 1.19 build; unverified on 1.20.1.2, which, started directly, reported nothing about descriptors outside `enabled_mods` (`"1.20.*"` on the enabled probes drew no message) | Same code |
+| Direct launch (bypassing the launcher) | **Verified** (2026-11-13, 1.20.1.2): `binaries/ck3.exe -gdpr-compliant` started by the application, no launcher process, the same process 26 s later (no restart through Steam), the written `dlc_load.json` used and not rewritten ([probe run](../evidence/2026-11-13-ck3-load-order.md)). With Steam closed, unverified | Unverified, no Steam environment |
 | Workshop subscribe and download (helper in CK3's app context) | Implemented, unverified (the content check after a download accepts an item that ships `<Name>.mod`, fixture-tested) | Unsupported: requires the game on a Steam account |
-| Effective order / precedence in game | **Not verified**: the order of `enabled_mods` is written as for Stellaris, but which of two mods that change the same file wins has not been measured ([load order](../load-order.md#crusader-kings-iii)) | Unverified |
+| Effective order / precedence in game | **Verified** (2026-11-13, 1.20.1.2) with probe mods: enabled mods loaded, the disabled one not; **the later mod in `enabled_mods` wins a shared file**, and moving mods in the application moves the winner ([load order](../load-order.md#crusader-kings-iii)) | Unverified |
 
 No claim is made about achievements or ironman with mods: the sources
 disagree.
@@ -48,8 +50,9 @@ the dropped `-enabletelemetry` argument. Observed differences on 1.20.1.2:
 | `rawVersion` `1.20.1.2`: no leading `v`, four parts; the label is `1.20.1.2 (Crozier)`, codename last | Same version parser (an optional `v`) |
 | `userdir.txt`: none ships; the CK3 wiki documents `<install>/game/userdir.txt` | Trait `userDirFile = "game/userdir.txt"` (see User data) |
 | Only `supported_version="1.*"` was reported as invalid (1.19 build) | `rejectsEarlyWildcards = true`, as for Stellaris |
+| Started directly, 1.20.1.2 lists only the `enabled_mods` descriptors in `debug.log` and reports nothing about the others (Stellaris, EU4 and a 1.19 build parsed every descriptor in `mod/`) | Nothing to handle: warnings come from the descriptors themselves |
 | A Workshop item ships `<Name>.mod` instead of `descriptor.mod` | The only `.mod` file describes the item, for every game (see Mods) |
-| Which mod wins a shared file is not measured | `loadOrderVerifiedInGame = false`, and a temporary user note says so above a CK3 playset |
+| Not a difference from Stellaris: the later mod in `enabled_mods` wins a shared file (measured 2026-11-13) | `loadOrderVerifiedInGame = true` with Stellaris's wording; no user note (the temporary "not yet verified" note is gone) |
 
 ## Installation discovery
 
@@ -181,10 +184,19 @@ Stellaris. That `"*"` and `"1.*.*"` are rejected too is inferred from
 Stellaris, and the rule is unverified on 1.20.1.2. That a two-part pattern
 without a wildcard (`"1.20"`) is valid is assumed: no descriptor on the
 machine has one, so the report for `"1.*"` cannot tell a wildcard before the
-patch number from fewer than three parts (the probe run checks it).
-`debug.log` of the same run lists every registered descriptor as `|Enabled`
-or `|Disabled` and mounts the enabled mods in exactly the `enabled_mods`
-order.
+patch number from fewer than three parts. `debug.log` of the same run lists
+every registered descriptor as `|Enabled` or `|Disabled` and mounts the
+enabled mods in exactly the `enabled_mods` order.
+
+The probe run on 1.20.1.2 (2026-11-13) could not check `"1.20"`: started
+directly by the application, the game listed only the `enabled_mods` entries
+in `debug.log` (no `|Disabled` line) and reported no `Invalid
+supported_version` line at all, also not for the registered `"1.*"`
+descriptor; the disabled probe with `"1.20"` was never read. `"1.20.*"` on
+the two enabled probes drew no message. The 1.19 run was apparently started
+through the Paradox launcher, so whether the version or the launch path makes
+the difference is not known. The rule therefore stays as it is: unverified
+on 1.20.1.2, and `"1.20"` assumed valid.
 
 ## Launch
 
@@ -212,12 +224,20 @@ writers: `Paradox Launcher.exe` and `dowser.exe` (`dowser.exe` ships in
 `<install>/launcher/`; the launcher itself lives in
 `%LOCALAPPDATA%\Programs\Paradox Interactive\launcher`).
 
-Unverified until a launch with the owner's approval: that `ck3.exe` started
-this way stays up without restarting through Steam or the launcher, that it
-reads the written `dlc_load.json`, what it does without Steam, whether DLC
-stays enabled when the launcher is bypassed for a long time (the game writes
-`dlc_signature` at start-up, as Stellaris and EU4 do), and multiplayer
-without the launcher's session arguments.
+Observed on 2026-11-13 in two direct launches with the owner's approval
+([probe run](../evidence/2026-11-13-ck3-load-order.md)): `ck3.exe` started
+this way stays up, as the same process, without restarting through Steam or
+opening the launcher; it reads the written `dlc_load.json` (the enabled
+probes loaded, mounted in its order) and does not rewrite it; `debug.log`
+mounted 27 DLC folders. The process list does not show the working
+directory; the launch plan sets `binaries/`. One of the two runs crashed
+while closing (an access violation in a worker thread, after
+`CloseMainWindow` 43 s after the main menu and before the `debug.log` line
+`Setup completion (history loaded)`); the other, closed after that line,
+quit cleanly. The cause is not known. Still unverified: what the game does
+without Steam, whether DLC stays enabled when the launcher is bypassed for a
+long time (the game writes `dlc_signature` at start-up, as Stellaris and EU4
+do), and multiplayer without the launcher's session arguments.
 
 ## Backups and coexistence
 
@@ -313,7 +333,8 @@ The application, read-only with new scratch profiles on the same day:
 `pmm-app --profile <new> --read-only --game ck3 --screenshot <png>` shows
 "Crusader Kings III, Installed · 1.20.1.2" first in the games column and Play
 blocked by the read-only mode; with `--self-test config` added, the mods
-pane shows the "not yet verified" load-order note above the 9 entries; `--self-test
+pane showed the "not yet verified" load-order note above the 9 entries (removed
+after the probe run); `--self-test
 "config,disable:1,move:0:3,export:<code>,dump:a.json"` created a playset of 9
 entries from the game's configuration, and a second new profile imported the
 code (9 entries, 8 enabled, 9 installed, 0 missing) with a byte-identical
@@ -322,19 +343,20 @@ changed.
 
 ## Outstanding validation
 
-Each needs the owner's approval, on 1.20.1.2:
+Done on 2026-11-13 with the owner's approval
+([probe run](../evidence/2026-11-13-ck3-load-order.md)): the probe procedure
+of [`../load-order.md`](../load-order.md#crusader-kings-iii) (the later mod in
+`enabled_mods` wins a shared file; the traits are set), and two direct
+launches from the application (no launcher process, no restart through Steam,
+the probes active as configured). Each of the following needs the owner's
+approval, on 1.20.1.2:
 
-1. The probe procedure of [`../load-order.md`](../load-order.md#crusader-kings-iii)
-   ([`../validation.md`](../validation.md) section 3): which mod wins a shared
-   file, and that 1.20.1.2 still reads `dlc_load.json`, lists the
-   descriptors as `Enabled`/`Disabled` and rejects `"1.*"`, and whether it
-   accepts `"1.20"`. Then set the traits (`loadOrderSummary`,
-   `loadOrderEvidence`, `loadOrderVerifiedInGame`, and `loadOrderUserNote`:
-   the temporary "not yet verified" note is removed or replaced) and the
-   CHANGELOG's load-order sentence.
-2. A direct launch from the app: no launcher process, no restart through
-   Steam, the game stays up with the working directory `binaries/`, the mods
-   are active; what happens with Steam closed.
+1. Whether CK3 accepts `supported_version="1.20"` and still rejects `"1.*"`.
+   Started directly, 1.20.1.2 did not read descriptors outside
+   `enabled_mods`, so this needs a run in which such a descriptor is enabled,
+   or one started through the launcher.
+2. A direct launch with Steam closed; DLC over a long time without the
+   launcher; multiplayer without the launcher's session arguments.
 3. Workshop subscribe and download for app 1158310, ideally including an
    item that ships `<Name>.mod` instead of `descriptor.mod`.
 4. How CK3 treats a `game/userdir.txt` (absolute and relative).

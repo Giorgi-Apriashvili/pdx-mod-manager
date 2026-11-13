@@ -4,8 +4,9 @@ What works for which game and store, and how we know. The application runs on
 Windows only ([ADR 0009](adr/0009-windows-only.md)). Support for a combination
 depends on the game's own executable and a validated integration (spec section 1).
 
-Last reviewed: 2026-11-13 (Crusader Kings III added, read-only checks only), after
-the live validation of 2026-10-30; application 0.1.2 plus unreleased changes.
+Last reviewed: 2026-11-13 (Crusader Kings III added: read-only checks, then its
+probe run with direct launches), after the live validation of 2026-10-30;
+application 0.1.2 plus unreleased changes.
 
 ## Status legend
 
@@ -61,7 +62,11 @@ tested. Results:
   plan for the launcher's selection, which writes nothing, and a share-code
   round trip between two new profiles of the application
   ([CK3 adapter](games/ck3.md#real-machine-evidence)). The game was not
-  started.
+  started for these checks.
+- Crusader Kings III 1.20.1.2, 2026-11-13, live (with the owner's approval):
+  two direct launches without the Paradox launcher, enabled and disabled
+  probe mods and the effective override order observed in the game's own
+  logs, restore of the previous configuration ([evidence](evidence/2026-11-13-ck3-load-order.md)).
 
 Not observed yet: other stores and Steam's own offline mode.
 
@@ -131,8 +136,10 @@ Differences from Stellaris and EU4: the executable is `binaries/ck3.exe` and
 `binaries/`, where direct launches start; `userdir.txt` is read from
 `<install>/game/` (documented by the CK3 wiki, unverified); only
 `supported_version="1.*"` was reported invalid (1.19 build); one Workshop item
-ships `<Name>.mod` instead of `descriptor.mod`. **Which mod wins a shared file
-has not been checked in the game** ([CK3 adapter](games/ck3.md)).
+ships `<Name>.mod` instead of `descriptor.mod`; started directly, 1.20.1.2
+reports nothing about descriptors outside `enabled_mods`. As in Stellaris,
+**the later mod in `enabled_mods` wins a shared file**
+([evidence](evidence/2026-11-13-ck3-load-order.md); [CK3 adapter](games/ck3.md)).
 
 | Capability | Windows · Steam | Other stores |
 | --- | --- | --- |
@@ -144,9 +151,9 @@ has not been checked in the game** ([CK3 adapter](games/ck3.md)).
 | Workshop: Steam session and item state | Implemented, unverified | Unsupported: requires the game on a Steam account |
 | Workshop: subscribe and download | Implemented, unverified | Unsupported: requires the game on a Steam account |
 | Workshop: manual fallback | Implemented, unverified | Unsupported |
-| Direct launch without the Paradox launcher | Implemented, unverified (working directory `binaries/`, as the launcher uses) | Implemented, unverified |
+| Direct launch without the Paradox launcher | **Verified (2026-11-13, 1.20.1.2)**: started directly from `binaries/ck3.exe` (working directory `binaries/`, as the launcher uses), no launcher process, the same process 26 s later (no restart through Steam); restored afterwards ([evidence](evidence/2026-11-13-ck3-load-order.md)). One of the two runs crashed while the game was being closed, cause unknown | Implemented, unverified |
 | Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
-| In-game verification of enabled mods and order | **Unverified**: the playset order is written to `enabled_mods`; which mod wins a shared file has not been measured, and a note above a CK3 playset says so ([load order](load-order.md#crusader-kings-iii)) | Unverified |
+| In-game verification of enabled mods and order | **Verified (2026-11-13, 1.20.1.2)** with probe mods: enabled mods loaded, disabled not; the later mod in `enabled_mods` wins a shared file, and moving mods in the app moves the winner ([evidence](evidence/2026-11-13-ck3-load-order.md); [load order](load-order.md#crusader-kings-iii)) | Unverified |
 
 ## Other combinations
 

@@ -514,13 +514,12 @@ TEST_CASE("Crusader Kings III process names and load-order information", "[games
     CHECK(adapter.defaultUserDataPath(env) ==
           u8path("/docs/Paradox Interactive/Crusader Kings III"));
 
-    // Not probed in game yet: the playset order is written, but which mod
-    // wins a shared file is not claimed, and users are told so.
+    // Probe mods on 1.20.1.2 (2026-11-13): the later mod in enabled_mods won a
+    // shared file in both orders, as in Stellaris, so no note is shown.
     const LoadOrderInfo info = adapter.loadOrderInfo();
-    CHECK_FALSE(info.verifiedInGame);
-    CHECK(info.userNote == "It is not yet verified that Crusader Kings III follows this order "
-                           "when two mods change the same file.");
+    CHECK(info.verifiedInGame);
+    CHECK(info.userNote.empty()); // the playset order is the effective order
     CHECK(info.summary.find("index 0 first") != std::string::npos);
-    CHECK(info.summary.find("not verified for Crusader Kings III") != std::string::npos);
-    CHECK(info.evidence.find("docs/games/ck3.md") != std::string::npos);
+    CHECK(info.summary.find("later in the list wins") != std::string::npos);
+    CHECK(info.evidence.find("docs/evidence/2026-11-13-ck3-load-order.md") != std::string::npos);
 }
