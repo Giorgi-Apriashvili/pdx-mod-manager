@@ -2,7 +2,8 @@ add_library(pmm_sharing STATIC
   codec.cpp
   manifest.cpp
   share_code.cpp
-  utf8.cpp)
+  utf8.cpp
+  workshop_id_list.cpp)
 target_link_libraries(pmm_sharing
   PUBLIC pmm_core
   PRIVATE nlohmann_json::nlohmann_json PMM::zlib)

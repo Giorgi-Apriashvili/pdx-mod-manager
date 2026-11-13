@@ -305,6 +305,24 @@ TEST_CASE("Steam Workshop ids are 1-20 digits within uint64", "[sharing][manifes
     }
 }
 
+TEST_CASE("isValidWorkshopId follows the manifest rule at its boundaries", "[sharing][manifest]") {
+    for (const char* good :
+         {"1", "9", "10", "1234567890", "9999999999999999999", "18446744073709551615",
+          "18446744073709551614", "10000000000000000000"}) {
+        INFO(good);
+        CHECK(isValidWorkshopId(good));
+    }
+    for (const char* bad : {"", "0", "00", "0123", "18446744073709551616", "18446744073709551625",
+                            "19000000000000000000", "99999999999999999999", "123456789012345678901",
+                            "12a4", "-5", "+5", " 5", "5 ", "1.0", "１２"}) {
+        INFO(bad);
+        CHECK_FALSE(isValidWorkshopId(bad));
+    }
+    CHECK_FALSE(isValidWorkshopId(std::string_view("12\0"
+                                                   "3",
+                                                   4)));
+}
+
 TEST_CASE("Local ids cannot look like paths", "[sharing][manifest]") {
     Manifest m = test::sampleManifest();
     for (const char* good : {"my mod", "Ünïcødé 日本語", "mod.v2", "...x"}) {

@@ -3,4 +3,5 @@ pmm_add_test(pmm_sharing_tests
     codec_tests.cpp
     manifest_tests.cpp
     share_code_tests.cpp
+    workshop_id_list_tests.cpp
   LIBS pmm_sharing PMM::zlib)
