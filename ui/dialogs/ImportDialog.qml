@@ -371,11 +371,13 @@ AppDialog {
                                 height: 22
                                 color: index % 2 === 1 ? Theme.alternateBase : Theme.base
                                 Accessible.role: Accessible.ListItem
-                                Accessible.name: qsTr("%1. %2, %3, %4, %5").arg(entry.modelData.position)
-                                                 .arg(entry.modelData.name)
+                                // The name comes from the text or from Steam: substituted
+                                // last, so a "%3" in it stays as it is.
+                                Accessible.name: qsTr("%1. %5, %2, %3, %4").arg(entry.modelData.position)
                                                  .arg(entry.modelData.enabled ? qsTr("enabled") : qsTr("disabled"))
                                                  .arg(entry.modelData.source === "local" ? qsTr("Local") : qsTr("Workshop"))
                                                  .arg(entry.modelData.statusText)
+                                                 .arg(entry.modelData.name)
 
                                 Rectangle {
                                     anchors.fill: parent

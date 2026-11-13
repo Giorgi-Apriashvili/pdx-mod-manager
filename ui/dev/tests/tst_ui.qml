@@ -69,6 +69,8 @@ Item {
 
         function init() {
             win.closeDialogs()
+            // test_9b turns it off, and a failed check would skip its own reset.
+            Backend.sharing.autoLookup = true
             // test_9 activates the imported playset; later tests use the first one.
             if (Backend.playsets.activeId !== firstPlaysetId) {
                 Backend.playsets.activate(firstPlaysetId)
@@ -308,7 +310,6 @@ Item {
             tryVerify(() => !dialog.visible)
             compare(Backend.playsets.count, count + 1)
             compare(Backend.playsets.activeName, "Friday list")
-            sharing.autoLookup = true
         }
 
         function test_9c_importIdListErrors() {
