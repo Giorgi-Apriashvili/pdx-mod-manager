@@ -17,10 +17,10 @@ telemetry.
 > **Status: 0.2.0 ([2026-11-13](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.2.0)).** The desktop
 > application (`pmm-app`), the Stellaris, EU4 and Crusader Kings III adapters and
 > every layer below them are implemented and covered by 596 automated tests. On
-> Windows 11 with Steam, Stellaris and EU4
-> were started directly by the application with the selected mods
-> (checked in the games' own logs), a missing Workshop mod was subscribed and
-> downloaded live for each of them, and the failure cases behaved as specified
+> Windows 11 with Steam, Stellaris and EU4 were started directly by the
+> application with the selected mods (checked in the games' own logs), a missing
+> Workshop mod was subscribed and downloaded live for each of them, and the
+> failure cases behaved as specified
 > ([live validation](docs/evidence/live-validation-2026-10-30.md)). On 2026-11-13
 > the application started Crusader Kings III 1.20.1.2 directly with probe mods
 > ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md)); Workshop
