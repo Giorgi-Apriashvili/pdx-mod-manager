@@ -123,10 +123,34 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
 - It sends no API key and no cookies, and collects no telemetry.
 - Requests time out after 15 s. Replies larger than the parser's limit are
   aborted.
-- Failures are logged and not answered (offline operation).
-- `PMM_WORKSHOP_METADATA_URL` overrides the endpoint (tests, local stubs).
-- It only runs for acquisition jobs, to show names and reject items of the
-  wrong game.
+- `PMM_WORKSHOP_METADATA_URL` overrides the endpoint (tests, local stubs);
+  `RunnerOptions::metadataEndpoint` does the same for tests.
+- It runs for acquisition jobs (names and the identity gate) and for import
+  previews. `request()` answers the coordinator through its sink, and a
+  failed request is logged and not answered (offline operation).
+  `lookup()` answers only its own caller, exactly once, failures included.
+
+#### Workshop names in the import preview
+
+When a preview (of a share code or a Workshop ID list) has Workshop mods that
+are not installed, their item ids and nothing else are sent once the preview
+has settled (600 ms after the last change):
+
+- At most 1,000 ids per preview, in requests of at most 100
+  (`ServiceRunner::lookupWorkshopItems()`); answers are cached for the
+  session, so previewing the same text again sends nothing.
+- The answers show the Workshop titles and mark items that were not found
+  (deleted, private or friends-only), are banned or belong to another game.
+  A title replaces the text's own name hint and is stored with the imported
+  playset; if the playset is confirmed before the answer arrives, it is
+  stored without.
+- Preview answers go only to the preview, never to the coordinator, so they
+  neither reject nor confirm an acquisition job.
+- After 20 s without an answer the preview says the Steam Workshop could not
+  be reached and shows the ids; importing works either way.
+- Sessions without Steam (`--no-steam`, `--read-only` and the verification
+  switches) have no Web API host, so neither the preview's nor the
+  acquisition's requests happen. Read-only sessions never look anything up.
 
 ### Updates
 
@@ -238,9 +262,9 @@ success.
 | `--screenshot-delay-ms <n>` | Settle time before the grab (default 1500). |
 | `--window-size <w>x<h>` | Logical size of the window for the capture, never below its minimum (900x440): `--window-size 1x1` captures the smallest window. |
 | `--theme light\|dark` | Theme for the capture. |
-| `--open <what>` | Open `export`, `add-mods`, `settings`, `history`, `locate` or `import:<code file>` before the capture. Can be repeated. |
+| `--open <what>` | Open `export`, `add-mods`, `settings`, `history`, `locate` or `import:<file>` (a share code or a Workshop ID list) before the capture. Can be repeated. |
 | `--select-row <n>`, `--filter <status>`, `--search <text>` | Select a row, or set the mod list filter or search. |
-| `--self-test <steps>` | Run comma-separated steps through the Backend, like the UI does: `config` (playset from the game's current configuration), `disable:<row>`, `move:<from>:<to>`, `export:<file>`, `import:<file>` (preview, then import as a new playset), `dump:<file>` (the active playset's identities, order and enabled flags as JSON). |
+| `--self-test <steps>` | Run comma-separated steps through the Backend, like the UI does: `config` (playset from the game's current configuration), `disable:<row>`, `move:<from>:<to>`, `export:<file>`, `ids:<file>` (the active playset's Workshop ID list), `import:<file>` (preview a share code or a Workshop ID list, then import it as a new playset), `dump:<file>` (the active playset's identities, order and enabled flags as JSON). |
 
 `--live-test <steps>` runs the same steps **without** the read-only
 restriction, for the recorded acceptance runs in

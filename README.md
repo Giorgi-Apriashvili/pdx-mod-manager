@@ -4,9 +4,10 @@
 
 A compact desktop mod manager for Paradox games, for Windows only. It keeps named
 playsets per game, shares a playset's exact mod list, order and enabled flags as
-a copyable code (`PMM1.…`), acquires missing Steam Workshop mods through the
-user's own Steam client, and starts the game directly with the selected mods,
-without the Paradox launcher.
+a copyable code (`PMM1.…`) or its enabled Workshop mods as a plain list of
+Workshop IDs, acquires missing Steam Workshop mods through the user's own Steam
+client, and starts the game directly with the selected mods, without the
+Paradox launcher.
 
 It supports **Stellaris** and **Europa Universalis IV**, and in the next release
 **Crusader Kings III**, on Windows 10 and 11. Linux, macOS, the Steam Deck and
@@ -49,6 +50,7 @@ reason documented.
 | Stellaris and EU4: installation and user-data detection, mod inventory, current configuration, launch plan (executable, arguments, environment, configuration writes) | **Verified** read-only, 2026-10-29, Stellaris 4.5.2 and EU4 1.37.5, Steam, Windows 11 | [Real-data evidence](docs/evidence/real-scan-2026-10-29.md); registered Workshop items without content show as Missing |
 | Crusader Kings III (unreleased): installation and user-data detection, mod inventory, current configuration, launch plan, share-code round trip | **Verified** read-only, 2026-11-13, CK3 1.20.1.2, Steam, Windows 11 | [CK3 adapter](docs/games/ck3.md); its direct launch and load order are verified too (rows below); Workshop downloads are **not verified** |
 | Share codes: `PMM1` encoding, strict validation, size limits, frozen regression fixtures | Implemented | [Protocol](docs/share-code-protocol.md), versioned independently (protocol 1, schema 1) |
+| Workshop ID lists (unreleased): export enabled Workshop mods as `id\|id\|…`, import lists and Workshop links; the import preview names missing mods from the Steam Web API | Implemented; tested against a local Web API stub only | [Protocol section 8](docs/share-code-protocol.md#8-workshop-id-lists), [Workshop names in the preview](docs/app.md#workshop-names-in-the-import-preview) |
 | Share-code round trip between two clean profiles (identities, order, enabled flags) | **Verified** read-only, 2026-10-29 and 2026-10-30, both games, Windows 11 | [Round-trip evidence](docs/evidence/app-round-trip-2026-10-30.md) |
 | Playset editing, filtering rules, launch readiness, dependency checks, import planning | Implemented | `src/core`, `src/services` |
 | Application database: migrations, upgrade backups, playset undo history | Implemented | [Persistence](docs/persistence.md) |

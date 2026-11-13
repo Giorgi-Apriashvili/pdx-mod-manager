@@ -242,7 +242,9 @@ The application side is described in detail in [`app.md`](app.md)
   unredacted.
 - No telemetry. Network traffic is limited to the Steam client (through the
   helper) and key-less Steam Web API metadata requests that contain only
-  published-file ids.
+  published-file ids, for acquisition jobs and for the import preview of
+  Workshop mods that are not installed; sessions without Steam send none
+  ([details](app.md#workshop-names-in-the-import-preview)).
 
 ## 6. State and file locations
 

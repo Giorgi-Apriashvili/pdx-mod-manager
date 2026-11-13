@@ -9,6 +9,9 @@ uses only the Python standard library.
   share-code.py encode <manifest.json | ->   print a PMM1 code for a manifest
   share-code.py compare <a> <b>              compare game, identities, order and
                                              enabled flags of two codes
+  share-code.py ids <code | file | ->        print the Workshop ID list of a code:
+                                             its enabled Workshop entries in order,
+                                             separated by | (protocol section 8)
 
 `decode` checks the envelope, digest, Base64URL spelling, bounded inflation,
 UTF-8 and duplicate JSON keys like the application, but not the manifest
@@ -139,6 +142,20 @@ def compare(a: dict, b: dict) -> list[str]:
     return differences
 
 
+def workshop_ids(manifest: dict) -> tuple[list[str], int, int]:
+    """The enabled steam-workshop ids in order, and the numbers of local and
+    disabled Workshop entries a Workshop ID list leaves out."""
+    ids, local, disabled = [], 0, 0
+    for source, mod_id, enabled in entries(manifest):
+        if source != "steam-workshop":
+            local += 1
+        elif enabled is not True:
+            disabled += 1
+        else:
+            ids.append(str(mod_id))
+    return ids, local, disabled
+
+
 def main(argv: list[str]) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -150,6 +167,7 @@ def main(argv: list[str]) -> int:
     p_compare = sub.add_parser("compare")
     p_compare.add_argument("a")
     p_compare.add_argument("b")
+    sub.add_parser("ids").add_argument("code")
     args = parser.parse_args(argv)
 
     try:
@@ -158,6 +176,11 @@ def main(argv: list[str]) -> int:
         elif args.command == "encode":
             source = sys.stdin.read() if args.manifest == "-" else Path(args.manifest).read_text(encoding="utf-8")
             print(encode(json.loads(source)))
+        elif args.command == "ids":
+            ids, local, disabled = workshop_ids(decode(read_text(args.code)))
+            print("|".join(ids))
+            print(f"{len(ids)} enabled Workshop mods; left out: {local} local, {disabled} disabled",
+                  file=sys.stderr)
         else:
             a, b = decode(read_text(args.a)), decode(read_text(args.b))
             differences = compare(a, b)

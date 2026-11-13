@@ -20,6 +20,12 @@ Two independent version numbers exist:
 Both are versioned separately from the application (`PMM_SHARE_PROTOCOL_VERSION`
 in the top-level `CMakeLists.txt`).
 
+A **Workshop ID list** (section 8) is a second, plain format next to the share
+code: Steam Workshop item ids such as `3818297502|3149445431|3366734814`, as
+other mod managers share them. It carries less (enabled Workshop mods in
+order, no game, no name, no checksum) and is not versioned. Text starting with
+`PMM` is always a share code; the share-code format above is unaffected.
+
 ## 1. Envelope
 
 ```
@@ -94,7 +100,9 @@ limit fails are reported as `ValidationFailed` in every schema version.
 Clipboard and file transfer use the same text. A share-code file contains the
 code, optionally followed by a line break, encoded as UTF-8 without a byte
 order mark. Readers pass the file content to the same decoder, so surrounding
-ASCII whitespace (including CRLF line endings) is accepted.
+ASCII whitespace (including CRLF line endings) is accepted. A file may hold a
+Workshop ID list instead; the detection rule of section 8 decides which
+reader gets the text.
 
 ## 3. Manifest schema version 1
 
@@ -279,3 +287,110 @@ enforce that limit; otherwise they report "too large" or "invalid" instead of
    its code with `pmm_sharing_tests "[.generate]"` and save it as `<nn>-<name>.code`
    (no trailing newline). Verify it with an independent implementation before
    committing; never regenerate existing fixtures.
+7. **Workshop ID lists are outside this versioning.** They have no prefix and
+   no version; section 8 says how they may change. Adding them changed
+   nothing in `PMM1`, schema 1 or the fixtures.
+
+## 8. Workshop ID lists
+
+### Purpose
+
+Players share mod lists as plain Steam Workshop ids, for example
+`3818297502|3149445431|3366734814` (WH3 Mod Manager's form). Such a list is
+short, readable and easy to check on the Workshop, but it carries only
+Workshop mods and their order: no game, no playset name, no local mods, no
+disabled entries and no checksum. It is offered **next to** the share code,
+which stays the complete format. Reference implementation:
+`src/sharing/workshop_id_list.hpp`; `scripts/share-code.py ids <code>` prints
+the list a code's playset exports, independently of the application.
+
+A list is **not versioned**: it has no prefix and nothing names a version.
+Writers produce one fixed form; readers may accept more over time, never less.
+
+### Detection
+
+After leading ASCII whitespace (space, tab, CR, LF), text that starts with
+`PMM` is a share code and goes to the decoder of section 1 (so `PMM9.…` still
+reports a newer protocol version). Anything else is read as a Workshop ID
+list. A text that is neither fails as a list, on its first entry: "This text
+is neither a share code (it starts with "PMM1.") nor a list of Workshop
+IDs: …".
+
+### Grammar
+
+ABNF (RFC 5234; `%s` marks a case-sensitive string, RFC 7405). Input is
+UTF-8; separators and entries are matched on bytes.
+
+```
+id-list    = *separator entry *( 1*separator entry ) *separator
+separator  = "|" / "," / SP / HTAB / CR / LF
+           / %xC2.A0 / %xE2.80.AF / %xE2.80.8B / %xEF.BB.BF
+             ; U+00A0, U+202F, U+200B and U+FEFF, which chats and editors insert
+entry      = item-id / item-link
+item-id    = %x31-39 0*19DIGIT       ; at most 18446744073709551615
+item-link  = [ scheme ] [ "www." ] "steamcommunity.com" item-path [ "/" ]
+             "?" query [ "#" fragment ]
+scheme     = "http://" / "https://"
+item-path  = "/sharedfiles/filedetails" / "/workshop/filedetails"
+query      = param *( "&" param )    ; exactly one param is %s"id=" item-id
+param      = *( %x00-FF except "&", "#" and separators )
+fragment   = *( %x00-FF except separators )
+```
+
+* Runs of separators count as one; leading and trailing ones are ignored.
+  `;` is **not** a separator.
+* `item-id` is the manifest's `steam-workshop` id rule (section 3).
+* In a link, scheme, host and path ignore ASCII case; the parameter name `id`
+  does not. Other parameters and a fragment are ignored. A second `id=` is
+  refused. Links are only read, never fetched. `steam://` links are not
+  accepted (yet).
+
+### Limits and errors
+
+| Rule                                                    | Error code         |
+| ------------------------------------------------------- | ------------------ |
+| Raw input at most 2 MiB, checked before anything else    | `LimitExceeded`    |
+| At most 10,000 entries; reading stops at entry 10,001    | `LimitExceeded`    |
+| Each entry is an `item-id` or an `item-link`             | `ParseError`       |
+| No item twice, as an id or as a link                     | `ValidationFailed` |
+| At least one entry                                       | `ParseError`       |
+
+Messages name the 1-based entry and quote it shortened and with control
+characters replaced, for example `Entry 3 of the Workshop ID list, "12a4", is
+not a Workshop ID or a Steam Workshop link.` or `Workshop ID 3149445431 is
+listed twice, as entry 2 and entry 7.` Byte offsets go into the error detail.
+
+**Position suffixes are refused.** WH3 Mod Manager writes `<id>;<n>` to pin a
+mod's load position, because Total War loads unpinned mods alphabetically.
+Paradox games load mods in list order, and ignoring the pins would silently
+import a different order, so such an entry is refused: `Entry 2,
+"3149445431;2", has a ";2" suffix. Other mod managers use it to pin a load
+position; Paradox games load mods in list order, so remove the suffixes and
+put the IDs in the order the mods should load.`
+
+### Mapping to a manifest
+
+A list is imported for the game selected in the window; without one the
+preview says "Select a game first". It becomes a schema 1 manifest (section 3)
+with that `game`, `playsetName` "Imported mod list" (made unique like any
+proposed name, and editable in the dialog), no `gameVersionHint`, and one
+entry per id in list order: `source` `steam-workshop`, `enabled` true, no
+hints. The manifest is validated, previewed and imported exactly like a
+decoded share code.
+
+### Export form
+
+The enabled `steam-workshop` entries of the playset, in playset order, as
+bare ids joined by `|`, with no spaces and no trailing separator. Local
+entries and disabled Workshop entries are left out; the export says how many
+and that the share code carries them. A playset without enabled Workshop mods
+has an empty list. The form never changes; anything new is for readers only.
+
+### Integrity
+
+A list has no checksum. A list cut short or mistyped (`381829750` for
+`3818297502`) still parses. The only check is the Steam Web API's answer in
+the import preview, which names the missing items and marks those that were
+not found or belong to another game ([`app.md`](app.md#workshop-names-in-the-import-preview));
+sessions without the Web API host show the ids alone. The preview shows every
+entry before anything changes.

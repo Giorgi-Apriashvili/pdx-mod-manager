@@ -334,6 +334,34 @@ std::vector<Verification::Step> Verification::selfTestSteps() {
                     Qt::SingleShotConnection);
                 sharing->exportCode();
             });
+        } else if (name == QLatin1String("ids")) {
+            steps.push_back([this, argument](std::function<void()> next) {
+                ShareController* sharing = m_backend.sharing();
+                connect(
+                    sharing, &ShareController::exported, this,
+                    [this, argument, next, sharing](const QString&) {
+                        const QVariantMap list = sharing->workshopIdList();
+                        const QString error = list.value(QStringLiteral("error")).toString();
+                        if (list.isEmpty() || !error.isEmpty()) {
+                            fail(QStringLiteral("Workshop ID list failed: %1").arg(error));
+                            return;
+                        }
+                        const QString text = list.value(QStringLiteral("text")).toString();
+                        if (!writeText(argument, (text + QLatin1Char('\n')).toUtf8())) {
+                            fail(QStringLiteral("could not write %1").arg(argument));
+                            return;
+                        }
+                        say(QStringLiteral("wrote a Workshop ID list of %1 mods to %2 (left out: "
+                                           "%3 local, %4 disabled)")
+                                .arg(list.value(QStringLiteral("count")).toInt())
+                                .arg(argument)
+                                .arg(list.value(QStringLiteral("leftOutLocal")).toInt())
+                                .arg(list.value(QStringLiteral("leftOutDisabled")).toInt()));
+                        next();
+                    },
+                    Qt::SingleShotConnection);
+                sharing->exportCode();
+            });
         } else if (name == QLatin1String("import")) {
             steps.push_back([this, argument](std::function<void()> next) {
                 bool ok = false;
