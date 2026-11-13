@@ -367,6 +367,13 @@ fixes the same captures, also at 911x512 with `QT_SCALE_FACTOR` 1.5 and at
 1120x700, and the real application with `--filter disabled` at 900x440
 (scale 1 and 2), showed nothing clipped or covered.
 
+The two captures below were refreshed on 2026-11-13 for 0.2.0 with
+`--screenshot` and `QT_SCALE_FACTOR` 1.5 and 2 (the real application,
+read-only, Stellaris 4.5.4, a new scratch profile with a playset from the
+game's configuration, light theme): 2100x1290 pixels, and at 2 again the
+window limited to the screen, 2800x1422. A row is highlighted where the mouse
+pointer rested.
+
 ![Real application at scale factor 1.5](screenshots/a11y-scale-150.png)
 
 ![Real application at scale factor 2, limited to the screen height](screenshots/a11y-scale-200.png)

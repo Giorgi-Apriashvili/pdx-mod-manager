@@ -170,6 +170,7 @@ release's CI run them without bash.
 
 `docs/screenshots/`: `main-light`, `main-dark`, `main-filtered` (reorder
 disabled banner), `import-preview` / `import-preview-dark`, `export-code`
-(with a toast above the dialog), `add-mods`, `settings`, `playset-deleted`
-(Restore affordance), `history`, `game-not-found`, `a11y-focus-light`
-(keyboard focus ring and tool tip), `a11y-shortcuts-dark` (F1 list).
+(with its Workshop ID list and a toast above the dialog), `add-mods`,
+`settings`, `playset-deleted` (Restore affordance), `history`,
+`game-not-found`, `a11y-focus-light` (keyboard focus ring and tool tip),
+`a11y-shortcuts-dark` (F1 list).
