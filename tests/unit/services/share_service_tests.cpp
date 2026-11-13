@@ -513,3 +513,303 @@ TEST_CASE("A failed import leaves existing playsets and the database untouched",
     removeJobInsertFailure(w);
     CHECK(share.applyImport(preview, ImportMode::New).ok());
 }
+
+// --- Workshop ID lists and Workshop names in the preview ---------------------
+
+namespace {
+
+providers::WorkshopItemMetadata steamItem(const std::string& id, const std::string& title,
+                                          const std::string& appId = kAppId) {
+    providers::WorkshopItemMetadata item;
+    item.id = id;
+    item.found = true;
+    item.resultCode = 1;
+    item.title = title;
+    item.consumerAppId = appId;
+    return item;
+}
+
+providers::WorkshopItemMetadata unansweredItem(const std::string& id, int resultCode) {
+    providers::WorkshopItemMetadata item;
+    item.id = id;
+    item.resultCode = resultCode;
+    return item;
+}
+
+std::vector<std::string> previewIds(const ImportPreview& preview) {
+    std::vector<std::string> out;
+    for (const ImportPlanEntry& entry : preview.plan->entries)
+        out.push_back(entry.entry.identity.id);
+    return out;
+}
+
+// The warnings withWorkshopMetadata() put before the standing note.
+std::vector<std::string> addedWarnings(const ImportPreview& preview) {
+    const std::vector<std::string>& all = preview.plan->warnings;
+    REQUIRE_FALSE(all.empty());
+    CHECK(all.back() == kIdenticalContentNotGuaranteed);
+    REQUIRE(preview.workshopWarnings < all.size());
+    return {all.end() - 1 - static_cast<std::ptrdiff_t>(preview.workshopWarnings), all.end() - 1};
+}
+
+} // namespace
+
+TEST_CASE("A Workshop ID list is previewed and imported for the selected game",
+          "[services][share][idlist]") {
+    World w;
+    w.addWorkshopMod("2000000001", "UI Overhaul Example");
+    w.refresh();
+    const std::string before = dumpState(w);
+    ShareService share(w.ctx);
+
+    const ImportPreview preview =
+        share.previewImport(" 2000000003|2000000001\r\n2000000002\n", kGame);
+    REQUIRE(preview.ok());
+    CHECK(preview.format == sharing::ImportTextFormat::WorkshopIdList);
+    CHECK(preview.gameName == "Stellaris");
+    CHECK(preview.gameInstalled);
+    CHECK(preview.steamAppId == kAppId);
+    REQUIRE(preview.manifest);
+    CHECK(preview.manifest->game == kGame);
+    CHECK(preview.manifest->playsetName == "Imported mod list");
+    REQUIRE(preview.plan);
+    CHECK(preview.plan->proposedName == "Imported mod list");
+    CHECK(previewIds(preview) ==
+          std::vector<std::string>{"2000000003", "2000000001", "2000000002"});
+    const ImportCounts& counts = preview.plan->counts;
+    CHECK(counts.total == 3);
+    CHECK(counts.enabled == 3);
+    CHECK(counts.installed == 1);
+    CHECK(counts.missingEnabled == 2);
+    CHECK(counts.missingDisabled == 0);
+    CHECK(preview.plan->entries[0].status == ImportEntryStatus::Missing);
+    CHECK(preview.plan->entries[1].status == ImportEntryStatus::Installed);
+    CHECK(preview.plan->warnings == std::vector<std::string>{kIdenticalContentNotGuaranteed});
+    CHECK(workshopIdsToLookUp(preview) == std::vector<std::string>{"2000000003", "2000000002"});
+    CHECK(dumpState(w) == before); // previewing writes nothing
+
+    const AppliedImport applied = require(share.applyImport(preview, ImportMode::New));
+    CHECK(applied.playsetName == "Imported mod list");
+    PlaysetService playsets(w.ctx);
+    const Playset imported = require(playsets.playset(applied.playsetId));
+    CHECK(shape(imported.entries) == std::vector<Identity>{{"steam-workshop", "2000000003", true},
+                                                           {"steam-workshop", "2000000001", true},
+                                                           {"steam-workshop", "2000000002", true}});
+    REQUIRE(applied.jobs.size() == 2);
+    CHECK(applied.jobs[0].identity.id == "2000000003");
+    CHECK(applied.jobs[1].identity.id == "2000000002");
+    CHECK(require(playsets.activePlaysetId(kGame)) == applied.playsetId);
+
+    // A link imports the same item; the name is made unique, or typed.
+    const ImportPreview again = share.previewImport(
+        "https://steamcommunity.com/sharedfiles/filedetails/?id=2000000002", kGame);
+    REQUIRE(again.ok());
+    CHECK(again.plan->proposedName == "Imported mod list (2)");
+    CHECK(require(share.applyImport(again, ImportMode::New, std::nullopt, "Friday list"))
+              .playsetName == "Friday list");
+}
+
+TEST_CASE("Share codes and Workshop ID lists are told apart, and errors say which",
+          "[services][share][idlist]") {
+    World w;
+    w.refresh();
+    ShareService share(w.ctx);
+    const auto failure = [&](std::string_view text, const GameKey& game) {
+        ImportPreview preview = share.previewImport(text, game);
+        REQUIRE_FALSE(preview.ok());
+        CHECK_FALSE(preview.manifest);
+        CHECK_FALSE(preview.plan);
+        CHECK(workshopIdsToLookUp(preview).empty());
+        return preview;
+    };
+
+    ImportPreview p = failure("PMM9.abc.def", kGame);
+    CHECK(p.format == sharing::ImportTextFormat::ShareCode);
+    CHECK(p.error->code == ErrorCode::UnsupportedVersion);
+    p = failure("  PMM1.abc", kGame);
+    CHECK(p.format == sharing::ImportTextFormat::ShareCode);
+    CHECK(p.error->code == ErrorCode::ParseError);
+
+    p = failure("hello", kGame);
+    CHECK(p.format == sharing::ImportTextFormat::WorkshopIdList);
+    CHECK(p.error->code == ErrorCode::ParseError);
+    CHECK_THAT(p.error->message, Catch::Matchers::StartsWith("This text is neither a share code"));
+    // A text that is no list fails as such, game or not.
+    CHECK_THAT(failure("hello", {}).error->message,
+               Catch::Matchers::StartsWith("This text is neither a share code"));
+
+    p = failure("2000000001|2000000002", {});
+    CHECK(p.error->code == ErrorCode::InvalidArgument);
+    CHECK(p.error->message ==
+          "Select a game first: a Workshop ID list does not say which game it is for.");
+    p = failure("2000000001|2000000002", "eu4"); // no adapter in this world
+    CHECK(p.error->code == ErrorCode::UnsupportedGame);
+    CHECK(p.error->message == "This build of Paradox Mod Manager cannot manage Europa "
+                              "Universalis IV, so the Workshop ID list cannot be imported for it.");
+    p = failure("2000000001|2000000002|2000000001", kGame);
+    CHECK(p.error->code == ErrorCode::ValidationFailed);
+    p = failure("2000000001;1", kGame);
+    CHECK_THAT(p.error->message, ContainsSubstring("Paradox games load mods in list order"));
+    CHECK_FALSE(share.applyImport(p, ImportMode::New));
+}
+
+TEST_CASE("Workshop names replace the hints of missing entries and are stored",
+          "[services][share][idlist]") {
+    const std::string code = senderCode();
+    World w;
+    w.addWorkshopMod("2000000001", "UI Overhaul Example");
+    w.refresh();
+    ShareService share(w.ctx);
+    const ImportPreview base = share.previewImport(code);
+    REQUIRE(base.ok());
+    CHECK(base.format == sharing::ImportTextFormat::ShareCode);
+    CHECK(base.steamAppId == kAppId);
+    // Missing Workshop entries only, the disabled one included; never the
+    // installed one or a local mod.
+    CHECK(workshopIdsToLookUp(base) == std::vector<std::string>{"2000000002", "2000000003"});
+    const std::string codeHint = base.manifest->mods[0].nameHint;
+    CHECK_FALSE(codeHint.empty());
+
+    const std::vector<providers::WorkshopItemMetadata> items{
+        steamItem("2000000002", std::string("Steam\x01Patch ") + std::string(300, 'x')),
+        unansweredItem("2000000003", 9),
+        steamItem("2000000001", "Not asked for"), // installed: ignored
+        steamItem("9999", "Not in the preview")};
+    const ImportPreview named = withWorkshopMetadata(base, items);
+    REQUIRE(named.ok());
+    CHECK(named.workshop.size() == 2);
+    const PreviewWorkshopItem& patch = named.workshop.at("2000000002");
+    CHECK(patch.check == WorkshopItemCheck::Ok);
+    CHECK(patch.message.empty());
+    // Fitted like any hint: control characters become spaces, cut to the limit.
+    CHECK(patch.title.size() == sharing::kMaxNameHintBytes);
+    CHECK(patch.title.rfind("Steam Patch xxx", 0) == 0);
+    const PreviewWorkshopItem& gone = named.workshop.at("2000000003");
+    CHECK(gone.check == WorkshopItemCheck::NotFound);
+    CHECK(gone.title.empty());
+    CHECK_THAT(gone.message, ContainsSubstring("was not found"));
+
+    // The Steam title replaces the code's hint in the manifest and the plan;
+    // without a title the code's hint stays.
+    CHECK(named.manifest->mods[0].nameHint == patch.title);
+    CHECK(named.plan->entries[0].entry.nameHint == patch.title);
+    CHECK(named.manifest->mods[1].nameHint == base.manifest->mods[1].nameHint);
+    CHECK(named.manifest->mods[2].nameHint == base.manifest->mods[2].nameHint);
+    CHECK(sharing::validateManifest(*named.manifest).ok());
+    CHECK(addedWarnings(named) ==
+          std::vector<std::string>{"1 missing Workshop mod was not found on the Steam Workshop. "
+                                   "It may have been deleted, or it is private or friends-only."});
+    // The input preview is not changed.
+    CHECK(base.manifest->mods[0].nameHint == codeHint);
+    CHECK(base.workshop.empty());
+
+    // A later answer replaces the earlier one and its warnings.
+    const ImportPreview later =
+        withWorkshopMetadata(named, std::vector{steamItem("2000000003", "Old Era on Steam")});
+    CHECK(later.workshop.at("2000000003").check == WorkshopItemCheck::Ok);
+    CHECK(later.manifest->mods[1].nameHint == "Old Era on Steam");
+    CHECK(later.manifest->mods[0].nameHint == patch.title);
+    CHECK(addedWarnings(later).empty());
+    CHECK(later.plan->warnings.size() == base.plan->warnings.size());
+
+    // The titles are stored with the playset.
+    const AppliedImport applied = require(share.applyImport(later, ImportMode::New));
+    PlaysetService playsets(w.ctx);
+    const Playset imported = require(playsets.playset(applied.playsetId));
+    CHECK(imported.entries[0].nameHint == patch.title);
+    CHECK(imported.entries[1].nameHint == "Old Era on Steam");
+    CHECK(imported.entries[2].nameHint == base.manifest->mods[2].nameHint);
+    CHECK(shape(imported.entries) == shape(senderEntries()));
+}
+
+TEST_CASE("Workshop answers warn about banned, unavailable and other games' items",
+          "[services][share][idlist]") {
+    World w;
+    w.addWorkshopMod("2000000001", "UI Overhaul Example");
+    w.refresh();
+    ShareService share(w.ctx);
+    const ImportPreview list =
+        share.previewImport("5550001|5550002|5550003|5550004|5550005", kGame);
+    REQUIRE(list.ok());
+
+    const ImportPreview mixed = withWorkshopMetadata(
+        list, std::vector{unansweredItem("5550002", 15), unansweredItem("5550003", 15),
+                          steamItem("5550004", "EU4 mod", "236850"), steamItem("5550005", "Fine")});
+    CHECK(mixed.workshop.count("5550001") == 0);
+    CHECK(mixed.workshop.at("5550002").check == WorkshopItemCheck::Unavailable);
+    CHECK(mixed.workshop.at("5550004").check == WorkshopItemCheck::WrongGame);
+    CHECK(mixed.workshop.at("5550004").otherGame == "eu4");
+    CHECK(mixed.workshop.at("5550004").title == "EU4 mod");
+    CHECK(mixed.workshop.at("5550005").check == WorkshopItemCheck::Ok);
+    CHECK(addedWarnings(mixed) ==
+          std::vector<std::string>{
+              "Steam gave no details for 2 missing Workshop mods, so they may not download.",
+              "1 missing Workshop mod is for another game, not Stellaris."});
+
+    providers::WorkshopItemMetadata banned = steamItem("5550001", "Banned");
+    banned.banned = true;
+    const ImportPreview withBan = withWorkshopMetadata(list, std::vector{banned});
+    CHECK(withBan.workshop.at("5550001").check == WorkshopItemCheck::Banned);
+    CHECK(withBan.workshop.at("5550001").title == "Banned");
+    CHECK(addedWarnings(withBan) ==
+          std::vector<std::string>{"1 missing Workshop mod is banned on the Steam Workshop and "
+                                   "cannot be downloaded."});
+
+    SECTION("a list of another game's mods names that game") {
+        const std::vector<providers::WorkshopItemMetadata> eu4{steamItem("5550001", "A", "236850"),
+                                                               steamItem("5550002", "B", "236850"),
+                                                               unansweredItem("5550003", 9)};
+        const std::vector<std::string> warnings = addedWarnings(withWorkshopMetadata(list, eu4));
+        REQUIRE(warnings.size() == 2);
+        CHECK(warnings[1] == "These are Europa Universalis IV mods, not Stellaris mods: select "
+                             "Europa Universalis IV and paste the list again.");
+        // Not when another found item is this game's, another game's, or of
+        // a game the catalog does not know.
+        for (const providers::WorkshopItemMetadata& extra :
+             {steamItem("5550004", "Mine"), steamItem("5550004", "C", "1158310"),
+              steamItem("5550004", "D", "12345")}) {
+            std::vector<providers::WorkshopItemMetadata> answers = eu4;
+            answers.push_back(extra);
+            CHECK(addedWarnings(withWorkshopMetadata(list, answers)).back().find("These are") ==
+                  std::string::npos);
+        }
+        // Not when a listed mod is installed for this game.
+        const ImportPreview partly = share.previewImport("2000000001|5550001|5550002", kGame);
+        CHECK(addedWarnings(withWorkshopMetadata(partly, eu4)).back() ==
+              "2 missing Workshop mods are for another game, not Stellaris.");
+        // A share code names its game itself.
+        World sender;
+        sender.refresh();
+        const std::int64_t id = makePlayset(
+            sender, {workshopEntry("5550001", "A"), workshopEntry("5550002", "B")}, "Code");
+        const std::string code = require(ShareService(sender.ctx).exportCode(id));
+        CHECK(addedWarnings(withWorkshopMetadata(share.previewImport(code), eu4)).back() ==
+              "2 missing Workshop mods are for another game, not Stellaris.");
+    }
+    SECTION("a failed preview stays as it is") {
+        const ImportPreview failed = share.previewImport("x", kGame);
+        const ImportPreview same = withWorkshopMetadata(failed, std::vector{steamItem("5", "A")});
+        CHECK_FALSE(same.ok());
+        CHECK(same.workshop.empty());
+    }
+}
+
+TEST_CASE("A playset's Workshop ID list leaves out local and disabled entries",
+          "[services][share][idlist]") {
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    const std::int64_t id = makePlayset(w, senderEntries(), "Mixed");
+    ShareService share(w.ctx);
+    const sharing::WorkshopIdListExport list = require(share.exportWorkshopIdList(id));
+    CHECK(list.text == "2000000002|2000000001");
+    CHECK(list.ids == std::vector<std::string>{"2000000002", "2000000001"});
+    CHECK(list.leftOutLocal == 1);
+    CHECK(list.leftOutDisabled == 1);
+    CHECK(share.exportWorkshopIdList(id + 100).error().code == ErrorCode::NotFound);
+
+    // Imported again, the list gives the same enabled Workshop mods in order.
+    const ImportPreview preview = share.previewImport(list.text, kGame);
+    REQUIRE(preview.ok());
+    CHECK(previewIds(preview) == list.ids);
+}

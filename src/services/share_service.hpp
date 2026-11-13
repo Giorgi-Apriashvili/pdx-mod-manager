@@ -1,6 +1,7 @@
 #pragma once
 
-// Share-code export and import (spec section 5).
+// Share-code and Workshop ID list export and import (spec section 5,
+// docs/share-code-protocol.md sections 1-8).
 //
 // Export: every entry of the playset, disabled ones included, in exact order.
 // Installed entries carry their installed descriptor name and version as
@@ -10,12 +11,18 @@
 // inventory for readiness comparisons until the next rescan), and the code
 // carries the installed game version as gameVersionHint. Hints are display
 // text only and are sanitised to what the manifest accepts; identities, order
-// and enabled flags are copied verbatim.
+// and enabled flags are copied verbatim. exportWorkshopIdList() lists the
+// enabled Workshop entries only, in order, and counts what it left out.
 //
-// Import is two steps:
-//   previewImport()  decodes and validates the complete code and reconciles it
+// Import is two steps, for a share code or a Workshop ID list alike (text
+// starting with "PMM" is a code; a list is imported for the game the caller
+// names, with every entry enabled):
+//   previewImport()  decodes and validates the complete text and reconciles it
 //                    with the cached inventory. Read-only: no database write,
-//                    no job, no download.
+//                    no job, no download. withWorkshopMetadata() adds what the
+//                    Steam Web API said about the missing Workshop entries
+//                    (workshopIdsToLookUp()); the caller asks, this service
+//                    never does.
 //   applyImport()    validates again, rebuilds the plan against the current
 //                    inventory, and then in ONE database transaction creates
 //                    the exact playset (or replaces an explicitly chosen one,
@@ -33,11 +40,16 @@
 #include "core/import_plan.hpp"
 #include "core/model.hpp"
 #include "core/result.hpp"
+#include "providers/web_metadata.hpp"
 #include "services/service_context.hpp"
 #include "sharing/manifest.hpp"
+#include "sharing/workshop_id_list.hpp"
 
+#include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -49,16 +61,57 @@ enum class ImportMode {
     Replace, // replace the entries of an existing playset (explicit choice; recoverable)
 };
 
+// What the Steam Web API said about a missing Workshop entry of a preview
+// (providers::classifyWorkshopItemForGame() for the preview's Steam app).
+enum class WorkshopItemCheck {
+    Ok,          // found, and for the preview's game
+    NotFound,    // deleted, private or friends-only (EResult 9)
+    Unavailable, // another result without details
+    Banned,
+    WrongGame, // another game's item
+};
+
+struct PreviewWorkshopItem {
+    std::string title; // the Workshop title fitted as a name hint; empty if none
+    WorkshopItemCheck check = WorkshopItemCheck::Ok;
+    std::string message;   // why, unless Ok (validateWorkshopItemForGame()'s message)
+    std::string otherGame; // WrongGame: the catalog key of the item's game, if it is one
+};
+
 struct ImportPreview {
-    std::optional<Error> error; // decoding/validation failure; nothing else is set then
+    std::optional<Error> error; // decoding/validation failure; no manifest or plan then
+    sharing::ImportTextFormat format = sharing::ImportTextFormat::ShareCode;
     std::optional<sharing::Manifest> manifest;
     std::optional<ImportPlan> plan;
     std::string gameName;
     bool gameInstalled = false; // an installation of the manifest's game is known
     std::string installedGameVersion;
+    std::string steamAppId; // the installation's, else the catalog's
+    // withWorkshopMetadata(): the answers for missing Workshop entries, by id.
+    std::map<std::string, PreviewWorkshopItem> workshop;
+    // How many of plan->warnings withWorkshopMetadata() added; they come right
+    // before the standing note, and a later call replaces them.
+    std::size_t workshopWarnings = 0;
 
     bool ok() const noexcept { return !error.has_value(); }
 };
+
+// The ids of the preview's missing Workshop entries (disabled ones included),
+// in playset order and without repeats: what may be looked up for it. Empty
+// for a failed preview.
+std::vector<std::string> workshopIdsToLookUp(const ImportPreview& preview);
+
+// `preview` with the Web API's answers for its missing Workshop entries;
+// items for other ids are ignored, and an item answered again replaces the
+// earlier answer. Pure: nothing is read or written. For each answered entry
+// the Workshop title, fitted to the manifest's rules, replaces the name hint
+// of the text (it is untrusted) in both the manifest and the plan, so that
+// applyImport() stores it. The plan gets warnings for items that were not
+// found, have no details, are banned or belong to another game, before the
+// standing note; for a Workshop ID list whose found items all belong to one
+// other catalog game (and none is installed), one warning names that game.
+ImportPreview withWorkshopMetadata(ImportPreview preview,
+                                   std::span<const providers::WorkshopItemMetadata> items);
 
 struct ImportOptions {
     // Creates or reuses an acquisition job for every missing Workshop entry.
@@ -87,8 +140,13 @@ public:
     // identity cannot be shared (for example a malformed local id).
     Result<std::string> exportCode(std::int64_t playsetId);
 
-    // Never writes anything. On failure the preview carries the actionable error.
-    ImportPreview previewImport(std::string_view text);
+    // The playset's Workshop ID list (sharing::workshopIdListFromPlayset()).
+    Result<sharing::WorkshopIdListExport> exportWorkshopIdList(std::int64_t playsetId);
+
+    // Never writes anything. On failure the preview carries the actionable
+    // error. A share code names its game; a Workshop ID list is previewed for
+    // `idListGame` (the selected game) and fails without one.
+    ImportPreview previewImport(std::string_view text, const GameKey& idListGame = {});
 
     // `targetPlaysetId` is required for Replace (a live playset of the
     // manifest's game) and ignored for New. `name` overrides the proposed
@@ -100,6 +158,9 @@ public:
                                       const std::string& name = {}, ImportOptions options = {});
 
 private:
+    // The preview of a decoded or listed manifest against the cached inventory.
+    ImportPreview buildPreview(sharing::Manifest manifest, sharing::ImportTextFormat format);
+
     const ServiceContext& m_ctx;
 };
 
