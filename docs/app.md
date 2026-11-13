@@ -311,15 +311,23 @@ entries) and EU4 (9 entries)
 ([evidence](evidence/app-round-trip-2026-10-30.md)).
 
 The screenshots in `docs/screenshots/app-*.png` were taken with
-`--screenshot` against Stellaris 4.5.2 and EU4 1.37.5 on Windows 11, with
-temporary profiles; they were refreshed on 2026-10-30 after the accessibility
-changes. The Play area therefore shows the read-only blocker. The Stellaris
-profile was prepared with `--self-test
-"config,disable:2,move:0:5,move:16:1,export:code.txt"`; the main and dark
-captures use `--select-row 2` (a Workshop mod, so the details show no
-personal path), the filtered one `--filter disabled --select-row 0`, the
+`--screenshot` against Stellaris and EU4 on Windows 11, with new temporary
+profiles; first on 2026-10-30 (Stellaris 4.5.2), last refreshed on 2026-11-13
+for 0.2.0 (Stellaris 4.5.4, EU4 1.37.5). Crusader Kings III, installed on the
+same machine, appears only as an entry in the games column. The Play area
+shows the read-only blocker. Every run passes `--game stellaris` or `--game
+eu4`, since a new profile otherwise opens the first installed game in
+alphabetical order. The Stellaris profile was prepared with `--self-test
+"config,disable:2,move:0:5,move:13:1,export:code.txt"` (its configuration had
+14 entries; `move:13:1` moves the last one to the second place); the main and
+dark captures use `--select-row 2` (a Workshop mod, so the details show no
+personal path), the export and add-mods ones too, with `--open export` and
+`--open add-mods`, the filtered one `--filter disabled --select-row 0`, the
 import preview a new profile with `--open import:code.txt`, and the EU4 one a
-new profile with `--self-test config --select-row 0`. The list only shows its
+new profile with `--self-test config --select-row 0`.
+`app-settings-updates.png` is the Updates part of `--open settings`, cut to
+436x352 pixels from the dialog's top left corner, above the About section with
+the profile's folders. The list only shows its
 focus ring when the window is the active window during the capture; repeat a
 capture that shows the grey inactive selection. Play's tool tip opens when
 the mouse pointer happens to rest where the window opens (while Play is
@@ -332,10 +340,11 @@ smallest window, set `QT_SCALE_FACTOR=2` and add `--window-size 1x1`
 | --- | --- |
 | `app-main-light.png`, `app-main-dark.png` | Stellaris playset from the game's configuration, one entry disabled and reordered, a Workshop mod selected |
 | `app-filtered.png` | status filter "Disabled": reordering is off, with the explanation |
-| `app-export.png` | export dialog with the share code |
+| `app-export.png` | export dialog with the share code and the Workshop ID list |
 | `app-add-mods.png` | installed Stellaris mods, playset members marked |
 | `app-import-preview.png` | the exported code previewed in a clean profile |
-| `app-eu4.png` | EU4 playset from the game's `dlc_load.json` |
+| `app-eu4.png` | EU4 playset from the game's `dlc_load.json`, with the load order note |
+| `app-settings-updates.png` | the Updates section of Settings in a verification run, where it is off |
 
 ## Files and folders
 

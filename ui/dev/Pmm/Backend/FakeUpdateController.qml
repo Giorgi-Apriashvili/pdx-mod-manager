@@ -8,7 +8,7 @@ QtObject {
 
     property FakeNotificationCenter notifications
     property string state: "idle"
-    readonly property string currentVersion: "0.1.0"
+    readonly property string currentVersion: "0.2.0"
     property string latestVersion: ""
     property real progress: 0
     property string errorMessage: ""

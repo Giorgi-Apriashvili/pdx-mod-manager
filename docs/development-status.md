@@ -24,20 +24,20 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Core model, catalog, logging and redaction, SHA-256, UTF-8 | `src/core` | done, tested | |
 | Playset operations, readiness, dependencies, import plan | `src/core` | done, tested | |
 | Share-code protocol v1 and regression fixtures | `src/sharing`, [`share-code-protocol.md`](share-code-protocol.md) | done, tested | |
-| Workshop ID lists and Workshop names in the import preview (for the next release) | `src/sharing/workshop_id_list`, `src/services/share_service`, `src/app/core/metadata_host`, `src/app/gui/share_controller`, `ui/dialogs`, [`share-code-protocol.md`](share-code-protocol.md#8-workshop-id-lists), [`app.md`](app.md#workshop-names-in-the-import-preview) | done 2026-11-13 on `workshop-id-lists`, for review (not merged). Owner's decisions of 2026-11-13 with the lead's defaults D1-D10. The Web API lookup is tested against a local stub only; a real lookup needs a session with Steam (not read-only) and is left to the owner's first use | |
+| Workshop ID lists and Workshop names in the import preview (for 0.2.0) | `src/sharing/workshop_id_list`, `src/services/share_service`, `src/app/core/metadata_host`, `src/app/gui/share_controller`, `ui/dialogs`, [`share-code-protocol.md`](share-code-protocol.md#8-workshop-id-lists), [`app.md`](app.md#workshop-names-in-the-import-preview) | done 2026-11-13 on `workshop-id-lists`, merged into `main` (`abcb775`). Owner's decisions of 2026-11-13 with the lead's defaults D1-D10. The Web API lookup is tested against a local stub only; a real lookup needs a session with Steam (not read-only) and is left to the owner's first use | |
 | SQLite persistence and migrations | `src/persistence`, [`persistence.md`](persistence.md) | done, tested | |
 | Platform: files, paths, processes, Steam discovery, file transactions | `src/platform` | done, tested | |
 | Workshop provider and `pmm-steam-helper` | `src/providers`, `tools/steam-helper`, [`steam-workshop.md`](steam-workshop.md) | done; session and item state verified read-only; subscribe and download tested against the fake Steam API only | [probe](evidence/steam-helper-probe.md) |
 | EU4 and Stellaris adapters | `src/games`, [`games/`](games/), [`load-order.md`](load-order.md) | done; detection, inventory, current configuration and launch plan verified read-only | [real scan](evidence/real-scan-2026-10-29.md) |
-| Crusader Kings III adapter (for the next release) | `src/games/ck3.{hpp,cpp}`, [`games/ck3.md`](games/ck3.md), [`load-order.md`](load-order.md#crusader-kings-iii) | done 2026-11-13 on `agent/ck3`, merged into `main` (`5013efe`). Owner's decisions of 2026-11-12/13: the game's own Steam API library is loaded as for the other games, the catalog lists the supported games alphabetically (`ck3`, `eu4`, `stellaris`), the load order ships unverified (`loadOrderVerifiedInGame = false`, and a temporary note above a CK3 playset says so) until a probe run approved by the owner. Also for every game: launches start in the executable's folder (unchanged for Stellaris and EU4), and a Workshop folder without `descriptor.mod` is described by its only `.mod` file, also by the content check after a download. Detection, inventory, current configuration, launch plan and a share-code round trip verified read-only on 1.20.1.2. **Probe run done 2026-11-13** with the owner's approval (recorded on `agent/ck3-probe`): two direct launches without the launcher or a restart through Steam, and **the later mod in `enabled_mods` wins**, as in Stellaris; `loadOrderVerifiedInGame = true` and the temporary note removed. **Workshop acquisition not run**; `supported_version="1.20"` still undetermined | [CK3 adapter](games/ck3.md#real-machine-evidence), [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
+| Crusader Kings III adapter (for 0.2.0) | `src/games/ck3.{hpp,cpp}`, [`games/ck3.md`](games/ck3.md), [`load-order.md`](load-order.md#crusader-kings-iii) | done 2026-11-13 on `agent/ck3`, merged into `main` (`5013efe`). Owner's decisions of 2026-11-12/13: the game's own Steam API library is loaded as for the other games, the catalog lists the supported games alphabetically (`ck3`, `eu4`, `stellaris`), the load order ships unverified (`loadOrderVerifiedInGame = false`, and a temporary note above a CK3 playset says so) until a probe run approved by the owner. Also for every game: launches start in the executable's folder (unchanged for Stellaris and EU4), and a Workshop folder without `descriptor.mod` is described by its only `.mod` file, also by the content check after a download. Detection, inventory, current configuration, launch plan and a share-code round trip verified read-only on 1.20.1.2. **Probe run done 2026-11-13** with the owner's approval (recorded on `agent/ck3-probe`, merged `ab265ea`): two direct launches without the launcher or a restart through Steam, and **the later mod in `enabled_mods` wins**, as in Stellaris; `loadOrderVerifiedInGame = true` and the temporary note removed. **Workshop acquisition not run**; `supported_version="1.20"` still undetermined | [CK3 adapter](games/ck3.md#real-machine-evidence), [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
 | Qt-free services (games, playsets, sharing, acquisition, launch) | `src/services`, [`architecture-services.md`](architecture-services.md) | done, tested | |
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
 | Play without a playset (for 0.1.1) | `src/services/launch_service`, `src/app/core/view_data`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/vanilla-launch`. Owner's decision of 2026-11-06: spec section 7 says "validate the installation, active playset, ..."; no playset now means a launch without mods instead of a blocker. Every other check still runs; the empty mod list is written as one journaled transaction labelled `launch <game> without mods`, which Restore and Recover handle like any launch. Tested with fakes only; **not run against a real game** (a live run needs the owner's approval) | |
 | Play requires the Steam client for Steam installations (for 0.1.1) | `src/services/launch_service`, `src/platform/steam`, `src/app/gui/backend`, `src/app/core/view_data`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`app.md`](app.md), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/require-steam`. Owner's decision of 2026-11-06: games could be started directly with Steam closed; Play now requires the Steam client for Steam installations (`DistributionSource::Steam`: found through Steam's app manifest, or located by hand inside a Steam library). A copy from another store located by hand is not blocked. The check uses the process list the running-instance check already reads (`steam.exe`, or the pid in `HKCU\Software\Valve\Steam\ActiveProcess` without a readable name); an unreadable list is a warning. While Steam, the game or the Paradox launcher blocks, the Backend re-checks every 3 s without the write probes, so Play follows on its own. Tested with fakes only; **not run against a real game or Steam** (a live run needs the owner's approval). Limitations: whether Steam runs is detected, whether it is signed in is not; the process list covers every Windows session, so another signed-in user's Steam counts as running | |
-| Discard an interrupted change that Recover cannot undo (for the next release) | `src/platform/file_transaction`, `src/services/launch_service`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, `ui/dialogs/ConfirmDialog.qml`, [`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup), [ADR 0005](adr/0005-journaled-config-writes.md) | done 2026-11-07 on `agent/discard-interrupted`. Recovery skips the backups of targets already original (or absent and absent before); `abandon()` gives up an interrupted transaction (`abandoned`, no file changed, folder and backups kept, pruned like any finished one but counted from when it was abandoned); after a Recover that failed with `IntegrityCheckFailed` the banner offers "Discard this record", and Play is available afterwards when nothing else blocks. Tested with fakes only; **not run against a real game** | |
+| Discard an interrupted change that Recover cannot undo (for 0.1.2) | `src/platform/file_transaction`, `src/services/launch_service`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, `ui/dialogs/ConfirmDialog.qml`, [`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup), [ADR 0005](adr/0005-journaled-config-writes.md) | done 2026-11-07 on `agent/discard-interrupted`. Recovery skips the backups of targets already original (or absent and absent before); `abandon()` gives up an interrupted transaction (`abandoned`, no file changed, folder and backups kept, pruned like any finished one but counted from when it was abandoned); after a Recover that failed with `IntegrityCheckFailed` the banner offers "Discard this record", and Play is available afterwards when nothing else blocks. Tested with fakes only; **not run against a real game** | |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
-| Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there; 2026-11-12 on `agent/accessibility-6`: the smallest window fits 1920x1080 at 200 %, keyboard resizing of the columns, Play focusable while blocked, preview tests in ctest | UI Automation inspection, contrast check, scale factors 1.5 and 2, captures of the smallest window at 100 % and 200 % |
+| Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there; 2026-11-12 on `agent/accessibility-6`, merged into `main` (`8e4c7da`) for 0.2.0: the smallest window fits 1920x1080 at 200 %, keyboard resizing of the columns, Play focusable while blocked, preview tests in ctest | UI Automation inspection, contrast check, scale factors 1.5 and 2, captures of the smallest window at 100 % and 200 % |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
 | Windows installer (Inno Setup, per-user) | `packaging/windows/`, [`packaging.md`](packaging.md#windows-installer) | verified with silent runs in a scratch folder, including failed upgrades; the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked. Added 2026-11-06: no downgrade over a newer installed version, one Start Menu shortcut instead of a folder, no desktop shortcut brought back by an update run, the previous version started again after a failed update run, the uninstall message about the data folders; verified by the extended smoke test on GitHub on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)) | [installer](evidence/installer-2026-10-30.md) |
 | Update check, daily check and update button | `src/services/app_update`, `src/app/core/update_client`, `src/app/gui/update_controller`, [`updates.md`](updates.md) | done, tested against a local stub; **a real update verified** on 2026-11-07: the owner's installed 0.1.0 updated itself to [0.1.1](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.1). 2026-11-06 (the updater lockdown): the request by repository id, owner and repository taken from the checked reply, redirects only for downloads and only to `github.com` and `*.githubusercontent.com`, the daily check with its banner and setting, no in-app install in `--profile` and `--no-steam` sessions, retries of the final save, and "Open release page" built from the repository the reply named (the compiled slug's list of releases only while no reply has named one). Merged and verified together on `agent/updater-lockdown` | [installer](evidence/installer-2026-10-30.md#after-merging-the-update-check) |
@@ -689,10 +689,11 @@ Accessibility ([`accessibility.md`](accessibility.md), "Known gaps"):
   names, its notification and the separators' widths (name change plus
   announcement; one of the two may have to go) sound.
 - Done 2026-11-12 on `agent/accessibility-6` (owner's go-ahead of 2026-11-12,
-  backlog item 6b-e; not merged): the minimum window size is 900x440 and fits
-  a 1920x1080 screen at 200 % (it was 980x600); the column dividers and the
-  table's column edges resize from the keyboard (WAI-ARIA window splitter,
-  two Tab stops at the columns' edges and one for the four column edges);
+  backlog item 6b-e; merged into `main` as `8e4c7da`): the minimum window
+  size is 900x440 and fits a 1920x1080 screen at 200 % (it was 980x600); the
+  column dividers and the table's column edges resize from the keyboard
+  (WAI-ARIA window splitter, two Tab stops at the columns' edges and one for
+  the four column edges);
   Play stays focusable while it is blocked (aria-disabled: its name, its
   description and a notification give the reasons); `--screenshot` keeps an
   explicit `QT_SCALE_FACTOR` and `--window-size` sets the window's size; the
@@ -787,26 +788,31 @@ Packaging ([`packaging.md`](packaging.md)):
    with backlog items 1-5: discarding an interrupted change that Recover cannot
    undo, imports with downloads off, all-or-nothing edits, descriptor files that
    share a mod id, and the update contract check matching code only.
-7. Done 2026-11-12 on `agent/accessibility-6`, for the owner's review (not
-   merged): backlog item 6, parts b-e (smallest window, keyboard resizing,
+7. Done 2026-11-12 on `agent/accessibility-6`, merged into `main`
+   (`8e4c7da`): backlog item 6, parts b-e (smallest window, keyboard resizing,
    Play focusable while blocked, screenshot and test tooling; see Open items >
    Accessibility). Part a, the listening pass with NVDA and Narrator, stays
    with the owner.
 8. Done 2026-11-13 on `agent/ck3`, merged into `main` (`5013efe`):
    Crusader Kings III support, phase 1 (code, tests, fixtures, docs, the
    probe tool), verified read-only. Done 2026-11-13 with the owner's
-   approval, recorded on `agent/ck3-probe` for the owner's review: the probe
+   approval, recorded on `agent/ck3-probe` and merged (`ab265ea`): the probe
    run and two direct launches on 1.20.1.2 ([CK3 probe run](evidence/2026-11-13-ck3-load-order.md)), then the
    traits (the later mod wins), the support matrix and the CHANGELOG's
    load-order sentence. Next, each with the owner's approval: a Workshop
    download for app 1158310 and the other open CK3 items
-   ([CK3 adapter](games/ck3.md#outstanding-validation)). The release number
-   (probably 0.2.0) is decided later.
-9. Done 2026-11-13 on `workshop-id-lists`, for review (not merged): Workshop
-   ID lists next to the share code, and the names of missing Workshop mods
-   in the import preview (owner's decisions of 2026-11-13). Next: the two
-   reviews, then the merge; the release follows with CK3 (0.2.0), with the
-   owner's OK.
+   ([CK3 adapter](games/ck3.md#outstanding-validation)). In 0.2.0 (item
+   10).
+9. Done 2026-11-13 on `workshop-id-lists`, merged into `main` (`abcb775`):
+   Workshop ID lists next to the share code, and the names of missing
+   Workshop mods in the import preview (owner's decisions of 2026-11-13).
+   In 0.2.0 (item 10).
+10. 0.2.0 (owner's approval of 2026-11-13), prepared on `release-0.2.0`
+    (version, notes, docs and screenshots) and merged into `main`: Crusader Kings III (item 8), Workshop ID lists
+    and the Workshop names in the import preview (item 9), backlog item 6b-e
+    (item 7) and the fallback to a Workshop item's only `.mod` file, with the
+    notes of [`../CHANGELOG.md`](../CHANGELOG.md). The publication is
+    recorded here once the tag's run has finished.
 
 ## Working rules
 
@@ -828,9 +834,9 @@ Packaging ([`packaging.md`](packaging.md)):
 
 See [`feasibility.md`](feasibility.md) and the evidence files: Windows 11,
 Steam, Stellaris 4.5.2 (36 mods) and EU4 1.37.5 (13 mods), the versions tested on
-2026-10-29 and 2026-10-30. Stellaris 4.5.3 ("Cygnus v4.5.3 (4e91)", build
-26325427) is installed now (read-only check, 2026-11-06) and has not been
-tested. EU4 has no
+2026-10-29 and 2026-10-30. Stellaris 4.5.4 ("Cygnus v4.5.4 (1b4f)", build
+26557690) is installed now (read-only scan, 2026-11-13) and has not been
+tested in the game. EU4 has no
 `steam_appid.txt`, so a direct start sets `SteamAppId`/`SteamGameId`; its
 launcher arguments include `-enabletelemetry`, which direct launches drop.
 The helper initialised the Steam API in Stellaris's app context and read item

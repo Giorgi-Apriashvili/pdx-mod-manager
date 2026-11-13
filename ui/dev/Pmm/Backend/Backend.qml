@@ -8,7 +8,7 @@ import "FakeData.js" as FakeData
 QtObject {
     id: backend
 
-    readonly property string appVersion: "0.1.0-dev (preview backend)"
+    readonly property string appVersion: "0.2.0-dev (preview backend)"
     readonly property int protocolVersion: 1
     readonly property bool readOnly: false
     readonly property string dataDir: "C:/Users/Player/AppData/Roaming/ParadoxModManager"
@@ -70,6 +70,7 @@ QtObject {
         notifications: backend.notifications
         mods: backend.mods
         playsets: backend.playsets
+        games: backend.games
     }
 
     Component.onCompleted: games.select(settings.lastGameKey)
