@@ -6,7 +6,7 @@ depends on the game's own executable and a validated integration (spec section 1
 
 Last reviewed: 2026-11-13 (Crusader Kings III added: read-only checks, then its
 probe run with direct launches), after the live validation of 2026-10-30;
-application 0.1.2 plus unreleased changes.
+application 0.2.0.
 
 ## Status legend
 

@@ -9,29 +9,28 @@ Workshop IDs, acquires missing Steam Workshop mods through the user's own Steam
 client, and starts the game directly with the selected mods, without the
 Paradox launcher.
 
-It supports **Stellaris** and **Europa Universalis IV**, and in the next release
-**Crusader Kings III**, on Windows 10 and 11. Linux, macOS, the Steam Deck and
-Proton are not supported
+It supports **Stellaris**, **Europa Universalis IV** and **Crusader Kings III**
+on Windows 10 and 11. Linux, macOS, the Steam Deck and Proton are not supported
 ([ADR 0009](docs/adr/0009-windows-only.md)). It needs no server, account or
 telemetry.
 
-> **Status: 0.1.2 ([2026-11-07](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.1.2)).** The desktop
-> application (`pmm-app`), the EU4 and Stellaris adapters and every layer below
-> them are implemented and covered by 539 automated tests. On Windows 11 with Steam,
-> both games were started directly by the application with the selected mods
+> **Status: 0.2.0 ([2026-11-13](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.2.0)).** The desktop
+> application (`pmm-app`), the Stellaris, EU4 and Crusader Kings III adapters and
+> every layer below them are implemented and covered by 596 automated tests. On
+> Windows 11 with Steam, Stellaris and EU4
+> were started directly by the application with the selected mods
 > (checked in the games' own logs), a missing Workshop mod was subscribed and
-> downloaded live for each game, and the failure cases behaved as specified
-> ([live validation](docs/evidence/live-validation-2026-10-30.md)). **EU4
-> ignores the mod order for file overrides** (the mod whose name sorts first
-> wins); Stellaris follows it. See the
+> downloaded live for each of them, and the failure cases behaved as specified
+> ([live validation](docs/evidence/live-validation-2026-10-30.md)). On 2026-11-13
+> the application started Crusader Kings III 1.20.1.2 directly with probe mods
+> ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md)); Workshop
+> downloads have not been run for it yet ([CK3 adapter](docs/games/ck3.md)).
+> **EU4 ignores the mod order for file overrides** (the mod whose name sorts
+> first wins); Stellaris and Crusader Kings III follow it. See the
 > [support matrix](docs/support-matrix.md) and the
 > [development status](docs/development-status.md). The in-app update works
 > between published releases: on 2026-11-07 an installed 0.1.0 updated itself to
-> 0.1.1. Crusader Kings III support is unreleased: on 2026-11-13 the application
-> started Crusader Kings III 1.20.1.2 directly with probe mods, and the later mod
-> in the playset won a shared file, as in Stellaris
-> ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md)); Workshop
-> downloads have not been run for it yet ([CK3 adapter](docs/games/ck3.md)).
+> 0.1.1.
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -48,9 +47,9 @@ reason documented.
 | Desktop application (Qt Quick): games, playsets, search and filters, drag-and-drop and keyboard reordering, undo, import and export, downloads, Play with its blockers | Implemented; run read-only against the real games on Windows 11 | [Application](docs/app.md), [UI contract](docs/ui-contract.md) |
 | Accessibility: keyboard navigation, visible focus, accessible names, WCAG AA contrast, high-DPI | Implemented; checked with UI Automation and at scale factors 1.5 and 2 | [Accessibility](docs/accessibility.md); no screen-reader listening test yet |
 | Stellaris and EU4: installation and user-data detection, mod inventory, current configuration, launch plan (executable, arguments, environment, configuration writes) | **Verified** read-only, 2026-10-29, Stellaris 4.5.2 and EU4 1.37.5, Steam, Windows 11 | [Real-data evidence](docs/evidence/real-scan-2026-10-29.md); registered Workshop items without content show as Missing |
-| Crusader Kings III (unreleased): installation and user-data detection, mod inventory, current configuration, launch plan, share-code round trip | **Verified** read-only, 2026-11-13, CK3 1.20.1.2, Steam, Windows 11 | [CK3 adapter](docs/games/ck3.md); its direct launch and load order are verified too (rows below); Workshop downloads are **not verified** |
+| Crusader Kings III (since 0.2.0): installation and user-data detection, mod inventory, current configuration, launch plan, share-code round trip | **Verified** read-only, 2026-11-13, CK3 1.20.1.2, Steam, Windows 11 | [CK3 adapter](docs/games/ck3.md); its direct launch and load order are verified too (rows below); Workshop downloads are **not verified** |
 | Share codes: `PMM1` encoding, strict validation, size limits, frozen regression fixtures | Implemented | [Protocol](docs/share-code-protocol.md), versioned independently (protocol 1, schema 1) |
-| Workshop ID lists (unreleased): export enabled Workshop mods as `id\|id\|…`, import lists and Workshop links; the import preview names missing mods from the Steam Web API | Implemented; tested against a local Web API stub only | [Protocol section 8](docs/share-code-protocol.md#8-workshop-id-lists), [Workshop names in the preview](docs/app.md#workshop-names-in-the-import-preview) |
+| Workshop ID lists (since 0.2.0): export enabled Workshop mods as `id\|id\|…`, import lists and Workshop links; the import preview names missing mods from the Steam Web API | Implemented; tested against a local Web API stub only | [Protocol section 8](docs/share-code-protocol.md#8-workshop-id-lists), [Workshop names in the preview](docs/app.md#workshop-names-in-the-import-preview) |
 | Share-code round trip between two clean profiles (identities, order, enabled flags) | **Verified** read-only, 2026-10-29 and 2026-10-30, both games, Windows 11 | [Round-trip evidence](docs/evidence/app-round-trip-2026-10-30.md) |
 | Playset editing, filtering rules, launch readiness, dependency checks, import planning | Implemented | `src/core`, `src/services` |
 | Application database: migrations, upgrade backups, playset undo history | Implemented | [Persistence](docs/persistence.md) |
@@ -58,8 +57,8 @@ reason documented.
 | Workshop helper: Steam session and item state in the game's app context | **Verified** read-only, 2026-10-29, Stellaris 4.5.2, Windows 11 | [Probe evidence](docs/evidence/steam-helper-probe.md) |
 | Workshop subscribe and download | **Verified** 2026-10-30, EU4 1.37.5 and Stellaris 4.5.2, Windows 11 (one item each, live) | [Live validation](docs/evidence/live-validation-2026-10-30.md): pending job survives a restart; nothing is subscribed until the Web API confirms the item's game |
 | Manual Workshop fallback (open the item in Steam, then rescan) | Implemented, unverified | Limited: does not satisfy automatic download |
-| Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, and 2026-11-13, CK3 1.20.1.2 (unreleased), Windows 11 | No launcher process and no restart through Steam ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md)); EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration. Unreleased (0.1.1), tested with fakes only: a Steam copy starts only while the Steam client runs ([troubleshooting](docs/troubleshooting.md#steam-is-not-running-not-signed-in-or-the-game-is-not-owned)) |
-| In-game verification of loaded mods and order | **Verified** with probe mods: 2026-10-30 Stellaris and EU4, 2026-11-13 CK3 1.20.1.2 (unreleased) | Stellaris and Crusader Kings III: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
+| Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, and 2026-11-13, CK3 1.20.1.2, Windows 11 | No launcher process and no restart through Steam ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md)); EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration. Since 0.1.1, tested with fakes only: a Steam copy starts only while the Steam client runs ([troubleshooting](docs/troubleshooting.md#steam-is-not-running-not-signed-in-or-the-game-is-not-owned)) |
+| In-game verification of loaded mods and order | **Verified** with probe mods: 2026-10-30 Stellaris and EU4, 2026-11-13 CK3 1.20.1.2 | Stellaris and Crusader Kings III: the later mod in the list wins a shared file. **EU4: the list order is ignored; the mod whose name sorts first wins** ([load order](docs/load-order.md)) |
 | Windows package (ZIP with Qt and the C++ runtime) | **Verified** 2026-10-29 | [Packaging evidence](docs/evidence/packaging-2026-10-29.md) |
 | Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked; not code signed |
 | Updates: a daily check (can be turned off) and a button, verify the installer's SHA-256, install and restart | **Verified** 2026-11-07 with a real update from 0.1.0 to 0.1.1, and again from 0.1.1 to 0.1.2 | [Updates](docs/updates.md): the owner's installed 0.1.0 found the published 0.1.1, and **Update and restart** installed it. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch. The values every released copy relies on are frozen and checked in CI ([compatibility contract](docs/updates.md#compatibility-contract-frozen-since-010)) |
