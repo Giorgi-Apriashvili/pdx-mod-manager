@@ -106,6 +106,14 @@ TEST_CASE("Workshop ID list entries that are not ids are refused by number", "[s
                                                "2"));
         CHECK_THAT(e.message, ContainsSubstring("\"1?2\""));
     }
+    SECTION("direction controls and line separators are quoted as '?'") {
+        // U+202E, U+2066, U+200F, U+061C, U+2028 and U+2029.
+        const Error e = parseError("101|\xE2\x80\xAE"
+                                   "4321\xE2\x81\xA6"
+                                   "x\xE2\x80\x8F\xD8\x9C\xE2\x80\xA8\xE2\x80\xA9"
+                                   "y");
+        CHECK_THAT(e.message, StartsWith("Entry 2 of the Workshop ID list, \"?4321?x????y\","));
+    }
     SECTION("a position suffix is explained") {
         const Error e = parseError("3818297502|3149445431;2|3366734814");
         CHECK(e.code == ErrorCode::ParseError);

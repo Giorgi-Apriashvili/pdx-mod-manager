@@ -72,9 +72,10 @@ enum class WorkshopItemCheck {
 };
 
 struct PreviewWorkshopItem {
-    std::string title; // the Workshop title fitted as a name hint; empty if none
+    // The Workshop title fitted as a name hint, without direction marks or
+    // line separators; empty if none.
+    std::string title;
     WorkshopItemCheck check = WorkshopItemCheck::Ok;
-    std::string message;   // why, unless Ok (validateWorkshopItemForGame()'s message)
     std::string otherGame; // WrongGame: the catalog key of the item's game, if it is one
 };
 

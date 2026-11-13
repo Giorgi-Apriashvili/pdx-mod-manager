@@ -10,7 +10,9 @@
 namespace pmm::sharing {
 namespace {
 
-// Longer than the default: a quoted link should still show its id.
+// How much of an entry a message quotes; longer for a link, which should
+// still show its id.
+constexpr std::size_t kSnippetBytes = 40;
 constexpr std::size_t kLinkSnippetBytes = 100;
 
 bool isAsciiSpace(char c) noexcept {
@@ -120,8 +122,20 @@ std::optional<std::string> readEntry(std::string_view token) {
     return std::nullopt;
 }
 
-std::string quotedSnippet(std::string_view token, std::size_t maxBytes = 40) {
-    return "\"" + displaySnippet(token, maxBytes) + "\"";
+// `token` quoted as displaySnippet() shows it, where also the characters that
+// would reorder or break the message around it become '?'.
+std::string quotedSnippet(std::string_view token, std::size_t maxBytes = kSnippetBytes) {
+    std::string shown;
+    shown.reserve(token.size());
+    for (std::size_t i = 0; i < token.size();) {
+        if (const std::size_t length = layoutControlLength(token, i); length > 0) {
+            shown += '?';
+            i += length;
+        } else {
+            shown += token[i++];
+        }
+    }
+    return "\"" + displaySnippet(shown, maxBytes) + "\"";
 }
 
 std::string position(std::size_t entry, std::size_t offset) {

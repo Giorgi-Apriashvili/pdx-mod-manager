@@ -671,7 +671,9 @@ TEST_CASE("Workshop names replace the hints of missing entries and are stored",
     CHECK_FALSE(codeHint.empty());
 
     const std::vector<providers::WorkshopItemMetadata> items{
-        steamItem("2000000002", std::string("Steam\x01Patch ") + std::string(300, 'x')),
+        // With an override (U+202E), an isolate (U+2066) and a C0 control.
+        steamItem("2000000002",
+                  std::string("\xE2\x80\xAESteam\x01Patch\xE2\x81\xA6") + std::string(300, 'x')),
         unansweredItem("2000000003", 9),
         steamItem("2000000001", "Not asked for"), // installed: ignored
         steamItem("9999", "Not in the preview")};
@@ -680,14 +682,15 @@ TEST_CASE("Workshop names replace the hints of missing entries and are stored",
     CHECK(named.workshop.size() == 2);
     const PreviewWorkshopItem& patch = named.workshop.at("2000000002");
     CHECK(patch.check == WorkshopItemCheck::Ok);
-    CHECK(patch.message.empty());
-    // Fitted like any hint: control characters become spaces, cut to the limit.
+    // Fitted like any hint: control characters, and direction marks as well,
+    // become spaces, cut to the limit.
     CHECK(patch.title.size() == sharing::kMaxNameHintBytes);
     CHECK(patch.title.rfind("Steam Patch xxx", 0) == 0);
+    CHECK(patch.title.find("\xE2\x80\xAE") == std::string::npos);
+    CHECK(patch.title.find("\xE2\x81\xA6") == std::string::npos);
     const PreviewWorkshopItem& gone = named.workshop.at("2000000003");
     CHECK(gone.check == WorkshopItemCheck::NotFound);
     CHECK(gone.title.empty());
-    CHECK_THAT(gone.message, ContainsSubstring("was not found"));
 
     // The Steam title replaces the code's hint in the manifest and the plan;
     // without a title the code's hint stays.

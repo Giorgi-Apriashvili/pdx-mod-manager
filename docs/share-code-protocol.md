@@ -355,8 +355,8 @@ fragment   = *( %x00-FF except separators )
 | No item twice, as an id or as a link                     | `ValidationFailed` |
 | At least one entry                                       | `ParseError`       |
 
-Messages name the 1-based entry and quote it shortened and with control
-characters replaced, for example `Entry 3 of the Workshop ID list, "12a4", is
+Messages name the 1-based entry and quote it shortened, with control
+characters, direction marks and line separators replaced by `?`, for example `Entry 3 of the Workshop ID list, "12a4", is
 not a Workshop ID or a Steam Workshop link.` or `Workshop ID 3149445431 is
 listed twice, as entry 2 and entry 7.` Byte offsets go into the error detail.
 

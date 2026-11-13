@@ -172,6 +172,23 @@ TEST_CASE("Control characters include C0, DEL and C1", "[sharing][utf8]") {
     CHECK_FALSE(containsControlCharacters("Ünïcødé 日本語"));
 }
 
+TEST_CASE("Layout controls are the direction marks and line separators", "[sharing][utf8]") {
+    for (const char* control :
+         {"\xD8\x9C", "\xE2\x80\x8E", "\xE2\x80\x8F", "\xE2\x80\xA8", "\xE2\x80\xA9",
+          "\xE2\x80\xAA", "\xE2\x80\xAE", "\xE2\x81\xA6", "\xE2\x81\xA9"}) {
+        INFO(std::string(control));
+        const std::string text = std::string("a") + control + "b";
+        CHECK(layoutControlLength(text, 0) == 0);
+        CHECK(layoutControlLength(text, 1) == text.size() - 2);
+    }
+    // Neighbours, a truncated sequence and ordinary text are not.
+    for (const char* other : {"\xE2\x80\x8D", "\xE2\x80\xAF", "\xE2\x81\xA5", "\xE2\x81\xAA",
+                              "\xD8\x9B", "\xE2\x80", "\xD8", "\xC2\xA0", "x"}) {
+        INFO(std::string(other));
+        CHECK(layoutControlLength(other, 0) == 0);
+    }
+}
+
 TEST_CASE("Display snippets are short, printable and cut on character boundaries",
           "[sharing][utf8]") {
     CHECK(displaySnippet("short") == "short");

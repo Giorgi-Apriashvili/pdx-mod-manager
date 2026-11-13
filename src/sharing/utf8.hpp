@@ -21,6 +21,13 @@ using pmm::isValidUtf8;
 // DEL (U+007F) or a C1 control (U+0080..U+009F).
 bool containsControlCharacters(std::string_view text) noexcept;
 
+// Length of the character at text[pos] if it is one that reorders or breaks
+// the text displayed around it, else 0: the bidirectional marks, embeddings,
+// overrides and isolates (U+061C, U+200E, U+200F, U+202A..U+202E,
+// U+2066..U+2069) and the line and paragraph separators (U+2028, U+2029).
+// Requires pos < text.size().
+std::size_t layoutControlLength(std::string_view text, std::size_t pos) noexcept;
+
 // Short, printable rendering of untrusted text for error messages: at most
 // `maxBytes` bytes (cut on a character boundary, "..." appended), control
 // characters replaced by '?', ill-formed UTF-8 replaced by U+FFFD.

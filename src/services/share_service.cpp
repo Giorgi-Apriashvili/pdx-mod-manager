@@ -50,6 +50,24 @@ std::string fitHint(std::string_view text, std::size_t maxBytes) {
     return out;
 }
 
+// A Workshop title fitted as a name hint. Steam titles reach the preview and
+// the stored playset without anyone typing them, so also the characters that
+// reorder or break the text around them (sharing::layoutControlLength())
+// become spaces.
+std::string fitTitle(std::string_view title) {
+    std::string text;
+    text.reserve(title.size());
+    for (std::size_t i = 0; i < title.size();) {
+        if (const std::size_t length = sharing::layoutControlLength(title, i); length > 0) {
+            text += ' ';
+            i += length;
+        } else {
+            text += title[i++];
+        }
+    }
+    return fitHint(text, sharing::kMaxNameHintBytes);
+}
+
 bool isFingerprint(std::string_view text) {
     constexpr std::string_view kPrefix = "sha256:";
     if (text.size() != kPrefix.size() + 64 || text.substr(0, kPrefix.size()) != kPrefix)
@@ -229,12 +247,7 @@ ImportPreview withWorkshopMetadata(ImportPreview preview,
         PreviewWorkshopItem answer;
         answer.check = toCheck(providers::classifyWorkshopItemForGame(item, preview.steamAppId));
         if (item.found)
-            answer.title = fitHint(item.title, sharing::kMaxNameHintBytes);
-        if (answer.check != WorkshopItemCheck::Ok) {
-            const Status valid = providers::validateWorkshopItemForGame(item, preview.steamAppId);
-            if (!valid)
-                answer.message = valid.error().message;
-        }
+            answer.title = fitTitle(item.title);
         if (answer.check == WorkshopItemCheck::WrongGame)
             answer.otherGame = gameForAppId(item.consumerAppId);
         preview.workshop.insert_or_assign(item.id, std::move(answer));
