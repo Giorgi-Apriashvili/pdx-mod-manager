@@ -11,6 +11,7 @@ set(CMAKE_AUTOMOC ON)
 add_executable(pmm_app_tests
   test_main.cpp
   test_support.hpp
+  http_stub.hpp
   metadata_host_tests.cpp
   models_tests.cpp
   performance_tests.cpp

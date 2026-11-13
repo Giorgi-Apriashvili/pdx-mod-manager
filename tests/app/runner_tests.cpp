@@ -8,6 +8,7 @@
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
+#include "http_stub.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
@@ -43,6 +44,18 @@ RunnerOptions runnerOptions(const fs::path& profile, const FakeAdapter& adapter)
     RunnerOptions options;
     options.runtime = hermeticOptions(profile, adapter);
     options.steam = false;
+    return options;
+}
+
+// Steam and the Web API on: the Web API host asks `stub`, and the coordinator
+// finds no pmm-steam-helper, so no process is ever started.
+RunnerOptions steamRunnerOptions(const fs::path& profile, const FakeAdapter& adapter,
+                                 const HttpStub& stub) {
+    RunnerOptions options = runnerOptions(profile, adapter);
+    options.steam = true;
+    options.metadata = true;
+    options.metadataEndpoint = stub.url();
+    options.helperExecutable = qpath(profile.parent_path() / "no helper" / "pmm-steam-helper.exe");
     return options;
 }
 
@@ -228,6 +241,95 @@ TEST_CASE("ServiceRunner runs calls on its worker in order and answers on the ca
         &receiver, [](AppRuntime&) { return 0; }, [&afterShutdown](int) { afterShutdown = true; });
     QCoreApplication::processEvents();
     CHECK_FALSE(afterShutdown);
+}
+
+TEST_CASE("ServiceRunner looks Workshop items up in batches and answers once", "[app][runner]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    HttpStub stub;
+    stub.responder = HttpStub::catalog({{"5550001", {"First"}}, {"5550150", {"Last"}}});
+    RunnerOptions options = steamRunnerOptions(temp.path() / "profile", adapter, stub);
+    options.metadataTimeout = std::chrono::milliseconds(500);
+    std::vector<std::string> ids;
+    for (int i = 1; i <= 150; ++i)
+        ids.push_back(std::to_string(5550000 + i));
+
+    QObject receiver;
+    std::vector<WorkshopLookup> answers;
+    const auto lookUp = [&](ServiceRunner& runner, std::vector<std::string> wanted) {
+        runner.lookupWorkshopItems(&receiver, kGame, std::move(wanted),
+                                   [&](WorkshopLookup lookup) { answers.push_back(lookup); });
+        CHECK(answers.empty()); // queued, like call()
+        REQUIRE(waitUntil([&] { return !answers.empty(); }));
+        waitUntil([] { return false; }, std::chrono::milliseconds(100));
+        REQUIRE(answers.size() == 1);
+        return std::exchange(answers, {}).front();
+    };
+
+    SECTION("with the Web API host") {
+        ServiceRunner runner(options);
+        REQUIRE(runner.start().ok);
+        CHECK(runner.metadataEnabled());
+        WorkshopLookup lookup = lookUp(runner, ids);
+        CHECK(lookup.available);
+        CHECK(lookup.unanswered == 0);
+        REQUIRE(lookup.items.size() == 150);
+        REQUIRE(stub.bodies.size() == 2);
+        std::vector<std::string> requested = HttpStub::requestedIds(stub.bodies[0]);
+        const std::vector<std::string> second = HttpStub::requestedIds(stub.bodies[1]);
+        requested.insert(requested.end(), second.begin(), second.end());
+        std::sort(requested.begin(), requested.end());
+        CHECK(requested == ids);
+        // Two connections: either may arrive first.
+        const bool largeFirst = stub.bodies[0].startsWith("itemcount=100&");
+        CHECK(stub.bodies[largeFirst ? 0 : 1].startsWith("itemcount=100&"));
+        CHECK(stub.bodies[largeFirst ? 1 : 0].startsWith("itemcount=50&"));
+        int titled = 0;
+        for (const providers::WorkshopItemMetadata& item : lookup.items)
+            titled += item.found ? 1 : 0;
+        CHECK(titled == 2);
+
+        // A batch without an answer counts its ids; the others still arrive.
+        stub.responder = [](const QByteArray& body) {
+            return HttpStub::requestedIds(body).size() == 100 ? HttpStub::http(500, "{}")
+                                                              : HttpStub::catalog({})(body);
+        };
+        lookup = lookUp(runner, ids);
+        CHECK(lookup.available);
+        CHECK(lookup.unanswered == 100);
+        CHECK(lookup.items.size() == 50);
+
+        // No ids: an empty answer without a request.
+        stub.bodies.clear();
+        lookup = lookUp(runner, {});
+        CHECK(lookup.available);
+        CHECK(lookup.items.empty());
+        CHECK(stub.bodies.isEmpty());
+
+        // A stub that never answers: the host's timeout ends the lookup.
+        stub.responder = nullptr;
+        lookup = lookUp(runner, {"5550001"});
+        CHECK(lookup.available);
+        CHECK(lookup.unanswered == 1);
+        runner.shutdown();
+        CHECK_FALSE(runner.metadataEnabled());
+        // After shutdown: unavailable, still answered.
+        CHECK_FALSE(lookUp(runner, {"5550001"}).available);
+    }
+    SECTION("without it") {
+        for (const bool steam : {false, true}) {
+            options.steam = steam;
+            options.metadata = !steam; // --no-steam, or metadata off
+            ServiceRunner runner(options);
+            REQUIRE(runner.start().ok);
+            CHECK_FALSE(runner.metadataEnabled());
+            const WorkshopLookup lookup = lookUp(runner, ids);
+            CHECK_FALSE(lookup.available);
+            CHECK(lookup.items.empty());
+        }
+        CHECK(stub.requests == 0);
+    }
 }
 
 TEST_CASE("ServiceRunner reports start-up failures with an actionable message", "[app][runner]") {
