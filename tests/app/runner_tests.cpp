@@ -320,6 +320,26 @@ TEST_CASE("ServiceRunner looks Workshop items up in batches and answers once", "
         CHECK_FALSE(runner.metadataEnabled());
         // After shutdown: unavailable, still answered.
         CHECK_FALSE(lookUp(runner, {"5550001"}).available);
+
+        // A shutdown while a batch is in flight answers too, with that batch
+        // unanswered (the long timeout leaves only the shutdown to end it).
+        options.metadataTimeout = std::chrono::seconds(60);
+        ServiceRunner closing(options);
+        REQUIRE(closing.start().ok);
+        stub.responder = HttpStub::catalog({{"5550001", {"First"}}});
+        stub.hold();
+        closing.lookupWorkshopItems(
+            &receiver, kGame, {"5550001", "5550002"},
+            [&](WorkshopLookup answer) { answers.push_back(std::move(answer)); });
+        REQUIRE(waitUntil([&] { return stub.waiting() == 1; }));
+        closing.shutdown();
+        stub.release();
+        REQUIRE(waitUntil([&] { return !answers.empty(); }));
+        waitUntil([] { return false; }, std::chrono::milliseconds(200));
+        REQUIRE(answers.size() == 1);
+        CHECK(answers.front().available);
+        CHECK(answers.front().unanswered == 2);
+        CHECK(answers.front().items.empty());
     }
     SECTION("without it") {
         for (const bool steam : {false, true}) {

@@ -97,7 +97,8 @@ public:
 
     // Asks the Web API host about `ids` on the worker, in batches of
     // providers::kMaxPublishedFileDetailsItems, and answers once, when every
-    // batch has been answered or has failed: `done` runs queued on the
+    // batch has been answered or has failed, or at shutdown(), which counts
+    // the batches still waiting as unanswered: `done` runs queued on the
     // receiver's thread like call()'s, and is dropped if the receiver was
     // destroyed meanwhile. Without a host the answer has `available` false.
     void lookupWorkshopItems(QObject* receiver, GameKey game, std::vector<std::string> ids,

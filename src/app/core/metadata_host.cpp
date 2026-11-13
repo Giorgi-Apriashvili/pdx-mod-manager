@@ -19,7 +19,14 @@ constexpr const char* kComponent = "app.metadata";
 QtWorkshopMetadataHost::QtWorkshopMetadataHost(QObject* parent)
     : QObject(parent), m_endpoint(defaultEndpoint()) {}
 
-QtWorkshopMetadataHost::~QtWorkshopMetadataHost() = default;
+QtWorkshopMetadataHost::~QtWorkshopMetadataHost() {
+    // The replies die with this object: their lookups are answered now.
+    for (auto& [id, completion] : std::exchange(m_lookups, {})) {
+        WorkshopLookupReply reply;
+        reply.error = "the Web API host was closed before the reply arrived";
+        completion(std::move(reply));
+    }
+}
 
 QUrl QtWorkshopMetadataHost::defaultEndpoint() {
     const QString overrideUrl = qEnvironmentVariable("PMM_WORKSHOP_METADATA_URL");
@@ -38,28 +45,39 @@ void QtWorkshopMetadataHost::request(const GameKey& gameKey, const std::vector<s
 
 void QtWorkshopMetadataHost::lookup(const GameKey& gameKey, const std::vector<std::string>& ids,
                                     Completion completion) {
+    const quint64 id = ++m_lastLookup;
+    m_lookups.emplace(id, std::move(completion));
     const bool posted =
         post(gameKey, ids, "preview",
-             [completion](Result<std::vector<providers::WorkshopItemMetadata>> items) {
+             [this, id](Result<std::vector<providers::WorkshopItemMetadata>> items) {
                  WorkshopLookupReply reply;
                  reply.answered = items.ok();
                  if (items)
                      reply.items = std::move(items).value();
                  else
                      reply.error = items.error().message;
-                 completion(std::move(reply));
+                 answerLookup(id, std::move(reply));
              });
     if (!posted) {
         // Answered later all the same, as a caller expects of a request.
         QMetaObject::invokeMethod(
             this,
-            [completion = std::move(completion)] {
+            [this, id] {
                 WorkshopLookupReply reply;
                 reply.error = "no request could be built for the item ids";
-                completion(std::move(reply));
+                answerLookup(id, std::move(reply));
             },
             Qt::QueuedConnection);
     }
+}
+
+void QtWorkshopMetadataHost::answerLookup(quint64 id, WorkshopLookupReply reply) {
+    const auto it = m_lookups.find(id);
+    if (it == m_lookups.end())
+        return;
+    const Completion completion = std::move(it->second);
+    m_lookups.erase(it);
+    completion(std::move(reply));
 }
 
 bool QtWorkshopMetadataHost::post(const GameKey& gameKey, const std::vector<std::string>& ids,

@@ -203,3 +203,30 @@ TEST_CASE("metadata host answers a failed lookup once, unanswered", "[app][metad
     CHECK(stub.requests == expectedRequests);
     CHECK(host.pendingRequests() == 0);
 }
+
+TEST_CASE("metadata host answers its waiting lookups when it is destroyed", "[app][metadata]") {
+    HttpStub stub;
+    stub.response = HttpStub::http(200, kReply);
+    stub.hold();
+    Lookups lookups;
+    {
+        QtWorkshopMetadataHost host;
+        host.setEndpoint(stub.url());
+        SECTION("a request in flight") {
+            lookUp(host, lookups, {"123456789"});
+            REQUIRE(waitUntil([&] { return stub.waiting() == 1; }));
+        }
+        SECTION("ids no request can be built for") {
+            lookUp(host, lookups, {"not-an-id"});
+        }
+        CHECK(lookups.answers == 0);
+    }
+    CHECK(lookups.answers == 1);
+    REQUIRE(lookups.reply.has_value());
+    CHECK_FALSE(lookups.reply->answered);
+    CHECK_FALSE(lookups.reply->error.empty());
+    // Nothing more arrives, not even once the stub answers.
+    stub.release();
+    waitUntil([] { return false; }, std::chrono::milliseconds(200));
+    CHECK(lookups.answers == 1);
+}
