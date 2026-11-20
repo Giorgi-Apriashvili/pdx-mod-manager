@@ -423,7 +423,17 @@ Status ContentLoadJsonAdapter::verifyWorkshopContent(const fs::path& installPath
         return makeError(ErrorCode::ValidationFailed,
                          std::string(kModMetadataFile) + " is missing from the downloaded content",
                          pathToUtf8(installPath));
-    return requireNonEmptyFile(metadata, kModMetadataFile, installPath);
+    PMM_TRY(requireNonEmptyFile(metadata, kModMetadataFile, installPath));
+    // The scan's rule: a file that is not a JSON object leaves the mod Broken.
+    Result<ModMetadata> parsed = readModMetadata(metadata);
+    if (!parsed)
+        return makeError(ErrorCode::ValidationFailed,
+                         std::string(kModMetadataFile) +
+                             (parsed.error().code == ErrorCode::ParseError
+                                  ? " is not a valid JSON object"
+                                  : " cannot be read"),
+                         parsed.error().detail);
+    return {};
 }
 
 } // namespace pmm::games

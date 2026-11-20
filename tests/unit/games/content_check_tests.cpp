@@ -221,6 +221,17 @@ TEST_CASE("The content_load.json family's download check requires metadata.json"
     fs::create_directories(folder / ".metadata" / "metadata.json");
     CHECK_FALSE(adapter.verifyWorkshopContent(folder).ok());
 
+    // What the scan marks Broken: whitespace, a trailing comma, not an object.
+    for (const char* text : {"   ", "{\n  \"name\": \"x\",\n}", "[]"}) {
+        INFO(text);
+        writeText(base / "7" / ".metadata" / "metadata.json", text);
+        auto invalid = adapter.verifyWorkshopContent(base / "7");
+        REQUIRE_FALSE(invalid.ok());
+        CHECK(invalid.error().code == ErrorCode::ValidationFailed);
+        CHECK(invalid.error().message == ".metadata/metadata.json is not a valid JSON object");
+        CHECK(isValidUtf8(invalid.error().detail));
+    }
+
     auto gone = adapter.verifyWorkshopContent(base / "6");
     REQUIRE_FALSE(gone.ok());
     CHECK(gone.error().code == ErrorCode::NotFound);
@@ -243,6 +254,9 @@ TEST_CASE("The content_load.json family's download check accepts what its scan d
         {"5100000003", {{"descriptor.mod", "name=\"x\""}}, false},
         {"5100000004", {{"metadata.json", "{}"}}, false},
         {"5100000005", {{"common/x.txt", "x"}}, false},
+        // Read and rejected alike: the scan marks it Broken.
+        {"5100000006", {{".metadata/metadata.json", "{,}"}}, false},
+        {"5100000007", {{".metadata/metadata.json", "[\"x\"]"}}, false},
     };
     const Vic3Adapter adapter;
     TempDir dir("pmm verify vic3 scan");

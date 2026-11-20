@@ -231,7 +231,8 @@ helper session per game. Its responsibilities:
   needs the user rather than subscribing unverified.
 - Verify content with the game adapter's `verifyWorkshopContent()`, the rule
   of the adapter's own scan (`descriptor.mod` or a sole `.mod` file for the
-  `dlc_load.json` games, `.metadata/metadata.json` for Victoria 3).
+  `dlc_load.json` games, a `.metadata/metadata.json` that is a JSON object
+  for Victoria 3).
   `CoordinatorOptions::verifyContent` replaces it in tests.
 - Persist jobs when the reducer asks, coalescing progress-only changes.
 - Run at most one job per mod. A job that starts (a new import, a retry)

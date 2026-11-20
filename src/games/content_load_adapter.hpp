@@ -60,8 +60,8 @@ public:
     Result<LaunchPlan>
     buildLaunchPlan(const GameInstallation& installation,
                     std::span<const InstalledMod> orderedEnabledMods) const override;
-    // A folder needs a non-empty .metadata/metadata.json; a single file must
-    // not be empty.
+    // A folder needs a .metadata/metadata.json that is a JSON object, as the
+    // scan reads it; a single file must not be empty.
     Status verifyWorkshopContent(const fs::path& installPath) const override;
 };
 

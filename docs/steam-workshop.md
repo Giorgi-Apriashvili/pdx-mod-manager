@@ -21,7 +21,7 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
 | Europa Universalis IV | **Verified live** 2026-10-30 with EU4 1.37.5: the helper session in EU4's app context, with the `steam_api64.dll` from the game root, and subscribe and download (see the "Subscribe" row and the [evidence](evidence/live-validation-2026-10-30.md)) |
 | Crusader Kings III | Implemented, **unverified**: the same mechanism, with the Steam API library from `<install>/binaries`, where CK3 keeps it next to `ck3.exe`; the helper has not been run for app 1158310 |
-| Victoria 3 | Implemented, **unverified**: the same mechanism; the helper has not been run for app 529340. Its Workshop items have no `descriptor.mod`: the check that ends a download wants a non-empty `.metadata/metadata.json`, and accepts the 9 items installed on the development machine (read-only, 2026-11-20) |
+| Victoria 3 | Implemented, **unverified**: the same mechanism; the helper has not been run for app 529340. Its Workshop items have no `descriptor.mod`: the check that ends a download wants a `.metadata/metadata.json` that is a JSON object, and accepts the 9 items installed on the development machine (read-only, 2026-11-20) |
 
 ## 1. Architecture
 
@@ -269,8 +269,9 @@ its transitions and the helper.
   [ADR 0010](adr/0010-content-load-adapter-family.md)): for Stellaris, EU4 and CK3 a non-empty
   `descriptor.mod` in the folder, else exactly one other `.mod` file there, non-empty, and no
   `.zip` (`games::contentDescriptorFile()`; some items ship `<Name>.mod`); for Victoria 3 a
-  non-empty `.metadata/metadata.json`. For every game a single file (a legacy item) must not
-  be empty.
+  `.metadata/metadata.json` that is a JSON object, as the scan reads it (anything else makes
+  the scan list the mod as Broken). For every game a single file (a legacy item) must not be
+  empty.
 - Feed `Tick` about once per second. Save `context.job` when `persist` is set; progress-only
   changes may be coalesced.
 - On start-up, call `startAcquisition()` for every stored non-terminal job.
