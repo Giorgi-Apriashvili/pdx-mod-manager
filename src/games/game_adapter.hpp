@@ -113,7 +113,8 @@ public:
     virtual Status verifyWorkshopContent(const fs::path& installPath) const = 0;
 };
 
-// Registry of implemented adapters (CK3, EU4, Stellaris), in catalog order.
+// Registry of implemented adapters (CK3, EU4, Stellaris, Victoria 3), in
+// catalog order.
 std::span<const std::unique_ptr<GameAdapter>> adapters();
 const GameAdapter* findAdapter(std::string_view gameKey);
 

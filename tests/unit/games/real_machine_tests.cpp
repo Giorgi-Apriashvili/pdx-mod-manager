@@ -1,19 +1,23 @@
-// Hidden tests ("[.real]") that run the CK3, EU4 and Stellaris adapters against
-// the REAL installations of the machine they run on and print a redacted
-// summary. They are strictly read-only: discovery, scanning and reading
-// dlc_load.json only read files, and buildLaunchPlan() only computes the writes
-// it would make (nothing is applied, nothing is started). The replay step
-// copies the registered descriptors into a temporary folder and works on the
-// copy. Run explicitly:
+// Hidden tests ("[.real]") that run the CK3, EU4, Stellaris and Victoria 3
+// adapters against the REAL installations of the machine they run on and print
+// a redacted summary. They are strictly read-only: discovery, scanning and
+// reading dlc_load.json or content_load.json only read files,
+// buildLaunchPlan() only computes the writes it would make (nothing is
+// applied, nothing is started), and the Workshop content check only looks at
+// the folders. The replay steps copy the registered descriptors (Victoria 3:
+// content_load.json) into a temporary folder and work on the copy. Run
+// explicitly:
 //   pmm_games_tests "[.real]" -s
 // Results of a run are recorded in docs/evidence/real-scan-2026-10-29.md (EU4,
-// Stellaris) and docs/games/ck3.md (CK3).
+// Stellaris), docs/games/ck3.md (CK3) and docs/games/vic3.md (Victoria 3).
 
 #include "core/log.hpp"
 #include "games/ck3.hpp"
 #include "games/descriptor.hpp"
 #include "games/eu4.hpp"
+#include "games/mod_metadata.hpp"
 #include "games/stellaris.hpp"
+#include "games/vic3.hpp"
 #include "platform/fs.hpp"
 #include "platform/steam.hpp"
 #include "test_support.hpp"
@@ -45,7 +49,7 @@ std::string joined(const std::vector<std::string>& items) {
     return out;
 }
 
-void printSteamState(const DlcLoadJsonAdapter& adapter, const GameInstallation& inst) {
+void printSteamState(const LauncherGameAdapter& adapter, const GameInstallation& inst) {
     const std::string appId(adapter.traits().steamAppId);
     const fs::path library = inst.steamLibraryPath;
     if (auto app = steam::readAppManifest(
@@ -67,7 +71,7 @@ void printSteamState(const DlcLoadJsonAdapter& adapter, const GameInstallation& 
                   << installed << " installed, " << pending << " with a pending update)\n";
     }
     std::error_code ec;
-    // The file the adapter reads (<install>/userdir.txt, CK3:
+    // The file the adapter reads (<install>/userdir.txt, CK3 and Victoria 3:
     // <install>/game/userdir.txt), named when it is not the usual one.
     const std::string userDirName(adapter.traits().userDirFile);
     const fs::path userDir = inst.installPath / platform::pathFromUtf8(userDirName);
@@ -92,7 +96,9 @@ void printSteamState(const DlcLoadJsonAdapter& adapter, const GameInstallation& 
     std::cout << "steam_appid.txt: " << appIdFile << "\n";
 }
 
-void runRealScan(const DlcLoadJsonAdapter& adapter) {
+// Discovers the game and prints its installation, Steam state and
+// capabilities.
+GameInstallation printInstallation(const LauncherGameAdapter& adapter) {
     setLogSink({}); // keep the summary readable
     const DiscoveryEnvironment env = DiscoveryEnvironment::current();
     const std::vector<GameInstallation> found = adapter.discover(env);
@@ -115,7 +121,37 @@ void runRealScan(const DlcLoadJsonAdapter& adapter) {
               << caps.workshopAcquisition << ", localMods " << caps.localMods << "\n";
     for (const std::string& arg : inst.defaultArguments)
         CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
+    return inst;
+}
 
+// The launch plan for the current configuration (computed, never applied):
+// zero writes means this code reproduces the official launcher's files byte
+// for byte. Every write must target the user-data folder and change the file.
+void printLaunchPlan(const LaunchPlan& plan, const GameInstallation& inst) {
+    std::cout << "launch plan for the current configuration: " << plan.configWrites.size()
+              << " write(s)\n"
+              << "  executable:  " << shown(plan.executable) << "\n"
+              << "  working dir: " << shown(plan.workingDirectory) << "\n"
+              << "  arguments:   [" << joined(plan.arguments) << "]\n";
+    for (const auto& [name, value] : plan.environment)
+        std::cout << "  environment: " << name << "=" << value << "\n";
+    for (const std::string& warning : plan.warnings)
+        std::cout << "  warning: " << redact(warning) << "\n";
+    for (const ConfigWrite& write : plan.configWrites) {
+        auto existing = platform::readFile(write.target);
+        std::cout << "  would write " << shown(write.target) << " (" << write.purpose << "): "
+                  << (existing ? "replaces " + std::to_string(existing->size()) + " bytes"
+                               : std::string("new file"))
+                  << " with " << write.contents.size() << " bytes\n";
+        CHECK(platform::isWithin(write.target, inst.userDataPath));
+        CHECK_FALSE((existing && *existing == write.contents));
+    }
+    for (const std::string& arg : plan.arguments)
+        CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
+}
+
+void runRealScan(const DlcLoadJsonAdapter& adapter) {
+    const GameInstallation inst = printInstallation(adapter);
     auto scanned = adapter.scanMods(inst);
     REQUIRE(scanned.ok());
     const std::vector<InstalledMod>& mods = *scanned;
@@ -179,31 +215,9 @@ void runRealScan(const DlcLoadJsonAdapter& adapter) {
     }
     std::cout << "  unresolved: " << unresolved << "\n";
 
-    // The plan for the current configuration (computed, never applied): zero
-    // writes means this code reproduces the official launcher's files byte for
-    // byte. Every write must target the user-data folder and change the file.
     auto plan = adapter.buildLaunchPlan(inst, ordered);
     REQUIRE(plan.ok());
-    std::cout << "launch plan for the current configuration: " << plan->configWrites.size()
-              << " write(s)\n"
-              << "  executable:  " << shown(plan->executable) << "\n"
-              << "  working dir: " << shown(plan->workingDirectory) << "\n"
-              << "  arguments:   [" << joined(plan->arguments) << "]\n";
-    for (const auto& [name, value] : plan->environment)
-        std::cout << "  environment: " << name << "=" << value << "\n";
-    for (const std::string& warning : plan->warnings)
-        std::cout << "  warning: " << redact(warning) << "\n";
-    for (const ConfigWrite& write : plan->configWrites) {
-        auto existing = platform::readFile(write.target);
-        std::cout << "  would write " << shown(write.target) << " (" << write.purpose << "): "
-                  << (existing ? "replaces " + std::to_string(existing->size()) + " bytes"
-                               : std::string("new file"))
-                  << " with " << write.contents.size() << " bytes\n";
-        CHECK(platform::isWithin(write.target, inst.userDataPath));
-        CHECK_FALSE((existing && *existing == write.contents));
-    }
-    for (const std::string& arg : plan->arguments)
-        CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
+    printLaunchPlan(*plan, inst);
 
     // Regenerating each launcher-written Workshop registration from its
     // content descriptor (descriptor.mod, else a sole <Name>.mod) must give
@@ -287,6 +301,129 @@ void replayWithoutWorkshopContent(const DlcLoadJsonAdapter& adapter) {
         CHECK(mod.identity.source == source::Local);
 }
 
+void runRealVic3Scan(const Vic3Adapter& adapter) {
+    const GameInstallation inst = printInstallation(adapter);
+    const ProcessNames names = adapter.processNames(inst);
+    std::cout << "process names:  [" << joined(names.game) << "], writers ["
+              << joined(names.conflictingWriters) << "]\n";
+
+    auto scanned = adapter.scanMods(inst);
+    REQUIRE(scanned.ok());
+    const std::vector<InstalledMod>& mods = *scanned;
+    std::map<std::string, int> bySource;
+    std::map<std::string, int> byState;
+    std::map<std::string, int> warningsByPattern;
+    int archives = 0;
+    int withProblems = 0;
+    int withWarnings = 0;
+    int withoutCustomData = 0;
+    for (const InstalledMod& mod : mods) {
+        ++bySource[mod.identity.source];
+        ++byState[toString(mod.state)];
+        withProblems += mod.problems.empty() ? 0 : 1;
+        std::error_code ec;
+        archives += fs::is_regular_file(mod.contentPath, ec) ? 1 : 0;
+        if (!mod.descriptorPath.empty()) {
+            auto metadata = readModMetadata(mod.descriptorPath);
+            withoutCustomData += metadata && !metadata->hasGameCustomData ? 1 : 0;
+        }
+        const std::vector<std::string> warnings = adapter.compatibilityWarnings(inst, mod);
+        withWarnings += warnings.empty() ? 0 : 1;
+        if (!warnings.empty())
+            ++warningsByPattern["\"" + mod.descriptor.supportedVersion + "\" -> " +
+                                std::to_string(warnings.size()) + " warning(s)"];
+        // The path content_load.json would hold names the content.
+        if (!mod.contentPath.empty())
+            CHECK(platform::isWithin(platform::pathFromUtf8(mod.descriptorRef), mod.contentPath));
+    }
+    std::cout << "mods:           " << mods.size() << "\n";
+    for (const auto& [sourceKey, count] : bySource)
+        std::cout << "  source " << sourceKey << ": " << count << "\n";
+    for (const auto& [state, count] : byState)
+        std::cout << "  state " << state << ": " << count << "\n";
+    std::cout << "  local .zip mods: " << archives << "\n"
+              << "  metadata.json without game_custom_data: " << withoutCustomData << "\n"
+              << "  with scan problems: " << withProblems << "\n"
+              << "  with compatibility warnings: " << withWarnings << "\n";
+    for (const auto& [pattern, count] : warningsByPattern)
+        std::cout << "    supported_game_version " << pattern << ": " << count << " mod(s)\n";
+    for (const InstalledMod& mod : mods) {
+        for (const std::string& problem : mod.problems)
+            std::cout << "  problem " << toString(mod.identity) << ": " << redact(problem) << "\n";
+    }
+
+    auto current = adapter.readCurrentConfiguration(inst, mods);
+    REQUIRE(current.ok());
+    std::cout << "content_load.json enabled mods: " << current->size() << "\n";
+    std::vector<InstalledMod> ordered;
+    int unresolved = 0;
+    for (std::size_t i = 0; i < current->size(); ++i) {
+        const PlaysetEntry& entry = (*current)[i];
+        bool resolved = false;
+        for (const InstalledMod& mod : mods) {
+            if (mod.identity == entry.identity) {
+                ordered.push_back(mod);
+                resolved = true;
+            }
+        }
+        unresolved += resolved ? 0 : 1;
+        std::cout << "  #" << i + 1 << " " << toString(entry.identity) << " \"" << entry.nameHint
+                  << "\"" << (resolved ? "" : " (not installed)") << "\n";
+    }
+    std::cout << "  unresolved: " << unresolved << "\n";
+    auto plan = adapter.buildLaunchPlan(inst, ordered);
+    REQUIRE(plan.ok());
+    printLaunchPlan(*plan, inst);
+
+    // The check that ends a Workshop download, over the folders on disk.
+    int workshopFolders = 0;
+    int accepted = 0;
+    for (const InstalledMod& mod : mods) {
+        if (mod.identity.source != source::SteamWorkshop || mod.contentPath.empty())
+            continue;
+        ++workshopFolders;
+        const Status verified = adapter.verifyWorkshopContent(mod.contentPath);
+        accepted += verified.ok() ? 1 : 0;
+        if (!verified.ok())
+            std::cout << "  download check rejects " << toString(mod.identity) << ": "
+                      << verified.error().message << "\n";
+    }
+    std::cout << "download check accepts " << accepted << " of " << workshopFolders
+              << " Workshop folders\n";
+}
+
+// A new installation replayed with the real content_load.json: it is copied
+// into a temporary user-data folder without mod/, with the Steam library
+// replaced by an empty one. Only the copy is read; nothing is written.
+void replayVic3WithoutContent(const Vic3Adapter& adapter) {
+    setLogSink({});
+    const std::vector<GameInstallation> found = adapter.discover(DiscoveryEnvironment::current());
+    REQUIRE_FALSE(found.empty());
+    const GameInstallation& inst = found.front();
+    test::TempDir temp("pmm real replay");
+    const fs::path library = temp.path() / "Steam";
+    fs::create_directories(library / "steamapps");
+    GameInstallation replay = inst;
+    replay.userDataPath = temp.path() / "user data";
+    replay.steamLibraryPath = library;
+    test::writeText(replay.userDataPath / "content_load.json",
+                    test::readText(inst.userDataPath / "content_load.json"));
+
+    auto mods = adapter.scanMods(replay);
+    REQUIRE(mods.ok());
+    std::cout << "== " << adapter.catalog().displayName
+              << ": replay without mods or Workshop content\n  inventory: " << mods->size() << "\n";
+    CHECK(mods->empty());
+    auto current = adapter.readCurrentConfiguration(replay, *mods);
+    REQUIRE(current.ok());
+    std::map<std::string, int> entries;
+    for (const PlaysetEntry& entry : *current)
+        ++entries[entry.identity.source + " not installed"];
+    std::cout << "  content_load.json entries: " << current->size() << "\n";
+    for (const auto& [key, count] : entries)
+        std::cout << "    " << key << ": " << count << "\n";
+}
+
 } // namespace
 
 TEST_CASE("Real Stellaris installation (read-only)", "[.real]") {
@@ -302,4 +439,9 @@ TEST_CASE("Real EU4 installation (read-only)", "[.real]") {
 TEST_CASE("Real CK3 installation (read-only)", "[.real]") {
     runRealScan(Ck3Adapter());
     replayWithoutWorkshopContent(Ck3Adapter());
+}
+
+TEST_CASE("Real Victoria 3 installation (read-only)", "[.real]") {
+    runRealVic3Scan(Vic3Adapter());
+    replayVic3WithoutContent(Vic3Adapter());
 }

@@ -10,4 +10,5 @@ pmm_add_test(pmm_games_tests
     registry_tests.cpp
     stellaris_adapter_tests.cpp
     supported_version_tests.cpp
+    vic3_adapter_tests.cpp
   LIBS pmm_games pmm_platform)

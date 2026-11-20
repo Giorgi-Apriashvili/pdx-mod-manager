@@ -6,23 +6,32 @@
 #include <string_view>
 #include <vector>
 
-TEST_CASE("Catalog exposes CK3, EU4 and Stellaris as supported games", "[core][catalog]") {
+TEST_CASE("Catalog exposes CK3, EU4, Stellaris and Victoria 3 as supported games",
+          "[core][catalog]") {
     const auto* ck3 = pmm::findGame("ck3");
     const auto* eu4 = pmm::findGame("eu4");
     const auto* stellaris = pmm::findGame("stellaris");
+    const auto* vic3 = pmm::findGame("vic3");
     REQUIRE(ck3 != nullptr);
     REQUIRE(eu4 != nullptr);
     REQUIRE(stellaris != nullptr);
+    REQUIRE(vic3 != nullptr);
     CHECK(ck3->adapterAvailable);
     CHECK(eu4->adapterAvailable);
     CHECK(stellaris->adapterAvailable);
+    CHECK(vic3->adapterAvailable);
     CHECK(ck3->steamAppId == "1158310");
     CHECK(eu4->steamAppId == "236850");
     CHECK(stellaris->steamAppId == "281990");
+    CHECK(vic3->steamAppId == "529340");
     CHECK(ck3->displayName == "Crusader Kings III");
     CHECK(ck3->userDataFolder == "Crusader Kings III");
+    CHECK(vic3->displayName == "Victoria 3");
+    CHECK(vic3->userDataFolder == "Victoria 3");
     CHECK(pmm::isSourceValidForGame("ck3", pmm::source::SteamWorkshop));
     CHECK(pmm::isSourceValidForGame("ck3", pmm::source::Local));
+    CHECK(pmm::isSourceValidForGame("vic3", pmm::source::SteamWorkshop));
+    CHECK(pmm::isSourceValidForGame("vic3", pmm::source::Local));
 }
 
 TEST_CASE("Catalog lists supported games first, alphabetically", "[core][catalog]") {
@@ -30,7 +39,7 @@ TEST_CASE("Catalog lists supported games first, alphabetically", "[core][catalog
     std::vector<std::string_view> keys;
     for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog())
         keys.push_back(entry.key);
-    CHECK(keys == std::vector<std::string_view>{"ck3", "eu4", "stellaris", "hoi4", "vic3"});
+    CHECK(keys == std::vector<std::string_view>{"ck3", "eu4", "stellaris", "vic3", "hoi4"});
     bool unsupportedSeen = false;
     for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog()) {
         CHECK_FALSE((unsupportedSeen && entry.adapterAvailable));
@@ -39,7 +48,7 @@ TEST_CASE("Catalog lists supported games first, alphabetically", "[core][catalog
 }
 
 TEST_CASE("Catalog lists future games without claiming support", "[core][catalog]") {
-    for (auto key : {"hoi4", "vic3"}) {
+    for (auto key : {"hoi4"}) {
         const auto* game = pmm::findGame(key);
         REQUIRE(game != nullptr);
         CHECK_FALSE(game->adapterAvailable);

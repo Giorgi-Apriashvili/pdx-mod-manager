@@ -344,7 +344,7 @@ LauncherGameAdapter::beginLaunchPlan(const GameInstallation& installation) const
     plan.executable = installation.executablePath;
     // The executable's folder, as the Paradox launcher does: the installation
     // folder for Stellaris and EU4, <install>/binaries for CK3 (where its
-    // steam_appid.txt lies).
+    // steam_appid.txt lies) and Victoria 3 (whose engine finds ../game there).
     plan.workingDirectory = installation.executablePath.has_parent_path()
                                 ? installation.executablePath.parent_path()
                                 : installation.installPath;

@@ -4,6 +4,7 @@
 #include "core/utf8.hpp"
 #include "games/ck3.hpp"
 #include "games/stellaris.hpp"
+#include "games/vic3.hpp"
 #include "platform/steam.hpp"
 #include "test_support.hpp"
 
@@ -183,4 +184,86 @@ TEST_CASE("The download check reports paths with unpaired surrogates", "[games][
     Status missing = adapter.verifyWorkshopContent(folder / "1");
     REQUIRE_FALSE(missing.ok());
     CHECK(isValidUtf8(missing.error().detail));
+}
+
+TEST_CASE("The content_load.json family's download check requires metadata.json",
+          "[games][content-check]") {
+    const Vic3Adapter adapter;
+    TempDir dir("pmm verify vic3");
+    const fs::path base = dir.path() / u8path("Ünïcødé dir");
+
+    // As all nine Workshop items of the development machine: no descriptor.mod.
+    const fs::path good = base / "5000000001";
+    writeText(good / ".metadata" / "metadata.json", "{\"name\": \"Example Ledger\"}");
+    writeText(good / "common" / "x.txt", "x");
+    CHECK(adapter.verifyWorkshopContent(good).ok());
+
+    // A Clausewitz descriptor does not describe a Victoria 3 mod.
+    const fs::path clausewitz = base / "2";
+    writeText(clausewitz / "descriptor.mod", "name=\"Example\"");
+    auto missing = adapter.verifyWorkshopContent(clausewitz);
+    REQUIRE_FALSE(missing.ok());
+    CHECK(missing.error().code == ErrorCode::ValidationFailed);
+    CHECK(missing.error().message ==
+          ".metadata/metadata.json is missing from the downloaded content");
+
+    const fs::path topLevel = base / "3";
+    writeText(topLevel / "metadata.json", "{\"name\": \"Example\"}");
+    CHECK_FALSE(adapter.verifyWorkshopContent(topLevel).ok());
+
+    const fs::path empty = base / "4";
+    writeText(empty / ".metadata" / "metadata.json", "");
+    auto emptyMetadata = adapter.verifyWorkshopContent(empty);
+    REQUIRE_FALSE(emptyMetadata.ok());
+    CHECK(emptyMetadata.error().message == ".metadata/metadata.json is empty");
+
+    const fs::path folder = base / "5";
+    fs::create_directories(folder / ".metadata" / "metadata.json");
+    CHECK_FALSE(adapter.verifyWorkshopContent(folder).ok());
+
+    auto gone = adapter.verifyWorkshopContent(base / "6");
+    REQUIRE_FALSE(gone.ok());
+    CHECK(gone.error().code == ErrorCode::NotFound);
+
+    writeText(base / "legacy_item.zip", "PK\x03\x04");
+    CHECK(adapter.verifyWorkshopContent(base / "legacy_item.zip").ok());
+}
+
+TEST_CASE("The content_load.json family's download check accepts what its scan describes",
+          "[games][content-check]") {
+    struct Layout {
+        const char* id;
+        std::vector<std::pair<const char*, const char*>> files;
+        bool described;
+    };
+    const std::vector<Layout> layouts{
+        {"5100000001", {{".metadata/metadata.json", "{\"game_custom_data\": {}}"}}, true},
+        // Read, with a problem that names what is missing.
+        {"5100000002", {{".metadata/metadata.json", "{\"name\": \"x\"}"}}, true},
+        {"5100000003", {{"descriptor.mod", "name=\"x\""}}, false},
+        {"5100000004", {{"metadata.json", "{}"}}, false},
+        {"5100000005", {{"common/x.txt", "x"}}, false},
+    };
+    const Vic3Adapter adapter;
+    TempDir dir("pmm verify vic3 scan");
+    GameInstallation inst;
+    inst.game = "vic3";
+    inst.userDataPath = dir.path() / "user data";
+    inst.steamLibraryPath = dir.path() / "Steam";
+    fs::create_directories(inst.userDataPath / "mod");
+    const fs::path content = platform::steam::workshopContentDir(inst.steamLibraryPath, "529340");
+    for (const Layout& layout : layouts) {
+        for (const auto& [file, text] : layout.files)
+            writeText(content / layout.id / u8path(file), text);
+    }
+    auto mods = adapter.scanMods(inst);
+    REQUIRE(mods.ok());
+    REQUIRE(mods->size() == layouts.size());
+    for (const Layout& layout : layouts) {
+        INFO(layout.id);
+        const InstalledMod* mod = test::findMod(*mods, layout.id);
+        REQUIRE(mod != nullptr);
+        CHECK((mod->state == InstallState::Ready) == layout.described);
+        CHECK(adapter.verifyWorkshopContent(content / layout.id).ok() == layout.described);
+    }
 }

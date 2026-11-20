@@ -4,7 +4,10 @@
 // (launcher-settings.json next to the game or in <install>/launcher/). A
 // family derives from it for each way the enabled mods are stored:
 //   - DlcLoadJsonAdapter (games/dlc_load_adapter.hpp): dlc_load.json plus
-//     mod/*.mod registrations (Stellaris, EU4, Crusader Kings III).
+//     mod/*.mod registrations (Stellaris, EU4, Crusader Kings III);
+//   - ContentLoadJsonAdapter (games/content_load_adapter.hpp):
+//     content_load.json with absolute paths, mods described by their own
+//     .metadata/metadata.json (Victoria 3).
 // Everything that may differ per game within a family is a GameTraits field;
 // each game keeps its own adapter class so that it can diverge once evidence
 // requires it.
@@ -25,7 +28,7 @@
 //
 // Launch: the executable from launcher-settings.json (else
 // GameTraits::executable), started in its own folder (the installation folder
-// for Stellaris and EU4, <install>/binaries for CK3).
+// for Stellaris and EU4, <install>/binaries for CK3 and Victoria 3).
 
 #include "games/game_adapter.hpp"
 
@@ -46,8 +49,8 @@ struct GameTraits {
     // Processes that rewrite the configuration (the Paradox launcher).
     std::span<const std::string_view> launcherProcesses;
     // Path relative to the installation folder of the file that relocates
-    // the user-data folder ("userdir.txt", CK3: "game/userdir.txt"); empty
-    // when the game has no such file.
+    // the user-data folder ("userdir.txt", CK3 and Victoria 3:
+    // "game/userdir.txt"); empty when the game has no such file.
     std::string_view userDirFile;
     // launcher-settings.json arguments that are never passed on the user's
     // behalf, compared ASCII case-insensitively ("-enabletelemetry").
@@ -60,10 +63,11 @@ struct GameTraits {
     bool loadOrderVerifiedInGame = false; // probe-mod run recorded in the evidence
     std::string_view loadOrderUserNote;   // LoadOrderInfo::userNote
     std::string_view logComponent;        // "games.stellaris"
-    // The descriptor key that compatibilityWarnings() names.
+    // The descriptor key that compatibilityWarnings() names (Victoria 3:
+    // "supported_game_version").
     std::string_view supportedVersionKey = "supported_version";
     // Further processes that count as the running game, e.g. a console
-    // wrapper that starts the executable.
+    // wrapper that starts the executable (Victoria 3).
     std::span<const std::string_view> extraGameProcesses = {};
 };
 

@@ -1,0 +1,16 @@
+"AppState"
+{
+	"appid"		"529340"
+	"Universe"		"1"
+	"name"		"Victoria 3"
+	"StateFlags"		"4"
+	"installdir"		"Victoria 3"
+	"LastUpdated"		"1795105057"
+	"SizeOnDisk"		"18734520110"
+	"buildid"		"26763837"
+	"LastOwner"		"76561190000000001"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

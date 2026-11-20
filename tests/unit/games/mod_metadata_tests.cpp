@@ -166,7 +166,7 @@ TEST_CASE("Invalid metadata.json is a parse error that names the file", "[games]
     CHECK(read.error().detail.find(platform::pathToUtf8(file)) == 0);
 
     // More than 1 MiB.
-    test::writeText(file, "{\"name\": \"" + std::string(1024 * 1024, 'x') + "\"}");
+    test::writeText(file, "{\"name\": \"" + std::string(std::size_t{1024} * 1024, 'x') + "\"}");
     auto large = readModMetadata(file);
     REQUIRE_FALSE(large.ok());
     CHECK(large.error().code == ErrorCode::LimitExceeded);
