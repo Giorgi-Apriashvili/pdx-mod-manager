@@ -1,4 +1,5 @@
 #include "core/log.hpp"
+#include "games/vic3.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/inventory_repository.hpp"
 #include "persistence/playset_repository.hpp"
@@ -257,6 +258,46 @@ TEST_CASE("Content Steam already installed is verified, never downloaded again",
     CHECK(r.steam.sentIds<providers::SubscribeCommand>().empty());
     CHECK(r.steam.sentIds<providers::DownloadCommand>().empty());
     CHECK(installedInInventory(r.w, kItem));
+}
+
+TEST_CASE("The content check after a download is the one of the job's game",
+          "[services][acquisition]") {
+    // Victoria 3's adapter first: a check that ignored the job's game would
+    // take its rule (.metadata/metadata.json) instead of the fake Stellaris
+    // one (descriptor.mod), and judge both items the other way round.
+    const games::Vic3Adapter vic3;
+    Rig r;
+    r.w.ctx.adapters = {&vic3, &r.w.adapter};
+    r.metadata.answering = false;
+    const std::string described = "2000000102";
+    const std::string metadataOnly = "2000000103";
+    r.w.addWorkshopMod(described, "Described");
+    writeText(r.w.workshop / u8(metadataOnly) / ".metadata" / "metadata.json",
+              "{\"name\": \"Metadata Only\", \"game_custom_data\": {}}");
+    for (const std::string& id : {described, metadataOnly})
+        r.steam.items[id].flags =
+            providers::item_flag::Subscribed | providers::item_flag::Installed;
+    r.acquire(
+        {workshopEntry(described, "Described"), workshopEntry(metadataOnly, "Metadata Only")});
+    r.settle();
+    CHECK(r.job(described).state == AcquisitionState::Installed);
+    const AcquisitionJob rejected = r.job(metadataOnly);
+    CHECK(rejected.state == AcquisitionState::Failed);
+    CHECK_THAT(rejected.errorMessage,
+               ContainsSubstring("(descriptor.mod is missing from the downloaded content)"));
+
+    // A game without an adapter: nothing can check the content.
+    const std::string unchecked = "2000000104";
+    r.w.addWorkshopMod(unchecked, "Unchecked");
+    r.steam.items[unchecked].flags =
+        providers::item_flag::Subscribed | providers::item_flag::Installed;
+    r.acquire({workshopEntry(unchecked, "Unchecked")});
+    r.w.ctx.adapters = {&vic3};
+    r.settle();
+    const AcquisitionJob failed = r.job(unchecked);
+    CHECK(failed.state == AcquisitionState::Failed);
+    CHECK_THAT(failed.errorMessage,
+               ContainsSubstring("(no game adapter can check the downloaded content)"));
 }
 
 TEST_CASE("Offline failures retry automatically and recover", "[services][acquisition]") {
