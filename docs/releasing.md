@@ -11,7 +11,8 @@ dry run of the same checks ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-
 it changed neither the updater nor the packaging. On 2026-11-07 the owner's
 installed 0.1.0 updated itself to 0.1.1, the first real update, and later to 0.1.2. 0.1.2 was the
 first release started by pushing its tag ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42359177117)), the procedure since
-2026-11-07.
+2026-11-07. 0.2.0 (Crusader Kings III, Workshop ID lists) followed on 2026-11-13
+([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/43448512713)).
 
 Every release must keep the [update contract](#the-update-contract): copies that are
 already installed find and install it only through the values frozen in 0.1.0.

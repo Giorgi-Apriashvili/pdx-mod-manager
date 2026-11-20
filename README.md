@@ -105,7 +105,7 @@ stops with "cl ... was not found in the PATH".
 
 | Compiler | Tested | Additional packages |
 | --- | --- | --- |
-| MSVC with the "Desktop development with C++" workload | MSVC 19.51 (Visual Studio 2026) | Ninja (bundled with Visual Studio's CMake component, or `winget install Ninja-build.Ninja`) |
+| MSVC with the "Desktop development with C++" workload | MSVC 19.51 and 19.52 (Visual Studio 2026) | Ninja (bundled with Visual Studio's CMake component, or `winget install Ninja-build.Ninja`) |
 | clang-cl, only for the `core-clang-cl` preset | LLVM 22 | LLVM (`winget install LLVM.LLVM`), and the MSVC workload above for its headers and libraries |
 
 ## Build and test

@@ -74,7 +74,7 @@ Not observed yet: other stores and Steam's own offline mode.
 
 | Platform | Compiler | Core libraries + unit tests | Desktop application + tests | Packages |
 | --- | --- | --- | --- | --- |
-| Windows 11 x64 | MSVC 19.51 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 402 tests pass, 0 warnings at `/W4` | **Verified** 2026-10-30: 65 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
+| Windows 11 x64 | MSVC 19.51 and 19.52 (VS 2026), Qt 6.10.3 | **Verified** 2026-10-30: 402 tests pass, 0 warnings at `/W4`; 2026-11-20 with MSVC 19.52 (toolset 14.52.37025): all of `scripts/check.sh --full` passes, 0 warnings | **Verified** 2026-10-30: 65 tests pass; runs read-only and live against both games | ZIP **verified** 2026-10-29; installer **verified** 2026-10-30 ([evidence](evidence/installer-2026-10-30.md)) |
 | Windows (CI, `windows-2025`) | MSVC from the runner image | **Verified** 2026-10-30, CI green | **Verified** 2026-10-30, CI green | Unverified |
 | Windows (CI, `windows-2025`) | MSVC with ASan; clang-cl with UBSan (LLVM from the runner image) | **Verified** 2026-11-06, CI green | Not built in these jobs | Not built in these jobs |
 

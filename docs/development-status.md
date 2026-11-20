@@ -811,8 +811,11 @@ Packaging ([`packaging.md`](packaging.md)):
     (version, notes, docs and screenshots) and merged into `main`: Crusader Kings III (item 8), Workshop ID lists
     and the Workshop names in the import preview (item 9), backlog item 6b-e
     (item 7) and the fallback to a Workshop item's only `.mod` file, with the
-    notes of [`../CHANGELOG.md`](../CHANGELOG.md). The publication is
-    recorded here once the tag's run has finished.
+    notes of [`../CHANGELOG.md`](../CHANGELOG.md). Published 2026-11-13 from
+    `b3437aa` by pushing its tag ([release](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.2.0), [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/43448512713)); checked
+    afterwards as an installed copy reads it (the request by repository id
+    answers `v0.2.0` without a redirect, the real update client reads it, the
+    assets match `SHA256SUMS.txt` and pass `check-update-contract.sh assets`).
 
 ## Working rules
 
