@@ -41,7 +41,7 @@ ListModel {
         statusText: "Not found"; version: ""
         installPath: ""
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Victoria 3"
-        loadOrderNote: "It is not yet verified that Victoria 3 follows this order when two mods change the same file."
+        loadOrderNote: ""
     }
     ListElement {
         key: "hoi4"; name: "Hearts of Iron IV"; supported: false; installed: false; manualLocation: false

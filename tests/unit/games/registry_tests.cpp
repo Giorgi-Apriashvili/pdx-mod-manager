@@ -71,10 +71,14 @@ TEST_CASE("Game traits agree with the catalog", "[games][registry]") {
     CHECK(ck3Traits().userDirFile == "game/userdir.txt");
     CHECK(ck3Traits().loadOrderVerifiedInGame);
     CHECK_FALSE(vic3Traits().rejectsEarlyWildcards);
+    CHECK(vic3Traits().loneWildcardMismatches);
+    CHECK_FALSE(ck3Traits().loneWildcardMismatches);
+    CHECK_FALSE(stellarisTraits().loneWildcardMismatches);
+    CHECK_FALSE(eu4Traits().loneWildcardMismatches);
     CHECK(vic3Traits().executable == "binaries/victoria3.exe");
     CHECK(vic3Traits().userDirFile == "game/userdir.txt");
-    CHECK_FALSE(vic3Traits().loadOrderVerifiedInGame);
-    CHECK_FALSE(vic3Traits().loadOrderUserNote.empty());
+    CHECK(vic3Traits().loadOrderVerifiedInGame);
+    CHECK(vic3Traits().loadOrderUserNote.empty());
 }
 
 TEST_CASE("The real discovery environment describes this process", "[games][registry]") {

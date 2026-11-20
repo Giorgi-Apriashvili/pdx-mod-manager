@@ -20,24 +20,22 @@ Code: `src/games/dlc_load_adapter.cpp` and, for Victoria 3,
 | Playset order -> file | enabled entries in playset order, index 0 = array element 0 | same | same | same |
 | Disabled entries | not written (the launcher writes only enabled ones) | same | same | same |
 | Array order == launcher playset order | **Verified** read-only, 2026-10-29 (alphabetical playset, see below) | **Verified** read-only, 2026-10-29 (hand-made `custom` order, see below) | Not checked (the launcher's database is not read) | Not checked. The launcher's code writes every folder mod in playset order, then every zipped mod (inferred) |
-| Game enables the listed mods only | **Verified** in-game, 2026-10-30: listed probes loaded, the unlisted one not; every descriptor in `mod/` is parsed | **Verified** in-game, 2026-10-30 (same) | **Verified** in-game, 2026-11-13 (1.20.1.2): listed probes loaded, the unlisted one not, mounted in `enabled_mods` order. Started directly, 1.20.1.2 lists only the `enabled_mods` entries in `debug.log`; a 1.19 build, apparently started through the launcher, had listed every descriptor as `Enabled` or `Disabled` | Unverified: the last run's `debug.log` lists the one enabled mod in its `Mod:` block and mounts it after the DLC |
-| File override precedence (which mod wins) | **Verified** in-game, 2026-10-30 (4.5.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-10-30 (1.37.5): **the order of `enabled_mods` is ignored; the mod whose `name` sorts first wins** | **Verified** in-game, 2026-11-13 (1.20.1.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Unverified**: documented by others as "the later mod wins" a file; database entries follow other rules since 1.12 (see [Victoria 3](#victoria-3)) |
-| `LoadOrderInfo::verifiedInGame` | `true` | `true` | `true` | `false`, with a user note |
+| Game enables the listed mods only | **Verified** in-game, 2026-10-30: listed probes loaded, the unlisted one not; every descriptor in `mod/` is parsed | **Verified** in-game, 2026-10-30 (same) | **Verified** in-game, 2026-11-13 (1.20.1.2): listed probes loaded, the unlisted one not, mounted in `enabled_mods` order. Started directly, 1.20.1.2 lists only the `enabled_mods` entries in `debug.log`; a 1.19 build, apparently started through the launcher, had listed every descriptor as `Enabled` or `Disabled` | **Verified** in-game, 2026-11-21 (1.15.2): the listed probes and Workshop item loaded, the unlisted probe not, listed in the `Mod:` block and mounted after the DLC in `enabledMods` order. A mod without `game_custom_data` is left out of the `Mod:` block but still mounted and loaded |
+| File override precedence (which mod wins) | **Verified** in-game, 2026-10-30 (4.5.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-10-30 (1.37.5): **the order of `enabled_mods` is ignored; the mod whose `name` sorts first wins** | **Verified** in-game, 2026-11-13 (1.20.1.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-11-21 (1.15.2): **the later mod in `enabledMods` wins** a whole file; moving mods in the app moves the winner. Database entries follow other rules since 1.12 (see [Victoria 3](#victoria-3)) |
+| `LoadOrderInfo::verifiedInGame` | `true` | `true` | `true` | `true` |
 
 `LoadOrderInfo::summary`, Stellaris and CK3: "dlc_load.json enabled_mods,
 index 0 first; when two enabled mods contain the same file, the one later in
-the list wins". EU4: "dlc_load.json enabled_mods lists the playset order, but
-EU4 does not use it for file overrides: when two enabled mods contain the
-same file, the mod whose name sorts first alphabetically wins". Evidence:
+the list wins"; Victoria 3 the same with "content_load.json enabledMods".
+EU4: "dlc_load.json enabled_mods lists the playset order, but EU4 does not
+use it for file overrides: when two enabled mods contain the same file, the
+mod whose name sorts first alphabetically wins". Evidence:
 [live validation](evidence/live-validation-2026-10-30.md) for Stellaris and
-EU4, [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) for CK3. Only
-EU4 has a user note, which the mods pane shows above an EU4 playset; CK3's
-temporary "not yet verified" note was removed after its probe run.
-Victoria 3: "content_load.json enabledMods, index 0 first; when two enabled
-mods contain the same file, the one later in the list wins", with
-`verifiedInGame = false` and the temporary note "It is not yet verified that
-Victoria 3 follows this order when two mods change the same file." until its
-probe run.
+EU4, [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) for CK3,
+[Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md) for Victoria
+3. Only EU4 has a user note, which the mods pane shows above an EU4 playset;
+the temporary "not yet verified" notes of CK3 and Victoria 3 were removed
+after their probe runs.
 
 ## Mapping (Stellaris, EU4, Crusader Kings III)
 
@@ -219,8 +217,9 @@ replace an earlier one: the first one, in file-name order, is kept, unless
 the mod uses `REPLACE:`, `INJECT:`, `TRY_*` or `*_OR_CREATE:`; events and GUI
 types keep their first definition, and localization keys are replaced only
 through `localization/<language>/replace/`. So the file rule says nothing
-about which mod wins a database entry. All of this is documentation, not yet
-a measurement on this machine.
+about which mod wins a database entry. All of this is documentation; the
+probe run of 2026-11-21 confirmed the file rule on 1.15.2 (below), and the
+database rules were not probed.
 
 On 2026-10-29 these pages could not be retrieved from the development
 environment (a browser-verification page and HTTP 500). The claims above come
@@ -247,7 +246,8 @@ where both files named the same winner). Victoria 3 needs `--game vic3`,
 which writes probe folders with `.metadata/metadata.json` instead of `.mod`
 files, and Victoria 3's events (`<ns>.1 = { type = country_event hidden =
 yes ... }`) with a UTF-8 BOM and LF line ends, as the game's own script files
-have; how its `error.log` words an unknown trigger has not been seen yet.
+have; its `error.log` writes `Unknown trigger type:` and, like Stellaris and
+EU4, reported only the event files (1.15.2 on 2026-11-21).
 
 Stellaris (EU4 the same, with its own folder and a `supported_version` such
 as `v1.37.*`):
@@ -378,10 +378,48 @@ CK3 notes on the procedure above, as used for that run:
 
 ### Victoria 3
 
-**Not yet run.** The probe run is approved by the owner (O1) but has not
-been run; until then `src/games/vic3.cpp` ships
-`loadOrderVerifiedInGame = false` and the temporary note. Victoria 3 notes
-on the procedure above, for that run:
+Result, 2026-11-21, Victoria 3 1.15.2, Windows 11, Steam, started directly
+by the application, approved by the owner (O1)
+([evidence](evidence/2026-11-21-vic3-load-order.md)):
+
+| Run | Probe order in `enabledMods` | Probe names | Loaded | Shared file won by |
+| --- | --- | --- | --- | --- |
+| 1 | c, w1, w2, w3, g, the Workshop item, a (b disabled) | C, ..., A | a, c, g, w1, w2, w3 and the Workshop item | a (`last-enabled-wins`) |
+| 2 (a and c swapped in the app) | a, w1, w2, w3, g, the Workshop item, c (b disabled) | A, ..., C | the same | **c** (`last-enabled-wins`) |
+| 3 (only if the winner did not move) | | **Z**, ..., C (probe a renamed) | not needed | not needed |
+
+As in Stellaris and CK3, the playset order is the effective order for whole
+files: for the same file the later mod in `enabledMods` wins, and moving a
+mod in the app moves the winner. A sorts first by name in both runs, so
+EU4's rule (name order) would have kept a. The `Mod:` block of `debug.log`
+and the mounts follow `enabledMods`; the disabled probe b appears nowhere.
+`src/games/vic3.cpp` states the rule with `loadOrderVerifiedInGame = true`
+and no user note. Which definition of a database entry wins is a different
+rule since 1.12 (above) and was not probed.
+
+The same runs settled the rest of the procedure's questions:
+
+- `supported_game_version`: `"1.15.*"`, `"1.*"` and `"1.15"` were logged as
+  matching 1.15.2, `"*"` as **not** matching (and `dedicated_server.log`
+  listed that probe as out of date at the title menu); no pattern was
+  reported as invalid, and every version probe loaded. So
+  `rejectsEarlyWildcards` stays `false`, and `loneWildcardMismatches = true`
+  makes the application warn about `"*"`, which it used to count as a
+  match.
+- A `metadata.json` without `game_custom_data` (probe g): the game logs
+  "Mod metadata read error" and leaves the mod out of its `Mod:` block, but
+  still mounts its folder in playset position and loads its files. Such a
+  mod stays Ready, with a problem that says so; it is not Broken.
+- The Workshop item, written as
+  `C:\Program Files (x86)\Steam\steamapps\workshop\content\529340\<id>`
+  (the casing on disk and in `libraryfolders.vdf`; Steam's registry entry is
+  lower-case and was not used), was listed in the `Mod:` block, mounted in
+  its playset position and loaded.
+- The direct start stayed up: one `victoria3.exe`, the same process 27 s
+  later and until it was closed, no launcher process, no restart through
+  Steam, all 18 DLC in the `DLC:` block.
+
+Victoria 3 notes on the procedure above, as used for that run:
 
 - Run the read-only `[.real]` scan first, as a baseline
   ([`games/vic3.md`](games/vic3.md#real-machine-evidence)), and back up
@@ -408,12 +446,23 @@ on the procedure above, for that run:
   then `pmm_probe_b` disabled. The version probes and the Workshop item have
   no shared file, so they stay between c and a. Save the code to a file,
   then run `pmm-app --profile <scratch> --no-steam --live-test
-  "game:vic3,import:<file>,blockers,play"`. Check the direct launch:
+  "game:vic3,import:<file>,blockers,play"` (the 2026-11-21 run added
+  `dump:<file>` before `play`). Check the direct launch:
   `tasklist /FI "IMAGENAME eq victoria3.exe"` lists the game and still the
   same process about 20 s later (no restart through Steam), no
   `Paradox Launcher.exe` or `dowser.exe` process runs, and the `DLC:` block
   of `debug.log` lists all 18 DLC.
-- Step 4: wait for the main menu, then quit the game.
+- Step 4: wait for the title menu, then for the logs to stay unchanged for
+  60 s, then close the game with `CloseMainWindow` (never kill it while it
+  loads). Victoria 3's counterpart of CK3's `Setup completion` line is
+  `[pdx_transition_task.cpp:328]: Transition Empty->Game took: N seconds` in
+  `debug.log`, but `debug.log` reaches the disk late: on 2026-11-21 that line
+  and everything after it appeared only when the game closed. Wait instead
+  for `logs/custom_automated_stats.log`'s
+  `[AUTOMATION_SINGLE_STAT][time-to-reach-title-menu]:[N]`, written at once
+  (97 to 107 s after the start on 1.15.2), and judge "unchanged" from copies
+  of the files: sizes read from a folder listing lag behind. Closed this way,
+  both runs quit within 3 s.
 - Step 5: `python tools/probe-mods/probe_mods.py analyze "<Documents>/Paradox Interactive/Victoria 3/logs/error.log" --game vic3 --enabled c w1 w2 w3 a --disabled b`
   (add `g` after `w3` if it was made). Besides the `error.log` checks it
   reads `debug.log` and `debug.1.log` to `debug.5.log` (the log rotates
@@ -430,6 +479,11 @@ on the procedure above, for that run:
   `Mod:` block in playset order), by b (in neither) and by
   `sharedFileWinner`. If `error.log` names no unknown trigger, the `Mod:`
   block and the mount order still show what loaded, but not which mod won.
+  On 2026-11-21 only g was left out of the `Mod:` block (so `ok` was false,
+  as expected), the version probes all loaded, and the run 1 `Mod:` block
+  was in `debug.1.log` (the log rotated about a minute after the start).
+  Check each run's logs by their timestamps: the previous run's files are
+  still there until the game rotates them.
 - Step 6: repeat with the order **a, w1, w2, w3, (g,) the Workshop item,
   c**, moved in the application: `pmm-app --profile <scratch> --no-steam
   --live-test "game:vic3,select:<playset name>,move:5:0,move:1:5,dump:<file>,blockers,play"`
@@ -442,7 +496,8 @@ on the procedure above, for that run:
   the Steam library path it read (`libraryfolders.vdf`, else Steam's
   registry entry, which can be lower-case), while a third-party tool writes
   the casing on disk because a wrongly cased first entry reportedly breaks
-  the whole list.
+  the whole list. On 2026-11-21 the path had the casing on disk, and the
+  game mounted it.
 - Step 7: restore with the application once per launch, so twice:
   `pmm-app --profile <scratch> --live-test "game:vic3,restore"` restores the
   configuration from before the last launch it has not restored yet, so the
@@ -461,6 +516,8 @@ on the procedure above, for that run:
   `src/games/supported_version.hpp` and the CHANGELOG's load-order sentence.
   If the later mod wins, CK3's wording and no note; if the name that sorts
   first wins, EU4's wording and a note like EU4's; if neither, stop and
-  report to the owner.
+  report to the owner. Done on 2026-11-21 for the later mod winning, with
+  `loneWildcardMismatches` for `"*"` and the corrected `game_custom_data`
+  problem.
 - The probe measures whole files. It says nothing about database entries,
   which follow the rules above since 1.12.

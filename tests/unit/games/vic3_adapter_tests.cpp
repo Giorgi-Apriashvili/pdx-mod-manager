@@ -300,13 +300,16 @@ TEST_CASE("Victoria 3 scan applies the identity rules", "[games][vic3]") {
     CHECK(core.descriptor.name == "Example Core");
     CHECK(core.descriptor.supportedVersion == "1.7.*");
 
-    // The older list form of relationships; no game_custom_data.
+    // The older list form of relationships; no game_custom_data. 1.15.2 left
+    // such a probe out of its mod list but loaded its files (2026-11-21), so
+    // it is Ready with a problem, not Broken.
     const InstalledMod& maps = f.mod(mods, "5000000003");
     CHECK(maps.state == InstallState::Ready);
     CHECK(maps.descriptor.dependencies == std::vector<std::string>{"Example Core"});
     CHECK(maps.problems ==
           std::vector<std::string>{"Its .metadata/metadata.json has no \"game_custom_data\" "
-                                   "entry; Victoria 3 reportedly leaves such a mod out."});
+                                   "entry; Victoria 3 reports a read error and leaves the mod "
+                                   "out of its mod list, but still loads its files."});
 
     const InstalledMod& broken = f.mod(mods, "5000000004");
     CHECK(broken.state == InstallState::Broken);
@@ -657,12 +660,31 @@ TEST_CASE("Victoria 3 compatibility warnings follow supported_game_version", "[g
     CHECK(warnings("5000000002") ==
           std::vector<std::string>{"Made for Victoria 3 1.7.*; the installed version is 1.15.2."});
 
-    // Which wildcards the game rejects is not known yet: none is reported.
+    // 1.15.2 (probe run of 2026-11-21) matched "1.*" and "1.15" and reported
+    // no pattern as invalid, so no early wildcard is reported.
     InstalledMod custom = f.mod(mods, "5000000001");
-    for (const char* accepted : {"1.15.2", "1.15", "1.*", "*", "1.*.*"}) {
+    for (const char* accepted : {"1.15.2", "1.15", "1.*", "1.*.*"}) {
+        CAPTURE(accepted);
         custom.descriptor.supportedVersion = accepted;
         CHECK(f.adapter.compatibilityWarnings(inst, custom).empty());
     }
+    // But it logged "version * does not match game version 1.15.2" and listed
+    // that mod as out of date.
+    for (const char* lone : {"*", " * ", "v*"}) {
+        CAPTURE(lone);
+        custom.descriptor.supportedVersion = lone;
+        CHECK(f.adapter.compatibilityWarnings(inst, custom) ==
+              std::vector<std::string>{"Victoria 3 does not count supported_game_version \"" +
+                                       std::string(lone) +
+                                       "\" as matching the installed version 1.15.2 and lists "
+                                       "the mod as out of date."});
+    }
+    // Without a known installed version nothing is compared.
+    GameInstallation unknown = inst;
+    unknown.version.clear();
+    unknown.versionLabel.clear();
+    custom.descriptor.supportedVersion = "*";
+    CHECK(f.adapter.compatibilityWarnings(unknown, custom).empty());
     custom.descriptor.supportedVersion = "Ivan-Chai";
     CHECK(f.adapter.compatibilityWarnings(inst, custom) ==
           std::vector<std::string>{
@@ -686,14 +708,14 @@ TEST_CASE("Victoria 3 process names and load-order information", "[games][vic3]"
     env.documentsDir = u8path("/docs");
     CHECK(adapter.defaultUserDataPath(env) == u8path("/docs/Paradox Interactive/Victoria 3"));
 
-    // Not checked in the game yet: the note says so above a Victoria 3 playset.
+    // Probe mods on 1.15.2 (2026-11-21): the later mod in enabledMods won a
+    // shared file in both orders, as in Stellaris and CK3, so no note is shown.
     const LoadOrderInfo info = adapter.loadOrderInfo();
-    CHECK_FALSE(info.verifiedInGame);
-    CHECK(info.userNote == "It is not yet verified that Victoria 3 follows this order when two "
-                           "mods change the same file.");
+    CHECK(info.verifiedInGame);
+    CHECK(info.userNote.empty()); // the playset order is the effective file order
     CHECK(info.summary.find("content_load.json enabledMods, index 0 first") != std::string::npos);
     CHECK(info.summary.find("later in the list wins") != std::string::npos);
-    CHECK(info.evidence.find("not yet verified") != std::string::npos);
+    CHECK(info.evidence.find("docs/evidence/2026-11-21-vic3-load-order.md") != std::string::npos);
 }
 
 TEST_CASE("Paradox Mods folders and the launcher's path form", "[games][vic3]") {

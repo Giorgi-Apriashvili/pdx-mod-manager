@@ -4,9 +4,10 @@ What works for which game and store, and how we know. The application runs on
 Windows only ([ADR 0009](adr/0009-windows-only.md)). Support for a combination
 depends on the game's own executable and a validated integration (spec section 1).
 
-Last reviewed: 2026-11-20 (Victoria 3 added, read-only checks only), after the
-Crusader Kings III probe run of 2026-11-13 and the live validation of
-2026-10-30; application 0.2.0 and the unreleased Victoria 3 support.
+Last reviewed: 2026-11-21 (Victoria 3 added: read-only checks on 2026-11-20,
+then its probe run with direct launches), after the Crusader Kings III probe
+run of 2026-11-13 and the live validation of 2026-10-30; application 0.2.0
+and the unreleased Victoria 3 support.
 
 ## Status legend
 
@@ -74,7 +75,13 @@ tested. Results:
   writes nothing, the download check over the 9 Workshop folders, and two
   share-code round trips between new profiles of the application
   ([Victoria 3 adapter](games/vic3.md#real-machine-evidence)). The game was
-  not started.
+  not started for these checks.
+- Victoria 3 1.15.2, 2026-11-21, live (with the owner's approval): two direct
+  launches without the Paradox launcher, enabled and disabled probe mods,
+  one installed Workshop item by its absolute path, the effective override
+  order and the `supported_game_version` results observed in the game's own
+  logs, restore of the previous configuration
+  ([evidence](evidence/2026-11-21-vic3-load-order.md)).
 
 Not observed yet: other stores and Steam's own offline mode.
 
@@ -175,7 +182,9 @@ mod's id is its folder's (or `.zip` file's) name in `mod/`. Since 1.12 many
 databases keep the first definition of a key unless a mod uses `REPLACE:` or
 `INJECT:`, so the file order says nothing about database entries
 ([Victoria 3 adapter](games/vic3.md); [load order](load-order.md#victoria-3)).
-Nothing here has run against the game yet.
+`supported_game_version` `"1.*"` is accepted (unlike Stellaris and CK3), but a
+lone `"*"` matches no version. As in Stellaris and CK3, **the later mod in
+`enabledMods` wins a shared file** ([evidence](evidence/2026-11-21-vic3-load-order.md)).
 
 | Capability | Windows · Steam | Other stores |
 | --- | --- | --- |
@@ -183,14 +192,14 @@ Nothing here has run against the game yet.
 | Mod inventory (`metadata.json`, Workshop content) | **Verified (2026-11-20, 1.15.2)** read-only: 9 Workshop mods and 1 local mod, 0 problems; zipped local mods listed without reading their metadata (fixture-tested; none on the machine) | Implemented, unverified (local mods only) |
 | Playsets | **Verified (2026-11-20, 1.15.2)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
 | Share codes | **Verified (2026-11-20, 1.15.2)** read-only between new profiles on one machine (the game's configuration, and a 9-item playset from a Workshop ID list). Releases up to 0.2.0 reject codes for `vic3` as not supported | Implemented, unverified |
-| Generated configuration (`content_load.json`) | **Verified (2026-11-20, 1.15.2)** computed, not written: no write for the launcher's selection; only `enabledMods` changes, the launcher's layout byte for byte (fixture-tested) | Implemented, unverified |
+| Generated configuration (`content_load.json`) | **Verified (2026-11-20, 1.15.2)** computed, not written: no write for the launcher's selection; only `enabledMods` changes, the launcher's layout byte for byte (fixture-tested). **Verified (2026-11-21, 1.15.2)** written for the probe run: the game loaded exactly the listed mods, a Workshop item by its absolute path among them, and did not rewrite the file ([evidence](evidence/2026-11-21-vic3-load-order.md)) | Implemented, unverified |
 | Workshop: Steam session and item state | Implemented, unverified | Unsupported: requires the game on a Steam account |
 | Workshop: subscribe and download | Implemented, unverified; the check that ends a download accepts the 9 installed items (read-only, 2026-11-20) | Unsupported: requires the game on a Steam account |
 | Workshop: manual fallback | Implemented, unverified | Unsupported |
-| Direct launch without the Paradox launcher | Implemented, unverified: `binaries/victoria3.exe` in `binaries/` with `SteamAppId`/`SteamGameId`, no `steam_appid.txt` | Implemented, unverified |
+| Direct launch without the Paradox launcher | **Verified (2026-11-21, 1.15.2)**: started directly from `binaries/victoria3.exe` in `binaries/` with `SteamAppId`/`SteamGameId` and no `steam_appid.txt`, no launcher process, the same process 27 s later (no restart through Steam), all 18 DLC loaded; both runs closed cleanly; restored afterwards ([evidence](evidence/2026-11-21-vic3-load-order.md)) | Implemented, unverified |
 | Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
-| `supported_game_version` warnings | Implemented: a mismatch warns; which wildcard patterns the game rejects is unverified, so none is reported as invalid | Same code |
-| In-game verification of enabled mods and order | Unverified: documented by others as "the later mod wins" a file; a note above a Victoria 3 playset says it is not yet verified. The probe run is prepared ([load order](load-order.md#victoria-3)) | Unverified |
+| `supported_game_version` warnings | **Verified (2026-11-21, 1.15.2)** with probe mods: `"1.15.*"`, `"1.*"` and `"1.15"` match, and the game reports no pattern as invalid; a lone `"*"` does not match and warns; a mismatch warns, and the game still loads such a mod ([evidence](evidence/2026-11-21-vic3-load-order.md)) | Same code |
+| In-game verification of enabled mods and order | **Verified (2026-11-21, 1.15.2)** with probe mods: enabled mods loaded, disabled not; the later mod in `enabledMods` wins a shared file, and moving mods in the app moves the winner. Whole files only: database entries follow the game's own rules. A mod without `game_custom_data` is left out of the game's mod list but still loaded ([evidence](evidence/2026-11-21-vic3-load-order.md); [load order](load-order.md#victoria-3)) | Unverified |
 
 ## Other combinations
 

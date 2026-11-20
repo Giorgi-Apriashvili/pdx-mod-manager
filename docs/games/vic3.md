@@ -16,8 +16,11 @@ machine runs Windows 11 with "1.15.2 (Ivan-Chai)" from Steam (build
 the game's executable (its strings) and its logs, the Paradox launcher's
 code, the hidden real-machine test (see
 [Real-machine evidence](#real-machine-evidence)) and the application in
-read-only mode. The game was not started, and nothing under Steam, the game
-folder or `Documents/Paradox Interactive` was written.
+read-only mode. Then, on 2026-11-21 and with the owner's approval (O1), the
+application started it twice directly with probe mods and one installed
+Workshop item ([probe run](../evidence/2026-11-21-vic3-load-order.md)). The
+game logs quoted below as those of the last run come from a 1.15.1 session
+on 2026-11-18; the probe run rotated them out.
 
 | Capability | Windows / Steam | Other stores |
 | --- | --- | --- |
@@ -26,12 +29,12 @@ folder or `Documents/Paradox Interactive` was written.
 | `game/userdir.txt` | Implemented, unverified: none ships, and where the game reads it from is not known (chosen by analogy with Crusader Kings III) | Unverified |
 | Scan Workshop and local mods, identity rules | **Verified** (read-only): 9 Workshop mods and 1 local mod, 0 problems | Local mods only, unverified |
 | Read current `content_load.json` | **Verified** (read-only): 1 of 1 resolved | Unverified |
-| Generate `content_load.json` | **Verified** computed, not written: 0 writes for the launcher's selection; byte-identical to the launcher's layout in the fixture tests | Unverified |
+| Generate `content_load.json` | **Verified**: 0 writes for the launcher's selection (computed, read-only, 2026-11-20); byte-identical to the launcher's layout in the fixture tests; written for the probe run (2026-11-21) with 7 entries, a Workshop item among them, and the game loaded exactly those, without rewriting the file | Unverified |
 | Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, and one made from a Workshop ID list of the 9 Workshop items, with a disabled entry and moved entries, each exported and imported into new profiles with byte-identical dumps | Unverified |
-| `supported_game_version` warnings | Implemented: a mismatch is a warning (the game logs it and loads the mod). Which wildcard patterns the game rejects is not known, so none is reported as invalid | Same code |
-| Direct launch (bypassing the launcher) | Implemented, unverified: `binaries/victoria3.exe -gdpr-compliant` in `binaries/`, with `SteamAppId`/`SteamGameId`; third-party tools start 1.15 this way | Unverified, no Steam environment |
+| `supported_game_version` warnings | **Verified** (2026-11-21, 1.15.2) with probe mods: a mismatch is a warning (the game logs it and still loads the mod); `"1.*"` and `"1.15"` match and no pattern is reported as invalid, so no wildcard rule; a lone `"*"` does not match and gets a warning | Same code |
+| Direct launch (bypassing the launcher) | **Verified** (2026-11-21, 1.15.2): `binaries/victoria3.exe -gdpr-compliant` started by the application, no launcher process, the same process 27 s later (no restart through Steam) without a `steam_appid.txt`, all 18 DLC, the written `content_load.json` used and not rewritten ([probe run](../evidence/2026-11-21-vic3-load-order.md)). With Steam closed, unverified | Unverified, no Steam environment |
 | Workshop subscribe and download (helper in Victoria 3's app context) | Implemented, unverified. The content check that ends a download accepts all 9 installed items read-only (the previous check, which wanted `descriptor.mod`, would have rejected every one) | Unsupported: requires the game on a Steam account |
-| Effective order / precedence in game | **Unverified**: documented by others (the later mod wins a file), not yet measured; a note above a Victoria 3 playset says so | Unverified |
+| Effective order / precedence in game | **Verified** (2026-11-21, 1.15.2) with probe mods: enabled mods loaded, the disabled one not; **the later mod in `enabledMods` wins a shared file**, and moving mods in the application moves the winner ([load order](../load-order.md#victoria-3)). Whole files only: database entries follow the game's own rules (see [Load order](#load-order)) | Unverified |
 
 No claim is made about achievements or ironman with mods.
 
@@ -58,6 +61,7 @@ argument, the Workshop scan and its Steam states. Different:
 | `steam_appid.txt` | Stellaris: the installation folder; CK3: `binaries/`; EU4: none | none anywhere, as for EU4 |
 | Game processes | the executable | `victoria3.exe`, and `victoria3_win_console.exe`, a console wrapper that starts it |
 | Same object in two mods | mostly, the last definition wins | since 1.12, many databases keep the first definition unless the mod writes `REPLACE:` or `INJECT:` (see [Load order](#load-order)) |
+| Version wildcards | Stellaris and CK3 report `*` before the patch number as invalid | `1.*` matches; a lone `*` matches no version (1.15.2) |
 
 ## Installation discovery
 
@@ -198,29 +202,46 @@ mod that is not installed, and the application says so.
 
 **`game_custom_data`.** All 10 metadata files on the machine have it. Reverse
 engineering of 1.15.1 reports that the game logs "Mod metadata read error"
-and leaves out a mod without it, even when `content_load.json` lists it. Not
-observed here, so such a mod is `Ready` with a problem that says so.
+and leaves out a mod without it, even when `content_load.json` lists it. The
+probe run on 1.15.2 (2026-11-21) showed half of that: the game logs
+`Mod metadata read error. Error: Expected member (game_custom_data)` and
+leaves the mod out of its `Mod:` block, but still mounts its folder in its
+playset position and loads its files (the probe's event file was parsed).
+Such a mod therefore stays `Ready`, not `Broken`, with the problem "Its
+.metadata/metadata.json has no "game_custom_data" entry; Victoria 3 reports
+a read error and leaves the mod out of its mod list, but still loads its
+files."
 
 **Compatibility warnings.** `supported_game_version` (`1.15.*` in 4 Workshop
 items and the local mod, `1.7.*` in 1, empty in 4) is compared with
 `rawVersion` `1.15.2`. The game itself logs "Mod X (id) version 1.15.*
-successfully matched game version 1.15.1" (`debug.log`) or "does not match",
-and a mismatch does not stop the mod loading. The executable also has
-"Invalid supported_version in {}", but which patterns it reports (`1.*`,
-`*`) is not known, so `rejectsEarlyWildcards` is off until the probe run.
-Warnings name the key: `The supported_game_version "x" is not a version
-pattern.`
+successfully matched game version 1.15.1" (`debug.log`) or "does not match"
+(also in `error.log`), and a mismatch does not stop the mod loading; at the
+title menu `dedicated_server.log` lists such mods under "Unsupported Mods
+Detected ... The following mods are out of date". The executable also has
+"Invalid supported_version in {}". The probe run on 1.15.2 (2026-11-21)
+tried `1.15.*`, `1.*`, `1.15` and `*`: the first three matched 1.15.2, `*`
+did not match it (and was listed as out of date), no line reported a
+pattern as invalid, and all four probes loaded. So `rejectsEarlyWildcards`
+stays off (unlike Stellaris and CK3, `1.*` is fine), and
+`loneWildcardMismatches` gives a lone `*` the warning `Victoria 3 does not
+count supported_game_version "*" as matching the installed version 1.15.2
+and lists the mod as out of date.` Other warnings name the key too: `The
+supported_game_version "x" is not a version pattern.` Not tried: `1.*.*`,
+`*.*`, `1`.
 
 ## Load order
 
 The game reads `content_load.json`'s `enabledMods` in order, index 0 first,
-as the other games read `enabled_mods`. Documented, **not yet verified on
-this machine**: when two enabled mods contain the **same file**, the later
-one in the list wins (reverse engineering of 1.15.1: every mounted mod is
-searched before the earlier ones; also the community rule and the file
-set of the third-party validator vic3-tiger).
-`game_custom_data.replace_paths` hides the files of lower mods in exactly
-that folder.
+as the other games read `enabled_mods`: its `Mod:` block and its mounts
+follow that order. **Verified on 1.15.2** with probe mods on 2026-11-21
+([probe run](../evidence/2026-11-21-vic3-load-order.md)): when two enabled
+mods contain the **same file**, the later one in the list wins, and moving a
+mod in the application moves the winner. That is what reverse engineering
+of 1.15.1 reported (every mounted mod is searched before the earlier ones),
+and the community rule and the file set of the third-party validator
+vic3-tiger say the same. `game_custom_data.replace_paths` hides the files of
+lower mods in exactly that folder (not probed).
 
 That rule is about **whole files**. Since 1.12 (December 2025) many of the
 game's databases no longer let a later definition of the same key replace an
@@ -232,13 +253,15 @@ and localization keys are replaced only through
 does not make it override a database entry of a mod above it, unless that
 mod is written to.
 
-`debug.log` of the last run on the machine lists the 18 DLC, then a `Mod:`
-block (the one enabled mod, `name|absolute path`), then mounts the DLC
-folders followed by the mod. With one mod, the order between mods cannot be
-seen. Until a probe run measures it, `loadOrderVerifiedInGame` is false and
-a note above a Victoria 3 playset with more than one mod says: "It is not
-yet verified that Victoria 3 follows this order when two mods change the
-same file."
+`debug.log` of the last run on the machine before the probe run (1.15.1,
+2026-11-18) listed the 18 DLC, then a `Mod:` block (the one enabled mod,
+`name|absolute path`), then mounted the DLC folders followed by the mod. The
+probe run showed the same layout with seven mods, in `enabledMods` order.
+`loadOrderVerifiedInGame` is true, with the wording of Stellaris and CK3,
+and no note is shown above a Victoria 3 playset any more (until the probe
+run one said: "It is not yet verified that Victoria 3 follows this order
+when two mods change the same file."). The rule is about whole files; the
+playset order does not decide which mod's database entry wins.
 
 ## Launch
 
@@ -255,14 +278,32 @@ same file."
   victoria3.exe in ...\Victoria 3\binaries";
 - environment: `SteamAppId=529340` and `SteamGameId=529340` for Steam
   installations. There is no `steam_appid.txt` anywhere in the installation,
-  as for EU4, whose direct start stayed up; for Victoria 3 this is
-  unverified. The Steam client must be running;
+  as for EU4; started this way, 1.15.2 stayed up (2026-11-21). The Steam
+  client must be running;
 - config writes: `content_load.json` only, when its content changes. No
   descriptor or registration file is written.
 
 The game has no command-line option for mods; third-party tools write
 `content_load.json` and start `binaries\victoria3.exe` directly on 1.15, and
 the game prints the list it used in its `Mod:` block.
+
+Observed on 2026-11-21 in two direct launches with the owner's approval
+([probe run](../evidence/2026-11-21-vic3-load-order.md)): `victoria3.exe`
+started this way stays up, as the same process, without restarting through
+Steam or opening the launcher; it reads the written `content_load.json` (the
+enabled mods listed in the `Mod:` block and mounted in its order, the
+Workshop item by its absolute path) and does not rewrite it; the `DLC:` block
+lists all 18 DLC. Steam records the start (it rewrote
+`appmanifest_529340.acf` with a new `LastPlayed`). The title menu came 97 to
+107 s after the start; closed with `CloseMainWindow` afterwards, the game
+quit within 3 s both times. `debug.log` reaches the disk late (its
+title-menu line `Transition Empty->Game took` appeared only when the game
+closed), while `custom_automated_stats.log` logs
+`time-to-reach-title-menu` at once. The process list does not show the
+working directory; the launch plan sets `binaries/`. Still unverified: what
+the game does without Steam, whether DLC stays enabled when the launcher is
+bypassed for a long time, and multiplayer without the launcher's session
+arguments.
 
 Running-instance check (`processNames`): `victoria3.exe` and
 `victoria3_win_console.exe` (a 167 KB wrapper in `binaries/` that starts
@@ -365,33 +406,36 @@ items, imported into a third new profile with `--self-test
 "import:<ids>,disable:2,move:0:5,move:8:1,export:<code>,dump:a.json"`, gave
 a code that a fourth new profile imported with a byte-identical dump (9
 entries, 8 enabled, 9 installed, 0 missing); its window showed the "not yet
-verified" note above the list, and the dependency warning of the item whose
-dependency is not installed.
+verified" note above the list (removed after the probe run), and the
+dependency warning of the item whose dependency is not installed.
 
 ## Outstanding validation
 
-All on 1.15.2. The probe run of
-[`../load-order.md`](../load-order.md#victoria-3) covers 1 to 5, and 6 with
-its optional probe; it is approved by the owner (O1) but has not been run.
-Each item of 7 needs the owner's approval:
+Done on 2026-11-21, on 1.15.2, with the owner's approval (O1)
+([probe run](../evidence/2026-11-21-vic3-load-order.md)): the probe
+procedure of [`../load-order.md`](../load-order.md#victoria-3), which
+settled the former items 1 to 6:
 
-1. A direct start from the application: the game stays the same process,
-   no launcher appears, no restart through Steam, all 18 DLC in the `DLC:`
+1. A direct start from the application: the same process until it was
+   closed, no launcher, no restart through Steam, all 18 DLC in the `DLC:`
    block.
-2. The game loads exactly the written `content_load.json` (its `Mod:` block),
-   and not a disabled mod.
-3. Precedence: which of two enabled mods wins a shared file, in both orders.
-   Then set `loadOrderVerifiedInGame`, `loadOrderEvidence` and the user note.
+2. The game loads exactly the written `content_load.json` (its `Mod:` block
+   and mounts), and not a disabled mod.
+3. Precedence: the later mod in `enabledMods` wins a shared file, in both
+   orders; the traits are set (`loadOrderVerifiedInGame = true`, the
+   evidence, no user note).
 4. A Workshop item listed by its absolute
    `steamapps\workshop\content\529340\<id>` path, as the application writes
-   it, is mounted.
-5. Which `supported_game_version` patterns (`1.*`, `*`, `1.15`) the game
-   reports as invalid, and whether such mods still load; this sets
-   `rejectsEarlyWildcards`.
-6. Optionally: whether a mod without `game_custom_data` is left out (then it
-   would become `Broken`).
-7. A Workshop subscribe and download for app 529340, a direct launch with
-   Steam closed, DLC over a long time without the launcher, multiplayer
-   without the launcher's session arguments, `game/userdir.txt`, and paths
-   with non-ASCII characters (reportedly shown by the launcher but not loaded
-   by the game).
+   it, is mounted and loaded.
+5. `supported_game_version`: `1.*` and `1.15` match, `*` does not, none is
+   reported as invalid, and all load; `rejectsEarlyWildcards` stays off and
+   `loneWildcardMismatches` is on.
+6. A mod without `game_custom_data` is left out of the `Mod:` block but
+   still loaded, so it stays `Ready` with a problem that says so.
+
+Each of the following needs the owner's approval: a Workshop subscribe and
+download for app 529340, a direct launch with Steam closed, DLC over a long
+time without the launcher, multiplayer without the launcher's session
+arguments, `game/userdir.txt`, which definition wins a database entry when
+two mods define it, and paths with non-ASCII characters (reportedly shown by
+the launcher but not loaded by the game).

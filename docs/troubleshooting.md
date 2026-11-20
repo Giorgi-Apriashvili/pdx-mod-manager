@@ -291,9 +291,10 @@ launcher:
 - Victoria 3: the manager starts `binaries\victoria3.exe` in the `binaries`
   folder with the arguments from `launcher\launcher-settings.json` and the
   `SteamAppId`/`SteamGameId` variables; the game has no `steam_appid.txt`.
-  A direct start has not been observed yet on the development machine; if
-  the game quits, restarts through Steam or opens the launcher, report it
-  with the diagnostics ([Victoria 3 adapter](games/vic3.md)).
+  Victoria 3 1.15.2 started this way on 2026-11-21 stayed up without the
+  launcher and without restarting through Steam; if your copy quits,
+  restarts through Steam or opens the launcher, report it with the
+  diagnostics ([Victoria 3 adapter](games/vic3.md)).
 
 ## The game does not start (process start failures)
 

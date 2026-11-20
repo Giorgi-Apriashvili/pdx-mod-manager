@@ -92,6 +92,7 @@ SupportedVersionCheck checkSupportedVersion(std::string_view pattern,
     }
     for (std::size_t i = 0; i < parts->size() && i < 2; ++i)
         check.wildcardBeforePatch = check.wildcardBeforePatch || (*parts)[i] == "*";
+    check.loneWildcard = parts->size() == 1 && parts->front() == "*";
 
     const auto version = parseGameVersion(gameVersion);
     if (!version) {

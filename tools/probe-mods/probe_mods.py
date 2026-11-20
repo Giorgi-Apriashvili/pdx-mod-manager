@@ -31,9 +31,10 @@ The event syntax depends on the game (--game):
                   form of Victoria 3 1.15.2's own events, with a UTF-8 BOM and
                   LF line ends as all of its event and scripted-trigger files
                   have (the other games' probes are written in text mode, so
-                  with CRLF on Windows, which CK3 loaded). Not yet used
-                  against a running game; how its error.log words an unknown
-                  trigger has not been seen.
+                  with CRLF on Windows, which CK3 loaded). In the probe run of
+                  2026-11-21 (1.15.2) error.log reported "Unknown trigger
+                  type: ..." for the event files only, as Stellaris and EU4
+                  do.
 
 Victoria 3 has no .mod files: a probe is a folder with
 .metadata/metadata.json, and the game reads the absolute folder paths from
@@ -50,7 +51,8 @@ Usage:
       Victoria 3. --no-shared leaves out the shared file, for probes that only
       test a supported version and take no part in the precedence test.
       --no-game-custom-data (Victoria 3) leaves "game_custom_data" out of the
-      metadata, which reportedly makes the game skip the mod.
+      metadata: 1.15.2 then logs a metadata read error and leaves the mod
+      out of its "Mod:" block, but still mounts and loads its files.
   probe_mods.py analyze <error.log> --enabled c a [--disabled b] [--game vic3]
       Reads the game's error.log after it reached the main menu and reports
       which probes loaded and which one won the shared file, as JSON. With
