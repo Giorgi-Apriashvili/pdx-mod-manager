@@ -37,11 +37,14 @@ ListModel {
         loadOrderNote: ""
     }
     ListElement {
-        key: "hoi4"; name: "Hearts of Iron IV"; supported: false; installed: false; manualLocation: false
-        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""; loadOrderNote: ""
+        key: "vic3"; name: "Victoria 3"; supported: true; installed: false; manualLocation: false
+        statusText: "Not found"; version: ""
+        installPath: ""
+        userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Victoria 3"
+        loadOrderNote: "It is not yet verified that Victoria 3 follows this order when two mods change the same file."
     }
     ListElement {
-        key: "vic3"; name: "Victoria 3"; supported: false; installed: false; manualLocation: false
+        key: "hoi4"; name: "Hearts of Iron IV"; supported: false; installed: false; manualLocation: false
         statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""; loadOrderNote: ""
     }
 
