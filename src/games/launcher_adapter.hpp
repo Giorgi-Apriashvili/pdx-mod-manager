@@ -26,7 +26,8 @@
 // User data: a folder chosen by the user, else an absolute path in the
 // GameTraits::userDirFile, else launcher-settings.json "gameDataPath", else
 // the OS default. With GameTraits::gameDataPathOverridesUserDirFile (Hearts
-// of Iron IV) a gameDataPath that resolves comes before the userDirFile.
+// of Iron IV) a gameDataPath that resolves comes before the userDirFile, and
+// an absolute gameDataPath with a drive letter resolves too.
 //
 // Launch: the executable from launcher-settings.json (else
 // GameTraits::executable), started in its own folder (the installation folder
@@ -77,9 +78,11 @@ struct GameTraits {
     // wrapper that starts the executable (Victoria 3).
     std::span<const std::string_view> extraGameProcesses = {};
     // launcher-settings.json "gameDataPath" takes precedence over the
-    // userDirFile (Hearts of Iron IV: hoi4.exe calls a game-folder
-    // userdir.txt "old style", overridden by gameDataPath). Otherwise the
-    // userDirFile comes first.
+    // userDirFile, and may also be an absolute folder (Hearts of Iron IV:
+    // hoi4.exe calls a game-folder userdir.txt "old style", overridden by
+    // gameDataPath, and tells users to point gameDataPath at their custom
+    // user folder). Otherwise the userDirFile comes first, and gameDataPath
+    // must have the %USER_DOCUMENTS% form.
     bool gameDataPathOverridesUserDirFile = false;
 };
 

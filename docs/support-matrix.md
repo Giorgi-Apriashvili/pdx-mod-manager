@@ -199,7 +199,7 @@ Nothing here has run against the game yet.
 
 | Capability | Windows · Steam | Other stores |
 | --- | --- | --- |
-| Detect installation and user data | **Verified (2026-11-21, 1.20.0.0)** read-only (user data from `gameDataPath`); the precedence over `userdir.txt` implemented, unverified | Implemented, unverified (manual location) |
+| Detect installation and user data | **Verified (2026-11-21, 1.20.0.0)** read-only (user data from `gameDataPath`); the precedence over `userdir.txt` and an absolute `gameDataPath` implemented, unverified | Implemented, unverified (manual location) |
 | Mod inventory | **Verified (2026-11-21, 1.20.0.0)** read-only: 23 Workshop mods, 0 problems, `dependencies` and repeated `replace_path` kept; registered Workshop items without content read as missing (replay) | Implemented, unverified (local mods only) |
 | Playsets | **Verified (2026-11-21, 1.20.0.0)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
 | Share codes | **Verified (2026-11-21, 1.20.0.0)** read-only between two new profiles on one machine. Releases up to 0.2.0 reject codes for `hoi4` as not supported | Implemented, unverified |

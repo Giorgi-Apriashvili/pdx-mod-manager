@@ -240,13 +240,30 @@ TEST_CASE("Hearts of Iron IV takes gameDataPath before userdir.txt", "[games][ho
     REQUIRE(chosen.ok());
     CHECK(samePath(chosen->userDataPath, f.userData()));
 
-    // A gameDataPath that does not resolve is ignored with a warning, and
-    // userdir.txt is used.
+    // hoi4.exe tells users to point gameDataPath at their custom user folder,
+    // so an absolute one is taken too (normalized), before userdir.txt.
+    const auto setGameDataPath = [&](std::string_view from, const std::string& to) {
+        test::writeText(f.settingsFile(),
+                        test::replaceAll(test::readText(f.settingsFile()),
+                                         "\"" + std::string(from) + "\"", "\"" + to + "\""));
+    };
+    const fs::path absolute = f.path("Absolute Data/HOI4 dätä");
+    setGameDataPath("%USER_DOCUMENTS%/Paradox Interactive/HOI4 Elsewhere",
+                    f.generic("Absolute Data") + "/./HOI4 dätä/");
     capture.clear();
-    test::writeText(f.settingsFile(),
-                    test::replaceAll(test::readText(f.settingsFile()),
-                                     "%USER_DOCUMENTS%/Paradox Interactive/HOI4 Elsewhere",
-                                     "C:/Elsewhere/Hearts of Iron IV"));
+    CHECK(f.discovered().userDataPath == absolute.lexically_normal());
+    CHECK(logged(capture.records(), "Using the absolute gameDataPath of launcher-settings.json"));
+    CHECK(logged(capture.records(), "Ignoring the game's userdir.txt: gameDataPath in "
+                                    "launcher-settings.json overrides it"));
+    manual = f.adapter.inspectInstallation(f.install(), {}, f.env);
+    REQUIRE(manual.ok());
+    CHECK(manual->userDataPath == absolute.lexically_normal());
+
+    // A gameDataPath that does not resolve (here with a ".." part) is ignored
+    // with a warning, and userdir.txt is used.
+    const std::string unsupported = f.generic("Absolute Data") + "/../HOI4 dätä";
+    setGameDataPath(f.generic("Absolute Data") + "/./HOI4 dätä/", unsupported);
+    capture.clear();
     CHECK(samePath(f.discovered().userDataPath, custom));
     CHECK(logged(capture.records(), "Ignoring an unsupported gameDataPath"));
     CHECK(logged(capture.records(), "Using the user data folder from userdir.txt"));
@@ -254,8 +271,7 @@ TEST_CASE("Hearts of Iron IV takes gameDataPath before userdir.txt", "[games][ho
     // Without gameDataPath, userdir.txt decides; without either, the default.
     test::writeText(f.settingsFile(),
                     test::replaceAll(test::readText(f.settingsFile()),
-                                     "\t\"gameDataPath\": \"C:/Elsewhere/Hearts of Iron IV\",\n",
-                                     ""));
+                                     "\t\"gameDataPath\": \"" + unsupported + "\",\n", ""));
     REQUIRE(test::readText(f.settingsFile()).find("gameDataPath") == std::string::npos);
     CHECK(samePath(f.discovered().userDataPath, custom));
     // A relative path is ignored with a warning.
@@ -276,14 +292,25 @@ TEST_CASE("The other games keep userdir.txt before gameDataPath", "[games][hoi4]
     CHECK_FALSE(stellarisTraits().gameDataPathOverridesUserDirFile);
     test::GameFixture f("stellaris");
     const fs::path install = f.path("Steam/steamapps/common/Stellaris");
+    const fs::path settings = install / "launcher-settings.json";
     const fs::path custom = f.path("Custom Data/Stellaris dätä");
     fs::create_directories(custom);
     test::writeText(install / "userdir.txt", f.generic("Custom Data/Stellaris dätä"));
-    REQUIRE(test::readText(install / "launcher-settings.json").find("gameDataPath") !=
-            std::string::npos);
-    const auto found = StellarisAdapter().discover(f.env);
-    REQUIRE(found.size() == 1);
-    CHECK(samePath(found.front().userDataPath, custom));
+    REQUIRE(test::readText(settings).find("gameDataPath") != std::string::npos);
+    const auto userData = [&] {
+        const auto found = StellarisAdapter().discover(f.env);
+        REQUIRE(found.size() == 1);
+        return found.front().userDataPath;
+    };
+    CHECK(samePath(userData(), custom));
+
+    // Nor does Stellaris take an absolute gameDataPath: without userdir.txt
+    // it is ignored, and the default folder is used.
+    fs::remove(install / "userdir.txt");
+    test::writeText(settings, test::replaceAll(test::readText(settings),
+                                               "%USER_DOCUMENTS%/Paradox Interactive/Stellaris",
+                                               f.generic("Custom Data/Stellaris dätä")));
+    CHECK(samePath(userData(), f.path("Documents/Paradox Interactive/Stellaris")));
 }
 
 TEST_CASE("Hearts of Iron IV scan applies the identity rules", "[games][hoi4]") {

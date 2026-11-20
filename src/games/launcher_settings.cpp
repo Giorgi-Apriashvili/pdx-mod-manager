@@ -1,10 +1,12 @@
 #include "games/launcher_settings.hpp"
 
+#include "core/utf8.hpp"
 #include "platform/fs.hpp"
 #include "platform/steam.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <system_error>
 #include <utility>
 
@@ -34,6 +36,27 @@ Status readString(const nlohmann::json& object, const char* field, std::string& 
     if (out.find('\0') != std::string::npos)
         return invalidField(field, "contains a NUL character");
     return {};
+}
+
+// Appends the '/'- or '\\'-separated parts of `rest` to `base`, skipping empty
+// and "." parts. nullopt for a ".." part or a part with ':' (drive letters or
+// streams).
+std::optional<fs::path> appendParts(fs::path base, std::string_view rest) {
+    while (!rest.empty()) {
+        const std::size_t separator = rest.find_first_of("/\\");
+        const std::string_view part = rest.substr(0, separator);
+        if (part == "..")
+            return std::nullopt;
+        if (!part.empty() && part != ".") {
+            if (part.find(':') != std::string_view::npos)
+                return std::nullopt; // drive letters or streams
+            base /= platform::pathFromUtf8(part);
+        }
+        if (separator == std::string_view::npos)
+            break;
+        rest.remove_prefix(separator + 1);
+    }
+    return base;
 }
 
 } // namespace
@@ -140,25 +163,28 @@ std::optional<fs::path> resolveGameDataPath(std::string_view gameDataPath,
                                             const fs::path& documentsDir) {
     if (documentsDir.empty() || gameDataPath.substr(0, kUserDocuments.size()) != kUserDocuments)
         return std::nullopt;
-    std::string_view rest = gameDataPath.substr(kUserDocuments.size());
+    const std::string_view rest = gameDataPath.substr(kUserDocuments.size());
     if (!rest.empty() && rest.front() != '/' && rest.front() != '\\')
         return std::nullopt;
-    fs::path result = documentsDir;
-    while (!rest.empty()) {
-        const std::size_t separator = rest.find_first_of("/\\");
-        const std::string_view part = rest.substr(0, separator);
-        if (part == "..")
-            return std::nullopt;
-        if (!part.empty() && part != ".") {
-            if (part.find(':') != std::string_view::npos)
-                return std::nullopt; // drive letters or streams
-            result /= platform::pathFromUtf8(part);
-        }
-        if (separator == std::string_view::npos)
-            break;
-        rest.remove_prefix(separator + 1);
-    }
-    return result;
+    return appendParts(documentsDir, rest);
+}
+
+std::optional<fs::path> resolveAbsoluteGameDataPath(std::string_view gameDataPath) {
+    const auto isDriveLetter = [](char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    };
+    const auto isControl = [](char c) {
+        return static_cast<unsigned char>(c) < 0x20 || c == '\x7f';
+    };
+    if (gameDataPath.size() < 3 || !isDriveLetter(gameDataPath[0]) || gameDataPath[1] != ':' ||
+        (gameDataPath[2] != '/' && gameDataPath[2] != '\\') || !isValidUtf8(gameDataPath) ||
+        std::any_of(gameDataPath.begin(), gameDataPath.end(), isControl))
+        return std::nullopt;
+    std::optional<fs::path> result =
+        appendParts(platform::pathFromUtf8(gameDataPath.substr(0, 3)), gameDataPath.substr(3));
+    if (!result || !result->has_relative_path())
+        return std::nullopt; // a drive root is no user folder
+    return result->lexically_normal();
 }
 
 } // namespace pmm::games

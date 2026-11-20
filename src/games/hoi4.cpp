@@ -42,8 +42,10 @@ constexpr GameTraits kTraits{
                          "same file; this is not verified yet.",
     .logComponent = "games.hoi4",
     // hoi4.exe: a game-folder userdir.txt is "old style" and "Overridden by
-    // the gameDataPath field in launcher-settings.json". Inferred from these
-    // strings; not tested in the game.
+    // the gameDataPath field in launcher-settings.json", and users should
+    // "Update launcher-settings.json to point to the intended custom user
+    // directory", so an absolute gameDataPath is taken too. Inferred from
+    // these strings; not tested in the game.
     .gameDataPathOverridesUserDirFile = true,
 };
 

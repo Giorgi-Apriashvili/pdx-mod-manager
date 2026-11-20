@@ -88,12 +88,15 @@ void printSteamState(const LauncherGameAdapter& adapter, const GameInstallation&
                   << "\n";
     }
     // Hearts of Iron IV: whether the folder is launcher-settings.json's
-    // gameDataPath, which comes before userdir.txt there.
+    // gameDataPath (%USER_DOCUMENTS% or absolute), which comes before
+    // userdir.txt there.
     if (adapter.traits().gameDataPathOverridesUserDirFile) {
         std::string from = "not gameDataPath";
         if (auto settings = readLauncherSettings(inst.installPath)) {
-            const std::optional<fs::path> resolved = resolveGameDataPath(
+            std::optional<fs::path> resolved = resolveGameDataPath(
                 settings->gameDataPath, DiscoveryEnvironment::current().documentsDir);
+            if (!resolved)
+                resolved = resolveAbsoluteGameDataPath(settings->gameDataPath);
             if (resolved && resolved->lexically_normal() == inst.userDataPath.lexically_normal())
                 from = "gameDataPath (launcher-settings.json; before userdir.txt)";
         }

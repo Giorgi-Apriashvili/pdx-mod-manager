@@ -61,4 +61,11 @@ Result<fs::path> resolveLauncherExecutable(const LauncherSettings& settings,
 std::optional<fs::path> resolveGameDataPath(std::string_view gameDataPath,
                                             const fs::path& documentsDir);
 
+// An absolute gameDataPath below a drive letter ("D:/Games/HOI4 data"),
+// lexically normalized: the form hoi4.exe tells users to write for a custom
+// user folder (GameTraits::gameDataPathOverridesUserDirFile). nullopt for
+// any other form (relative, UNC, %VARIABLE%), a drive root, a ".." part, a
+// ':' after the drive, control characters or ill-formed UTF-8.
+std::optional<fs::path> resolveAbsoluteGameDataPath(std::string_view gameDataPath);
+
 } // namespace pmm::games

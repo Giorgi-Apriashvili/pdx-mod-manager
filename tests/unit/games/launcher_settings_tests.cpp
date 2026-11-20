@@ -151,3 +151,23 @@ TEST_CASE("gameDataPath maps %USER_DOCUMENTS% onto the documents folder",
     CHECK_FALSE(resolveGameDataPath("C:/Users/x/Documents/Paradox Interactive", docs).has_value());
     CHECK_FALSE(resolveGameDataPath("%USER_DOCUMENTS%/Paradox Interactive", {}).has_value());
 }
+
+TEST_CASE("An absolute gameDataPath below a drive letter resolves on its own",
+          "[games][launcher_settings]") {
+    // Taken for Hearts of Iron IV only (GameTraits::gameDataPathOverridesUserDirFile).
+    const fs::path expected = test::u8path("D:/Games/HOI4 dätä").lexically_normal();
+    for (const char* value : {"D:/Games/HOI4 dätä", "D:\\Games\\HOI4 dätä\\",
+                              "D:/Games/./HOI4 dätä/", "D://Games//HOI4 dätä"}) {
+        CAPTURE(value);
+        CHECK(resolveAbsoluteGameDataPath(value) == expected);
+    }
+    CHECK(resolveAbsoluteGameDataPath("c:/x") == test::u8path("c:/x").lexically_normal());
+
+    for (const char* value : {"", "D:", "D:/", "D:/.", "D:Games/HOI4", "/Games/HOI4", "Games/HOI4",
+                              "\\\\server\\share\\HOI4", "%USER_DOCUMENTS%/Paradox Interactive",
+                              "D:/Games/../HOI4", "D:/Games/C:/HOI4", "D:/Games/HOI4:stream",
+                              "1:/Games", "D:/Games/HOI4\t", "D:/Games/\xFF"}) {
+        CAPTURE(value);
+        CHECK_FALSE(resolveAbsoluteGameDataPath(value).has_value());
+    }
+}

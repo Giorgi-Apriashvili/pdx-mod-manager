@@ -307,13 +307,16 @@ launcher:
 
 - **Another user folder.** For Hearts of Iron IV the manager takes the
   user-data folder from `gameDataPath` in the game's `launcher-settings.json`
-  (normally `Documents\Paradox Interactive\Hearts of Iron IV`), and reads a
-  `userdir.txt` in the game folder only when `gameDataPath` is missing or not
-  usable: the game itself calls such a file "old style" and says
-  `gameDataPath` overrides it. The other games read `userdir.txt` first. If
-  your mods live elsewhere, choose that folder with **Locate installation…**;
-  a folder chosen there always wins. Which folder the game uses with both
-  files present is not verified.
+  (normally `%USER_DOCUMENTS%/Paradox Interactive/Hearts of Iron IV`, which
+  is `Documents\Paradox Interactive\Hearts of Iron IV`; an absolute folder
+  such as `D:/Games/HOI4 data` is taken too, as the game's own messages
+  suggest), and reads a `userdir.txt` in the game folder only when
+  `gameDataPath` is missing or not usable: the game itself calls such a file
+  "old style" and says `gameDataPath` overrides it. The other games read
+  `userdir.txt` first. If your mods live elsewhere, choose that folder with
+  **Locate installation…**; a folder chosen there always wins. Which folder
+  the game uses with both files present, or with an absolute
+  `gameDataPath`, is not verified.
 - **"Reports supported_version … as invalid".** Hearts of Iron IV writes
   `Invalid supported_version in  file: mod/ugc_<id>.mod` to
   `logs\error.log` for a mod made for `"1.*.*"` (a wildcard before the patch

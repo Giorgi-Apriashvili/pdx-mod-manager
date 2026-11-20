@@ -22,7 +22,7 @@ on 2026-11-18.
 | --- | --- | --- |
 | Discover installation and user data (`appmanifest_394360.acf`, `launcher-settings.json`) | **Verified** (read-only); the user data from `gameDataPath` | Not discovered; manual selection, unverified |
 | Read `launcher-settings.json` (version, executable, arguments) | **Verified** (read-only): `hoi4.exe`, `-gdpr-compliant` | Unverified |
-| `gameDataPath` before `userdir.txt` | Implemented, inferred from `hoi4.exe`'s strings: none ships, and how the game treats a `userdir.txt` is not observed | Unverified |
+| `gameDataPath` before `userdir.txt`, also as an absolute folder | Implemented, inferred from `hoi4.exe`'s strings: none ships, and how the game treats a `userdir.txt` or an absolute `gameDataPath` is not observed | Unverified |
 | Scan Workshop and local mods, identity rules | **Verified** (read-only): 23 Workshop mods, 0 problems | Local mods only, unverified |
 | Read current `dlc_load.json` | **Verified** (read-only): 21 of 21 resolved, from the launcher's pretty-printed file | Unverified |
 | Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** computed, not written: 0 writes for the launcher's selection; 21 of 23 regenerated descriptors identical to the launcher's, the other 2 differ only in `supported_version` (see Mods). A changed selection is written as compact JSON; that the game reads it is unverified | Unverified |
@@ -78,8 +78,11 @@ before `gameDataPath`):
 1. A folder chosen by the user (manual location).
 2. `launcher-settings.json` `gameDataPath`
    (`%USER_DOCUMENTS%/Paradox Interactive/Hearts of Iron IV` on 1.20.0.0),
-   mapped as for Stellaris, when it resolves. An unsupported form is ignored
-   with a warning.
+   mapped as for Stellaris, or an absolute folder below a drive letter
+   (`D:/Games/HOI4 data`, normalized; no `..` parts), which the other games
+   ignore: `hoi4.exe` tells users to "Update launcher-settings.json to point
+   to the intended custom user directory". Any other form is ignored with a
+   warning, and `userdir.txt` is read instead.
 3. `<install>/userdir.txt`, with the rules of
    [`eu4.md`](eu4.md#user-data-discovery) (first non-empty line, absolute
    paths only, a trailing separator allowed, anything else ignored with a
@@ -371,7 +374,8 @@ Each of the following needs the owner's approval, on 1.20.0.0:
    launcher; multiplayer without the launcher's session arguments.
 4. Workshop subscribe and download for app 394360.
 5. How the game treats a `userdir.txt` in its folder, with and without
-   `gameDataPath` (needs a write to the installation folder).
+   `gameDataPath`, and an absolute `gameDataPath` (needs a write to the
+   installation folder).
 6. `dependencies`, the order of 9- and 10-digit Workshop ids if the file
    names decide (`ugc_9…` sorts after `ugc_1…`), names that differ only in
    case or start with non-ASCII characters, and how database folders merge

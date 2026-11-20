@@ -261,6 +261,15 @@ Result<GameInstallation> LauncherGameAdapter::describe(const fs::path& installPa
                 return std::nullopt;
             std::optional<fs::path> resolved =
                 resolveGameDataPath(settings->gameDataPath, env.documentsDir);
+            // hoi4.exe tells users to point gameDataPath at their custom user
+            // folder, so the game that reads it first also takes it absolute.
+            if (!resolved && m_traits.gameDataPathOverridesUserDirFile) {
+                resolved = resolveAbsoluteGameDataPath(settings->gameDataPath);
+                if (resolved)
+                    logInfo(m_traits.logComponent,
+                            "Using the absolute gameDataPath of launcher-settings.json",
+                            {{"path", pathToUtf8(*resolved)}});
+            }
             if (!resolved)
                 logWarning(m_traits.logComponent, "Ignoring an unsupported gameDataPath",
                            {{"gameDataPath", settings->gameDataPath}});
