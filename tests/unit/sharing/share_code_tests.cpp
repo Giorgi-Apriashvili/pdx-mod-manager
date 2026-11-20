@@ -31,7 +31,8 @@ namespace {
 // Golden codes produced by this encoder (zlib 1.3.1). Never regenerate an
 // existing fixture: a mismatch means the protocol output changed.
 const char* const kGoldenFixtures[] = {"01-stellaris-basic", "02-eu4-unicode-local",
-                                       "03-minimal-empty", "05-ck3-basic", "06-vic3-basic"};
+                                       "03-minimal-empty",   "05-ck3-basic",
+                                       "06-vic3-basic",      "07-hoi4-basic"};
 
 Error decodeError(std::string_view input) {
     auto r = decodeShareCode(input);
@@ -243,6 +244,19 @@ TEST_CASE("Golden fixture content is what it claims", "[sharing][code][fixtures]
     CHECK(vic3->mods[1].id == "5000000002");
     CHECK(vic3->mods[3].id == "Example Bundle.zip");
     CHECK_FALSE(vic3->mods[3].enabled);
+
+    // Hearts of Iron IV: the playset order is carried as for every game,
+    // although whether the game applies it is not verified.
+    auto hoi4 = decodeShareCode(test::readFixture("v1/07-hoi4-basic.code"));
+    REQUIRE(hoi4.ok());
+    CHECK(hoi4->game == "hoi4");
+    CHECK(hoi4->gameVersionHint == "1.20.0.0");
+    REQUIRE(hoi4->mods.size() == 4);
+    CHECK(hoi4->mods[0].id == "6000000002");
+    CHECK(hoi4->mods[1].id == "6000000001");
+    CHECK(hoi4->mods[2].source == "local");
+    CHECK(hoi4->mods[2].id == "local_focus_tree");
+    CHECK_FALSE(hoi4->mods[3].enabled);
 }
 
 TEST_CASE("Codes from other encoders with non-canonical JSON decode", "[sharing][code][fixtures]") {
