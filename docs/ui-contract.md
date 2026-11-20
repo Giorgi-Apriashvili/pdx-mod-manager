@@ -82,11 +82,13 @@ Roles:
   otherwise. EU4 (observed in-game 2026-10-30): "Europa Universalis IV does
   not use this order when two mods change the same file: the mod whose name
   comes first alphabetically wins. The order is still saved, shared and
-  written for the game." Stellaris, Crusader Kings III and Victoria 3
-  (observed in-game 2026-10-30, 2026-11-13 and 2026-11-21): empty. Hearts of
-  Iron IV (not yet observed in-game; its wiki says the `.mod` file names
-  decide): "Hearts of Iron IV may not follow this order when two mods change
-  the same file; this is not verified yet." The mods pane shows it as a
+  written for the game." Hearts of Iron IV (observed in-game 2026-11-21: the
+  `.mod` file names decide): "Hearts of Iron IV does not use this order when
+  two mods change the same file: the mod whose .mod file in the game's mod
+  folder comes last alphabetically wins (ugc_<ID>.mod for a Workshop mod).
+  The order is still saved, shared and written for the game." Stellaris,
+  Crusader Kings III and Victoria 3 (observed in-game 2026-10-30, 2026-11-13
+  and 2026-11-21): empty. The mods pane shows it as a
   closable info banner above the list of a playset with more than one mod
   (hidden for that game for the rest of the session once closed).
 

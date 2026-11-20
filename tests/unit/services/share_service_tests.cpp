@@ -649,7 +649,8 @@ TEST_CASE("Share codes and Workshop ID lists are told apart, and errors say whic
     p = failure("2000000001|2000000002|2000000001", kGame);
     CHECK(p.error->code == ErrorCode::ValidationFailed);
     p = failure("2000000001;1", kGame);
-    CHECK_THAT(p.error->message, ContainsSubstring("Paradox games load mods in list order"));
+    CHECK_THAT(p.error->message,
+               ContainsSubstring("Paradox Mod Manager writes the mods in list order"));
     CHECK_FALSE(share.applyImport(p, ImportMode::New));
 }
 

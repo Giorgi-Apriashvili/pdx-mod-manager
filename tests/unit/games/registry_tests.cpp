@@ -86,6 +86,10 @@ TEST_CASE("Game traits agree with the catalog", "[games][registry]") {
         CHECK(traits->extraGameProcesses.size() == (traits->key == "vic3" ? 1u : 0u));
         // Only Hearts of Iron IV reads gameDataPath before its userdir.txt.
         CHECK(traits->gameDataPathOverridesUserDirFile == (traits->key == "hoi4"));
+        // Every game's rule for a shared file was measured with probe mods.
+        // EU4 and Hearts of Iron IV do not follow the list, and a note says so.
+        CHECK(traits->loadOrderVerifiedInGame);
+        CHECK(traits->loadOrderUserNote.empty() == (traits->key != "eu4" && traits->key != "hoi4"));
     }
     CHECK(ck3Traits().rejectsEarlyWildcards);
     CHECK(stellarisTraits().rejectsEarlyWildcards);
@@ -102,14 +106,13 @@ TEST_CASE("Game traits agree with the catalog", "[games][registry]") {
     CHECK(vic3Traits().userDirFile == "game/userdir.txt");
     CHECK(vic3Traits().loadOrderVerifiedInGame);
     CHECK(vic3Traits().loadOrderUserNote.empty());
+    // "1.*.*" is reported as invalid by 1.19.5.0 and by 1.20.0.0.
     CHECK(hoi4Traits().rejectsEarlyWildcards);
     // A lone "*" is untested for Hearts of Iron IV (docs/games/hoi4.md).
     CHECK_FALSE(hoi4Traits().loneWildcardMismatches);
     CHECK(hoi4Traits().executable == "hoi4.exe");
     CHECK(hoi4Traits().userDirFile == "userdir.txt");
     CHECK(hoi4Traits().droppedArguments.size() == 1);
-    CHECK_FALSE(hoi4Traits().loadOrderVerifiedInGame);
-    CHECK_FALSE(hoi4Traits().loadOrderUserNote.empty());
 }
 
 TEST_CASE("The real discovery environment describes this process", "[games][registry]") {

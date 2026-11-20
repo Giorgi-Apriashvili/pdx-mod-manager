@@ -21,9 +21,10 @@ read-only steps were run on 2026-11-20 and, with the owner's approval (O1),
 the probe run of step 6 (items 1 to 5, with the probes and one installed
 Workshop item; [load order](load-order.md#victoria-3)) on 2026-11-21
 ([evidence](evidence/2026-11-21-vic3-load-order.md)). For Hearts of Iron IV
-only the read-only steps were run, on 2026-11-21; its probe run is prepared
-([load order](load-order.md#hearts-of-iron-iv)) and is a separate step that
-needs the owner's approval.
+the read-only steps were run on 2026-11-21 and, the same day, the probe run
+of step 6 (items 1 to 5, with a playset of the probes only, in four launches;
+[load order](load-order.md#hearts-of-iron-iv))
+([evidence](evidence/2026-11-21-hoi4-load-order.md)).
 
 The procedure uses the desktop application `pmm-app` and the UI described in
 [`ui-contract.md`](ui-contract.md) (Import code, Export code, Play, ...).
@@ -100,8 +101,8 @@ subscriptions afterwards in the Steam client if wanted.
 | Version source | `<install>/launcher-settings.json` (`version`, `rawVersion`) and `buildid` in `steamapps/appmanifest_<appid>.acf` | same files (observed: `rawVersion` `v1.37.5.0`) | `<install>/launcher/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.20.1.2`, no `v`) | `<install>/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.20.0.0`, no `v`) | `<install>/launcher/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.15.2`) |
 | Arguments the game's launcher passes (`exeArgs`) | `-gdpr-compliant` | `-enabletelemetry -gdpr-compliant`; direct launches are designed to drop `-enabletelemetry` | `-gdpr-compliant` (the launcher adds its own session arguments, which a direct start does not pass) | `-gdpr-compliant` (the same) | `-gdpr-compliant` (the same) |
 | `steam_appid.txt` in `<install>` | present | **absent**: a direct start relies on `SteamAppId`/`SteamGameId` set by the manager | in `<install>/binaries`, the folder a direct start runs in | present (`394360`, no newline), in the folder a direct start runs in | **absent** everywhere, as for EU4; a direct start runs in `<install>/binaries` |
-| Load-order file | `<userdata>/dlc_load.json`, `enabled_mods` (observed) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only; not yet with a game started by the manager) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only; the launcher writes it pretty-printed, the manager compact) | `<userdata>/content_load.json`, `enabledMods`: absolute paths of the mod folders (observed read-only) |
-| `supported_version` format for probes | `v4.5.*` (match `rawVersion`) | `v1.37.*.*` (four components, as in installed descriptors) | `1.20.*` (no `v`; never `1.*`, which CK3 reports as invalid) | `1.20.*` (no `v`; never `1.*.*`, which Hearts of Iron IV reports as invalid) | `supported_game_version` `1.15.*` (in `.metadata/metadata.json`); which wildcards are invalid is to be found out |
+| Load-order file | `<userdata>/dlc_load.json`, `enabled_mods` (observed) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only; not yet with a game started by the manager) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only) | `<userdata>/dlc_load.json`, `enabled_mods` (observed; the launcher writes it pretty-printed, the manager compact, which 1.20.0.0 reads: 2026-11-21) | `<userdata>/content_load.json`, `enabledMods`: absolute paths of the mod folders (observed read-only) |
+| `supported_version` format for probes | `v4.5.*` (match `rawVersion`) | `v1.37.*.*` (four components, as in installed descriptors) | `1.20.*` (no `v`; never `1.*`, which CK3 reports as invalid) | `1.20.*` (no `v`; never `1.*.*`, which Hearts of Iron IV reports as invalid: 1.19.5.0 and 1.20.0.0) | `supported_game_version` `1.15.*` (in `.metadata/metadata.json`); which wildcards are invalid is to be found out |
 | Paradox launcher processes | `Paradox Launcher.exe`, `bootstrapper-v2.exe`, and `dowser.exe` (in the game folder) | same | same; `dowser.exe` lies in `<install>/launcher` | same; `dowser.exe` lies in `<install>` | same; `dowser.exe` lies in `<install>/launcher` |
 
 ## 2. Record the environment
@@ -140,7 +141,8 @@ nothing about descriptors outside `enabled_mods`).
 For Hearts of Iron IV, `--game hoi4` writes its event syntax
 (`add_namespace`) without a BOM and with LF line ends; its procedure, with
 up to four runs and `probe_mods.py rename` between them, is in
-[load order](load-order.md#hearts-of-iron-iv).
+[load order](load-order.md#hearts-of-iron-iv) (run on 2026-11-21: all four
+runs were needed, and the registration file names decide).
 For Victoria 3, `--game vic3` writes `mod/pmm_probe_{a,b,c}` folders with
 `.metadata/metadata.json` and no `.mod` files, and prints the absolute folder
 paths that `content_load.json` will hold; the version probes and the rest of
@@ -272,7 +274,10 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
    - Hearts of Iron IV only (started in `<install>`, where its
      `steam_appid.txt` lies): the same observations as for CK3; also record
      whether the game reads the compact `dlc_load.json` the manager wrote (the
-     launcher writes it pretty-printed) and whether the game rewrites it;
+     launcher writes it pretty-printed) and whether the game rewrites it
+     (2026-11-21: the same process after 25 s, no restart through Steam, 43
+     active DLC in `system.log`; the game read the compact file and did not
+     rewrite it);
    - Victoria 3 only: `<userdata>/content_load.json` `enabledMods` lists
      exactly the enabled entries by absolute path, in playset order (a
      Workshop item as `<Steam library>\steamapps\workshop\content\529340\<id>`),
@@ -286,7 +291,9 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
    crashed while closing; Victoria 3: for the `logs/custom_automated_stats.log`
    line `time-to-reach-title-menu`, then 60 s without a change in the logs,
    because `debug.log` writes its own title-menu line only when the game
-   closes), quit the game, then analyse its log:
+   closes; Hearts of Iron IV: for the `logs/setup.log` line `Startup time:
+   Nms`, then 60 s without a change in the logs), quit the game, then analyse
+   its log:
 
    ```sh
    python tools/probe-mods/probe_mods.py analyze "<userdata>/logs/error.log" --enabled c a --disabled b
@@ -298,10 +305,14 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
 
    Expected JSON: `allEnabledLoaded: true`, `noDisabledLoaded: true`,
    `singleSharedWinner: true`, `ok: true`. `precedence` reports whether the
-   first or the last enabled probe won the shared file.
+   first or the last enabled probe won the shared file; it names the winner's
+   place in the list, and is the game's rule only where the list decides.
 4. Swap probes A and C in the playset (A first), Play again, and rerun
    `analyze` with `--enabled a c --disabled b`. Expected: the winner moves with
-   the order, consistent with the reported precedence.
+   the order, consistent with the reported precedence, in Stellaris, Crusader
+   Kings III and Victoria 3. In EU4 and Hearts of Iron IV it does not move
+   (the mod's name, or its `.mod` file's name, decides; see
+   [load order](load-order.md)).
 5. Record: both `analyze` outputs, the `dlc_load.json` contents, and the
    precedence rule (this is the evidence for the adapter's `LoadOrderInfo`).
 6. Without a playset (0.1.1): start the manager with a new, empty profile, so
@@ -402,4 +413,5 @@ One row per game, Windows version and distribution combination (repeat rows for 
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (`main`, `5013efe`) | 2026-11-13 | 6, items 1-5, live with the probes only (C, A, B disabled, imported from a share code; one isolated profile; `--live-test` with `--no-steam`), two launches, then restore | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, probes loaded as configured, **the later mod in `enabled_mods` wins**, configuration restored. Run 1 crashed while the game was being closed (after the evidence was written); `supported_version="1.20"` undetermined; 4, 6 items 6-7, 7-9 not run | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
 | Victoria 3 | 1.15.2 (Ivan-Chai) (26763837) | Windows 11 23H2 | Steam | after 0.2.0 (branch `agent/vic3`) | 2026-11-20 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles: the game's configuration, 1 entry; and a Workshop ID list of the 9 installed items, 9 entries, one disabled, two moved) | partial: 4, 6-9 not run (the probe run of 6 is approved by the owner (O1) but not run yet; the others need the owner's approval) | [Victoria 3 adapter](games/vic3.md#real-machine-evidence) |
 | Victoria 3 | 1.15.2 (Ivan-Chai) (26763837) | Windows 11 23H2 | Steam | after 0.2.0 (`main`, `8225f35`) | 2026-11-21 | 6, items 1-5, live with the probes (C, W1, W2, W3, G, A, B disabled) and one installed Workshop item, imported from a share code (one isolated profile; `--live-test` with `--no-steam`), two launches, then restore | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, the written `content_load.json` loaded as configured (the Workshop item by its absolute path), **the later mod in `enabledMods` wins**, configuration restored, both runs closed cleanly. `supported_game_version`: `"1.*"` and `"1.15"` match, `"*"` does not, none invalid; a mod without `game_custom_data` is left out of the mod list but loaded; 4, 6 items 6-7, 7-9 not run | [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md) |
-| Hearts of Iron IV | Operation Postern v1.20.0.0.8873 (0c4f) (26733403) | Windows 11 23H2 | Steam | after 0.2.0 (branch `agent/hoi4`) | 2026-11-21 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles, playset from the game's configuration, 21 entries, one disabled, one moved) | partial: 4, 6-9 not run (the probe run of 6 is prepared and needs the owner's approval) | [Hearts of Iron IV adapter](games/hoi4.md#real-machine-evidence) |
+| Hearts of Iron IV | Operation Postern v1.20.0.0.8873 (0c4f) (26733403) | Windows 11 23H2 | Steam | after 0.2.0 (branch `agent/hoi4`) | 2026-11-21 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles, playset from the game's configuration, 21 entries, one disabled, one moved) | partial: 4, 6-9 not run (the probe run of 6 was run separately; next row) | [Hearts of Iron IV adapter](games/hoi4.md#real-machine-evidence) |
+| Hearts of Iron IV | Operation Postern v1.20.0.0.8873 (0c4f) (26733403) | Windows 11 23H2 | Steam | after 0.2.0 (`main`, `11b73aa`) | 2026-11-21 | 6, items 1-5, live with the probes only (C, A, B disabled, imported from a share code; one isolated profile; `--live-test` with `--no-steam`), four launches (the list moved, probe a renamed, a's registration renamed), then three restores | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, the compact `dlc_load.json` read as written and not rewritten, probes loaded as configured, **the mod whose registration file name (`mod/<file>.mod`) sorts later wins; the list order and `name=` do not decide**, configuration restored, all four runs closed cleanly. `supported_version`: `"1.*.*"` still reported as invalid, `"1.20"` not; 1.20.0.0 reads every `mod/*.mod` at start-up; 4, 6 items 6-7, 7-9 not run | [Hearts of Iron IV probe run](evidence/2026-11-21-hoi4-load-order.md) |
