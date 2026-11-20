@@ -18,7 +18,7 @@ Workshop downloads) follows the design in [`ui-contract.md`](ui-contract.md),
 | Database | `%APPDATA%\ParadoxModManager\state.sqlite` |
 | Cache | `%LOCALAPPDATA%\ParadoxModManager\cache\` |
 | Configuration journals and backups | `%APPDATA%\ParadoxModManager\transactions\` |
-| Game files the manager writes on Play | `Documents\Paradox Interactive\<Game>\dlc_load.json`, `...\mod\*.mod` |
+| Game files the manager writes on Play | `Documents\Paradox Interactive\<Game>\dlc_load.json`, `...\mod\*.mod`; for Victoria 3 only `Documents\Paradox Interactive\Victoria 3\content_load.json` |
 
 When started with an isolated profile (`pmm-app --profile <dir>`), all
 application files live inside `<dir>` instead. **Settings → About** shows the
@@ -140,8 +140,9 @@ offline is up to the game and Steam.
   space; then **Retry**.
 - "Installed content is unusable" means Steam reported the item as installed
   but the folder has no `descriptor.mod` (nor exactly one other `.mod` file,
-  which some items ship instead). Verify the item in Steam or resubscribe
-  there, then **Retry**.
+  which some items ship instead); for Victoria 3, no
+  `.metadata\metadata.json`. Verify the item in Steam or resubscribe there,
+  then **Retry**.
 - If automatic acquisition cannot work on your system, use **Open in Steam
   (manual)**: subscribe on the page that opens, then rescan. This fallback is
   limited and does not count as automatic download.
@@ -153,12 +154,14 @@ mods.
 ## Several descriptor files give a mod the same id
 
 A local mod's id is the name of its descriptor file in the game's `mod`
-folder, without `.mod`. Windows allows file names with characters that are
-not valid Unicode (usually left by a tool or an unpacked archive); the
-manager shows each of them as �, so such names can read the same as each
-other or as a name with a real �. The mod list then shows one **Broken** mod
-whose problem says "The descriptor files … all give this mod the id …" and
-names every file with its mod name. None of the files is used for that id,
+folder, without `.mod`; for Victoria 3 it is the name of the mod's folder in
+`mod`, or of its `.zip` file with the extension. Windows allows file names
+with characters that are not valid Unicode (usually left by a tool or an
+unpacked archive); the manager shows each of them as �, so such names can
+read the same as each other or as a name with a real �. The mod list then
+shows one **Broken** mod whose problem says "The descriptor files … all give
+this mod the id …" (Victoria 3: "The mod folders …") and names every file or
+folder with its mod name. None of the files is used for that id,
 because playsets and share codes refer to mods by id, and Play stays
 unavailable while it is enabled in the playset (a disabled entry never blocks
 launching). Rename the files in File Explorer so that each has a distinct
@@ -168,8 +171,9 @@ renamed mod with **Add mods…**.
 
 ## Configuration permission errors
 
-Play writes the game's load-order file (for Stellaris `dlc_load.json`) and
-missing mod descriptors in the game's user-data folder. If that fails, the
+Play writes the game's load-order file (for Stellaris `dlc_load.json`, for
+Victoria 3 `content_load.json`) and missing mod descriptors (never for
+Victoria 3, which has none) in the game's user-data folder. If that fails, the
 launch is refused, any partial change is rolled back, and the game is not
 started. Common causes:
 
@@ -284,6 +288,12 @@ launcher:
   without restarting through Steam; if your copy quits, restarts through
   Steam or opens the launcher, report it with the diagnostics
   ([CK3 adapter](games/ck3.md)).
+- Victoria 3: the manager starts `binaries\victoria3.exe` in the `binaries`
+  folder with the arguments from `launcher\launcher-settings.json` and the
+  `SteamAppId`/`SteamGameId` variables; the game has no `steam_appid.txt`.
+  A direct start has not been observed yet on the development machine; if
+  the game quits, restarts through Steam or opens the launcher, report it
+  with the diagnostics ([Victoria 3 adapter](games/vic3.md)).
 
 ## The game does not start (process start failures)
 

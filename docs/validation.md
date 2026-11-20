@@ -1,8 +1,8 @@
 # Manual end-to-end validation
 
 This is the acceptance procedure from spec section 10 ("Manual end-to-end
-acceptance") for **Stellaris**, **Europa Universalis IV** and **Crusader Kings
-III**. Automated tests
+acceptance") for **Stellaris**, **Europa Universalis IV**, **Crusader Kings
+III** and **Victoria 3**. Automated tests
 cannot cover it: it needs a real game installation, a Steam account that owns
 the game, and observation of the running game.
 
@@ -16,7 +16,10 @@ step is a valid result and must be written down as such. The
 For Crusader Kings III the read-only steps and, with the owner's approval,
 the probe run of step 6 (items 1 to 5, with a playset of the probes only)
 were run on 2026-11-13
-([evidence](evidence/2026-11-13-ck3-load-order.md)).
+([evidence](evidence/2026-11-13-ck3-load-order.md)). For Victoria 3 only the
+read-only steps were run, on 2026-11-20; its probe run is prepared
+([load order](load-order.md#victoria-3)) and approved by the owner (O1), but
+not run yet.
 
 The procedure uses the desktop application `pmm-app` and the UI described in
 [`ui-contract.md`](ui-contract.md) (Import code, Export code, Play, ...).
@@ -83,19 +86,19 @@ subscriptions afterwards in the Steam client if wanted.
 
 ### Paths used below
 
-| Placeholder | Stellaris | Europa Universalis IV | Crusader Kings III |
-| --- | --- | --- | --- |
-| `<appid>` | `281990` | `236850` | `1158310` |
-| `<install>` | `<Steam library>/steamapps/common/Stellaris` | `<Steam library>/steamapps/common/Europa Universalis IV` | `<Steam library>/steamapps/common/Crusader Kings III` |
-| `<exe>` | `stellaris.exe` | `eu4.exe` (observed) | `ck3.exe`, in `<install>/binaries` (observed) |
-| `<exe path>` | `<install>\stellaris.exe` | `<install>\eu4.exe` | `<install>\binaries\ck3.exe` |
-| `<userdata>` | `Documents\Paradox Interactive\Stellaris` | `Documents\Paradox Interactive\Europa Universalis IV`, unless `<install>/userdir.txt` names another folder | `Documents\Paradox Interactive\Crusader Kings III`, unless `<install>/game/userdir.txt` names another folder (none ships) |
-| Version source | `<install>/launcher-settings.json` (`version`, `rawVersion`) and `buildid` in `steamapps/appmanifest_<appid>.acf` | same files (observed: `rawVersion` `v1.37.5.0`) | `<install>/launcher/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.20.1.2`, no `v`) |
-| Arguments the game's launcher passes (`exeArgs`) | `-gdpr-compliant` | `-enabletelemetry -gdpr-compliant`; direct launches are designed to drop `-enabletelemetry` | `-gdpr-compliant` (the launcher adds its own session arguments, which a direct start does not pass) |
-| `steam_appid.txt` in `<install>` | present | **absent**: a direct start relies on `SteamAppId`/`SteamGameId` set by the manager | in `<install>/binaries`, the folder a direct start runs in |
-| Load-order file | `<userdata>/dlc_load.json`, `enabled_mods` (observed) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only; not yet with a game started by the manager) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only) |
-| `supported_version` format for probes | `v4.5.*` (match `rawVersion`) | `v1.37.*.*` (four components, as in installed descriptors) | `1.20.*` (no `v`; never `1.*`, which CK3 reports as invalid) |
-| Paradox launcher processes | `Paradox Launcher.exe`, `bootstrapper-v2.exe`, and `dowser.exe` (in the game folder) | same | same; `dowser.exe` lies in `<install>/launcher` |
+| Placeholder | Stellaris | Europa Universalis IV | Crusader Kings III | Victoria 3 |
+| --- | --- | --- | --- | --- |
+| `<appid>` | `281990` | `236850` | `1158310` | `529340` |
+| `<install>` | `<Steam library>/steamapps/common/Stellaris` | `<Steam library>/steamapps/common/Europa Universalis IV` | `<Steam library>/steamapps/common/Crusader Kings III` | `<Steam library>/steamapps/common/Victoria 3` |
+| `<exe>` | `stellaris.exe` | `eu4.exe` (observed) | `ck3.exe`, in `<install>/binaries` (observed) | `victoria3.exe`, in `<install>/binaries` (observed); `victoria3_win_console.exe` next to it is a console wrapper that starts it |
+| `<exe path>` | `<install>\stellaris.exe` | `<install>\eu4.exe` | `<install>\binaries\ck3.exe` | `<install>\binaries\victoria3.exe` |
+| `<userdata>` | `Documents\Paradox Interactive\Stellaris` | `Documents\Paradox Interactive\Europa Universalis IV`, unless `<install>/userdir.txt` names another folder | `Documents\Paradox Interactive\Crusader Kings III`, unless `<install>/game/userdir.txt` names another folder (none ships) | `Documents\Paradox Interactive\Victoria 3`, unless `<install>/game/userdir.txt` names another folder (none ships; unverified) |
+| Version source | `<install>/launcher-settings.json` (`version`, `rawVersion`) and `buildid` in `steamapps/appmanifest_<appid>.acf` | same files (observed: `rawVersion` `v1.37.5.0`) | `<install>/launcher/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.20.1.2`, no `v`) | `<install>/launcher/launcher-settings.json` and the app manifest (observed: `rawVersion` `1.15.2`) |
+| Arguments the game's launcher passes (`exeArgs`) | `-gdpr-compliant` | `-enabletelemetry -gdpr-compliant`; direct launches are designed to drop `-enabletelemetry` | `-gdpr-compliant` (the launcher adds its own session arguments, which a direct start does not pass) | `-gdpr-compliant` (the same) |
+| `steam_appid.txt` in `<install>` | present | **absent**: a direct start relies on `SteamAppId`/`SteamGameId` set by the manager | in `<install>/binaries`, the folder a direct start runs in | **absent** everywhere, as for EU4; a direct start runs in `<install>/binaries` |
+| Load-order file | `<userdata>/dlc_load.json`, `enabled_mods` (observed) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only; not yet with a game started by the manager) | `<userdata>/dlc_load.json`, `enabled_mods` (observed read-only) | `<userdata>/content_load.json`, `enabledMods`: absolute paths of the mod folders (observed read-only) |
+| `supported_version` format for probes | `v4.5.*` (match `rawVersion`) | `v1.37.*.*` (four components, as in installed descriptors) | `1.20.*` (no `v`; never `1.*`, which CK3 reports as invalid) | `supported_game_version` `1.15.*` (in `.metadata/metadata.json`); which wildcards are invalid is to be found out |
+| Paradox launcher processes | `Paradox Launcher.exe`, `bootstrapper-v2.exe`, and `dowser.exe` (in the game folder) | same | same; `dowser.exe` lies in `<install>/launcher` | same; `dowser.exe` lies in `<install>/launcher` |
 
 ## 2. Record the environment
 
@@ -116,6 +119,7 @@ python tools/probe-mods/probe_mods.py create "<userdata>/mod" --supported-versio
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --supported-version "v1.37.*.*"  # EU4 1.37.x
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game ck3 --supported-version "1.20.*"  # CK3 1.20.x
 python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game ck3 --names b --supported-version "1.20"  # CK3: then b again
+python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game vic3 --supported-version "1.15.*"  # Victoria 3 1.15.x
 ```
 
 This writes `mod/pmm_probe_{a,b,c}` folders and `mod/pmm_probe_{a,b,c}.mod`
@@ -128,7 +132,12 @@ rewrites probe b, which stays disabled, with `supported_version="1.20"`, a
 two-part pattern without a wildcard whose treatment by CK3 is not known (the
 run of 2026-11-13 could not tell: started directly, 1.20.1.2 reported
 nothing about descriptors outside `enabled_mods`).
-Remove them at the end with `probe_mods.py remove "<userdata>/mod"`.
+For Victoria 3, `--game vic3` writes `mod/pmm_probe_{a,b,c}` folders with
+`.metadata/metadata.json` and no `.mod` files, and prints the absolute folder
+paths that `content_load.json` will hold; the version probes and the rest of
+its procedure are in [load order](load-order.md#victoria-3).
+Remove them at the end with `probe_mods.py remove "<userdata>/mod"` (Victoria
+3: add `--game vic3`).
 
 ## 4. Procedure
 
@@ -248,13 +257,21 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
      position 0 first) that is `mod/pmm_probe_c.mod`, `mod/ugc_<W1>.mod`,
      `mod/pmm_probe_a.mod`, `mod/ugc_<W3>.mod`; all three games' existing
      files use the `mod/ugc_<id>.mod` naming for Workshop items.
-     `disabled_dlcs` is unchanged from before the launch.
+     `disabled_dlcs` is unchanged from before the launch;
+   - Victoria 3 only: `<userdata>/content_load.json` `enabledMods` lists
+     exactly the enabled entries by absolute path, in playset order (a
+     Workshop item as `<Steam library>\steamapps\workshop\content\529340\<id>`),
+     `disabledDLC` and `enabledUGC` are unchanged, and no file in `mod/` was
+     written. The `Mod:` block of `<userdata>/logs/debug.log` lists the same
+     mods, and the `DLC:` block all DLC.
 3. Wait for the main menu (CK3: also for the `debug.log` line `Setup
    completion (history loaded)`; on 2026-11-13 a run closed before that line
    crashed while closing), quit the game, then analyse its log:
 
    ```sh
    python tools/probe-mods/probe_mods.py analyze "<userdata>/logs/error.log" --enabled c a --disabled b
+   # Victoria 3: also the Mod: block and the mounts of the rotating debug logs
+   python tools/probe-mods/probe_mods.py analyze "<userdata>/logs/error.log" --game vic3 --enabled c a --disabled b
    ```
 
    Expected JSON: `allEnabledLoaded: true`, `noDisabledLoaded: true`,
@@ -361,3 +378,4 @@ One row per game, Windows version and distribution combination (repeat rows for 
 | Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (`19e4705`) | 2026-10-30 | 1-7 live (probe mods; step 4 with a separate approval, build `f809e91`; `--live-test`) | pass; 8-9 run for EU4 only (same code paths); step 7 found a stale Play blocker, fixed in `19e4705` and rerun | [live validation](evidence/live-validation-2026-10-30.md) |
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (branch `agent/ck3`, `e16268a`) | 2026-11-13 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles, playset from the game's configuration) | partial: 4, 6-9 not run (need the owner's approval) | [CK3 adapter](games/ck3.md#real-machine-evidence) |
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (`main`, `5013efe`) | 2026-11-13 | 6, items 1-5, live with the probes only (C, A, B disabled, imported from a share code; one isolated profile; `--live-test` with `--no-steam`), two launches, then restore | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, probes loaded as configured, **the later mod in `enabled_mods` wins**, configuration restored. Run 1 crashed while the game was being closed (after the evidence was written); `supported_version="1.20"` undetermined; 4, 6 items 6-7, 7-9 not run | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
+| Victoria 3 | 1.15.2 (Ivan-Chai) (26763837) | Windows 11 23H2 | Steam | after 0.2.0 (branch `agent/vic3`) | 2026-11-20 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles: the game's configuration, 1 entry; and a Workshop ID list of the 9 installed items, 9 entries, one disabled, two moved) | partial: 4, 6-9 not run (the probe run of 6 is approved by the owner (O1) but not run yet; the others need the owner's approval) | [Victoria 3 adapter](games/vic3.md#real-machine-evidence) |

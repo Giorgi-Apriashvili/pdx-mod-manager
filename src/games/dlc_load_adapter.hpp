@@ -3,16 +3,12 @@
 // Shared implementation for games whose mod configuration is
 // "<user data>/dlc_load.json + <user data>/mod/*.mod" (the scheme the Paradox
 // launcher v2 uses for Stellaris, EU4 and Crusader Kings III, observed on all
-// three).
-// Everything that may differ per game is a GameTraits field; each game keeps
-// its own adapter class so that it can diverge once evidence requires it.
+// three). Discovery, launch arguments and the other parts every launcher-v2
+// game shares are in games/launcher_adapter.hpp.
 //
-// Files read: <install>/launcher-settings.json (or launcher/...), the
-// GameTraits::userDirFile (<install>/userdir.txt, CK3:
-// <install>/game/userdir.txt), Steam libraryfolders.vdf,
-// appmanifest_<app>.acf, appworkshop_<app>.acf, the content descriptor of
-// <library>/steamapps/workshop/content/<app>/<id> (see contentDescriptorFile),
-// <user data>/mod/*.mod and <user data>/dlc_load.json.
+// Files read: those of LauncherGameAdapter, appworkshop_<app>.acf, the content
+// descriptor of <library>/steamapps/workshop/content/<app>/<id> (see
+// contentDescriptorFile), <user data>/mod/*.mod and <user data>/dlc_load.json.
 // Files written (through LaunchPlan::configWrites only): dlc_load.json and
 // mod/ugc_<id>.mod for Workshop items that are not (correctly) registered.
 // The launcher's own database (launcher-v2.sqlite) is never touched.
@@ -31,16 +27,8 @@
 // game was reinstalled and Steam has not downloaded the item yet) is not an
 // installed mod: it is left out of the inventory, so that the item reads as
 // missing and can be acquired. A local mod without its folder stays Broken.
-//
-// User data: a folder chosen by the user, else an absolute path in the
-// GameTraits::userDirFile, else launcher-settings.json "gameDataPath", else
-// the OS default.
-//
-// Launch: the executable from launcher-settings.json (else
-// GameTraits::executable), started in its own folder (the installation folder
-// for Stellaris and EU4, <install>/binaries for CK3).
 
-#include "games/game_adapter.hpp"
+#include "games/launcher_adapter.hpp"
 
 #include <optional>
 #include <span>
@@ -48,45 +36,10 @@
 
 namespace pmm::games {
 
-struct GameTraits {
-    std::string_view key;            // catalog key, "stellaris"
-    std::string_view steamAppId;     // "281990"
-    std::string_view userDataFolder; // folder under "Paradox Interactive"
-    std::string_view launcherGameId; // "gameId" in launcher-settings.json
-    // Executable relative to the installation folder when launcher-settings
-    // is missing or unusable.
-    std::string_view executable;
-    // Processes that rewrite the configuration (the Paradox launcher).
-    std::span<const std::string_view> launcherProcesses;
-    // Path relative to the installation folder of the file that relocates
-    // the user-data folder ("userdir.txt", CK3: "game/userdir.txt"); empty
-    // when the game has no such file.
-    std::string_view userDirFile;
-    // launcher-settings.json arguments that are never passed on the user's
-    // behalf, compared ASCII case-insensitively ("-enabletelemetry").
-    std::span<const std::string_view> droppedArguments;
-    // Wildcards before the patch number make the game log "Invalid
-    // supported_version" (see games/supported_version.hpp).
-    bool rejectsEarlyWildcards = false;
-    std::string_view loadOrderSummary;
-    std::string_view loadOrderEvidence;
-    bool loadOrderVerifiedInGame = false; // probe-mod run recorded in the evidence
-    std::string_view loadOrderUserNote;   // LoadOrderInfo::userNote
-    std::string_view logComponent;        // "games.stellaris"
-};
-
-class DlcLoadJsonAdapter : public GameAdapter {
+class DlcLoadJsonAdapter : public LauncherGameAdapter {
 public:
     explicit DlcLoadJsonAdapter(const GameTraits& traits);
 
-    const GameTraits& traits() const noexcept { return m_traits; }
-
-    const GameCatalogEntry& catalog() const override;
-    Capabilities capabilities(const GameInstallation& installation) const override;
-    std::vector<GameInstallation> discover(const DiscoveryEnvironment& env) const override;
-    Result<GameInstallation> inspectInstallation(const fs::path& installPath,
-                                                 const fs::path& userDataPath,
-                                                 const DiscoveryEnvironment& env) const override;
     Result<std::vector<InstalledMod>> scanMods(const GameInstallation& installation) const override;
     Result<std::vector<PlaysetEntry>>
     readCurrentConfiguration(const GameInstallation& installation,
@@ -94,33 +47,10 @@ public:
     Result<LaunchPlan>
     buildLaunchPlan(const GameInstallation& installation,
                     std::span<const InstalledMod> orderedEnabledMods) const override;
-    ProcessNames processNames(const GameInstallation& installation) const override;
-    LoadOrderInfo loadOrderInfo() const override;
-    std::vector<std::string> compatibilityWarnings(const GameInstallation& installation,
-                                                   const InstalledMod& mod) const override;
-
-    // <documents>/Paradox Interactive/<folder>. Empty when the base folder is
-    // unknown.
-    fs::path defaultUserDataPath(const DiscoveryEnvironment& env) const;
-    // Fallback executable relative to the installation folder.
-    fs::path defaultExecutable() const;
-    // `arguments` without the droppedArguments, order kept.
-    std::vector<std::string> launchArguments(const std::vector<std::string>& arguments) const;
-
-private:
-    enum class Mode { Discovered, Manual };
-    Result<GameInstallation> describe(const fs::path& installPath, const fs::path& userDataPath,
-                                      const DiscoveryEnvironment& env, Mode mode) const;
-
-    GameTraits m_traits;
-    const GameCatalogEntry* m_catalog = nullptr;
+    // A folder needs its content descriptor (contentDescriptorFile), not
+    // empty; a single file (a legacy zipped item) must not be empty.
+    Status verifyWorkshopContent(const fs::path& installPath) const override;
 };
-
-// Steam Workshop id of `path` when it lies inside
-// .../steamapps/workshop/content/<appId>/<id>; the id must be canonical
-// decimal. `libraryRoot` receives the folder that contains steamapps.
-std::optional<std::string> workshopIdFromPath(const fs::path& path, std::string_view appId,
-                                              fs::path* libraryRoot = nullptr);
 
 // "mod/ugc_123.mod" style reference for a descriptor file name.
 std::string descriptorReference(const fs::path& descriptorFile);
@@ -131,12 +61,5 @@ std::string descriptorReference(const fs::path& descriptorFile);
 // when several *.mod files leave it open which one describes the mod, or when
 // the folder holds a .zip (a legacy zipped item, described inside its archive).
 std::optional<fs::path> contentDescriptorFile(const fs::path& folder);
-
-// The user-data folder named by a userdir.txt file: its first non-empty line,
-// without surrounding whitespace and one pair of quotes, lexically
-// normalised. nullopt when the file is missing or blank. ValidationFailed
-// when the line is not an absolute path (relative paths are not supported:
-// what they would be relative to is unverified) or not valid UTF-8.
-Result<std::optional<fs::path>> readUserDirFile(const fs::path& file);
 
 } // namespace pmm::games

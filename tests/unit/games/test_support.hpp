@@ -80,11 +80,23 @@ inline std::string replaceAll(std::string text, std::string_view from, std::stri
     return text;
 }
 
+// The form Victoria 3's launcher writes a path in: Windows separators, an
+// upper-case drive letter.
+inline std::string windowsForm(const fs::path& path) {
+    std::string text = platform::pathToUtf8(fs::path(path).make_preferred());
+    if (text.size() >= 2 && text[1] == ':' && text[0] >= 'a' && text[0] <= 'z')
+        text[0] = static_cast<char>(text[0] - 'a' + 'A');
+    return text;
+}
+
 // Copies tests/fixtures/games/<name> into `destination`, replacing "@ROOT@" in
-// text files with the generic UTF-8 form of `destination`.
+// text files with the generic UTF-8 form of `destination`, and "@WINROOT@" in
+// .json files with its windowsForm() escaped for JSON (backslashes doubled),
+// as Victoria 3's content_load.json holds paths.
 inline void installFixture(std::string_view name, const fs::path& destination) {
     const fs::path source = fixturePath("games/" + std::string(name));
     const std::string root = platform::toGenericUtf8(destination);
+    const std::string windowsRoot = replaceAll(windowsForm(destination), "\\", "\\\\");
     for (const auto& entry : fs::recursive_directory_iterator(source)) {
         const fs::path target = destination / entry.path().lexically_relative(source);
         if (entry.is_directory()) {
@@ -96,6 +108,8 @@ inline void installFixture(std::string_view name, const fs::path& destination) {
         if (extension == ".mod" || extension == ".json" || extension == ".vdf" ||
             extension == ".acf")
             contents = replaceAll(std::move(contents), "@ROOT@", root);
+        if (extension == ".json")
+            contents = replaceAll(std::move(contents), "@WINROOT@", windowsRoot);
         writeText(target, contents);
     }
 }

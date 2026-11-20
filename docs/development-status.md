@@ -30,6 +30,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Workshop provider and `pmm-steam-helper` | `src/providers`, `tools/steam-helper`, [`steam-workshop.md`](steam-workshop.md) | done; session and item state verified read-only; subscribe and download tested against the fake Steam API only | [probe](evidence/steam-helper-probe.md) |
 | EU4 and Stellaris adapters | `src/games`, [`games/`](games/), [`load-order.md`](load-order.md) | done; detection, inventory, current configuration and launch plan verified read-only | [real scan](evidence/real-scan-2026-10-29.md) |
 | Crusader Kings III adapter (for 0.2.0) | `src/games/ck3.{hpp,cpp}`, [`games/ck3.md`](games/ck3.md), [`load-order.md`](load-order.md#crusader-kings-iii) | done 2026-11-13 on `agent/ck3`, merged into `main` (`5013efe`). Owner's decisions of 2026-11-12/13: the game's own Steam API library is loaded as for the other games, the catalog lists the supported games alphabetically (`ck3`, `eu4`, `stellaris`), the load order ships unverified (`loadOrderVerifiedInGame = false`, and a temporary note above a CK3 playset says so) until a probe run approved by the owner. Also for every game: launches start in the executable's folder (unchanged for Stellaris and EU4), and a Workshop folder without `descriptor.mod` is described by its only `.mod` file, also by the content check after a download. Detection, inventory, current configuration, launch plan and a share-code round trip verified read-only on 1.20.1.2. **Probe run done 2026-11-13** with the owner's approval (recorded on `agent/ck3-probe`, merged `ab265ea`): two direct launches without the launcher or a restart through Steam, and **the later mod in `enabled_mods` wins**, as in Stellaris; `loadOrderVerifiedInGame = true` and the temporary note removed. **Workshop acquisition not run**; `supported_version="1.20"` still undetermined | [CK3 adapter](games/ck3.md#real-machine-evidence), [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
+| Victoria 3 adapter (unreleased) | `src/games/{launcher_adapter,content_load_adapter,mod_metadata,vic3}.{hpp,cpp}`, [`games/vic3.md`](games/vic3.md), [ADR 0010](adr/0010-content-load-adapter-family.md), [`load-order.md`](load-order.md#victoria-3) | done 2026-11-20 on `agent/vic3`, not merged. Owner's decisions of 2026-11-20 (the lead's recommendations L1-L11, O2/O3 skipped, O4 no release yet, O5 the brief's scope): a second adapter family (`ContentLoadJsonAdapter`, `content_load.json` and `.metadata/metadata.json`) on a base extracted from `DlcLoadJsonAdapter` (`LauncherGameAdapter`; a commit of its own, without a change in behaviour); the Workshop content check per game (`GameAdapter::verifyWorkshopContent`); the catalog lists `vic3` as supported (`ck3`, `eu4`, `stellaris`, `vic3`, then `hoi4`); the load order ships unverified with a temporary note. Detection, inventory, current configuration, launch plan, the download check and share-code round trips verified read-only on 1.15.2. **Probe run approved (O1) but not run yet**; Workshop acquisition not run | [Victoria 3 adapter](games/vic3.md#real-machine-evidence) |
 | Qt-free services (games, playsets, sharing, acquisition, launch) | `src/services`, [`architecture-services.md`](architecture-services.md) | done, tested | |
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
@@ -44,7 +45,86 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Update contract, frozen since 0.1.0 | [`packaging/update-contract.txt`](../packaging/update-contract.txt), `scripts/check-update-contract.sh`, `scripts/test-update-contract.sh`, [`updates.md`](updates.md#compatibility-contract-frozen-since-010) | done 2026-11-06: CI's "Format check" checks the sources and tests the check (80 cases); the Release workflow checks the version, the published releases, the repository id in `pmm-app.exe` and the assets before the draft. Passes on the merged tree, and a deliberate drift fails it; passed on GitHub in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)). Since 2026-11-07 the check reads the code of the sources, without their comments, and also checks the relaunch after an update run: 56 source checks, 112 test cases | |
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
-| In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13 | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
+| In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13. `--game vic3` (2026-11-20: probe folders with `metadata.json`, `--no-shared`, `--no-game-custom-data`, `analyze` of the rotating debug logs) checked in scratch folders only | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
+
+## Test status (2026-11-20, Victoria 3, `agent/vic3`)
+
+Local runs only, with fakes, fixtures and new scratch profiles; no game, no
+launcher and no Steam client was started, nothing under Steam, the game
+folders or `Documents/Paradox Interactive` was written, and the launcher's
+databases and `playsets_backup` were not opened. MSVC 19.52 (toolset
+14.52.37025).
+
+- Step 1, the shared base without a change in behaviour (`1e646e3`): before
+  any change, the `debug` build of `main` (`cd1b2fc`) passed 596/596 tests
+  and `pmm_games_tests "[.real]"` gave the baseline; after the extraction,
+  596/596 again and the Stellaris, EU4 and CK3 output identical to it, line
+  for line (Catch2's seed line aside).
+- `debug` preset: **0 warnings**, **621/621 tests pass**, by label: core 51,
+  sharing 69, persistence 72, platform 59, providers 61, games 95, services
+  95, application 123, ui-preview 1. New: `mod_metadata_tests.cpp` (6
+  cases), `vic3_adapter_tests.cpp` (15 cases on the fixture
+  `tests/fixtures/games/vic3`: discovery, both wrong-game directions, the
+  fallback executable, `game/userdir.txt`, the identity rules, Downloading
+  and NeedsUpdate, folder names that read the same, the current
+  configuration, exact `content_load.json` plans byte for byte in the
+  launcher's layout, every other key kept, path strings reused, refusals,
+  the warnings with `supported_game_version`, process names with the console
+  wrapper, load-order information), `content_check_tests.cpp` (the content
+  check of both families; the providers cases moved here, the services case
+  that compared two copies of the rule is gone), a Victoria 3 share-code
+  round trip, the golden fixture `06-vic3-basic` (checked with Python's
+  `zlib`, `base64` and `hashlib`), catalog and registry checks. Changed: the
+  unsupported example of the share-code tests is now `hoi4`.
+- `pmm_games_tests`, `pmm_sharing_tests`, `pmm_providers_tests`, the
+  catalog tests of `pmm_core_tests`, the acquisition tests of
+  `pmm_services_tests`, the helper tests of `pmm_app_tests` (they change the
+  content check hook) and the preview tests passed 10 times each.
+- `pmm_games_tests "[.real]"` (read-only): Victoria 3 1.15.2, 10 mods (9
+  Workshop, 1 local), 0 problems, 1 version warning (`1.7.*`), 1 enabled mod,
+  0 unresolved, 0 writes, the download check accepts 9 of 9 Workshop folders
+  (the previous rule in providers would have rejected all 9: none has a
+  `.mod` file); the Stellaris, EU4 and CK3 output identical, line for line,
+  to the baseline of `main`.
+- The application read-only with new scratch profiles: `--game vic3
+  --screenshot` (Victoria 3 fourth in the games column, Installed · 1.15.2,
+  Hearts of Iron IV alone under "Other games", Play blocked by the read-only
+  mode); the scripted share-code round trip from the game's configuration (1
+  entry, disabled) and from a Workshop ID list of the 9 installed items (9
+  entries, 8 enabled, 2 moved), each with byte-identical dumps; the
+  load-order note above the 9-entry playset.
+- `tools/probe-mods/probe_mods.py` into scratch folders: `create` (default,
+  `--game stellaris`, `--game eu4`, `--game ck3`), `remove` and `analyze`
+  print and write exactly what the version of `main` does; `--game vic3`
+  writes probe folders with `metadata.json` (and the `--no-shared` and
+  `--no-game-custom-data` variants), and `analyze --game vic3` on synthetic
+  rotating debug logs picks the latest session.
+- Review fixes (`99c286d` to `a10c917`): a `content_load.json` path outside
+  `mod/` whose name is an installed mod's id, and which is not that folder
+  (`fs::equivalent`), is left out and logged instead of becoming that mod,
+  as is a path that names no folder (a games case with a folder of the
+  same name elsewhere, a missing one, `C:\`, an empty path and the installed
+  folder in the `\\?\` form); the download check reads `metadata.json` as
+  the scan does, so whitespace, a trailing comma and a JSON array are
+  rejected (games cases, and two more layouts in the comparison with the
+  scan); a services case shows that the check takes the adapter of the
+  job's game (Victoria 3's adapter listed first; with the coordinator
+  changed to take the first adapter, the case fails); the `[.real]` summary
+  counts only local `.zip` mods; the Victoria 3 probe scripts have LF line
+  ends (as all 133 event and 33 scripted-trigger files of 1.15.2 have; the
+  Stellaris, EU4 and CK3 probes unchanged byte for byte); the probe
+  procedure (the Workshop item in the step-3 code, `move` steps for run 2,
+  one `restore` per launch, the probes the game may leave out) and the
+  wording of the approval. `debug`: **0 warnings**, **623/623 tests pass**,
+  by label: core 51, sharing 69, persistence 72, platform 59, providers 61,
+  games 96, services 96, application 123, ui-preview 1; the new cases
+  passed 10 times each. `pmm_games_tests "[.real]"` (read-only): the
+  Stellaris, EU4 and CK3 output identical, line for line, to the baseline
+  of `main`; the Victoria 3 output unchanged (9 of 9 Workshop folders
+  accepted). `scripts/check.sh --full` on `a10c917`: passed (ASan and
+  clang-cl with UBSan 499/499 each, clang-tidy on the 22 C++ files changed
+  since `origin/main` without findings, the `ci` preset from a fresh
+  checkout 623/623).
 
 ## Test status (2026-11-13, Workshop ID lists, `workshop-id-lists`)
 
@@ -591,6 +671,8 @@ approval:
 | CK3 step 4 (Workshop subscribe and download for app 1158310) | not run; ideally with an item that ships `<Name>.mod` |
 | CK3 `supported_version="1.20"` and `"1.*"` on 1.20.1.2 | started directly, 1.20.1.2 did not read descriptors outside `enabled_mods`, so the disabled probe told nothing ([CK3 adapter](games/ck3.md#outstanding-validation)) |
 | CK3 steps 7-9, and step 6 items 6-7 | same code paths as Stellaris and EU4; not run for CK3 |
+| Victoria 3 probe run (O1, approved for 2026-11-20 as a separate step) | prepared, not run: direct start, the written `content_load.json` loaded, precedence, a Workshop path, the `supported_game_version` rule ([load order](load-order.md#victoria-3)) |
+| Victoria 3 steps 4 and 6-9 (Workshop download for app 529340: O2, skipped) | not run; the download check is the only Victoria 3 specific part, checked read-only |
 
 **EU4 order:** EU4 does not use the playset order for file overrides. The
 adapter's `LoadOrderInfo` says so (`verifiedInGame = true`), and the mods
@@ -816,6 +898,12 @@ Packaging ([`packaging.md`](packaging.md)):
     afterwards as an installed copy reads it (the request by repository id
     answers `v0.2.0` without a redirect, the real update client reads it, the
     assets match `SHA256SUMS.txt` and pass `check-update-contract.sh assets`).
+11. Done 2026-11-20 on `agent/vic3` (not merged): Victoria 3 support, phase
+    1 (code, tests, fixtures, docs, the probe tool), verified read-only on
+    1.15.2 ([Victoria 3 adapter](games/vic3.md)). Next: the probe run
+    approved by the owner (O1), recorded as
+    `docs/evidence/<date>-vic3-load-order.md`, then the traits, and the
+    release (O4: 0.3.0 after the probe run, with refreshed screenshots).
 
 ## Working rules
 
@@ -853,3 +941,9 @@ launcher or a restart through Steam, loaded exactly the enabled probes, and
 the later mod in `enabled_mods` won a shared file; it listed only the
 `enabled_mods` descriptors in `debug.log`, and one of the two runs crashed
 while being closed ([CK3 probe run](evidence/2026-11-13-ck3-load-order.md)).
+Victoria 3 "1.15.2 (Ivan-Chai)" (build 26763837, 9 Workshop mods and 1 local
+mod) was read on 2026-11-20 and not started: it keeps the enabled mods in
+`content_load.json` as absolute paths, has no `.mod` files, no
+`dlc_load.json` and no `steam_appid.txt`, and every mod carries a
+`.metadata/metadata.json`; the launch plan for the launcher's selection
+writes nothing ([Victoria 3](games/vic3.md)).

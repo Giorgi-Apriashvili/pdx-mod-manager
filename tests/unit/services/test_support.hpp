@@ -10,6 +10,7 @@
 #include "core/model.hpp"
 #include "games/dlc_load_adapter.hpp"
 #include "games/game_adapter.hpp"
+#include "games/stellaris.hpp"
 #include "persistence/database.hpp"
 #include "persistence/testing.hpp"
 #include "platform/file_transaction.hpp"
@@ -282,6 +283,11 @@ public:
         if (installation.version.rfind(prefix, 0) == 0)
             return {};
         return {"Made for " + wanted + "; the installed game is " + installation.version + "."};
+    }
+
+    // The real dlc_load.json adapters' rule, as the scan above follows it.
+    Status verifyWorkshopContent(const fs::path& installPath) const override {
+        return games::StellarisAdapter().verifyWorkshopContent(installPath);
     }
 };
 

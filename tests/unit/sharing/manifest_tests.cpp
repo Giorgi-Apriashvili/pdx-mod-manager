@@ -367,6 +367,8 @@ TEST_CASE("Games and sources are validated against the catalog", "[sharing][mani
 
     m.game = "ck3";
     CHECK(validateManifest(m).ok());
+    m.game = "vic3";
+    CHECK(validateManifest(m).ok());
     m.game = "eu4";
     CHECK(validateManifest(m).ok());
     m.mods[1].source = "paradox-mods";

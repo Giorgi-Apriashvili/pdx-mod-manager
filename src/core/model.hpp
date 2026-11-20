@@ -64,8 +64,9 @@ struct GameInstallation {
     bool manuallyConfigured = false;
 };
 
-// Parsed Clausewitz mod descriptor (.mod / descriptor.mod). Unknown keys are kept
-// verbatim so regenerated descriptors preserve them.
+// Parsed mod descriptor: a Clausewitz .mod / descriptor.mod, or a Victoria 3
+// .metadata/metadata.json. Unknown keys are kept verbatim so regenerated
+// descriptors preserve them.
 struct ModDescriptor {
     std::string name;
     std::string version;
@@ -91,9 +92,13 @@ const char* toString(InstallState state) noexcept;
 struct InstalledMod {
     ModIdentity identity;
     ModDescriptor descriptor;
-    std::filesystem::path contentPath;    // directory (or archive) with mod files
-    std::filesystem::path descriptorPath; // user-dir .mod file, empty if not registered yet
-    std::string descriptorRef;            // e.g. "mod/ugc_123.mod" as used by the game
+    std::filesystem::path contentPath; // directory (or archive) with mod files
+    // The registered .mod file in the user mod folder (empty if not registered
+    // yet), or the mod's own metadata.json (Victoria 3).
+    std::filesystem::path descriptorPath;
+    // How the game's configuration refers to the mod: "mod/ugc_123.mod" in
+    // dlc_load.json, or the content path in Victoria 3's content_load.json.
+    std::string descriptorRef;
     InstallState state = InstallState::Ready;
     std::vector<std::string> problems; // human-readable issues found while scanning
     std::int64_t contentUpdatedAt = 0; // unix seconds, best effort

@@ -8,20 +8,21 @@ an ordered mod list is the first mod handed to the game.** Which end of the
 list wins when two mods contain the same file is a property of the game, not
 of this application, and is recorded below only as far as it is verified.
 
-Code: `src/games/dlc_load_adapter.cpp` (`buildLaunchPlan`,
+Code: `src/games/dlc_load_adapter.cpp` and, for Victoria 3,
+`src/games/content_load_adapter.cpp` (`buildLaunchPlan`,
 `readCurrentConfiguration`), `LoadOrderInfo` from `GameAdapter::loadOrderInfo()`.
 
 ## Summary
 
-| | Stellaris | Europa Universalis IV | Crusader Kings III |
-| --- | --- | --- | --- |
-| Configuration file | `<user data>/dlc_load.json`, key `enabled_mods` | same (**verified** read-only on v1.37.5.0) | same (**verified** read-only on 1.20.1.2) |
-| Playset order -> file | enabled entries in playset order, index 0 = array element 0 | same | same |
-| Disabled entries | not written (the launcher writes only enabled ones) | same | same |
-| Array order == launcher playset order | **Verified** read-only, 2026-10-29 (alphabetical playset, see below) | **Verified** read-only, 2026-10-29 (hand-made `custom` order, see below) | Not checked (the launcher's database is not read) |
-| Game enables the listed mods only | **Verified** in-game, 2026-10-30: listed probes loaded, the unlisted one not; every descriptor in `mod/` is parsed | **Verified** in-game, 2026-10-30 (same) | **Verified** in-game, 2026-11-13 (1.20.1.2): listed probes loaded, the unlisted one not, mounted in `enabled_mods` order. Started directly, 1.20.1.2 lists only the `enabled_mods` entries in `debug.log`; a 1.19 build, apparently started through the launcher, had listed every descriptor as `Enabled` or `Disabled` |
-| File override precedence (which mod wins) | **Verified** in-game, 2026-10-30 (4.5.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-10-30 (1.37.5): **the order of `enabled_mods` is ignored; the mod whose `name` sorts first wins** | **Verified** in-game, 2026-11-13 (1.20.1.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner |
-| `LoadOrderInfo::verifiedInGame` | `true` | `true` | `true` |
+| | Stellaris | Europa Universalis IV | Crusader Kings III | Victoria 3 |
+| --- | --- | --- | --- | --- |
+| Configuration file | `<user data>/dlc_load.json`, key `enabled_mods` | same (**verified** read-only on v1.37.5.0) | same (**verified** read-only on 1.20.1.2) | `<user data>/content_load.json`, key `enabledMods`, absolute paths (**verified** read-only on 1.15.2) |
+| Playset order -> file | enabled entries in playset order, index 0 = array element 0 | same | same | same |
+| Disabled entries | not written (the launcher writes only enabled ones) | same | same | same |
+| Array order == launcher playset order | **Verified** read-only, 2026-10-29 (alphabetical playset, see below) | **Verified** read-only, 2026-10-29 (hand-made `custom` order, see below) | Not checked (the launcher's database is not read) | Not checked. The launcher's code writes every folder mod in playset order, then every zipped mod (inferred) |
+| Game enables the listed mods only | **Verified** in-game, 2026-10-30: listed probes loaded, the unlisted one not; every descriptor in `mod/` is parsed | **Verified** in-game, 2026-10-30 (same) | **Verified** in-game, 2026-11-13 (1.20.1.2): listed probes loaded, the unlisted one not, mounted in `enabled_mods` order. Started directly, 1.20.1.2 lists only the `enabled_mods` entries in `debug.log`; a 1.19 build, apparently started through the launcher, had listed every descriptor as `Enabled` or `Disabled` | Unverified: the last run's `debug.log` lists the one enabled mod in its `Mod:` block and mounts it after the DLC |
+| File override precedence (which mod wins) | **Verified** in-game, 2026-10-30 (4.5.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-10-30 (1.37.5): **the order of `enabled_mods` is ignored; the mod whose `name` sorts first wins** | **Verified** in-game, 2026-11-13 (1.20.1.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Unverified**: documented by others as "the later mod wins" a file; database entries follow other rules since 1.12 (see [Victoria 3](#victoria-3)) |
+| `LoadOrderInfo::verifiedInGame` | `true` | `true` | `true` | `false`, with a user note |
 
 `LoadOrderInfo::summary`, Stellaris and CK3: "dlc_load.json enabled_mods,
 index 0 first; when two enabled mods contain the same file, the one later in
@@ -32,8 +33,13 @@ same file, the mod whose name sorts first alphabetically wins". Evidence:
 EU4, [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) for CK3. Only
 EU4 has a user note, which the mods pane shows above an EU4 playset; CK3's
 temporary "not yet verified" note was removed after its probe run.
+Victoria 3: "content_load.json enabledMods, index 0 first; when two enabled
+mods contain the same file, the one later in the list wins", with
+`verifiedInGame = false` and the temporary note "It is not yet verified that
+Victoria 3 follows this order when two mods change the same file." until its
+probe run.
 
-## Mapping (all three games)
+## Mapping (Stellaris, EU4, Crusader Kings III)
 
 `buildLaunchPlan(installation, orderedEnabledMods)` receives only the enabled
 entries, in playset order, and writes:
@@ -58,6 +64,45 @@ entries, in playset order, and writes:
   pointing into the Workshop content folder) stays the Workshop item `<id>`,
   even when its content is not downloaded, so it can be acquired. Anything
   else becomes a `local` entry named after the reference stem.
+
+## Mapping (Victoria 3)
+
+`buildLaunchPlan` receives the enabled entries in playset order and writes
+`content_load.json` in the launcher's layout (two-space indent, LF, no BOM,
+no trailing newline):
+
+```json
+{
+  "enabledMods": [
+    {
+      "path": "C:\\Program Files (x86)\\Steam\\steamapps\\workshop\\content\\529340\\1000000001"
+    },
+    {
+      "path": "C:\\Users\\Player\\Documents\\Paradox Interactive\\Victoria 3\\mod\\Local Tweaks"
+    }
+  ],
+  "disabledDLC": [],
+  "enabledUGC": []
+}
+```
+
+- Each element is `{"path": ...}` with the absolute path of the mod's folder,
+  or of its `.zip`. A path the file already holds for the same location is
+  kept as written; new ones are absolute, with backslashes, an upper-case
+  drive letter and no trailing separator, the form the launcher writes.
+  Workshop items are used in place; nothing is generated or registered.
+- Only `enabledMods` changes. `disabledDLC`, `enabledUGC`, `formatVersion`
+  and unknown keys keep their values and positions; no key is added. A
+  missing file becomes `{"enabledMods":[...],"disabledDLC":[],"enabledUGC":[]}`,
+  a malformed one is rebuilt so, with a launch warning. The file is only
+  written when its JSON would change.
+- `readCurrentConfiguration` is the inverse: a path inside
+  `.../workshop/content/529340/<id>` is that Workshop item, installed or not;
+  any other path is the installed mod at that location, else a `local` entry
+  named after the path's last component (the entry's name in `mod/`), which
+  reads as not installed. A path outside `mod/` whose last component is the
+  name of an installed mod at another location, and a path that names no
+  folder, are left out and logged.
 
 ## Verified on the development machine (read-only)
 
@@ -120,6 +165,18 @@ has since overwritten them):
    older than their Workshop content (only `version`, `name` or `tags`
    differ), and the launcher rewrites them at its next start.
 
+Victoria 3 1.15.2 (Steam, Windows 11), 2026-11-20 (details in
+[`games/vic3.md`](games/vic3.md#real-machine-evidence)). The game had last
+run as 1.15.1 on 2026-11-18:
+
+1. **The game reads `content_load.json`.** `victoria3.exe` contains
+   `content_load.json`, `enabledMods` and `disabledDLC`, and no
+   `dlc_load.json`. The last session's `debug.log` lists the 18 DLC, then a
+   `Mod:` block with the one enabled mod (`name|absolute path`), then mounts
+   the DLC folders followed by the mod.
+2. **This application reproduces the launcher's file**: the launch plan for
+   the current `content_load.json` has zero writes.
+
 ## Community claims about precedence (conflicting)
 
 Community sources disagree about which mod wins when several mods contain
@@ -152,6 +209,19 @@ measurement: the same "lower overrides" advice circulated for EU4, and EU4
 1.37.5 turned out to ignore the order (below). For CK3 the probe run of
 2026-11-13 confirmed the file rule on 1.20.1.2 (below).
 
+For Victoria 3, reverse engineering of 1.15.1 (v3x) reports that every
+mounted mod is searched before the earlier ones, so a later entry in
+`enabledMods` wins a shared file; the community gives the same advice, and the
+third-party validator vic3-tiger models it. `game_custom_data.replace_paths`
+hides the files of lower mods in exactly that folder. Since 1.12 (December
+2025) many databases no longer let a later definition of the same key
+replace an earlier one: the first one, in file-name order, is kept, unless
+the mod uses `REPLACE:`, `INJECT:`, `TRY_*` or `*_OR_CREATE:`; events and GUI
+types keep their first definition, and localization keys are replaced only
+through `localization/<language>/replace/`. So the file rule says nothing
+about which mod wins a database entry. All of this is documentation, not yet
+a measurement on this machine.
+
 On 2026-10-29 these pages could not be retrieved from the development
 environment (a browser-verification page and HTTP 500). The claims above come
 from search-result excerpts of these threads and related Steam discussions,
@@ -173,7 +243,11 @@ checked at start-up (observed 2026-10-30). CK3 needs `--game ck3`, which
 writes CK3 events (`<ns>.1 = { type = character_event hidden = yes ... }`)
 with a UTF-8 BOM; its error.log reports unknown triggers in
 `common/scripted_triggers` too (a 1.19 build, and 1.20.1.2 on 2026-11-13,
-where both files named the same winner).
+where both files named the same winner). Victoria 3 needs `--game vic3`,
+which writes probe folders with `.metadata/metadata.json` instead of `.mod`
+files, and Victoria 3's events (`<ns>.1 = { type = country_event hidden =
+yes ... }`) with a UTF-8 BOM and LF line ends, as the game's own script files
+have; how its `error.log` words an unknown trigger has not been seen yet.
 
 Stellaris (EU4 the same, with its own folder and a `supported_version` such
 as `v1.37.*`):
@@ -301,3 +375,92 @@ CK3 notes on the procedure above, as used for that run:
   `tests/unit/games/ck3_adapter_tests.cpp` and the CK3 row of
   `ui/dev/Pmm/Backend/FakeGamesModel.qml` with it. Done on 2026-11-13 for
   the later mod winning.
+
+### Victoria 3
+
+**Not yet run.** The probe run is approved by the owner (O1) but has not
+been run; until then `src/games/vic3.cpp` ships
+`loadOrderVerifiedInGame = false` and the temporary note. Victoria 3 notes
+on the procedure above, for that run:
+
+- Run the read-only `[.real]` scan first, as a baseline
+  ([`games/vic3.md`](games/vic3.md#real-machine-evidence)), and back up
+  `content_load.json` outside the game folders (with its SHA-256), together
+  with a listing of `<userdata>/mod`.
+- Step 1: close the Paradox launcher; it writes `content_load.json` from its
+  own playset when it starts a game.
+- Step 2: `python tools/probe-mods/probe_mods.py create "<Documents>/Paradox Interactive/Victoria 3/mod" --game vic3 --supported-version "1.15.*"`
+  writes probes a, b and c, each a folder with `.metadata/metadata.json`
+  and no `.mod` file; the output lists the absolute folder paths, exactly as
+  `content_load.json` will hold them. Then the version probes, without the
+  shared file so that they take no part in the precedence test:
+  `create ... --game vic3 --names w1 --supported-version "1.*" --no-shared`,
+  the same with `--names w2 --supported-version "*"` and with
+  `--names w3 --supported-version "1.15"`. Optionally (step 6 of
+  [`games/vic3.md`](games/vic3.md#outstanding-validation)):
+  `create ... --game vic3 --names g --no-game-custom-data --no-shared --supported-version "1.15.*"`.
+- Step 3: make a playset with **only** the probes and **one** installed
+  Workshop item (for step 6; pick one without warnings in the application),
+  from a share code built with `scripts/share-code.py encode` (game `vic3`;
+  local ids are the folder names). In this order: `pmm_probe_c`,
+  `pmm_probe_w1`, `pmm_probe_w2`, `pmm_probe_w3`, `pmm_probe_g` if made, the
+  Workshop item (`steam-workshop` and its id), `pmm_probe_a`, all enabled,
+  then `pmm_probe_b` disabled. The version probes and the Workshop item have
+  no shared file, so they stay between c and a. Save the code to a file,
+  then run `pmm-app --profile <scratch> --no-steam --live-test
+  "game:vic3,import:<file>,blockers,play"`. Check the direct launch:
+  `tasklist /FI "IMAGENAME eq victoria3.exe"` lists the game and still the
+  same process about 20 s later (no restart through Steam), no
+  `Paradox Launcher.exe` or `dowser.exe` process runs, and the `DLC:` block
+  of `debug.log` lists all 18 DLC.
+- Step 4: wait for the main menu, then quit the game.
+- Step 5: `python tools/probe-mods/probe_mods.py analyze "<Documents>/Paradox Interactive/Victoria 3/logs/error.log" --game vic3 --enabled c w1 w2 w3 a --disabled b`
+  (add `g` after `w3` if it was made). Besides the `error.log` checks it
+  reads `debug.log` and `debug.1.log` to `debug.5.log` (the log rotates
+  within a session) and reports the latest session's `Mod:` block (the
+  probes in it, in order, and how many other mods: the Workshop item), its
+  `Mounted Data:` lines, the probes' "version ... matched / does not match"
+  lines and every `Invalid supported_version` line, which settle
+  `rejectsEarlyWildcards` for `1.*`, `*` and `1.15`. The version probes and
+  `g` test what the game accepts: `g` is expected to be left out, and so may
+  be a version probe whose pattern the game rejects. Then `loaded` and
+  `modBlock.probes` lack it, `allEnabledLoaded` and `modBlockIsEnabledOrder`
+  are false and the tool exits with 1; that is a result to record, not a
+  failed run. The run itself is judged by a and c (both loaded, and in the
+  `Mod:` block in playset order), by b (in neither) and by
+  `sharedFileWinner`. If `error.log` names no unknown trigger, the `Mod:`
+  block and the mount order still show what loaded, but not which mod won.
+- Step 6: repeat with the order **a, w1, w2, w3, (g,) the Workshop item,
+  c**, moved in the application: `pmm-app --profile <scratch> --no-steam
+  --live-test "game:vic3,select:<playset name>,move:5:0,move:1:5,dump:<file>,blockers,play"`
+  (with g: `move:6:0,move:1:6`; rows count from 0, b included). The dump
+  must list a, w1, w2, w3, (g,) the Workshop item, c and b (disabled). The
+  Workshop item's `Mounted Data:` line in `debug.log` (in both runs) proves
+  that the game takes the `...\steamapps\workshop\content\529340\<id>` path
+  the application writes. Note whether that path has the casing on disk:
+  the application upper-cases only the drive letter and keeps the casing of
+  the Steam library path it read (`libraryfolders.vdf`, else Steam's
+  registry entry, which can be lower-case), while a third-party tool writes
+  the casing on disk because a wrongly cased first entry reportedly breaks
+  the whole list.
+- Step 7: restore with the application once per launch, so twice:
+  `pmm-app --profile <scratch> --live-test "game:vic3,restore"` restores the
+  configuration from before the last launch it has not restored yet, so the
+  first run undoes step 6 and the second step 3, as in the CK3 run. Then
+  compare `content_load.json` with the backup (it must be byte-identical)
+  and run
+  `python tools/probe-mods/probe_mods.py remove "<Documents>/Paradox Interactive/Victoria 3/mod" --game vic3 --names a b c w1 w2 w3 g`
+  (folders only; there are no `.mod` files).
+- Step 8: record the evidence as `docs/evidence/<date>-vic3-load-order.md`
+  and the result table here. Then set the traits in `src/games/vic3.cpp`
+  (`loadOrderVerifiedInGame`, `loadOrderEvidence`, the user note and
+  `rejectsEarlyWildcards`), their checks in
+  `tests/unit/games/vic3_adapter_tests.cpp` and `registry_tests.cpp`, the
+  Victoria 3 row of `ui/dev/Pmm/Backend/FakeGamesModel.qml`,
+  [`games/vic3.md`](games/vic3.md), the [support matrix](support-matrix.md),
+  `src/games/supported_version.hpp` and the CHANGELOG's load-order sentence.
+  If the later mod wins, CK3's wording and no note; if the name that sorts
+  first wins, EU4's wording and a note like EU4's; if neither, stop and
+  report to the owner.
+- The probe measures whole files. It says nothing about database entries,
+  which follow the rules above since 1.12.

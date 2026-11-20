@@ -4,9 +4,9 @@ What works for which game and store, and how we know. The application runs on
 Windows only ([ADR 0009](adr/0009-windows-only.md)). Support for a combination
 depends on the game's own executable and a validated integration (spec section 1).
 
-Last reviewed: 2026-11-13 (Crusader Kings III added: read-only checks, then its
-probe run with direct launches), after the live validation of 2026-10-30;
-application 0.2.0.
+Last reviewed: 2026-11-20 (Victoria 3 added, read-only checks only), after the
+Crusader Kings III probe run of 2026-11-13 and the live validation of
+2026-10-30; application 0.2.0 and the unreleased Victoria 3 support.
 
 ## Status legend
 
@@ -67,6 +67,14 @@ tested. Results:
   two direct launches without the Paradox launcher, enabled and disabled
   probe mods and the effective override order observed in the game's own
   logs, restore of the previous configuration ([evidence](evidence/2026-11-13-ck3-load-order.md)).
+- Victoria 3 "1.15.2 (Ivan-Chai)" build 26763837, 2026-11-20, read-only:
+  installation, user data, executable, arguments, environment, mod inventory
+  (9 Workshop mods and 1 local mod), the current `content_load.json`,
+  compatibility warnings, the launch plan for the launcher's selection, which
+  writes nothing, the download check over the 9 Workshop folders, and two
+  share-code round trips between new profiles of the application
+  ([Victoria 3 adapter](games/vic3.md#real-machine-evidence)). The game was
+  not started.
 
 Not observed yet: other stores and Steam's own offline mode.
 
@@ -155,11 +163,41 @@ reports nothing about descriptors outside `enabled_mods`. As in Stellaris,
 | Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
 | In-game verification of enabled mods and order | **Verified (2026-11-13, 1.20.1.2)** with probe mods: enabled mods loaded, disabled not; the later mod in `enabled_mods` wins a shared file, and moving mods in the app moves the winner ([evidence](evidence/2026-11-13-ck3-load-order.md); [load order](load-order.md#crusader-kings-iii)) | Unverified |
 
+## Victoria 3 (Steam app 529340)
+
+Differences from the other games: the enabled mods are in `content_load.json`
+as absolute paths of the mod folders, and each mod is described by its own
+`.metadata/metadata.json`; there are no `.mod` files, and Workshop folders are
+used in place ([ADR 0010](adr/0010-content-load-adapter-family.md)). The
+executable is `binaries/victoria3.exe` and `launcher-settings.json` lies in
+`launcher/`, as for CK3; there is no `steam_appid.txt`, as for EU4. A local
+mod's id is its folder's (or `.zip` file's) name in `mod/`. Since 1.12 many
+databases keep the first definition of a key unless a mod uses `REPLACE:` or
+`INJECT:`, so the file order says nothing about database entries
+([Victoria 3 adapter](games/vic3.md); [load order](load-order.md#victoria-3)).
+Nothing here has run against the game yet.
+
+| Capability | Windows · Steam | Other stores |
+| --- | --- | --- |
+| Detect installation and user data | **Verified (2026-11-20, 1.15.2)** read-only; `game/userdir.txt` implemented, unverified (where the game reads it from is not known) | Implemented, unverified (manual location) |
+| Mod inventory (`metadata.json`, Workshop content) | **Verified (2026-11-20, 1.15.2)** read-only: 9 Workshop mods and 1 local mod, 0 problems; zipped local mods listed without reading their metadata (fixture-tested; none on the machine) | Implemented, unverified (local mods only) |
+| Playsets | **Verified (2026-11-20, 1.15.2)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
+| Share codes | **Verified (2026-11-20, 1.15.2)** read-only between new profiles on one machine (the game's configuration, and a 9-item playset from a Workshop ID list). Releases up to 0.2.0 reject codes for `vic3` as not supported | Implemented, unverified |
+| Generated configuration (`content_load.json`) | **Verified (2026-11-20, 1.15.2)** computed, not written: no write for the launcher's selection; only `enabledMods` changes, the launcher's layout byte for byte (fixture-tested) | Implemented, unverified |
+| Workshop: Steam session and item state | Implemented, unverified | Unsupported: requires the game on a Steam account |
+| Workshop: subscribe and download | Implemented, unverified; the check that ends a download accepts the 9 installed items (read-only, 2026-11-20) | Unsupported: requires the game on a Steam account |
+| Workshop: manual fallback | Implemented, unverified | Unsupported |
+| Direct launch without the Paradox launcher | Implemented, unverified: `binaries/victoria3.exe` in `binaries/` with `SteamAppId`/`SteamGameId`, no `steam_appid.txt` | Implemented, unverified |
+| Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
+| `supported_game_version` warnings | Implemented: a mismatch warns; which wildcard patterns the game rejects is unverified, so none is reported as invalid | Same code |
+| In-game verification of enabled mods and order | Unverified: documented by others as "the later mod wins" a file; a note above a Victoria 3 playset says it is not yet verified. The probe run is prepared ([load order](load-order.md#victoria-3)) | Unverified |
+
 ## Other combinations
 
 | Combination | Status | Reason |
 | --- | --- | --- |
-| Hearts of Iron IV, Victoria 3 | Unsupported | In the game catalog only (`adapterAvailable = false`); share codes for them are rejected with `UnsupportedGame`. The adapter interface is designed for them; no adapter exists. |
+| Hearts of Iron IV | Unsupported | In the game catalog only (`adapterAvailable = false`); share codes for it are rejected with `UnsupportedGame`. The adapter interface is designed for it; no adapter exists. |
+| Victoria 3: Paradox Mods, the launcher's playsets, DLC toggling | Unsupported | As for every game: no Paradox Mods provider (`pdx_*` folders are skipped, as the launcher skips them), the launcher's database is never read, and `disabledDLC` is kept as it is. |
 | EU4 versions before the Paradox launcher v2 (mods in `settings.txt`) | Unsupported | Not detected as such; their mods would not be enabled ([EU4 adapter](games/eu4.md)). |
 | Workshop acquisition with Steam offline or not signed in | Unsupported (by design) | Installed content is still accepted; network operations wait until Steam is online. |
 | Mods from Paradox Mods (mods.paradoxplaza.com) or other non-Steam sources | Unsupported | No provider exists; such mods can be used as local mods. |

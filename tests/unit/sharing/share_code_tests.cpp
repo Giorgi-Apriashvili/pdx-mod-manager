@@ -30,7 +30,7 @@ namespace {
 // Golden codes produced by this encoder (zlib 1.3.1). Never regenerate an
 // existing fixture: a mismatch means the protocol output changed.
 const char* const kGoldenFixtures[] = {"01-stellaris-basic", "02-eu4-unicode-local",
-                                       "03-minimal-empty", "05-ck3-basic"};
+                                       "03-minimal-empty", "05-ck3-basic", "06-vic3-basic"};
 
 Error decodeError(std::string_view input) {
     auto r = decodeShareCode(input);
@@ -229,6 +229,19 @@ TEST_CASE("Golden fixture content is what it claims", "[sharing][code][fixtures]
     REQUIRE(ck3->mods.size() == 3);
     CHECK(ck3->mods[1].source == "local");
     CHECK_FALSE(ck3->mods[2].enabled);
+
+    // A Victoria 3 local id is the entry's name in mod/, a .zip with its
+    // extension.
+    auto vic3 = decodeShareCode(test::readFixture("v1/06-vic3-basic.code"));
+    REQUIRE(vic3.ok());
+    CHECK(vic3->game == "vic3");
+    CHECK(vic3->gameVersionHint == "1.15.2");
+    REQUIRE(vic3->mods.size() == 4);
+    CHECK(vic3->mods[0].source == "local");
+    CHECK(vic3->mods[0].id == "Local Almanac");
+    CHECK(vic3->mods[1].id == "5000000002");
+    CHECK(vic3->mods[3].id == "Example Bundle.zip");
+    CHECK_FALSE(vic3->mods[3].enabled);
 }
 
 TEST_CASE("Codes from other encoders with non-canonical JSON decode", "[sharing][code][fixtures]") {
@@ -542,7 +555,7 @@ TEST_CASE("encodeShareCode validates before encoding", "[sharing][code]") {
     m.mods.push_back(m.mods[0]);
     CHECK(encodeShareCode(m).error().code == ErrorCode::ValidationFailed);
     m = test::sampleManifest();
-    m.game = "vic3";
+    m.game = "hoi4";
     CHECK(encodeShareCode(m).error().code == ErrorCode::UnsupportedGame);
 }
 
@@ -551,6 +564,22 @@ TEST_CASE("Crusader Kings III playsets round-trip", "[sharing][code]") {
     Manifest m = test::sampleManifest();
     m.game = "ck3";
     m.gameVersionHint = "1.20.1.2";
+    auto code = encodeShareCode(m);
+    REQUIRE(code.ok());
+    CHECK_THAT(*code, StartsWith("PMM1."));
+    auto decoded = decodeShareCode(*code);
+    REQUIRE(decoded.ok());
+    CHECK(*decoded == m);
+}
+
+TEST_CASE("Victoria 3 playsets round-trip", "[sharing][code]") {
+    // A game newly marked supported in the catalog: the format is unchanged,
+    // and 0.2.0 and earlier reject such codes as a game they do not support.
+    Manifest m = test::sampleManifest();
+    m.game = "vic3";
+    m.gameVersionHint = "1.15.2";
+    m.mods[2].id = "Local Almanac"; // the folder's name in mod/
+    m.mods.push_back({"local", "Example Bundle.zip", "Example Bundle", true, "", ""});
     auto code = encodeShareCode(m);
     REQUIRE(code.ok());
     CHECK_THAT(*code, StartsWith("PMM1."));

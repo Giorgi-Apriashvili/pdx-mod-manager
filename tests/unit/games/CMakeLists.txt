@@ -1,11 +1,14 @@
 pmm_add_test(pmm_games_tests
   SOURCES
     ck3_adapter_tests.cpp
+    content_check_tests.cpp
     descriptor_tests.cpp
     eu4_adapter_tests.cpp
     launcher_settings_tests.cpp
+    mod_metadata_tests.cpp
     real_machine_tests.cpp
     registry_tests.cpp
     stellaris_adapter_tests.cpp
     supported_version_tests.cpp
+    vic3_adapter_tests.cpp
   LIBS pmm_games pmm_platform)

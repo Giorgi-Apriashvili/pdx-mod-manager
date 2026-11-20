@@ -17,6 +17,7 @@ decision itself unchanged are appended as a dated "Amendment" section (0001,
 | [0007](0007-license.md) | MIT license; Qt used under LGPLv3 with dynamic linking | Accepted; other systems superseded by 0009 |
 | [0008](0008-sqlite-migrations.md) | SQLite schema and migration policy | Accepted |
 | [0009](0009-windows-only.md) | Windows only: Linux and macOS support removed | Accepted |
+| [0010](0010-content-load-adapter-family.md) | A second adapter family for `content_load.json` games (Victoria 3) on a shared launcher-v2 base; the Workshop content check per game | Accepted |
 
 ## Template
 

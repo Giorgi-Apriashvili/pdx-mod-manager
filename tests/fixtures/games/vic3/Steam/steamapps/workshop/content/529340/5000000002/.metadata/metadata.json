@@ -1,0 +1,14 @@
+{
+  "name": "Example Core",
+  "id": "com.example.core",
+  "version": "",
+  "supported_game_version": "1.7.*",
+  "short_description": "",
+  "tags": [
+    "Framework"
+  ],
+  "relationships": [],
+  "game_custom_data": {
+    "multiplayer_synchronized": true
+  }
+}

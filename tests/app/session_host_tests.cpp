@@ -353,7 +353,8 @@ TEST_CASE("acquisition runs subscribe, download and install through the runner (
         coordinator.progressPersistIntervalMs = 0;
         // The fake reports an install folder that does not exist; stand in for
         // Steam having written the content where the adapter scans.
-        coordinator.verifyContent = [verified, itemFolder](const fs::path&) -> Status {
+        coordinator.verifyContent = [verified, itemFolder](const GameKey&,
+                                                           const fs::path&) -> Status {
             ++*verified;
             std::error_code ec;
             fs::create_directories(itemFolder, ec);
@@ -449,7 +450,7 @@ TEST_CASE("an imported code with a missing Workshop mod becomes playable (fake S
     const fs::path itemFolder = world.workshop / "222222222";
     options.configureCoordinator = [itemFolder](services::CoordinatorOptions& coordinator) {
         coordinator.policy.pollIntervalMs = 100;
-        coordinator.verifyContent = [itemFolder](const fs::path&) -> Status {
+        coordinator.verifyContent = [itemFolder](const GameKey&, const fs::path&) -> Status {
             std::error_code ec;
             fs::create_directories(itemFolder, ec);
             return platform::writeFileAtomic(itemFolder / "name.txt", "Downloaded Item");

@@ -15,10 +15,10 @@ constexpr std::array<GameCatalogEntry, 5> kCatalog{{
     {"ck3", "Crusader Kings III", "1158310", "Crusader Kings III", kWorkshopAndLocal, true},
     {"eu4", "Europa Universalis IV", "236850", "Europa Universalis IV", kWorkshopAndLocal, true},
     {"stellaris", "Stellaris", "281990", "Stellaris", kWorkshopAndLocal, true},
-    // Known, not yet supported: listed so the architecture and UI can name them
+    {"vic3", "Victoria 3", "529340", "Victoria 3", kWorkshopAndLocal, true},
+    // Known, not yet supported: listed so the architecture and UI can name it
     // without advertising support.
     {"hoi4", "Hearts of Iron IV", "394360", "Hearts of Iron IV", kWorkshopAndLocal, false},
-    {"vic3", "Victoria 3", "529340", "Victoria 3", kWorkshopAndLocal, false},
 }};
 
 } // namespace

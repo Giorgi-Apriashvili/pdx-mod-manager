@@ -29,7 +29,8 @@
 //     (share codes are untrusted input); state queries and the verification
 //     of content Steam already installed go ahead. Without a verdict within
 //     identityTimeoutMs the job needs the user; Retry asks the Web API again;
-//   - verifies reported content with providers::verifyWorkshopContent();
+//   - verifies reported content with the game adapter's
+//     verifyWorkshopContent(), the rule of its own scan;
 //   - persists jobs when the reducer says so (progress-only changes are
 //     coalesced to one write per progressPersistIntervalMs);
 //   - rescans the game's inventory when an item becomes Installed, so that
@@ -107,8 +108,9 @@ struct CoordinatorOptions {
     // to open a session. Empty: not checked (the host knows the path).
     std::filesystem::path helperExecutable;
     std::int64_t progressPersistIntervalMs = 2'000;
-    // Content check for VerifyContent; defaults to providers::verifyWorkshopContent.
-    std::function<Status(const std::filesystem::path&)> verifyContent;
+    // Content check for VerifyContent; defaults to the game adapter's
+    // verifyWorkshopContent().
+    std::function<Status(const GameKey&, const std::filesystem::path&)> verifyContent;
     // With a metadata host, how long a subscribe or download request waits
     // for the Web API to confirm the item before the job needs the user.
     std::int64_t identityTimeoutMs = 15'000;
