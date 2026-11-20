@@ -245,37 +245,6 @@ TEST_CASE("A download that ships its own .mod file instead of descriptor.mod is 
     CHECK(view.launch.canLaunch);
 }
 
-TEST_CASE("The download check accepts the Workshop folders the game adapters describe",
-          "[services][acquisition]") {
-    // providers::verifyWorkshopContent() repeats games::contentDescriptorFile()'s
-    // rule, as providers does not link games.
-    struct Layout {
-        const char* name;
-        std::vector<const char*> files;
-        bool described;
-    };
-    const std::vector<Layout> layouts{
-        {"descriptor.mod", {"descriptor.mod"}, true},
-        {"descriptor.mod and another .mod", {"descriptor.mod", "Other.mod"}, true},
-        {"descriptor.mod and a .zip", {"descriptor.mod", "legacy.zip"}, true},
-        {"one .mod", {"Example_Steel.mod"}, true},
-        {"one upper-case .MOD", {"Example.MOD"}, true},
-        {"two .mod", {"A.mod", "b.mod"}, false},
-        {"no .mod", {"readme.txt"}, false},
-        {"one .mod and a .zip", {"legacy.mod", "legacy.ZIP"}, false},
-    };
-    TempDir dir;
-    for (const Layout& layout : layouts) {
-        INFO(layout.name);
-        const fs::path folder = dir.path() / u8(layout.name);
-        writeText(folder / "common" / "x.txt", "x");
-        for (const char* file : layout.files)
-            writeText(folder / u8(file), "name=\"Example\"");
-        CHECK(games::contentDescriptorFile(folder).has_value() == layout.described);
-        CHECK(providers::verifyWorkshopContent(folder).ok() == layout.described);
-    }
-}
-
 TEST_CASE("Content Steam already installed is verified, never downloaded again",
           "[services][acquisition]") {
     Rig r;

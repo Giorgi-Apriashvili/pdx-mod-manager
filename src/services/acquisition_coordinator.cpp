@@ -177,8 +177,13 @@ AcquisitionCoordinator::AcquisitionCoordinator(const ServiceContext& context, Ga
     : m_ctx(context), m_games(games), m_sessions(sessions), m_metadata(metadata),
       m_options(std::move(options)) {
     if (!m_options.verifyContent)
-        m_options.verifyContent = [](const std::filesystem::path& path) {
-            return providers::verifyWorkshopContent(path);
+        m_options.verifyContent = [&context = m_ctx](const GameKey& game,
+                                                     const std::filesystem::path& path) -> Status {
+            const games::GameAdapter* adapter = context.adapterFor(game);
+            if (adapter == nullptr)
+                return makeError(ErrorCode::UnsupportedGame,
+                                 "no game adapter can check the downloaded content", game);
+            return adapter->verifyWorkshopContent(path);
         };
 }
 
@@ -342,7 +347,8 @@ void AcquisitionCoordinator::perform(std::int64_t jobId, const providers::Action
         return;
     }
     case ActionKind::VerifyContent: {
-        const Status verified = m_options.verifyContent(platform::pathFromUtf8(action.installPath));
+        const Status verified =
+            m_options.verifyContent(game, platform::pathFromUtf8(action.installPath));
         enqueue(jobId,
                 obs::ContentVerified{verified.ok(),
                                      verified.ok() ? std::string() : verified.error().message});

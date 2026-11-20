@@ -652,4 +652,23 @@ DlcLoadJsonAdapter::buildLaunchPlan(const GameInstallation& installation,
     return plan;
 }
 
+Status DlcLoadJsonAdapter::verifyWorkshopContent(const fs::path& installPath) const {
+    if (std::optional<Status> verdict = checkWorkshopContentPath(installPath))
+        return std::move(*verdict);
+    if (const std::optional<fs::path> descriptor = contentDescriptorFile(installPath))
+        return requireNonEmptyFile(*descriptor, pathToUtf8(descriptor->filename()), installPath);
+    // A .zip marks a legacy zipped item (described inside its archive), so
+    // its .mod files do not count.
+    const std::size_t modFiles = legacyArchive(installPath) ? 0 : modFilesIn(installPath).size();
+    if (modFiles > 1)
+        return makeError(ErrorCode::ValidationFailed,
+                         "descriptor.mod is missing from the downloaded content, and its " +
+                             std::to_string(modFiles) +
+                             " .mod files leave it open which one describes the mod",
+                         pathToUtf8(installPath));
+    return makeError(ErrorCode::ValidationFailed,
+                     "descriptor.mod is missing from the downloaded content",
+                     pathToUtf8(installPath));
+}
+
 } // namespace pmm::games

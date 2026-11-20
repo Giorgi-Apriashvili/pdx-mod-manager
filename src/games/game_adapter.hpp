@@ -104,6 +104,13 @@ public:
     // Non-blocking compatibility warnings, e.g. supported_version mismatch.
     virtual std::vector<std::string> compatibilityWarnings(const GameInstallation& installation,
                                                            const InstalledMod& mod) const = 0;
+
+    // The check that ends a Workshop download: `installPath`, the folder (or
+    // the file of a legacy zipped item) that Steam reports for the item,
+    // holds content this game can describe, by the rule scanMods() applies.
+    // Performs file-system I/O. NotFound when the path does not exist,
+    // ValidationFailed with a short reason otherwise.
+    virtual Status verifyWorkshopContent(const fs::path& installPath) const = 0;
 };
 
 // Registry of implemented adapters (CK3, EU4, Stellaris), in catalog order.

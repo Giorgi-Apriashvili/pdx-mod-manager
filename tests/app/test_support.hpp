@@ -232,6 +232,15 @@ public:
         return {};
     }
 
+    // The fake's Workshop items are folders with a name.txt, no descriptor.
+    Status verifyWorkshopContent(const fs::path& installPath) const override {
+        std::error_code ec;
+        if (!fs::is_directory(installPath, ec))
+            return makeError(ErrorCode::NotFound,
+                             "the content folder reported by Steam does not exist");
+        return {};
+    }
+
 private:
     const FakeWorld& m_world;
 };

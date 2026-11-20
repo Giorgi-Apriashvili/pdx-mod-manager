@@ -53,19 +53,9 @@ TEST_CASE("A file name with an unpaired surrogate fails fingerprinting cleanly",
     CHECK(fingerprintDirectory(oddRoot).ok());
 }
 
-TEST_CASE("Content checks and helper arguments report paths with unpaired surrogates",
-          "[providers][paths]") {
+TEST_CASE("Helper arguments report paths with unpaired surrogates", "[providers][paths]") {
     TempDir dir("verify-surrogate");
     const fs::path folder = dir.path() / fs::path(L"caf\xD800");
-
-    Status gone = verifyWorkshopContent(folder / "703156866");
-    REQUIRE_FALSE(gone.ok());
-    CHECK(gone.error().code == ErrorCode::NotFound);
-    CHECK(isValidUtf8(gone.error().detail));
-    CHECK(gone.error().detail.find("caf\xEF\xBF\xBD") != std::string::npos);
-
-    writeFile(folder / "703156866" / "descriptor.mod", "name=\"x\"\n");
-    CHECK(verifyWorkshopContent(folder / "703156866").ok());
 
     Status badName =
         validateHelperArguments("281990", dir.path() / fs::path(L"steam_api64\xD800.dll"));

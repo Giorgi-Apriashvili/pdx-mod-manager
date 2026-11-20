@@ -47,6 +47,9 @@ public:
     Result<LaunchPlan>
     buildLaunchPlan(const GameInstallation& installation,
                     std::span<const InstalledMod> orderedEnabledMods) const override;
+    // A folder needs its content descriptor (contentDescriptorFile), not
+    // empty; a single file (a legacy zipped item) must not be empty.
+    Status verifyWorkshopContent(const fs::path& installPath) const override;
 };
 
 // "mod/ugc_123.mod" style reference for a descriptor file name.

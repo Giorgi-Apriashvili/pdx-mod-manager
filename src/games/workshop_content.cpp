@@ -226,4 +226,32 @@ std::string steamStateNote(const steam::WorkshopItemState* item) {
     return item->subscribedBy.empty() ? "not subscribed" : "subscribed, download pending";
 }
 
+std::optional<Status> checkWorkshopContentPath(const fs::path& installPath) {
+    const std::string shown = pathToUtf8(installPath);
+    std::error_code ec;
+    const auto status = fs::status(installPath, ec);
+    if (ec || !fs::exists(status))
+        return makeError(ErrorCode::NotFound, "the content folder reported by Steam does not exist",
+                         shown);
+    if (fs::is_regular_file(status)) {
+        const auto size = fs::file_size(installPath, ec);
+        if (ec || size == 0)
+            return makeError(ErrorCode::ValidationFailed, "the downloaded file is empty", shown);
+        return Status{};
+    }
+    if (!fs::is_directory(status))
+        return makeError(ErrorCode::ValidationFailed,
+                         "the content path is neither a folder nor a file", shown);
+    return std::nullopt;
+}
+
+Status requireNonEmptyFile(const fs::path& file, std::string_view shown, const fs::path& folder) {
+    std::error_code ec;
+    const auto size = fs::file_size(file, ec);
+    if (ec || size == 0)
+        return makeError(ErrorCode::ValidationFailed, std::string(shown) + " is empty",
+                         pathToUtf8(folder));
+    return {};
+}
+
 } // namespace pmm::games

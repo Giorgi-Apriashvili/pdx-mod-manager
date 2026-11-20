@@ -35,7 +35,6 @@
 #include "providers/workshop_item.hpp"
 
 #include <cstdint>
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -93,7 +92,7 @@ enum class ActionKind {
     QueryState,       // helper "state" for itemId
     Subscribe,        // helper "subscribe" for itemId
     RequestDownload,  // helper "download" for itemId
-    VerifyContent,    // check installPath (verifyWorkshopContent), report ContentVerified
+    VerifyContent,    // check installPath (the game adapter's rule), report ContentVerified
     OpenFallbackPage, // open manualFallbackLinks(itemId) for the user
 };
 const char* toString(ActionKind kind) noexcept;
@@ -197,12 +196,5 @@ std::optional<Observation> observationFromHelperEvent(const HelperEvent& event,
 // actions the driver performs itself (QuerySession, VerifyContent,
 // OpenFallbackPage).
 std::optional<HelperCommand> helperCommandFor(const Action& action);
-
-// The agreed content check for VerifyContent (performs filesystem I/O): a
-// directory must contain a non-empty regular "descriptor.mod", or else exactly
-// one *.mod file, non-empty, and no .zip (the rule of
-// games::contentDescriptorFile(); some items ship "<Name>.mod"); a single file
-// (legacy Workshop item) must be non-empty.
-Status verifyWorkshopContent(const std::filesystem::path& installPath);
 
 } // namespace pmm::providers

@@ -5,10 +5,12 @@
 // Internal to the games library: included by its sources only.
 
 #include "core/model.hpp"
+#include "core/result.hpp"
 #include "platform/steam.hpp"
 
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -80,5 +82,14 @@ std::vector<InstalledMod> mergeSharedIdentities(std::vector<InstalledMod> mods,
 
 // How Steam sees an item whose content is not on disk (diagnostics only).
 std::string steamStateNote(const platform::steam::WorkshopItemState* item);
+
+// What every game's Workshop content check starts with: the path Steam
+// reported exists, and a single file (a legacy zipped item) is not empty.
+// nullopt for a folder, whose content the game's own rule decides.
+std::optional<Status> checkWorkshopContentPath(const fs::path& installPath);
+
+// ValidationFailed ("<shown> is empty") unless `file` has content; `folder`
+// is the content folder the error detail names.
+Status requireNonEmptyFile(const fs::path& file, std::string_view shown, const fs::path& folder);
 
 } // namespace pmm::games
