@@ -7,7 +7,8 @@ import Pmm.Backend
 // 2,000 rows, keyboard editing with undo/redo, the reorder rules while
 // searching, delete confirmation, drag-and-drop, column-width persistence,
 // theme switching, the import flow, discarding an interrupted change that
-// Recover cannot undo, keyboard accessibility (Tab order, F6,
+// Recover cannot undo, the "Other games" section with an unsupported game
+// added by the test, keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
 // Updates section, the update banner, the discard action, a blocked Play and
 // column widths from the keyboard), and the smallest window.
@@ -345,6 +346,44 @@ Item {
             compare(Backend.notifications.latest.title, "Workshop ID list copied")
             dialog.close()
             tryVerify(() => !dialog.visible)
+        }
+
+        // The visible row of the games column for `key`, or null.
+        function gameRow(key: string): var {
+            const stack = [named("gamesPane")]
+            while (stack.length > 0) {
+                const item = stack.pop()
+                if (item.visible && item.supported !== undefined && item.model && item.model.key === key)
+                    return item
+                for (let i = 0; i < item.children.length; ++i)
+                    stack.push(item.children[i])
+            }
+            return null
+        }
+
+        // "Other games" lists a game the catalog knows without supporting it.
+        // The application has no such game at present, so the test adds one.
+        function test_9e_otherGamesSection() {
+            const pane = named("gamesPane")
+            const before = pane.otherGameCount
+            const current = Backend.games.currentKey
+            Backend.games.append({key: "pmm-test", name: "Test Game", supported: false, installed: false,
+                                  manualLocation: false, statusText: "Not supported yet", version: "",
+                                  installPath: "", userDataPath: "", loadOrderNote: ""})
+            tryCompare(pane, "otherGameCount", before + 1)
+            const row = gameRow("pmm-test")
+            verify(row !== null)
+            verify(!row.supported)
+            compare(row.focusPolicy, Qt.NoFocus)
+            compare(row.Accessible.name, "Test Game, Not supported yet")
+            // Neither selecting it nor clicking it makes it the current game.
+            Backend.games.select("pmm-test")
+            compare(Backend.games.currentKey, current)
+            mouseClick(row)
+            compare(Backend.games.currentKey, current)
+            Backend.games.remove(Backend.games.indexOfKey("pmm-test"))
+            tryCompare(pane, "otherGameCount", before)
+            compare(gameRow("pmm-test"), null)
         }
 
         // --- keyboard and accessibility (docs/accessibility.md) ---------------

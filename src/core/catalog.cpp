@@ -1,8 +1,10 @@
 #include "core/catalog.hpp"
 
+#include "core/catalog_testing.hpp"
 #include "core/model.hpp"
 
 #include <array>
+#include <cstddef>
 
 namespace pmm {
 namespace {
@@ -21,14 +23,34 @@ constexpr std::array<GameCatalogEntry, 5> kCatalog{{
     {"hoi4", "Hearts of Iron IV", "394360", "Hearts of Iron IV", kWorkshopAndLocal, false},
 }};
 
+// The catalog in use: kCatalog, except while a testing::ScopedGameCatalog
+// replaces it.
+std::span<const GameCatalogEntry> g_catalog = kCatalog;
+
+// testing::catalogWithUnsupportedGame(): kCatalog, then a known game without
+// an adapter.
+constexpr auto kCatalogWithUnsupportedGame = [] {
+    std::array<GameCatalogEntry, kCatalog.size() + 1> entries{};
+    for (std::size_t i = 0; i < kCatalog.size(); ++i)
+        entries[i] = kCatalog[i];
+    GameCatalogEntry& unsupported = entries.back();
+    unsupported.key = testing::kUnsupportedGameKey;
+    unsupported.displayName = "Example Unsupported Game";
+    unsupported.steamAppId = "1";
+    unsupported.userDataFolder = "Example Unsupported Game";
+    unsupported.sources = kWorkshopAndLocal;
+    unsupported.adapterAvailable = false;
+    return entries;
+}();
+
 } // namespace
 
 std::span<const GameCatalogEntry> gameCatalog() noexcept {
-    return kCatalog;
+    return g_catalog;
 }
 
 const GameCatalogEntry* findGame(std::string_view key) noexcept {
-    for (const auto& entry : kCatalog) {
+    for (const auto& entry : g_catalog) {
         if (entry.key == key)
             return &entry;
     }
@@ -45,5 +67,22 @@ bool isSourceValidForGame(std::string_view gameKey, std::string_view sourceKey) 
     }
     return false;
 }
+
+namespace testing {
+
+ScopedGameCatalog::ScopedGameCatalog(std::span<const GameCatalogEntry> entries) noexcept
+    : m_previous(g_catalog) {
+    g_catalog = entries;
+}
+
+ScopedGameCatalog::~ScopedGameCatalog() {
+    g_catalog = m_previous;
+}
+
+std::span<const GameCatalogEntry> catalogWithUnsupportedGame() noexcept {
+    return kCatalogWithUnsupportedGame;
+}
+
+} // namespace testing
 
 } // namespace pmm

@@ -1,8 +1,10 @@
 #include "core/catalog.hpp"
+#include "core/catalog_testing.hpp"
 #include "core/model.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstddef>
 #include <string_view>
 #include <vector>
 
@@ -40,19 +42,43 @@ TEST_CASE("Catalog lists supported games first, alphabetically", "[core][catalog
     for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog())
         keys.push_back(entry.key);
     CHECK(keys == std::vector<std::string_view>{"ck3", "eu4", "stellaris", "vic3", "hoi4"});
-    bool unsupportedSeen = false;
-    for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog()) {
-        CHECK_FALSE((unsupportedSeen && entry.adapterAvailable));
-        unsupportedSeen = unsupportedSeen || !entry.adapterAvailable;
-    }
+    const auto supportedFirst = [] {
+        bool unsupportedSeen = false;
+        for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog()) {
+            CHECK_FALSE((unsupportedSeen && entry.adapterAvailable));
+            unsupportedSeen = unsupportedSeen || !entry.adapterAvailable;
+        }
+        return unsupportedSeen;
+    };
+    supportedFirst();
+    // Also with a game the catalog knows but no adapter supports.
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    CHECK(supportedFirst());
 }
 
-TEST_CASE("Catalog lists future games without claiming support", "[core][catalog]") {
-    for (auto key : {"hoi4"}) {
-        const auto* game = pmm::findGame(key);
+TEST_CASE("Catalog lists a known game without claiming support", "[core][catalog]") {
+    const std::size_t realSize = pmm::gameCatalog().size();
+    {
+        const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+        REQUIRE(pmm::gameCatalog().size() == realSize + 1);
+        const auto* game = pmm::findGame(pmm::testing::kUnsupportedGameKey);
         REQUIRE(game != nullptr);
+        CHECK(game == &pmm::gameCatalog().back());
         CHECK_FALSE(game->adapterAvailable);
+        CHECK(game->displayName == "Example Unsupported Game");
+        CHECK(pmm::isSourceValidForGame(game->key, pmm::source::SteamWorkshop));
+        CHECK(pmm::isSourceValidForGame(game->key, pmm::source::Local));
+        // The real entries are all still there, in the same order.
+        for (std::size_t i = 0; i < realSize; ++i) {
+            const pmm::GameCatalogEntry& entry = pmm::gameCatalog()[i];
+            REQUIRE(pmm::findGame(entry.key) == &entry);
+        }
+        CHECK(pmm::findGame("stellaris")->adapterAvailable);
     }
+    // The guard restores the real catalog.
+    CHECK(pmm::gameCatalog().size() == realSize);
+    CHECK(pmm::findGame(pmm::testing::kUnsupportedGameKey) == nullptr);
+    CHECK_FALSE(pmm::isSourceValidForGame(pmm::testing::kUnsupportedGameKey, pmm::source::Local));
     CHECK(pmm::findGame("not-a-game") == nullptr);
 }
 

@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "core/sha256.hpp"
 #include "sharing/codec.hpp"
 #include "sharing/share_code.hpp"
@@ -456,10 +457,12 @@ TEST_CASE("Decoded JSON is validated strictly", "[sharing][code]") {
         decodeJson(R"({"schemaVersion":1,"game":"skyrim","playsetName":"P","mods":[]})");
     CHECK(unknownGame.code == ErrorCode::ValidationFailed);
 
-    const Error hoi4 =
-        decodeJson(R"({"schemaVersion":1,"game":"hoi4","playsetName":"P","mods":[]})");
-    CHECK(hoi4.code == ErrorCode::UnsupportedGame);
-    CHECK_THAT(hoi4.message, ContainsSubstring("Hearts of Iron IV"));
+    // A game the catalog knows, without an adapter in this version.
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    const Error unsupported = decodeJson(
+        R"({"schemaVersion":1,"game":"pmm-test-unsupported","playsetName":"P","mods":[]})");
+    CHECK(unsupported.code == ErrorCode::UnsupportedGame);
+    CHECK_THAT(unsupported.message, ContainsSubstring("Example Unsupported Game"));
 }
 
 TEST_CASE("More than 10000 entries are rejected", "[sharing][code][limits]") {
@@ -554,9 +557,12 @@ TEST_CASE("encodeShareCode validates before encoding", "[sharing][code]") {
     Manifest m = test::sampleManifest();
     m.mods.push_back(m.mods[0]);
     CHECK(encodeShareCode(m).error().code == ErrorCode::ValidationFailed);
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
     m = test::sampleManifest();
-    m.game = "hoi4";
-    CHECK(encodeShareCode(m).error().code == ErrorCode::UnsupportedGame);
+    m.game = std::string(pmm::testing::kUnsupportedGameKey);
+    const Error unsupported = encodeShareCode(m).error();
+    CHECK(unsupported.code == ErrorCode::UnsupportedGame);
+    CHECK_THAT(unsupported.message, ContainsSubstring("Example Unsupported Game"));
 }
 
 TEST_CASE("Crusader Kings III playsets round-trip", "[sharing][code]") {

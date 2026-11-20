@@ -233,8 +233,8 @@ TEST_CASE("GamesModel, PlaysetsModel and JobsModel update in place", "[app][mode
     gameRows[0].key = "stellaris";
     gameRows[0].name = "Stellaris";
     gameRows[0].supported = true;
-    gameRows[1].key = "hoi4";
-    gameRows[1].name = "Hearts of Iron IV";
+    gameRows[1].key = "pmm-test-unsupported";
+    gameRows[1].name = "Example Unsupported Game";
     games.setRows(gameRows);
     games.setCurrent("stellaris");
     CHECK(games.currentName() == "Stellaris");

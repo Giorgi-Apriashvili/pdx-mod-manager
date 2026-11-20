@@ -1,5 +1,6 @@
 // ServiceRunner marshalling and shutdown, and the Backend driving the real
-// services through it: edits are persisted and undoable, playset management,
+// services through it: edits are persisted and undoable, a known game without
+// an adapter (the test-only catalog hook) cannot be selected, playset management,
 // the share-code round trip, Workshop ID lists and the names of missing
 // Workshop mods in the import preview (the Web API against a local HTTP
 // stub), start-up failures, Play without a playset, Play following Steam, the
@@ -9,6 +10,7 @@
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
 #include "app/gui/backend.hpp"
+#include "core/catalog_testing.hpp"
 #include "http_stub.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/launch_history_repository.hpp"
@@ -1163,6 +1165,39 @@ TEST_CASE("Backend restores settings and creates playsets from the game configur
     CHECK(backend.settings()->windowWidth() == 1234);
     CHECK(backend.settings()->lastGameKey() == "stellaris");
     CHECK(backend.mods()->count() == 2); // last active playset restored at start-up
+    runner.shutdown();
+}
+
+TEST_CASE("A known game without an adapter is listed but cannot be selected", "[app][backend]") {
+    // Before the runner's worker starts, which reads the catalog.
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    const QString unsupported = qs(pmm::testing::kUnsupportedGameKey);
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    ServiceRunner runner(runnerOptions(temp.path() / "profile", adapter));
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    Backend backend(runner, {});
+    backend.initialize(start);
+    REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+    REQUIRE(backend.currentGame() == kGame);
+
+    CHECK(backend.games()->rowCount() == static_cast<int>(gameCatalog().size()));
+    const GameRowData* row = backend.games()->find(unsupported);
+    REQUIRE(row != nullptr);
+    CHECK(row->name == "Example Unsupported Game");
+    CHECK_FALSE(row->supported);
+    CHECK_FALSE(row->installed);
+    CHECK(row->statusText == "Not supported yet");
+    // Neither the model nor the Backend switches to it, so Play stays with
+    // the selected game.
+    backend.games()->select(unsupported);
+    backend.selectGame(unsupported);
+    CHECK(backend.currentGame() == kGame);
+    CHECK(backend.games()->currentKey() == kGame);
+    CHECK(backend.games()->currentSupported());
+    backend.shutdown();
     runner.shutdown();
 }
 

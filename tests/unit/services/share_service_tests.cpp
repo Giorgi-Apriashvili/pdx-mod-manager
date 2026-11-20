@@ -653,6 +653,45 @@ TEST_CASE("Share codes and Workshop ID lists are told apart, and errors say whic
     CHECK_FALSE(share.applyImport(p, ImportMode::New));
 }
 
+TEST_CASE("A share code for a game without an adapter is refused, and nothing is saved",
+          "[services][share]") {
+    // A valid code for EU4, which the catalog supports; this world has only
+    // the Stellaris adapter.
+    sharing::Manifest manifest;
+    manifest.game = "eu4";
+    manifest.playsetName = "Elsewhere";
+    manifest.mods.push_back({"steam-workshop", "2000000001", "UI Overhaul", true, "", ""});
+    const std::string code = require(sharing::encodeShareCode(manifest));
+
+    World w;
+    w.installFixtureMods();
+    w.refresh();
+    REQUIRE(w.ctx.adapterFor("eu4") == nullptr);
+    const std::string before = dumpState(w);
+    ShareService share(w.ctx);
+    const ImportPreview preview = share.previewImport(code, kGame);
+    REQUIRE_FALSE(preview.ok());
+    CHECK(preview.format == sharing::ImportTextFormat::ShareCode);
+    CHECK(preview.gameName == "Europa Universalis IV");
+    CHECK(preview.error->code == ErrorCode::UnsupportedGame);
+    CHECK(preview.error->message == "This share code is for Europa Universalis IV, which this "
+                                    "build of Paradox Mod Manager cannot manage.");
+    CHECK_FALSE(preview.manifest);
+    CHECK_FALSE(preview.plan);
+    CHECK(workshopIdsToLookUp(preview).empty());
+
+    // Applying it anyway, with the manifest the preview did not carry, is
+    // refused the same way.
+    ImportPreview forced = preview;
+    forced.error.reset();
+    forced.manifest = manifest;
+    const auto applied = share.applyImport(forced, ImportMode::New);
+    REQUIRE_FALSE(applied);
+    CHECK(applied.error().code == ErrorCode::UnsupportedGame);
+    CHECK(applied.error().message == preview.error->message);
+    CHECK(dumpState(w) == before);
+}
+
 TEST_CASE("Workshop names replace the hints of missing entries and are stored",
           "[services][share][idlist]") {
     const std::string code = senderCode();

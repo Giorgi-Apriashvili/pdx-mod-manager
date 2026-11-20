@@ -36,7 +36,12 @@ TEST_CASE("The registry lists the CK3, EU4, Stellaris and Victoria 3 adapters in
     CHECK(findAdapter("stellaris") == list[2].get());
     CHECK(findAdapter("vic3") == list[3].get());
     CHECK(dynamic_cast<const ContentLoadJsonAdapter*>(list[3].get()) != nullptr);
-    CHECK(findAdapter("hoi4") == nullptr); // known game, no adapter
+    // Known games the catalog does not support have no adapter.
+    for (const GameCatalogEntry& entry : gameCatalog()) {
+        if (!entry.adapterAvailable)
+            CHECK(findAdapter(entry.key) == nullptr);
+    }
+    CHECK(findAdapter("not-a-game") == nullptr);
     CHECK(findAdapter("") == nullptr);
 
     // Every game the catalog calls supported has its adapter, in the same order.
