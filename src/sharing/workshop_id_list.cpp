@@ -168,8 +168,9 @@ Error badEntry(std::string_view token, std::size_t entry, std::size_t offset) {
                     quotedSnippet(token, looksLikeLink(token) ? kLinkSnippetBytes : kSnippetBytes) +
                     ", has a " + quotedSnippet(token.substr(semicolon)) +
                     " suffix. Other mod managers use it to pin a load position; "
-                    "Paradox games load mods in list order, so remove the suffixes "
-                    "and put the IDs in the order the mods should load.",
+                    "Paradox Mod Manager writes the mods in list order, the order most "
+                    "Paradox games load them in, so remove the suffixes and put the IDs "
+                    "in the order the mods should load.",
                 where);
     }
 

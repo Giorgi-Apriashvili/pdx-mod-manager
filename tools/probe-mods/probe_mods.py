@@ -40,14 +40,15 @@ The event syntax depends on the game (--game):
                   namespace with add_namespace (114 files; none uses
                   "namespace ="). UTF-8 without a BOM and LF line ends, as all
                   55 of its scripted-trigger files are (its events have LF
-                  too, 87 of 129 with a BOM). Not yet used against a running
-                  game; its error.log reports an unknown trigger as
-                  'Unknown trigger-type: <name>, near line: <n>" in file:
-                  <file>', but so far only from common/unit_medals, so whether
-                  it reports the probes' events or unused scripted triggers
-                  at start-up is not known. Its system.log lists the loaded
-                  mods by name ("Active Mod:" lines), which `analyze --game
-                  hoi4` reports.
+                  too, 87 of 129 with a BOM). In the probe run of 2026-11-21
+                  (1.20.0.0) error.log reported every probe file, in
+                  common/scripted_triggers and in events, each with two
+                  lines: "Invalid trigger '<name>' in <file> line : <n>",
+                  then 'Error: "Unknown trigger-type: <name>, near line:
+                  <n>" in file: "<file>"'; both files named the same winner.
+                  Its system.log lists the loaded mods sorted by name ("Active
+                  Mod:" lines, a display order, not the load order), which
+                  `analyze --game hoi4` reports.
 
 Victoria 3 has no .mod files: a probe is a folder with
 .metadata/metadata.json, and the game reads the absolute folder paths from
@@ -70,16 +71,22 @@ Usage:
       loads its files.
   probe_mods.py analyze <error.log> --enabled c a [--disabled b] [--game hoi4|vic3]
       Reads the game's error.log after it reached the main menu and reports
-      which probes loaded and which one won the shared file, as JSON. With
+      which probes loaded and which one won the shared file, as JSON.
+      "precedence" names the winner's place in --enabled (first or last);
+      it reads as a rule only where the list decides. In Hearts of Iron IV
+      1.20.0.0 the registration file names decide (the later name wins), so
+      the label changes with the list while the winner does not. With
       --game vic3 it also reads debug.log and debug.1.log to debug.5.log next
       to it (the log rotates within a session) and reports the latest
       session's "Mod:" block, its "Mounted Data:" lines, the supported version
       lines of the probes and every "Invalid supported_version" line. With
       --game hoi4 it also reads system.log next to it and reports the probes
       among its "Active Mod:" lines (by name, in the log's order, which is
-      alphabetical) and every "Invalid supported_version" line.
+      alphabetical) and every "Invalid supported_version" line (1.20.0.0
+      reports those for every mod/*.mod, enabled or not).
   probe_mods.py rename <mod-dir> --name a [--display Z] [--file z]
-      Hearts of Iron IV's load-order runs 3 and 4 (docs/load-order.md):
+      Hearts of Iron IV's load-order runs 3 and 4 (docs/load-order.md; on
+      2026-11-21 run 4 moved the winner):
       --display Z sets name="PMM Probe Z" in both of a's descriptors (the
       folder's descriptor.mod and its registration); --file z moves a's
       registration mod/pmm_probe_a.mod (wherever it is now) to

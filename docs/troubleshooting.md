@@ -102,7 +102,9 @@ entry it could not read:
   (names, numbering, a heading) has to go. Links to profiles, search pages or
   other sites are not item links.
 - **A ";2" suffix.** Lists made for Total War mod managers pin load positions
-  as `id;position`. Paradox games load mods in list order, so remove the
+  as `id;position`. Paradox Mod Manager writes the mods in list order, the
+  order most Paradox games load them in (Europa Universalis IV and Hearts of
+  Iron IV decide by name; see [load order](load-order.md)), so remove the
   suffixes and put the ids in the order the mods should load.
 - **Listed twice.** A playset holds each mod once; remove one of the two
   entries the message names.
@@ -298,12 +300,13 @@ launcher:
 - Hearts of Iron IV: the manager starts `hoi4.exe` in the installation
   folder, where the game keeps its `steam_appid.txt`, with the arguments
   from `launcher-settings.json` and the `SteamAppId`/`SteamGameId`
-  variables. A direct start has not been observed yet on the development
-  machine; if the game quits, restarts through Steam or opens the launcher,
-  report it with the diagnostics
+  variables. Hearts of Iron IV 1.20.0.0 started this way on 2026-11-21
+  stayed up without the launcher and without restarting through Steam, and
+  read the `dlc_load.json` the manager wrote; if your copy quits, restarts
+  through Steam or opens the launcher, report it with the diagnostics
   ([Hearts of Iron IV adapter](games/hoi4.md)).
 
-## Hearts of Iron IV: user folder, version warnings and the launcher's cache
+## Hearts of Iron IV: user folder, version warnings, load order and the launcher's cache
 
 - **Another user folder.** For Hearts of Iron IV the manager takes the
   user-data folder from `gameDataPath` in the game's `launcher-settings.json`
@@ -323,7 +326,15 @@ launcher:
   number); the manager shows that as a warning on the mod. On the
   development machine such mods were loaded all the same (the game's
   `system.log` listed them as active); the pattern is the mod author's to
-  fix.
+  fix. Hearts of Iron IV 1.20.0.0 reports such a registration at every
+  start, also when the mod is not enabled.
+- **Moving a mod does not change which mod wins.** Hearts of Iron IV ignores
+  the playset order when two enabled mods contain the same file: the mod
+  whose `.mod` file in `mod\` comes last alphabetically wins
+  (`ugc_<id>.mod` for a Workshop mod), as the note above its playsets says
+  (observed on 1.20.0.0; [load order](load-order.md#hearts-of-iron-iv)). The
+  manager still saves, shares and writes the order, and does not rename the
+  `.mod` files to force one.
 - **After clearing the launcher's cache.** The Paradox launcher lists `mod/`
   among the game's cache folders. Whether clearing its cache removes the
   `mod\ugc_<id>.mod` registrations is not known. If it does, the manager

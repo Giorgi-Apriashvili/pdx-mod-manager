@@ -505,12 +505,14 @@ TEST_CASE("Hearts of Iron IV compatibility warnings follow supported_version", "
     CHECK(warnings("6000000004") ==
           std::vector<std::string>{
               "Made for Hearts of Iron IV 1.19.4.1; the installed version is 1.20.0.0."});
-    // error.log of 1.19.5.0: "Invalid supported_version" for "1.*.*" only.
+    // error.log of 1.19.5.0, and of 1.20.0.0 started directly (probe run of
+    // 2026-11-21): "Invalid supported_version" for "1.*.*" only.
     CHECK(warnings("6000000003") ==
           std::vector<std::string>{"Hearts of Iron IV reports supported_version \"1.*.*\" as "
                                    "invalid (wildcards are only accepted in the patch number)."});
 
     InstalledMod custom = f.mod(mods, "6000000001");
+    // 1.20.0.0 read the disabled probe's "1.20" and did not report it.
     for (const char* accepted : {"1.20.0.*", "1.20.0.0", "1.20.*", "1.20"}) {
         INFO(accepted);
         custom.descriptor.supportedVersion = accepted;
@@ -563,13 +565,19 @@ TEST_CASE("Hearts of Iron IV process names and load-order information", "[games]
     CHECK(adapter.defaultUserDataPath(env) ==
           u8path("/docs/Paradox Interactive/Hearts of Iron IV"));
 
-    // Not probed in the game yet: the playset order is written as for every
-    // game, and a note says that it may not be the order the game applies.
+    // Probe run of 2026-11-21 (1.20.0.0): the registration file names decide,
+    // not the list, as EU4's names do. The playset order is still written, and
+    // a note says which mod wins.
     const LoadOrderInfo info = adapter.loadOrderInfo();
-    CHECK_FALSE(info.verifiedInGame);
-    CHECK(info.userNote == "Hearts of Iron IV may not follow this order when two mods change the "
-                           "same file; this is not verified yet.");
-    CHECK(info.summary.find("index 0 first") != std::string::npos);
-    CHECK(info.summary.find("not verified for Hearts of Iron IV") != std::string::npos);
-    CHECK(info.evidence.find("docs/games/hoi4.md") != std::string::npos);
+    CHECK(info.verifiedInGame);
+    CHECK(info.userNote ==
+          "Hearts of Iron IV does not use this order when two mods change the same file: the mod "
+          "whose .mod file in the game's mod folder comes last alphabetically wins (ugc_<ID>.mod "
+          "for a Workshop mod). The order is still saved, shared and written for the game.");
+    CHECK(info.summary.find("lists the playset order") != std::string::npos);
+    CHECK(info.summary.find("registration file name (mod/<file>.mod) sorts last wins") !=
+          std::string::npos);
+    CHECK(info.summary.find("not verified") == std::string::npos);
+    CHECK(info.evidence.find("docs/evidence/2026-11-21-hoi4-load-order.md") != std::string::npos);
+    CHECK(info.evidence.find("1.20.0.0") != std::string::npos);
 }

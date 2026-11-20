@@ -4,9 +4,9 @@ What works for which game and store, and how we know. The application runs on
 Windows only ([ADR 0009](adr/0009-windows-only.md)). Support for a combination
 depends on the game's own executable and a validated integration (spec section 1).
 
-Last reviewed: 2026-11-21 (Hearts of Iron IV added, read-only checks only),
-after Victoria 3 (read-only checks on 2026-11-20, then its probe run with
-direct launches on 2026-11-21), the Crusader Kings III probe run of
+Last reviewed: 2026-11-21 (Hearts of Iron IV added: read-only checks, then
+its probe run with direct launches), after Victoria 3 (read-only checks on
+2026-11-20, then its probe run with direct launches on 2026-11-21), the Crusader Kings III probe run of
 2026-11-13 and the live validation of 2026-10-30; application 0.2.0 and the
 unreleased Victoria 3 and Hearts of Iron IV support.
 
@@ -92,7 +92,13 @@ tested. Results:
   over the 23 Workshop folders, and a share-code round trip between two new
   profiles of the application
   ([Hearts of Iron IV adapter](games/hoi4.md#real-machine-evidence)). The game
-  was not started.
+  was not started for these checks.
+- Hearts of Iron IV 1.20.0.0, 2026-11-21, live: four direct launches without
+  the Paradox launcher, enabled and disabled probe mods, the compact
+  `dlc_load.json` the application writes, the effective override order and
+  the `supported_version` results observed in the game's own logs, restore of
+  the previous configuration
+  ([evidence](evidence/2026-11-21-hoi4-load-order.md)).
 
 Not observed yet: other stores and Steam's own offline mode.
 
@@ -189,13 +195,14 @@ folder. Differences: `gameDataPath` in `launcher-settings.json` comes before a
 `userdir.txt` in the game folder, which `hoi4.exe` calls "old style" (inferred
 from its strings, untested); the launcher writes `dlc_load.json`
 pretty-printed, and this application writes it compact when the selection
-changes (that the game accepts it is unverified); only
-`supported_version="1.*.*"` was reported invalid (1.19.5.0). **Which mod wins a
-shared file is not verified**: the HOI4 wiki orders mods by the names of their
-`mod/*.mod` files, not by the list, and the launcher turns its own load-order
-controls off for this game; a note above a Hearts of Iron IV playset says so
-([Hearts of Iron IV adapter](games/hoi4.md); [load order](load-order.md#hearts-of-iron-iv)).
-Nothing here has run against the game yet.
+changes, which the game reads; only `supported_version="1.*.*"` is reported
+invalid (1.19.5.0 and 1.20.0.0), and 1.20.0.0 reads every registration in
+`mod/`, enabled or not. **Hearts of Iron IV does not use the order of
+`enabled_mods` for file overrides: the mod whose registration file name
+(`mod/<file>.mod`) sorts last wins**, as its wiki says; a note above a Hearts
+of Iron IV playset says so, and the playset order is still written, as for
+EU4 ([evidence](evidence/2026-11-21-hoi4-load-order.md);
+[Hearts of Iron IV adapter](games/hoi4.md); [load order](load-order.md#hearts-of-iron-iv)).
 
 | Capability | Windows · Steam | Other stores |
 | --- | --- | --- |
@@ -203,14 +210,14 @@ Nothing here has run against the game yet.
 | Mod inventory | **Verified (2026-11-21, 1.20.0.0)** read-only: 23 Workshop mods, 0 problems, `dependencies` and repeated `replace_path` kept; registered Workshop items without content read as missing (replay) | Implemented, unverified (local mods only) |
 | Playsets | **Verified (2026-11-21, 1.20.0.0)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
 | Share codes | **Verified (2026-11-21, 1.20.0.0)** read-only between two new profiles on one machine. Releases up to 0.2.0 reject codes for `hoi4` as not supported | Implemented, unverified |
-| Generated configuration | **Verified (2026-11-21, 1.20.0.0)** computed, not written: no write for the launcher's selection (compared by meaning with the launcher's pretty-printed file); 21 of 23 regenerated descriptors identical, 2 registrations older than their content. A changed selection is written as compact JSON, unverified in the game | Implemented, unverified |
+| Generated configuration | **Verified (2026-11-21, 1.20.0.0)** computed, not written: no write for the launcher's selection (compared by meaning with the launcher's pretty-printed file); 21 of 23 regenerated descriptors identical, 2 registrations older than their content. **Verified (2026-11-21, 1.20.0.0)** written for the probe run: a changed selection is written as compact JSON, the game loaded exactly the listed mods and did not rewrite the file ([evidence](evidence/2026-11-21-hoi4-load-order.md)) | Implemented, unverified |
 | Workshop: Steam session and item state | Implemented, unverified | Unsupported: requires the game on a Steam account |
 | Workshop: subscribe and download | Implemented, unverified; the check that ends a download accepts the 23 installed items (read-only, 2026-11-21) | Unsupported: requires the game on a Steam account |
 | Workshop: manual fallback | Implemented, unverified | Unsupported |
-| Direct launch without the Paradox launcher | Implemented, unverified: `hoi4.exe -gdpr-compliant` in the installation folder (where `steam_appid.txt` lies) with `SteamAppId`/`SteamGameId` | Implemented, unverified |
+| Direct launch without the Paradox launcher | **Verified (2026-11-21, 1.20.0.0)**: started directly as `hoi4.exe -gdpr-compliant` in the installation folder (where `steam_appid.txt` lies) with `SteamAppId`/`SteamGameId`, no launcher process, the same process 25 s later (no restart through Steam), 43 DLC active; all four runs closed cleanly; restored afterwards ([evidence](evidence/2026-11-21-hoi4-load-order.md)) | Implemented, unverified |
 | Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
-| `supported_version` warnings | Implemented: a mismatch warns, and `"1.*.*"` as invalid (error.log of 1.19.5.0); `"*"`, `"1.*"`, `"1.20"` and `"1.20.0"` untested | Same code |
-| In-game verification of enabled mods and order | Unverified: the list order is written as for every game, but the game may not follow it (wiki: the `.mod` file names decide); a note above a Hearts of Iron IV playset says so. The probe run is prepared ([load order](load-order.md#hearts-of-iron-iv)) | Unverified |
+| `supported_version` warnings | **Verified (2026-11-21, 1.20.0.0)** with probe mods: a mismatch warns, and `"1.*.*"` as invalid, which the game's error.log reports (also on 1.19.5.0); the game does not report `"1.20"` or `"1.20.*"`. `"*"`, `"1.*"` and `"1.20.0"` untested ([evidence](evidence/2026-11-21-hoi4-load-order.md#supported_version)) | Same code |
+| In-game verification of enabled mods and order | **Verified (2026-11-21, 1.20.0.0)** with probe mods: enabled mods loaded, disabled not; **the playset order does not decide file overrides: the mod whose registration file name (`mod/<file>.mod`) sorts last wins** (measured with local mods; for Workshop items, `mod/ugc_<id>.mod`, inferred) ([evidence](evidence/2026-11-21-hoi4-load-order.md); [load order](load-order.md#hearts-of-iron-iv)) | Unverified |
 
 ## Victoria 3 (Steam app 529340)
 

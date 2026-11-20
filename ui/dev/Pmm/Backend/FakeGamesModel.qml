@@ -35,7 +35,7 @@ ListModel {
         statusText: "Not found"; version: ""
         installPath: ""
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Hearts of Iron IV"
-        loadOrderNote: "Hearts of Iron IV may not follow this order when two mods change the same file; this is not verified yet."
+        loadOrderNote: "Hearts of Iron IV does not use this order when two mods change the same file: the mod whose .mod file in the game's mod folder comes last alphabetically wins (ugc_<ID>.mod for a Workshop mod). The order is still saved, shared and written for the game."
     }
     ListElement {
         key: "stellaris"; name: "Stellaris"; supported: true; installed: true; manualLocation: false

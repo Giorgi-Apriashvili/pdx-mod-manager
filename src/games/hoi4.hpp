@@ -6,8 +6,11 @@
 // launcher-written descriptors were checked read-only against a real Windows
 // installation (1.20.0.0), and the supported_version rule against the
 // error.log of a 1.19.5.0 run. The user-data precedence (gameDataPath before
-// userdir.txt) is inferred from strings in hoi4.exe. Launching and the
-// in-game load order are unverified. Details: docs/games/hoi4.md.
+// userdir.txt) is inferred from strings in hoi4.exe. A probe run on 1.20.0.0
+// (2026-11-21) verified the direct launch, the compact dlc_load.json, the
+// supported_version rule and the load order: the mod whose registration file
+// name sorts last wins a shared file, whatever the order of enabled_mods.
+// Details: docs/games/hoi4.md.
 
 #include "games/dlc_load_adapter.hpp"
 

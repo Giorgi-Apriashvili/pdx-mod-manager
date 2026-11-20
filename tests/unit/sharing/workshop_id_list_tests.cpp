@@ -133,8 +133,9 @@ TEST_CASE("Workshop ID list entries that are not ids are refused by number", "[s
         CHECK(e.code == ErrorCode::ParseError);
         CHECK(e.message ==
               "Entry 2, \"3149445431;2\", has a \";2\" suffix. Other mod managers use it to pin a "
-              "load position; Paradox games load mods in list order, so remove the suffixes and "
-              "put the IDs in the order the mods should load.");
+              "load position; Paradox Mod Manager writes the mods in list order, the order most "
+              "Paradox games load them in, so remove the suffixes and put the IDs in the order "
+              "the mods should load.");
         CHECK(e.detail == "entry 2 at byte offset 11");
         // Also on the first entry, and after a link.
         CHECK_THAT(parseError("3818297502;1").message,

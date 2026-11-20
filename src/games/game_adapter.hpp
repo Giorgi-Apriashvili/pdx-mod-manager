@@ -46,8 +46,9 @@ struct LoadOrderInfo {
     bool verifiedInGame = false; // true only with recorded in-game evidence
     std::string evidence;        // where the evidence is documented
     // Shown to users when the playset order is not the order the game applies
-    // (EU4 picks the winner of a shared file by mod name), or while that is
-    // not verified for the game (Hearts of Iron IV); empty otherwise.
+    // (EU4 picks the winner of a shared file by mod name, Hearts of Iron IV by
+    // the name of the mod's .mod file), or while that is not verified for the
+    // game (none at present); empty otherwise.
     std::string userNote;
 };
 
