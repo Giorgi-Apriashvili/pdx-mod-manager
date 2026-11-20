@@ -28,10 +28,12 @@ The event syntax depends on the game (--game):
                   triggers in common/scripted_triggers (seen on a 1.19 build,
                   and on 1.20.1.2 in the probe run of 2026-11-13).
   vic3            <ns>.1 = { type = country_event  hidden = yes ... }, the
-                  form of Victoria 3 1.15.2's own events, with a UTF-8 BOM as
-                  all of its event and scripted-trigger files have. Not yet
-                  used against a running game; how its error.log words an
-                  unknown trigger has not been seen.
+                  form of Victoria 3 1.15.2's own events, with a UTF-8 BOM and
+                  LF line ends as all of its event and scripted-trigger files
+                  have (the other games' probes are written in text mode, so
+                  with CRLF on Windows, which CK3 loaded). Not yet used
+                  against a running game; how its error.log words an unknown
+                  trigger has not been seen.
 
 Victoria 3 has no .mod files: a probe is a folder with
 .metadata/metadata.json, and the game reads the absolute folder paths from
@@ -153,6 +155,12 @@ def script_encoding(game: str) -> str:
     return "utf-8-sig" if game in ("ck3", "vic3") else "utf-8"
 
 
+def script_newline(game: str) -> str | None:
+    # Victoria 3's own script files have LF line ends; the other games' probes
+    # keep the platform's (CRLF on Windows), as checked in game.
+    return "\n" if game == "vic3" else None
+
+
 def create(
     mod_dir: Path,
     names: list[str],
@@ -164,6 +172,7 @@ def create(
     if not mod_dir.is_dir():
         raise SystemExit(f"mod directory does not exist: {mod_dir}")
     encoding = script_encoding(game)
+    newline = script_newline(game)
     created = []
     for name in names:
         folder = mod_dir / probe_folder(name)
@@ -172,20 +181,26 @@ def create(
         (triggers / f"pmm_probe_only_{name}.txt").write_text(
             f"pmm_probe_only_{name}_trigger = {{\n\tpmm_probe_loaded_{name} = yes\n}}\n",
             encoding=encoding,
+            newline=newline,
         )
         if shared:
             (triggers / "pmm_probe_shared.txt").write_text(
                 f"pmm_probe_shared_trigger = {{\n\tpmm_probe_shared_from_{name} = yes\n}}\n",
                 encoding=encoding,
+                newline=newline,
             )
         events = folder / "events"
         events.mkdir(parents=True, exist_ok=True)
         (events / f"pmm_probe_only_{name}.txt").write_text(
-            probe_event(f"pmm_probe_{name}", f"pmm_probe_loaded_{name}", game), encoding=encoding
+            probe_event(f"pmm_probe_{name}", f"pmm_probe_loaded_{name}", game),
+            encoding=encoding,
+            newline=newline,
         )
         if shared:
             (events / "pmm_probe_shared.txt").write_text(
-                probe_event("pmm_probe_shared", f"pmm_probe_shared_from_{name}", game), encoding=encoding
+                probe_event("pmm_probe_shared", f"pmm_probe_shared_from_{name}", game),
+                encoding=encoding,
+                newline=newline,
             )
         if game == "vic3":
             # No .mod files: the folder is listed in content_load.json by path.

@@ -246,8 +246,8 @@ with a UTF-8 BOM; its error.log reports unknown triggers in
 where both files named the same winner). Victoria 3 needs `--game vic3`,
 which writes probe folders with `.metadata/metadata.json` instead of `.mod`
 files, and Victoria 3's events (`<ns>.1 = { type = country_event hidden =
-yes ... }`) with a UTF-8 BOM; how its `error.log` words an unknown trigger has
-not been seen yet.
+yes ... }`) with a UTF-8 BOM and LF line ends, as the game's own script files
+have; how its `error.log` words an unknown trigger has not been seen yet.
 
 Stellaris (EU4 the same, with its own folder and a `supported_version` such
 as `v1.37.*`):
