@@ -1,5 +1,6 @@
-# Game adapters: Clausewitz descriptors, launcher-settings.json, the shared
-# launcher-v2 base, and the dlc_load.json-based CK3, EU4 and Stellaris adapters.
+# Game adapters: Clausewitz descriptors, Victoria 3's metadata.json,
+# launcher-settings.json, the shared launcher-v2 base, and the
+# dlc_load.json-based CK3, EU4 and Stellaris adapters.
 add_library(pmm_games STATIC
   ck3.cpp
   descriptor.cpp
@@ -7,6 +8,7 @@ add_library(pmm_games STATIC
   eu4.cpp
   launcher_adapter.cpp
   launcher_settings.cpp
+  mod_metadata.cpp
   registry.cpp
   stellaris.cpp
   supported_version.cpp

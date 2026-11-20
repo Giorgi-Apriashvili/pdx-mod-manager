@@ -4,6 +4,7 @@ pmm_add_test(pmm_games_tests
     descriptor_tests.cpp
     eu4_adapter_tests.cpp
     launcher_settings_tests.cpp
+    mod_metadata_tests.cpp
     real_machine_tests.cpp
     registry_tests.cpp
     stellaris_adapter_tests.cpp
