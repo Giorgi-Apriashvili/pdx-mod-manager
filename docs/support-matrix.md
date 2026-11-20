@@ -247,7 +247,7 @@ lone `"*"` matches no version. As in Stellaris and CK3, **the later mod in
 
 | Combination | Status | Reason |
 | --- | --- | --- |
-| Victoria 3 and Hearts of Iron IV: Paradox Mods, the launcher's playsets, DLC toggling | Unsupported | As for every game: no Paradox Mods provider (`pdx_*` folders are skipped, as the launcher skips them), the launcher's database is never read, and `disabledDLC` (Victoria 3) or `disabled_dlcs` (Hearts of Iron IV) is kept as it is. |
+| Victoria 3 and Hearts of Iron IV: Paradox Mods, the launcher's playsets, DLC toggling | Unsupported | As for every game: no Paradox Mods provider (Victoria 3 skips `pdx_*` folders, as its launcher does; in Hearts of Iron IV, as in the other `dlc_load.json` games, a `mod/pdx_<id>.mod` registration reads as a local mod), the launcher's database is never read, and `disabledDLC` (Victoria 3) or `disabled_dlcs` (Hearts of Iron IV) is kept as it is. |
 | EU4 versions before the Paradox launcher v2 (mods in `settings.txt`) | Unsupported | Not detected as such; their mods would not be enabled ([EU4 adapter](games/eu4.md)). |
 | Workshop acquisition with Steam offline or not signed in | Unsupported (by design) | Installed content is still accepted; network operations wait until Steam is online. |
 | Mods from Paradox Mods (mods.paradoxplaza.com) or other non-Steam sources | Unsupported | No provider exists; such mods can be used as local mods. |
