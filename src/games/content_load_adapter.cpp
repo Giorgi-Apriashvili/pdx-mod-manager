@@ -305,11 +305,38 @@ ContentLoadJsonAdapter::readCurrentConfiguration(const GameInstallation& install
                 entry.identity = mod->identity;
             } else {
                 entry.identity = ModIdentity{game, source::Local, lastComponent(written)};
-                if (!path.is_absolute() || !samePath(path.parent_path(), modDir))
-                    logInfo(traits().logComponent,
-                            "An enabled mod lies outside the mod folder and the Workshop; it is "
-                            "listed as a local mod that is not installed",
-                            {{"path", written}});
+                const std::string& name = entry.identity.id;
+                if (name.empty() || name == "." || name == ".." ||
+                    name.find(':') != std::string::npos) {
+                    // e.g. "" or a drive root: no folder name to identify a mod by.
+                    logWarning(traits().logComponent,
+                               "An enabled mod's path names no mod folder; it is left out",
+                               {{"path", written}});
+                    continue;
+                }
+                const bool inModFolder = path.is_absolute() && samePath(path.parent_path(), modDir);
+                if (!inModFolder) {
+                    // Elsewhere, with the name of an installed mod: that identity
+                    // means the installed folder, so taking it would swap in a
+                    // different mod. The same folder reached by another route
+                    // (a junction, a short name) is that mod.
+                    mod = findMod(
+                        [&](const InstalledMod& m) { return m.identity == entry.identity; });
+                    std::error_code ec;
+                    if (mod != nullptr &&
+                        (mod->contentPath.empty() || !fs::equivalent(path, mod->contentPath, ec))) {
+                        logWarning(traits().logComponent,
+                                   "An enabled mod outside the mod folder and the Workshop has "
+                                   "the folder name of an installed mod; it is left out",
+                                   {{"path", written}, {"id", name}});
+                        continue;
+                    }
+                    if (mod == nullptr)
+                        logInfo(traits().logComponent,
+                                "An enabled mod lies outside the mod folder and the Workshop; "
+                                "it is listed as a local mod that is not installed",
+                                {{"path", written}});
+                }
             }
         }
         if (mod != nullptr) {

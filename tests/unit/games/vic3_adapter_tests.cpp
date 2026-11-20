@@ -432,6 +432,42 @@ TEST_CASE("Victoria 3 content_load.json entries outside the inventory", "[games]
     CHECK(f.adapter.readCurrentConfiguration(inst, mods)->empty());
 }
 
+TEST_CASE("Victoria 3 entries elsewhere never take the id of an installed mod", "[games][vic3]") {
+    Vic3Fixture f;
+    const GameInstallation inst = f.discovered();
+    const std::vector<InstalledMod> mods = f.scan(inst);
+    const test::LogCapture capture;
+    // As a tool other than the launcher could write them: another folder with
+    // the installed local mod's name, one that is gone, a drive root, an empty
+    // path, and the installed folder itself in the \\?\ form.
+    const fs::path almanac = f.modDir() / "Local Almanac";
+    const fs::path namesake = f.path("Elsewhere/Local Almanac");
+    test::writeText(namesake / ".metadata" / "metadata.json", "{\"name\": \"Other Almanac\"}");
+    const std::string alias = "\\\\?\\" + test::windowsForm(almanac.lexically_normal());
+    // Not the same path to the adapter, which compares paths as written.
+    REQUIRE_FALSE(platform::isWithin(platform::pathFromUtf8(alias), almanac));
+    test::writeText(f.contentLoad(),
+                    "{\"enabledMods\": [{\"path\": \"" + f.jsonPath(namesake) + "\"},\n" +
+                        "{\"path\": \"D:\\\\Elsewhere\\\\Local Almanac\"},\n" +
+                        "{\"path\": \"C:\\\\\"}, {\"path\": \"\"},\n" + "{\"path\": \"" +
+                        test::replaceAll(alias, "\\", "\\\\") + "\"},\n" +
+                        "{\"path\": \"D:\\\\Elsewhere\\\\Portable Mod\"}]}");
+    auto entries = f.adapter.readCurrentConfiguration(inst, mods);
+    REQUIRE(entries.ok());
+    REQUIRE(entries->size() == 2);
+    const auto& e = *entries;
+    CHECK(e[0].identity == ModIdentity{"vic3", "local", "Local Almanac"});
+    CHECK(e[0].nameHint == "Local Almanac");
+    CHECK(e[0].versionHint == "0.1.0");
+    CHECK(e[1].identity == ModIdentity{"vic3", "local", "Portable Mod"});
+    const auto leftOut = std::count_if(
+        capture.records().begin(), capture.records().end(), [](const LogRecord& record) {
+            return record.level == LogLevel::Warning &&
+                   record.message.find("it is left out") != std::string::npos;
+        });
+    CHECK(leftOut == 4);
+}
+
 TEST_CASE("Victoria 3 launch plan writes only content_load.json", "[games][vic3]") {
     Vic3Fixture f;
     const GameInstallation inst = f.discovered();

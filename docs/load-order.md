@@ -100,7 +100,9 @@ no trailing newline):
   `.../workshop/content/529340/<id>` is that Workshop item, installed or not;
   any other path is the installed mod at that location, else a `local` entry
   named after the path's last component (the entry's name in `mod/`), which
-  reads as not installed.
+  reads as not installed. A path outside `mod/` whose last component is the
+  name of an installed mod at another location, and a path that names no
+  folder, are left out and logged.
 
 ## Verified on the development machine (read-only)
 

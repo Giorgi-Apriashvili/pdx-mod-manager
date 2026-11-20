@@ -284,7 +284,12 @@ conflicting writers. This application never touches `launcher-v2*.sqlite`,
 
 Paradox Mods (`pdx_*` folders) are not supported, as for every game. Mods in
 other locations than `mod/` and the Workshop that a `content_load.json`
-lists are read as local mods that are not installed.
+lists are read as local mods that are not installed, named after their
+folder. Such an entry is left out (and logged) when an installed mod in
+`mod/` already has that name and the path is not that mod's folder, so that
+an import never puts a different mod in its place; so is a path that names
+no folder (empty, a drive root). Only other tools write such paths; the
+launcher writes `mod/` and Workshop paths.
 
 ## Real-machine evidence
 

@@ -45,7 +45,9 @@ public:
     // Each enabledMods path inside .../workshop/content/<app>/<id> is that
     // Workshop item, installed or not; any other path is the inventory mod
     // at that location, else a local mod named after the path's last
-    // component that is not installed.
+    // component that is not installed. Left out (and logged): a path that
+    // names no folder (empty, a drive root), and one outside mod/ whose name
+    // is an installed mod's id but which is not that mod's folder.
     Result<std::vector<PlaysetEntry>>
     readCurrentConfiguration(const GameInstallation& installation,
                              std::span<const InstalledMod> inventory) const override;
