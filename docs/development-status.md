@@ -99,6 +99,32 @@ databases and `playsets_backup` were not opened. MSVC 19.52 (toolset
   writes probe folders with `metadata.json` (and the `--no-shared` and
   `--no-game-custom-data` variants), and `analyze --game vic3` on synthetic
   rotating debug logs picks the latest session.
+- Review fixes (`99c286d` to `a10c917`): a `content_load.json` path outside
+  `mod/` whose name is an installed mod's id, and which is not that folder
+  (`fs::equivalent`), is left out and logged instead of becoming that mod,
+  as is a path that names no folder (a games case with a folder of the
+  same name elsewhere, a missing one, `C:\`, an empty path and the installed
+  folder in the `\\?\` form); the download check reads `metadata.json` as
+  the scan does, so whitespace, a trailing comma and a JSON array are
+  rejected (games cases, and two more layouts in the comparison with the
+  scan); a services case shows that the check takes the adapter of the
+  job's game (Victoria 3's adapter listed first; with the coordinator
+  changed to take the first adapter, the case fails); the `[.real]` summary
+  counts only local `.zip` mods; the Victoria 3 probe scripts have LF line
+  ends (as all 133 event and 33 scripted-trigger files of 1.15.2 have; the
+  Stellaris, EU4 and CK3 probes unchanged byte for byte); the probe
+  procedure (the Workshop item in the step-3 code, `move` steps for run 2,
+  one `restore` per launch, the probes the game may leave out) and the
+  wording of the approval. `debug`: **0 warnings**, **623/623 tests pass**,
+  by label: core 51, sharing 69, persistence 72, platform 59, providers 61,
+  games 96, services 96, application 123, ui-preview 1; the new cases
+  passed 10 times each. `pmm_games_tests "[.real]"` (read-only): the
+  Stellaris, EU4 and CK3 output identical, line for line, to the baseline
+  of `main`; the Victoria 3 output unchanged (9 of 9 Workshop folders
+  accepted). `scripts/check.sh --full` on `a10c917`: passed (ASan and
+  clang-cl with UBSan 499/499 each, clang-tidy on the 22 C++ files changed
+  since `origin/main` without findings, the `ci` preset from a fresh
+  checkout 623/623).
 
 ## Test status (2026-11-13, Workshop ID lists, `workshop-id-lists`)
 
