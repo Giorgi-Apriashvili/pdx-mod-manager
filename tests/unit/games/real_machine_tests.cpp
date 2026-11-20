@@ -322,7 +322,8 @@ void runRealVic3Scan(const Vic3Adapter& adapter) {
         ++byState[toString(mod.state)];
         withProblems += mod.problems.empty() ? 0 : 1;
         std::error_code ec;
-        archives += fs::is_regular_file(mod.contentPath, ec) ? 1 : 0;
+        if (mod.identity.source == source::Local)
+            archives += fs::is_regular_file(mod.contentPath, ec) ? 1 : 0;
         if (!mod.descriptorPath.empty()) {
             auto metadata = readModMetadata(mod.descriptorPath);
             withoutCustomData += metadata && !metadata->hasGameCustomData ? 1 : 0;
