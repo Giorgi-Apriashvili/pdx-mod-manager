@@ -239,29 +239,58 @@ Result<GameInstallation> LauncherGameAdapter::describe(const fs::path& installPa
         const fs::path userAbsolute = fs::absolute(userDataPath, ec);
         inst.userDataPath = (ec ? userDataPath : userAbsolute).lexically_normal();
     } else {
-        std::optional<fs::path> fromUserDir;
-        if (!m_traits.userDirFile.empty()) {
-            Result<std::optional<fs::path>> read =
-                readUserDirFile(inst.installPath / pathFromUtf8(m_traits.userDirFile));
+        const fs::path userDirFile = m_traits.userDirFile.empty()
+                                         ? fs::path()
+                                         : inst.installPath / pathFromUtf8(m_traits.userDirFile);
+        const auto fromUserDir = [&]() -> std::optional<fs::path> {
+            if (userDirFile.empty())
+                return std::nullopt;
+            Result<std::optional<fs::path>> read = readUserDirFile(userDirFile);
             if (!read) {
                 logWarning(m_traits.logComponent, "Ignoring the game's userdir.txt",
                            {{"error", read.error().message}, {"detail", read.error().detail}});
-            } else if (*read) {
-                fromUserDir = **read;
-                logInfo(m_traits.logComponent, "Using the user data folder from userdir.txt",
-                        {{"path", pathToUtf8(*fromUserDir)}});
+                return std::nullopt;
             }
-        }
-        std::optional<fs::path> fromSettings;
-        if (!fromUserDir && settings && !settings->gameDataPath.empty()) {
-            fromSettings = resolveGameDataPath(settings->gameDataPath, env.documentsDir);
-            if (!fromSettings)
+            if (*read)
+                logInfo(m_traits.logComponent, "Using the user data folder from userdir.txt",
+                        {{"path", pathToUtf8(**read)}});
+            return *read;
+        };
+        const auto fromSettings = [&]() -> std::optional<fs::path> {
+            if (!settings || settings->gameDataPath.empty())
+                return std::nullopt;
+            std::optional<fs::path> resolved =
+                resolveGameDataPath(settings->gameDataPath, env.documentsDir);
+            // hoi4.exe tells users to point gameDataPath at their custom user
+            // folder, so the game that reads it first also takes it absolute.
+            if (!resolved && m_traits.gameDataPathOverridesUserDirFile) {
+                resolved = resolveAbsoluteGameDataPath(settings->gameDataPath);
+                if (resolved)
+                    logInfo(m_traits.logComponent,
+                            "Using the absolute gameDataPath of launcher-settings.json",
+                            {{"path", pathToUtf8(*resolved)}});
+            }
+            if (!resolved)
                 logWarning(m_traits.logComponent, "Ignoring an unsupported gameDataPath",
                            {{"gameDataPath", settings->gameDataPath}});
+            return resolved;
+        };
+        std::optional<fs::path> chosen;
+        if (m_traits.gameDataPathOverridesUserDirFile) {
+            chosen = fromSettings();
+            if (!chosen)
+                chosen = fromUserDir();
+            else if (!userDirFile.empty() && isRegularFile(userDirFile))
+                logInfo(m_traits.logComponent,
+                        "Ignoring the game's userdir.txt: gameDataPath in launcher-settings.json "
+                        "overrides it",
+                        {{"userdir", pathToUtf8(userDirFile)}, {"path", pathToUtf8(*chosen)}});
+        } else {
+            chosen = fromUserDir();
+            if (!chosen)
+                chosen = fromSettings();
         }
-        inst.userDataPath = fromUserDir    ? *fromUserDir
-                            : fromSettings ? *fromSettings
-                                           : defaultUserDataPath(env);
+        inst.userDataPath = chosen ? *chosen : defaultUserDataPath(env);
         if (inst.userDataPath.empty())
             return makeError(ErrorCode::NotFound, "The " + gameName +
                                                       " user data folder could not be determined. "
@@ -343,8 +372,9 @@ LauncherGameAdapter::beginLaunchPlan(const GameInstallation& installation) const
     plan.game = std::string(m_traits.key);
     plan.executable = installation.executablePath;
     // The executable's folder, as the Paradox launcher does: the installation
-    // folder for Stellaris and EU4, <install>/binaries for CK3 (where its
-    // steam_appid.txt lies) and Victoria 3 (whose engine finds ../game there).
+    // folder for Stellaris, EU4 and Hearts of Iron IV, <install>/binaries for
+    // CK3 (where its steam_appid.txt lies) and Victoria 3 (whose engine finds
+    // ../game there).
     plan.workingDirectory = installation.executablePath.has_parent_path()
                                 ? installation.executablePath.parent_path()
                                 : installation.installPath;

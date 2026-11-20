@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "sharing/manifest.hpp"
 #include "sharing_test_support.hpp"
 
@@ -360,12 +361,19 @@ TEST_CASE("Games and sources are validated against the catalog", "[sharing][mani
     m.game = "";
     CHECK(validateManifest(m).error().code == ErrorCode::ValidationFailed);
 
-    m.game = "hoi4";
-    s = validateManifest(m);
-    CHECK(s.error().code == ErrorCode::UnsupportedGame);
-    CHECK_THAT(s.error().message, ContainsSubstring("Hearts of Iron IV"));
+    {
+        // A game the catalog knows, without an adapter in this version.
+        const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+        m.game = std::string(pmm::testing::kUnsupportedGameKey);
+        s = validateManifest(m);
+        CHECK(s.error().code == ErrorCode::UnsupportedGame);
+        CHECK_THAT(s.error().message, ContainsSubstring("Example Unsupported Game"));
+    }
+    CHECK(validateManifest(m).error().code == ErrorCode::ValidationFailed); // unknown again
 
     m.game = "ck3";
+    CHECK(validateManifest(m).ok());
+    m.game = "hoi4";
     CHECK(validateManifest(m).ok());
     m.game = "vic3";
     CHECK(validateManifest(m).ok());

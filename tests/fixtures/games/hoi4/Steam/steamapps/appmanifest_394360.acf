@@ -1,0 +1,17 @@
+"AppState"
+{
+	"appid"		"394360"
+	"Universe"		"1"
+	"name"		"Hearts of Iron IV"
+	"StateFlags"		"4"
+	"installdir"		"Hearts of Iron IV"
+	"LastUpdated"		"1795200235"
+	"SizeOnDisk"		"81604378624"
+	"buildid"		"26733403"
+	"LastOwner"		"76561190000000001"
+	"UserConfig"
+	{
+		"language"		"english"
+		"BetaKey"		"public"
+	}
+}

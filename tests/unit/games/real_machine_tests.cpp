@@ -1,20 +1,23 @@
-// Hidden tests ("[.real]") that run the CK3, EU4, Stellaris and Victoria 3
-// adapters against the REAL installations of the machine they run on and print
-// a redacted summary. They are strictly read-only: discovery, scanning and
-// reading dlc_load.json or content_load.json only read files,
-// buildLaunchPlan() only computes the writes it would make (nothing is
-// applied, nothing is started), and the Workshop content check only looks at
-// the folders. The replay steps copy the registered descriptors (Victoria 3:
+// Hidden tests ("[.real]") that run the CK3, EU4, Hearts of Iron IV, Stellaris
+// and Victoria 3 adapters against the REAL installations of the machine they
+// run on and print a redacted summary. They are strictly read-only:
+// discovery, scanning and reading dlc_load.json or content_load.json only
+// read files, buildLaunchPlan() only computes the writes it would make
+// (nothing is applied, nothing is started), and the Workshop content check
+// only looks at the folders. The replay steps copy the registered descriptors (Victoria 3:
 // content_load.json) into a temporary folder and work on the copy. Run
 // explicitly:
 //   pmm_games_tests "[.real]" -s
 // Results of a run are recorded in docs/evidence/real-scan-2026-10-29.md (EU4,
-// Stellaris), docs/games/ck3.md (CK3) and docs/games/vic3.md (Victoria 3).
+// Stellaris), docs/games/ck3.md (CK3), docs/games/hoi4.md (Hearts of Iron IV)
+// and docs/games/vic3.md (Victoria 3).
 
 #include "core/log.hpp"
 #include "games/ck3.hpp"
 #include "games/descriptor.hpp"
 #include "games/eu4.hpp"
+#include "games/hoi4.hpp"
+#include "games/launcher_settings.hpp"
 #include "games/mod_metadata.hpp"
 #include "games/stellaris.hpp"
 #include "games/vic3.hpp"
@@ -84,6 +87,21 @@ void printSteamState(const LauncherGameAdapter& adapter, const GameInstallation&
         std::cout << "userdir.txt:    " << (*read ? shown(**read) : std::string("empty")) << probed
                   << "\n";
     }
+    // Hearts of Iron IV: whether the folder is launcher-settings.json's
+    // gameDataPath (%USER_DOCUMENTS% or absolute), which comes before
+    // userdir.txt there.
+    if (adapter.traits().gameDataPathOverridesUserDirFile) {
+        std::string from = "not gameDataPath";
+        if (auto settings = readLauncherSettings(inst.installPath)) {
+            std::optional<fs::path> resolved = resolveGameDataPath(
+                settings->gameDataPath, DiscoveryEnvironment::current().documentsDir);
+            if (!resolved)
+                resolved = resolveAbsoluteGameDataPath(settings->gameDataPath);
+            if (resolved && resolved->lexically_normal() == inst.userDataPath.lexically_normal())
+                from = "gameDataPath (launcher-settings.json; before userdir.txt)";
+        }
+        std::cout << "user data from: " << from << "\n";
+    }
     // In the installation folder (Stellaris), or next to the executable (CK3:
     // binaries/), which is the working directory of a launch.
     const fs::path exeFolder = inst.executablePath.parent_path();
@@ -150,7 +168,8 @@ void printLaunchPlan(const LaunchPlan& plan, const GameInstallation& inst) {
         CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
 }
 
-void runRealScan(const DlcLoadJsonAdapter& adapter) {
+// Returns the scanned mods, for the Hearts of Iron IV download check.
+std::vector<InstalledMod> runRealScan(const DlcLoadJsonAdapter& adapter) {
     const GameInstallation inst = printInstallation(adapter);
     auto scanned = adapter.scanMods(inst);
     REQUIRE(scanned.ok());
@@ -245,6 +264,25 @@ void runRealScan(const DlcLoadJsonAdapter& adapter) {
     }
     std::cout << "regenerated Workshop descriptors identical to the launcher's: " << identical
               << " of " << compared << "\n";
+    return mods;
+}
+
+// The check that ends a Workshop download, over the folders on disk.
+void printDownloadCheck(const LauncherGameAdapter& adapter, const std::vector<InstalledMod>& mods) {
+    int workshopFolders = 0;
+    int accepted = 0;
+    for (const InstalledMod& mod : mods) {
+        if (mod.identity.source != source::SteamWorkshop || mod.contentPath.empty())
+            continue;
+        ++workshopFolders;
+        const Status verified = adapter.verifyWorkshopContent(mod.contentPath);
+        accepted += verified.ok() ? 1 : 0;
+        if (!verified.ok())
+            std::cout << "  download check rejects " << toString(mod.identity) << ": "
+                      << verified.error().message << "\n";
+    }
+    std::cout << "download check accepts " << accepted << " of " << workshopFolders
+              << " Workshop folders\n";
 }
 
 // The state right after a reinstall, replayed with the real descriptors: the
@@ -376,21 +414,7 @@ void runRealVic3Scan(const Vic3Adapter& adapter) {
     REQUIRE(plan.ok());
     printLaunchPlan(*plan, inst);
 
-    // The check that ends a Workshop download, over the folders on disk.
-    int workshopFolders = 0;
-    int accepted = 0;
-    for (const InstalledMod& mod : mods) {
-        if (mod.identity.source != source::SteamWorkshop || mod.contentPath.empty())
-            continue;
-        ++workshopFolders;
-        const Status verified = adapter.verifyWorkshopContent(mod.contentPath);
-        accepted += verified.ok() ? 1 : 0;
-        if (!verified.ok())
-            std::cout << "  download check rejects " << toString(mod.identity) << ": "
-                      << verified.error().message << "\n";
-    }
-    std::cout << "download check accepts " << accepted << " of " << workshopFolders
-              << " Workshop folders\n";
+    printDownloadCheck(adapter, mods);
 }
 
 // A new installation replayed with the real content_load.json: it is copied
@@ -440,6 +464,12 @@ TEST_CASE("Real EU4 installation (read-only)", "[.real]") {
 TEST_CASE("Real CK3 installation (read-only)", "[.real]") {
     runRealScan(Ck3Adapter());
     replayWithoutWorkshopContent(Ck3Adapter());
+}
+
+TEST_CASE("Real HOI4 installation (read-only)", "[.real]") {
+    const std::vector<InstalledMod> mods = runRealScan(Hoi4Adapter());
+    printDownloadCheck(Hoi4Adapter(), mods);
+    replayWithoutWorkshopContent(Hoi4Adapter());
 }
 
 TEST_CASE("Real Victoria 3 installation (read-only)", "[.real]") {

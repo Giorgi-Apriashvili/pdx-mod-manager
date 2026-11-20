@@ -35,34 +35,60 @@ The event syntax depends on the game (--game):
                   2026-11-21 (1.15.2) error.log reported "Unknown trigger
                   type: ..." for the event files only, as Stellaris and EU4
                   do.
+  hoi4            add_namespace = <ns>, then the country_event of stellaris and
+                  eu4: Hearts of Iron IV 1.20.0.0's own events declare their
+                  namespace with add_namespace (114 files; none uses
+                  "namespace ="). UTF-8 without a BOM and LF line ends, as all
+                  55 of its scripted-trigger files are (its events have LF
+                  too, 87 of 129 with a BOM). Not yet used against a running
+                  game; its error.log reports an unknown trigger as
+                  'Unknown trigger-type: <name>, near line: <n>" in file:
+                  <file>', but so far only from common/unit_medals, so whether
+                  it reports the probes' events or unused scripted triggers
+                  at start-up is not known. Its system.log lists the loaded
+                  mods by name ("Active Mod:" lines), which `analyze --game
+                  hoi4` reports.
 
 Victoria 3 has no .mod files: a probe is a folder with
 .metadata/metadata.json, and the game reads the absolute folder paths from
 content_load.json. `create --game vic3` prints those paths.
 
 Usage:
-  probe_mods.py create <mod-dir> [--game ck3|vic3] [--names a b c] [--supported-version v4.5.*]
-                       [--no-shared] [--no-game-custom-data]
+  probe_mods.py create <mod-dir> [--game ck3|hoi4|vic3] [--names a b c]
+                       [--supported-version v4.5.*] [--no-shared] [--no-game-custom-data]
       Writes probe folders and .mod descriptors (Victoria 3: metadata.json)
       into the game's user mod directory (e.g. "Documents/Paradox
       Interactive/Stellaris/mod"). --supported-version must use the game's
       version format and must not make the game report it as invalid:
-      "v4.5.*" for Stellaris, "1.20.*" for CK3 (never "1.*"), "1.15.*" for
-      Victoria 3. --no-shared leaves out the shared file, for probes that only
-      test a supported version and take no part in the precedence test.
-      --no-game-custom-data (Victoria 3) leaves "game_custom_data" out of the
-      metadata: 1.15.2 then logs a metadata read error and leaves the mod
-      out of its "Mod:" block, but still mounts and loads its files.
-  probe_mods.py analyze <error.log> --enabled c a [--disabled b] [--game vic3]
+      "v4.5.*" for Stellaris, "1.20.*" for CK3 (never "1.*"), "1.20.*" for
+      Hearts of Iron IV (never "1.*.*", which its error.log reports as
+      invalid), "1.15.*" for Victoria 3. --no-shared leaves out the shared
+      file, for probes that only test a supported version and take no part in
+      the precedence test. --no-game-custom-data (Victoria 3) leaves
+      "game_custom_data" out of the metadata: 1.15.2 then logs a metadata read
+      error and leaves the mod out of its "Mod:" block, but still mounts and
+      loads its files.
+  probe_mods.py analyze <error.log> --enabled c a [--disabled b] [--game hoi4|vic3]
       Reads the game's error.log after it reached the main menu and reports
       which probes loaded and which one won the shared file, as JSON. With
       --game vic3 it also reads debug.log and debug.1.log to debug.5.log next
       to it (the log rotates within a session) and reports the latest
       session's "Mod:" block, its "Mounted Data:" lines, the supported version
-      lines of the probes and every "Invalid supported_version" line.
+      lines of the probes and every "Invalid supported_version" line. With
+      --game hoi4 it also reads system.log next to it and reports the probes
+      among its "Active Mod:" lines (by name, in the log's order, which is
+      alphabetical) and every "Invalid supported_version" line.
+  probe_mods.py rename <mod-dir> --name a [--display Z] [--file z]
+      Hearts of Iron IV's load-order runs 3 and 4 (docs/load-order.md):
+      --display Z sets name="PMM Probe Z" in both of a's descriptors (the
+      folder's descriptor.mod and its registration); --file z moves a's
+      registration mod/pmm_probe_a.mod (wherever it is now) to
+      mod/pmm_probe_z.mod and leaves its path= unchanged. Each is undone by
+      renaming back (--display A, --file a). Refuses to overwrite a file.
   probe_mods.py remove <mod-dir> [--game vic3] [--names a b c]
       Deletes the probe folders and descriptors created by `create`
-      (Victoria 3: the folders only).
+      (Victoria 3: the folders only), and any other mod/pmm_probe_*.mod whose
+      path= names one of those folders (a registration moved by `rename`).
 
 The probes contain no gameplay content and are safe to leave disabled.
 """
@@ -78,7 +104,8 @@ from pathlib import Path
 
 DEFAULT_NAMES = ["a", "b", "c"]
 NAME_RE = re.compile(r"^[a-z0-9]{1,16}$")
-GAMES = ["stellaris", "eu4", "ck3", "vic3"]
+DISPLAY_RE = re.compile(r"^[A-Za-z0-9]{1,16}$")
+GAMES = ["stellaris", "eu4", "ck3", "hoi4", "vic3"]
 # Victoria 3's debug.log rotates at about 512 KB, also within one session.
 VIC3_DEBUG_LOGS = ["debug.log"] + [f"debug.{n}.log" for n in range(1, 6)]
 
@@ -138,8 +165,10 @@ def probe_event(namespace: str, trigger: str, game: str) -> str:
             f"\ttrigger = {{\n\t\t{trigger} = yes\n\t}}\n"
             "}\n"
         )
+    # Hearts of Iron IV declares an event namespace with add_namespace.
+    keyword = "add_namespace" if game == "hoi4" else "namespace"
     return (
-        f"namespace = {namespace}\n\n"
+        f"{keyword} = {namespace}\n\n"
         "country_event = {\n"
         f"\tid = {namespace}.1\n"
         f"\ttitle = {namespace}.1.t\n"
@@ -153,14 +182,17 @@ def probe_event(namespace: str, trigger: str, game: str) -> str:
 
 def script_encoding(game: str) -> str:
     # CK3's and Victoria 3's own script files all start with a UTF-8 BOM;
-    # Stellaris and EU4 probes are written without one, as checked in game.
+    # Stellaris and EU4 probes are written without one, as checked in game,
+    # and so are Hearts of Iron IV's (none of its scripted-trigger files has
+    # one).
     return "utf-8-sig" if game in ("ck3", "vic3") else "utf-8"
 
 
 def script_newline(game: str) -> str | None:
-    # Victoria 3's own script files have LF line ends; the other games' probes
-    # keep the platform's (CRLF on Windows), as checked in game.
-    return "\n" if game == "vic3" else None
+    # Victoria 3's and Hearts of Iron IV's own script files have LF line ends;
+    # the other games' probes keep the platform's (CRLF on Windows), as
+    # checked in game.
+    return "\n" if game in ("hoi4", "vic3") else None
 
 
 def create(
@@ -221,18 +253,82 @@ def create(
     return {"created": created}
 
 
+def registration_folder(registration: Path) -> str | None:
+    # The last component of a registration's path=, e.g. "pmm_probe_a".
+    text = registration.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r'^\s*path\s*=\s*"([^"]*)"', text, re.MULTILINE)
+    if not match:
+        return None
+    return re.split(r"[/\\]", match.group(1).rstrip("/\\"))[-1]
+
+
+def registrations_of(mod_dir: Path, name: str) -> list[Path]:
+    # mod/pmm_probe_*.mod files whose path= names probe `name`'s folder: its
+    # own registration, also after `rename --file` moved it.
+    return sorted(
+        f for f in mod_dir.glob("pmm_probe_*.mod") if f.is_file() and registration_folder(f) == probe_folder(name)
+    )
+
+
 def remove(mod_dir: Path, names: list[str], game: str = "stellaris") -> dict:
     removed = []
     for name in names:
         folder = mod_dir / probe_folder(name)
         desc = mod_dir / f"{probe_folder(name)}.mod"
+        # Read before the folder goes: a registration moved by `rename --file`.
+        moved = [] if game == "vic3" else [f for f in registrations_of(mod_dir, name) if f.name != desc.name]
         if folder.is_dir():
             shutil.rmtree(folder)
             removed.append(str(folder.name))
         if game != "vic3" and desc.is_file():
             desc.unlink()
             removed.append(desc.name)
+        for registration in moved:
+            registration.unlink()
+            removed.append(registration.name)
     return {"removed": removed}
+
+
+def set_descriptor_name(file: Path, display: str) -> None:
+    # Rewrites the name= line in place; keeps the encoding and line ends.
+    data = file.read_bytes()
+    new, count = re.subn(
+        rb'^name="PMM Probe [A-Za-z0-9]+"', f'name="PMM Probe {display}"'.encode(), data, flags=re.MULTILINE
+    )
+    if count != 1:
+        raise SystemExit(f"{file}: expected one name=\"PMM Probe ...\" line, found {count}")
+    file.write_bytes(new)
+
+
+def rename(mod_dir: Path, name: str, display: str | None, file_name: str | None) -> dict:
+    # Hearts of Iron IV's load-order runs 3 and 4: one key of probe `name`
+    # changes at a time. Each change is undone by renaming back.
+    if display is None and file_name is None:
+        raise SystemExit("rename: give --display and/or --file")
+    folder = mod_dir / probe_folder(name)
+    if not folder.is_dir():
+        raise SystemExit(f"probe folder does not exist: {folder}")
+    registrations = registrations_of(mod_dir, name)
+    if len(registrations) != 1:
+        raise SystemExit(
+            f"expected one mod/pmm_probe_*.mod whose path= names {folder.name}, found "
+            f"{[f.name for f in registrations]}"
+        )
+    registration = registrations[0]
+    renamed = []
+    if display is not None:
+        for descriptor_file in (folder / "descriptor.mod", registration):
+            set_descriptor_name(descriptor_file, display)
+            renamed.append(f"{descriptor_file.relative_to(mod_dir).as_posix()}: name=\"PMM Probe {display}\"")
+    if file_name is not None:
+        target = mod_dir / f"{probe_folder(file_name)}.mod"
+        if target != registration:
+            if target.exists():
+                raise SystemExit(f"refusing to overwrite {target}")
+            registration.rename(target)
+            renamed.append(f"{registration.name} -> {target.name} (path= unchanged)")
+            registration = target
+    return {"renamed": renamed, "registration": f"mod/{registration.name}"}
 
 
 def analyze(error_log: Path, enabled: list[str], disabled: list[str]) -> dict:
@@ -325,6 +421,29 @@ def analyze_vic3(error_log: Path, enabled: list[str], disabled: list[str], resul
     result["ok"] = result["ok"] and checks["modBlockIsEnabledOrder"] and checks["noDisabledInModBlock"]
 
 
+def analyze_hoi4(error_log: Path, result: dict) -> None:
+    # system.log, rewritten at each start: "Active Mod Count: <n>" and one
+    # "Active Mod: <name>" line per loaded mod, sorted by name.
+    system_log = error_log.parent / "system.log"
+    lines = system_log.read_text(encoding="utf-8", errors="replace").splitlines() if system_log.is_file() else []
+    counts = [i for i, line in enumerate(lines) if re.search(r"Active Mod Count: \d+\s*$", line)]
+    session = lines[counts[-1] :] if counts else []
+    declared = int(re.search(r"Active Mod Count: (\d+)", session[0]).group(1)) if session else None
+    active = [re.search(r"Active Mod: (.*)$", line).group(1).strip() for line in session if "Active Mod: " in line]
+    probes = [name for name in active if name.startswith("PMM Probe ")]
+    error_text = error_log.read_text(encoding="utf-8", errors="replace").splitlines()
+    result["systemLog"] = system_log.name if system_log.is_file() else None
+    result["activeMods"] = {
+        "count": declared,
+        "listed": len(active),
+        "probes": probes,
+        "others": len(active) - len(probes),
+    }
+    result["invalidSupportedVersion"] = [
+        line.split("]: ", 1)[-1] for line in error_text if "Invalid supported_version" in line
+    ]
+
+
 def validated_names(values: list[str]) -> list[str]:
     for v in values:
         if not NAME_RE.match(v):
@@ -340,7 +459,10 @@ def main(argv: list[str]) -> int:
     p_create.add_argument("--names", nargs="+", default=DEFAULT_NAMES)
     p_create.add_argument("--supported-version", help='e.g. "v4.5.*"; must match the game version format')
     p_create.add_argument(
-        "--game", choices=GAMES, default="stellaris", help="event syntax (stellaris and eu4 share one)"
+        "--game",
+        choices=GAMES,
+        default="stellaris",
+        help="event syntax (stellaris and eu4 share one; hoi4 differs in add_namespace)",
     )
     p_create.add_argument(
         "--no-shared", action="store_true", help="leave out the shared file (version probes)"
@@ -356,7 +478,14 @@ def main(argv: list[str]) -> int:
     p_analyze.add_argument("error_log", type=Path)
     p_analyze.add_argument("--enabled", nargs="+", required=True)
     p_analyze.add_argument("--disabled", nargs="*", default=[])
-    p_analyze.add_argument("--game", choices=GAMES, default="stellaris", help="vic3: also the debug logs")
+    p_analyze.add_argument(
+        "--game", choices=GAMES, default="stellaris", help="vic3: also the debug logs; hoi4: also system.log"
+    )
+    p_rename = sub.add_parser("rename")
+    p_rename.add_argument("mod_dir", type=Path)
+    p_rename.add_argument("--name", required=True, help="the probe, e.g. a")
+    p_rename.add_argument("--display", help='name="PMM Probe <DISPLAY>" in both descriptors, e.g. Z (back: A)')
+    p_rename.add_argument("--file", help="move the registration to mod/pmm_probe_<FILE>.mod, e.g. z (back: a)")
     args = parser.parse_args(argv)
 
     if args.command == "create":
@@ -370,12 +499,19 @@ def main(argv: list[str]) -> int:
         )
     elif args.command == "remove":
         out = remove(args.mod_dir, validated_names(args.names), args.game)
+    elif args.command == "rename":
+        if args.display is not None and not DISPLAY_RE.match(args.display):
+            raise SystemExit(f"invalid display name: {args.display!r} (use 1-16 letters/digits)")
+        file_name = validated_names([args.file])[0] if args.file is not None else None
+        out = rename(args.mod_dir, validated_names([args.name])[0], args.display, file_name)
     else:
         enabled = validated_names(args.enabled)
         disabled = validated_names(args.disabled)
         out = analyze(args.error_log, enabled, disabled)
         if args.game == "vic3":
             analyze_vic3(args.error_log, enabled, disabled, out)
+        elif args.game == "hoi4":
+            analyze_hoi4(args.error_log, out)
     print(json.dumps(out, indent=2))
     return 0 if out.get("ok", True) else 1
 

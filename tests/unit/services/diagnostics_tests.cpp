@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/launch_history_repository.hpp"
 #include "services/diagnostics.hpp"
@@ -111,6 +112,18 @@ TEST_CASE("Diagnostics work on an empty profile", "[services][diagnostics]") {
     CHECK_THAT(text, ContainsSubstring("in memory"));
     CHECK_THAT(text, ContainsSubstring("Interrupted configuration transactions: 0"));
     CHECK_THAT(text, ContainsSubstring("Adapter: not loaded"));
-    CHECK_THAT(text, ContainsSubstring("Adapter: not supported yet"));
     CHECK_THAT(text, !ContainsSubstring("Recent launches"));
+}
+
+TEST_CASE("Diagnostics name a known game without an adapter as not supported yet",
+          "[services][diagnostics]") {
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    World w;
+    DiagnosticsOptions options;
+    options.redaction = RedactionContext{platform::pathToUtf8(w.root), kUser};
+    const std::string text = diagnosticsText(w.ctx, options);
+    CHECK_THAT(text, ContainsSubstring("== Example Unsupported Game (pmm-test-unsupported) ==\n"
+                                       "Adapter: not supported yet\n"));
+    CHECK_THAT(text, ContainsSubstring("== Stellaris (stellaris) ==\nAdapter: available\n"));
+    CHECK_THAT(text, ContainsSubstring("== Europa Universalis IV (eu4) ==\nAdapter: not loaded\n"));
 }

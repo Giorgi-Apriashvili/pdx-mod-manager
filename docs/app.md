@@ -222,8 +222,8 @@ release page. What is contacted, verified and protected against is in
 4. `Backend::initialize()` loads the UI settings, the cached game states and
    the initial game's context from the database. The initial game is
    `--game`, else the last selected game, else the first installed supported
-   game in catalog order (`ck3`, `eu4`, `stellaris`, `vic3`), else the first
-   supported game (`ck3`, shown as not found). Then the window is created
+   game in catalog order (`ck3`, `eu4`, `hoi4`, `stellaris`, `vic3`), else
+   the first supported game (`ck3`, shown as not found). Then the window is created
    (`qmlRegisterSingletonInstance("Pmm.Backend", ...)`,
    `engine.loadFromModule("Pmm.Ui", "Main")`). The first frame already shows
    the last active playset. The engine has no network access: its
@@ -249,7 +249,7 @@ and joins the thread.
 | --- | --- |
 | `--profile <dir>` | Keep every application file (database, journal, logs, cache) in `<dir>` instead of the standard per-user locations. Use it for a clean, isolated profile, for example for the "import into a clean profile" acceptance step. An installed copy does not install updates in such a session: it offers the release page and says to restart without `--profile`. |
 | `--verbose` | Write debug-level log records (including redacted helper stderr). |
-| `--game <key>` | Select this game at start-up (`ck3`, `eu4`, `stellaris`, `vic3`). |
+| `--game <key>` | Select this game at start-up (`ck3`, `eu4`, `hoi4`, `stellaris`, `vic3`). |
 | `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing: a later session with Steam resumes only the downloads queued before, and the other missing mods need **Download missing** (or **Retry** after an earlier failed download). Updates offer the release page instead of installing, as with `--profile`. |
 | `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. "Check for updates" and the daily check are off too, and Settings says so. |
 
@@ -315,8 +315,9 @@ The screenshots in `docs/screenshots/app-*.png` were taken with
 profiles; first on 2026-10-30 (Stellaris 4.5.2), last refreshed on 2026-11-13
 for 0.2.0 (Stellaris 4.5.4, EU4 1.37.5). Crusader Kings III, installed on the
 same machine, appears only as an entry in the games column. They predate the
-Victoria 3 support and still show it under "Other games"; refresh them for
-the next release. The Play area
+Victoria 3 and Hearts of Iron IV support and still show both under "Other
+games", a section the application no longer shows (every catalog game is
+supported); refresh them for the next release. The Play area
 shows the read-only blocker. Every run passes `--game stellaris` or `--game
 eu4`, since a new profile otherwise opens the first installed game in
 alphabetical order. The Stellaris profile was prepared with `--self-test

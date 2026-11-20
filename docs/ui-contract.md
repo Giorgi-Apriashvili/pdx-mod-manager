@@ -72,7 +72,9 @@ Roles:
 - `key` (string), `name`;
 - `supported` (bool: adapter implemented), `installed` (bool);
 - `statusText` ("Installed · v4.5.2", "Installed · v4.5.2 · manual location",
-  "Not found", "Not supported yet"), `version`;
+  "Not found", "Not supported yet"), `version`. Rows that are not
+  supported (a catalog game without an adapter; none at present) are listed
+  under "Other games" and cannot be selected;
 - `installPath`, `userDataPath` (display only);
 - `manualLocation` (bool: the installation was located manually);
 - `loadOrderNote` (string): set when the game does not apply the playset
@@ -81,10 +83,12 @@ Roles:
   not use this order when two mods change the same file: the mod whose name
   comes first alphabetically wins. The order is still saved, shared and
   written for the game." Stellaris, Crusader Kings III and Victoria 3
-  (observed in-game 2026-10-30, 2026-11-13 and 2026-11-21): empty. The mods
-  pane shows it as a closable info banner above the list of a playset with
-  more than one mod (hidden for that game for the rest of the session once
-  closed).
+  (observed in-game 2026-10-30, 2026-11-13 and 2026-11-21): empty. Hearts of
+  Iron IV (not yet observed in-game; its wiki says the `.mod` file names
+  decide): "Hearts of Iron IV may not follow this order when two mods change
+  the same file; this is not verified yet." The mods pane shows it as a
+  closable info banner above the list of a playset with more than one mod
+  (hidden for that game for the rest of the session once closed).
 
 Properties: `currentKey` (string), `currentName`, `currentInstalled` (bool),
 `currentSupported` (bool), `currentLoadOrderNote` (string), `scanning`

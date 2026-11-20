@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "sharing/share_code.hpp"
 #include "sharing/workshop_id_list.hpp"
 
@@ -242,7 +243,7 @@ TEST_CASE("Workshop ID lists format with '|' and round-trip", "[sharing][idlist]
 
 TEST_CASE("A Workshop ID list maps to a manifest for the selected game", "[sharing][idlist]") {
     const Ids ids{"3818297502", "3149445431"};
-    for (const char* game : {"ck3", "eu4", "stellaris"}) {
+    for (const char* game : {"ck3", "eu4", "hoi4", "stellaris", "vic3"}) {
         INFO(game);
         auto manifest = manifestFromWorkshopIds(game, ids);
         REQUIRE(manifest.ok());
@@ -260,7 +261,13 @@ TEST_CASE("A Workshop ID list maps to a manifest for the selected game", "[shari
     REQUIRE(named.ok());
     CHECK(named->playsetName == "My list");
 
-    CHECK(manifestFromWorkshopIds("hoi4", ids).error().code == ErrorCode::UnsupportedGame);
+    {
+        // A game the catalog knows, without an adapter in this version.
+        const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+        CHECK(manifestFromWorkshopIds(std::string(pmm::testing::kUnsupportedGameKey), ids)
+                  .error()
+                  .code == ErrorCode::UnsupportedGame);
+    }
     CHECK(manifestFromWorkshopIds("unknown", ids).error().code == ErrorCode::ValidationFailed);
     CHECK(manifestFromWorkshopIds("", ids).error().code == ErrorCode::ValidationFailed);
     CHECK(manifestFromWorkshopIds("stellaris", Ids{"0"}).error().code ==

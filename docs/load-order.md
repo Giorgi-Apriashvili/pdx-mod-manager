@@ -14,15 +14,15 @@ Code: `src/games/dlc_load_adapter.cpp` and, for Victoria 3,
 
 ## Summary
 
-| | Stellaris | Europa Universalis IV | Crusader Kings III | Victoria 3 |
-| --- | --- | --- | --- | --- |
-| Configuration file | `<user data>/dlc_load.json`, key `enabled_mods` | same (**verified** read-only on v1.37.5.0) | same (**verified** read-only on 1.20.1.2) | `<user data>/content_load.json`, key `enabledMods`, absolute paths (**verified** read-only on 1.15.2) |
-| Playset order -> file | enabled entries in playset order, index 0 = array element 0 | same | same | same |
-| Disabled entries | not written (the launcher writes only enabled ones) | same | same | same |
-| Array order == launcher playset order | **Verified** read-only, 2026-10-29 (alphabetical playset, see below) | **Verified** read-only, 2026-10-29 (hand-made `custom` order, see below) | Not checked (the launcher's database is not read) | Not checked. The launcher's code writes every folder mod in playset order, then every zipped mod (inferred) |
-| Game enables the listed mods only | **Verified** in-game, 2026-10-30: listed probes loaded, the unlisted one not; every descriptor in `mod/` is parsed | **Verified** in-game, 2026-10-30 (same) | **Verified** in-game, 2026-11-13 (1.20.1.2): listed probes loaded, the unlisted one not, mounted in `enabled_mods` order. Started directly, 1.20.1.2 lists only the `enabled_mods` entries in `debug.log`; a 1.19 build, apparently started through the launcher, had listed every descriptor as `Enabled` or `Disabled` | **Verified** in-game, 2026-11-21 (1.15.2): the listed probes and Workshop item loaded, the unlisted probe not, listed in the `Mod:` block and mounted after the DLC in `enabledMods` order. A mod without `game_custom_data` is left out of the `Mod:` block but still mounted and loaded |
-| File override precedence (which mod wins) | **Verified** in-game, 2026-10-30 (4.5.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-10-30 (1.37.5): **the order of `enabled_mods` is ignored; the mod whose `name` sorts first wins** | **Verified** in-game, 2026-11-13 (1.20.1.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-11-21 (1.15.2): **the later mod in `enabledMods` wins** a whole file; moving mods in the app moves the winner. Database entries follow other rules since 1.12 (see [Victoria 3](#victoria-3)) |
-| `LoadOrderInfo::verifiedInGame` | `true` | `true` | `true` | `true` |
+| | Stellaris | Europa Universalis IV | Crusader Kings III | Hearts of Iron IV | Victoria 3 |
+| --- | --- | --- | --- | --- | --- |
+| Configuration file | `<user data>/dlc_load.json`, key `enabled_mods` | same (**verified** read-only on v1.37.5.0) | same (**verified** read-only on 1.20.1.2) | same (**verified** read-only on 1.20.0.0; the launcher writes it pretty-printed) | `<user data>/content_load.json`, key `enabledMods`, absolute paths (**verified** read-only on 1.15.2) |
+| Playset order -> file | enabled entries in playset order, index 0 = array element 0 | same | same | same | same |
+| Disabled entries | not written (the launcher writes only enabled ones) | same | same | same | same |
+| Array order == launcher playset order | **Verified** read-only, 2026-10-29 (alphabetical playset, see below) | **Verified** read-only, 2026-10-29 (hand-made `custom` order, see below) | Not checked (the launcher's database is not read) | Not checked; the launcher turns its activation order off for this game (its log, 2026-11-18) | Not checked. The launcher's code writes every folder mod in playset order, then every zipped mod (inferred) |
+| Game enables the listed mods only | **Verified** in-game, 2026-10-30: listed probes loaded, the unlisted one not; every descriptor in `mod/` is parsed | **Verified** in-game, 2026-10-30 (same) | **Verified** in-game, 2026-11-13 (1.20.1.2): listed probes loaded, the unlisted one not, mounted in `enabled_mods` order. Started directly, 1.20.1.2 lists only the `enabled_mods` entries in `debug.log`; a 1.19 build, apparently started through the launcher, had listed every descriptor as `Enabled` or `Disabled` | Unverified: the last run's (1.19.5.0, through the launcher) `system.log` lists exactly the 21 enabled mods as `Active Mod:` lines, sorted by name | **Verified** in-game, 2026-11-21 (1.15.2): the listed probes and Workshop item loaded, the unlisted probe not, listed in the `Mod:` block and mounted after the DLC in `enabledMods` order. A mod without `game_custom_data` is left out of the `Mod:` block but still mounted and loaded |
+| File override precedence (which mod wins) | **Verified** in-game, 2026-10-30 (4.5.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Verified** in-game, 2026-10-30 (1.37.5): **the order of `enabled_mods` is ignored; the mod whose `name` sorts first wins** | **Verified** in-game, 2026-11-13 (1.20.1.2): **the later mod in `enabled_mods` wins**; moving mods in the app moves the winner | **Unverified**: the HOI4 wiki says the names of the `mod/*.mod` files decide, the later name winning, not the list (see [Hearts of Iron IV](#hearts-of-iron-iv)) | **Verified** in-game, 2026-11-21 (1.15.2): **the later mod in `enabledMods` wins** a whole file; moving mods in the app moves the winner. Database entries follow other rules since 1.12 (see [Victoria 3](#victoria-3)) |
+| `LoadOrderInfo::verifiedInGame` | `true` | `true` | `true` | `false`, with a user note | `true` |
 
 `LoadOrderInfo::summary`, Stellaris and CK3: "dlc_load.json enabled_mods,
 index 0 first; when two enabled mods contain the same file, the one later in
@@ -33,11 +33,19 @@ mod whose name sorts first alphabetically wins". Evidence:
 [live validation](evidence/live-validation-2026-10-30.md) for Stellaris and
 EU4, [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) for CK3,
 [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md) for Victoria
-3. Only EU4 has a user note, which the mods pane shows above an EU4 playset;
-the temporary "not yet verified" notes of CK3 and Victoria 3 were removed
-after their probe runs.
+3. Hearts of Iron IV: "dlc_load.json enabled_mods, index 0 first; which mod
+wins when two enabled mods contain the same file is not verified for Hearts
+of Iron IV", with `verifiedInGame = false`. The mods pane shows a game's user
+note above its playsets. EU4's note is permanent (the game does not use the
+list order). Hearts of Iron IV has a temporary one until its probe run:
+"Hearts of Iron IV may not follow this order when two mods change the same
+file; this is not verified yet." It says "may not" because the sources point
+to another rule. The temporary "not yet verified" notes of CK3 and Victoria 3
+were removed after their probe runs.
 
-## Mapping (Stellaris, EU4, Crusader Kings III)
+## Mapping (the dlc_load.json games)
+
+Stellaris, EU4, Crusader Kings III and Hearts of Iron IV.
 
 `buildLaunchPlan(installation, orderedEnabledMods)` receives only the enabled
 entries, in playset order, and writes:
@@ -53,9 +61,10 @@ entries, in playset order, and writes:
   unknown) is kept with its value and position. A malformed file is rebuilt
   as `{"enabled_mods":[...],"disabled_dlcs":[]}` with a launch warning.
 - Output is compact JSON without a trailing newline, the form the launcher
-  writes. The file is only written when its content would change: an
-  existing file with the same JSON in another layout (BOM, CRLF, indentation,
-  `1.50` for `1.5`) is left as it is.
+  writes for Stellaris, EU4 and CK3 (for Hearts of Iron IV it writes the file
+  pretty-printed). The file is only written when its content would change:
+  an existing file with the same JSON in another layout (BOM, CRLF,
+  indentation, `1.50` for `1.5`) is left as it is.
 - `readCurrentConfiguration` is the inverse: array order becomes playset
   order, every entry enabled. A reference that matches no installed mod keeps
   the identity its registration implies: `mod/ugc_<id>.mod` (or a descriptor
@@ -207,6 +216,41 @@ measurement: the same "lower overrides" advice circulated for EU4, and EU4
 1.37.5 turned out to ignore the order (below). For CK3 the probe run of
 2026-11-13 confirmed the file rule on 1.20.1.2 (below).
 
+For Hearts of Iron IV, Paradox's own sources describe a different rule from
+the list order:
+
+- A 2018 developer diary (the game director): "Mods will usually load in
+  alphabetical order of their file names (so the mod last in the list will
+  overwrite the earlier)", and a mod that needs a certain load order names
+  the others under `dependencies`.
+- The Paradox-hosted HOI4 wiki (Modding; the same wording in its 2023 and
+  2026 captures): mods are "ordered by using filenames of user-specific
+  descriptors", so `mod/xyz_mod.mod` beats `mod/abc_mod.mod` for the same
+  file; `dependencies = { "Exact Name" }` makes a mod load after the named
+  ones without making them required. The full order is the base game, the
+  DLC by internal id, the user directory, then the mods. The later copy wins
+  per relative file path and folders merge; `replace_path` unloads earlier
+  files in one folder (not its subfolders) without changing the order and
+  must be in both descriptors; of two mods with the same name only the
+  first-loaded one counts; within a folder, files are read in ASCII
+  file-name order across sources; `localisation/<language>/replace/` wins.
+- A staff comment of 2021 in an EU4 thread ("It has worked for HoI 4 when
+  we've had the same problem") is ambiguous.
+
+Community claims are weaker and mostly older than the launcher v2: in 2016
+the built-in launcher sorted by `name=`, the higher one winning; in 2018 "1.5.0
+prioritizes Workshop mods over local mods no matter what"; in 2021 players
+said that Hearts of Iron IV "still load[s] mods only alphabetically", unlike
+EU4 and Stellaris. The mod manager Irony writes `enabled_mods` in its
+collection order for Hearts of Iron IV, which describes a tool, not the game.
+On the development machine the launcher turns its activation order and
+activation sets off for `hoi4` only, `system.log` lists the loaded mods sorted
+by name, and the owner's `enabled_mods` is in neither name nor id order (all
+observed read-only). If the wiki is right, Workshop items order by the string
+`ugc_<id>`, so a 9-digit id starting with 9 would beat a 10-digit id starting
+with 1, and the order of `enabled_mods` would not matter (inferred; case and
+byte order are not documented). None of this is a measurement yet.
+
 For Victoria 3, reverse engineering of 1.15.1 (v3x) reports that every
 mounted mod is searched before the earlier ones, so a later entry in
 `enabledMods` wins a shared file; the community gives the same advice, and the
@@ -248,6 +292,13 @@ files, and Victoria 3's events (`<ns>.1 = { type = country_event hidden =
 yes ... }`) with a UTF-8 BOM and LF line ends, as the game's own script files
 have; its `error.log` writes `Unknown trigger type:` and, like Stellaris and
 EU4, reported only the event files (1.15.2 on 2026-11-21).
+Hearts of Iron IV needs `--game hoi4`, which writes the Stellaris and EU4
+event with `add_namespace = <ns>` instead of `namespace = <ns>`, in UTF-8
+without a BOM, as all of the game's scripted-trigger files and a third of its
+event files are, and with LF line ends, as all of them have; its `error.log`
+words an unknown trigger as `Error: "Unknown trigger-type: <name>, near line:
+<n>" in file: <file>`, which `analyze` finds, but such lines have only been
+seen from `common/unit_medals` so far.
 
 Stellaris (EU4 the same, with its own folder and a `supported_version` such
 as `v1.37.*`):
@@ -521,3 +572,147 @@ Victoria 3 notes on the procedure above, as used for that run:
   problem.
 - The probe measures whole files. It says nothing about database entries,
   which follow the rules above since 1.12.
+
+### Hearts of Iron IV
+
+**Not yet run.** The probe run is a separate step that needs the owner's
+approval; until then `src/games/hoi4.cpp` ships
+`loadOrderVerifiedInGame = false` and the temporary note. Four rules are
+possible:
+
+| Hypothesis | Rule | Precedent |
+| --- | --- | --- |
+| H1 | The later entry in `enabled_mods` wins | Stellaris, CK3 (measured) |
+| H2 | The `name=` order decides (direction to measure) | EU4: the name that sorts first wins (measured) |
+| H3 | The registration file name (`mod/<file>.mod`) decides, the later name winning | the HOI4 wiki and the 2018 diary |
+| H4 | The content folder or path order decides | none (a fallback) |
+
+The probes align every key: probe a has the folder `pmm_probe_a`, the
+registration `mod/pmm_probe_a.mod` and the name "PMM Probe A", and so on, so
+each run changes one key. Probe b stays disabled throughout.
+
+| Run | `enabled_mods` | `name=` | Registration files | Separates |
+| --- | --- | --- | --- | --- |
+| 1 | c, a | C, A | `pmm_probe_c.mod`, `pmm_probe_a.mod` | the baseline |
+| 2 | a, c (a moved in the app) | A, C | the same | H1 from any sorted key |
+| 3 (only if run 2 kept the winner) | a, c | **Z**, C (a renamed in both of its descriptors) | the same | H2 from H3 and H4 |
+| 4 (only if run 3 kept the winner) | a, c | A, C (the name restored) | **`pmm_probe_z.mod`** (a's registration renamed; `path=` and folder unchanged) | H3 from H4 |
+
+Reading the results: if the winner swaps between runs 1 and 2, the list
+decides (H1, `last-enabled-wins` expected). If it stays, a sorted key decides:
+a winning means "first wins" (EU4's direction), c winning "last wins" (the
+wiki's). If run 3 moves the winner, `name=` decides; if run 4 does, the file
+name decides; if neither, record that and claim no rule. In every run record
+whether the event file and the scripted-trigger file at the shared path name
+the same winner, the `system.log` `Active Mod:` lines, that the compact
+`dlc_load.json` the application wrote was accepted (the probes loaded),
+whether the game rewrote `dlc_load.json`, and that `hoi4.exe` kept one
+process id with `pmm-app` as its parent (no restart through Steam or the
+launcher, no launcher process). Untested by these probes, to be recorded as
+such: `dependencies`, the order of 9- and 10-digit `ugc_` ids (if H3 holds,
+state it as inferred), names or file names that differ only in case or start
+with non-ASCII characters, and per-object merging in database folders.
+
+Notes on the procedure above, for that run (`<userdata>` is
+`<Documents>/Paradox Interactive/Hearts of Iron IV`):
+
+- Preconditions: the application is built from the branch with Hearts of
+  Iron IV support; the Steam client runs and is signed in; no
+  `Paradox Launcher.exe`, `dowser.exe` or `bootstrapper-v2.exe` process runs.
+  Record `buildid` from `appmanifest_394360.acf` (26733403 on 2026-11-21) at
+  the start and again at the end, and stop if Steam starts updating the game.
+- Run the read-only `[.real]` scan first, as a baseline
+  ([`games/hoi4.md`](games/hoi4.md#real-machine-evidence)): 23 Workshop mods,
+  21 enabled, 0 unresolved, **0 writes** for the current selection (this shows
+  the compare by meaning against the launcher's pretty-printed file), working
+  directory `<install>`, arguments `[-gdpr-compliant]`,
+  `SteamAppId`/`SteamGameId` 394360, the user data from `gameDataPath`, and
+  only `supported_version` warnings. Then back up, outside the game folders,
+  `dlc_load.json` (677 bytes on 2026-11-21) with its SHA-256, the 23
+  `mod/*.mod` files with their hashes, sizes and times, and a listing of
+  `<userdata>`.
+- Step 2:
+  `python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game hoi4 --supported-version "1.20.*"`.
+  Do **not** use `"1.*.*"`: the error.log of 1.19.5.0 reports it as invalid.
+  Optionally, rewrite probe b (disabled in every run) with a two-part pattern:
+  `python tools/probe-mods/probe_mods.py create "<userdata>/mod" --game hoi4 --names b --supported-version "1.20"`;
+  that a direct start reads descriptors outside `enabled_mods` is doubtful
+  (CK3 did not), so the result may be undetermined.
+- Step 3: make a playset with **only** the probes, from a share code: write
+  the manifest
+  `{"schemaVersion":1,"game":"hoi4","playsetName":"PMM probes","mods":[{"source":"local","id":"pmm_probe_c","enabled":true},{"source":"local","id":"pmm_probe_a","enabled":true},{"source":"local","id":"pmm_probe_b","enabled":false}]}`
+  to a file, encode it with
+  `python scripts/share-code.py encode <manifest.json> > probes.code`, then
+  run `pmm-app --profile <scratch> --no-steam --live-test "game:hoi4,import:probes.code,blockers,play"`
+  (run 1: c, a). Snapshot the processes every 5 s while the game starts
+  (`tasklist /FI "IMAGENAME eq hoi4.exe"`, and the launcher names above).
+- Step 4: wait until `error.log` and `system.log` show the probe lines and
+  the logs have been quiet for at least 60 s (the main menu; note its line
+  for the later runs), then close the game with `CloseMainWindow`; never
+  force-kill it while it loads. If `CrashReporter.exe` appears, leave it open
+  for the owner and record it. Copy `error.log`, `system.log`, `dlc_load.json`
+  after Play and after the exit, and the transaction journal.
+- Step 5:
+  `python tools/probe-mods/probe_mods.py analyze "<userdata>/logs/error.log" --game hoi4 --enabled c a --disabled b`
+  reports, besides the `error.log` checks, the probes among the `system.log`
+  `Active Mod:` lines (by name) and every `Invalid supported_version` line.
+  If `error.log` has no `pmm_probe_` line, the run says nothing about
+  precedence (the `Active Mod:` lines still show what loaded): stop, restore
+  and remove (below), record it, and keep the note.
+- Run 2: move a to the top in the application, then repeat steps 4 and 5
+  with `--enabled a c`:
+  `pmm-app --profile <scratch> --no-steam --live-test "game:hoi4,select:PMM probes,move:1:0,dump:run2.json,blockers,play"`
+  (rows count from 0: c, a, b before the move; the dump must list a, c and b
+  disabled).
+- Run 3, only if run 2 kept the winner:
+  `python tools/probe-mods/probe_mods.py rename "<userdata>/mod" --name a --display Z`
+  (name="PMM Probe Z" in both of a's descriptors), then
+  `pmm-app --profile <scratch> --no-steam --live-test "game:hoi4,rescan,select:PMM probes,blockers,play"`,
+  steps 4 and 5 with `--enabled a c`, and afterwards
+  `python tools/probe-mods/probe_mods.py rename "<userdata>/mod" --name a --display A`.
+- Run 4, only if run 3 kept the winner:
+  `python tools/probe-mods/probe_mods.py rename "<userdata>/mod" --name a --file z`
+  moves a's registration to `mod/pmm_probe_z.mod` (`path=` unchanged), so the
+  application sees a new local mod `pmm_probe_z`. Import a second manifest
+  for it, as in step 3 (`"playsetName":"PMM probes z"`, the entries
+  `pmm_probe_z` and `pmm_probe_c` enabled in that order, `pmm_probe_b`
+  disabled), with
+  `pmm-app --profile <scratch> --no-steam --live-test "game:hoi4,rescan,import:probes-z.code,blockers,play"`;
+  steps 4 and 5 with `--enabled a c` (the trigger names inside the folder
+  still say a). Afterwards
+  `python tools/probe-mods/probe_mods.py rename "<userdata>/mod" --name a --file a`.
+- Step 7: restore with the application once per launch that wrote the
+  configuration:
+  `pmm-app --profile <scratch> --no-steam --live-test "game:hoi4,restore"`
+  restores the configuration from before the last launch it has not
+  restored yet, the last launch first. Only a launch that writes something
+  can be restored: runs 1, 2 and 4 write `dlc_load.json`, but run 3 has run
+  2's `enabled_mods` and normally writes nothing, so it leaves nothing to
+  restore. That is 2 restores after runs 1 to 3 and 3 after runs 1 to 4. Or
+  repeat it until it fails with "there is no configuration to restore" (the
+  scratch profile holds only this run's launches); that failure then only
+  says that everything is restored. Then compare `dlc_load.json` with the
+  backup (it must be byte-identical, the launcher's pretty layout back) and
+  the 23 registrations with theirs, and run
+  `python tools/probe-mods/probe_mods.py remove "<userdata>/mod"`, which also
+  removes a registration left renamed by run 4. Record what the game itself
+  changed in `<userdata>` (settings, `continue_game.json`, caches).
+- Stop, restore and leave the rest to the owner if a launcher process
+  appears, `hoi4.exe` restarts through Steam, the application writes anything
+  besides `dlc_load.json` and `mod/pmm_probe_*`, or the restore does not match
+  the backup.
+- Step 8: record the evidence as `docs/evidence/<date>-hoi4-load-order.md`
+  (the owner's mods by count only) and the result table here and in
+  [`validation.md`](validation.md#6-results). Then set the traits in
+  `src/games/hoi4.cpp` (`loadOrderSummary`, `loadOrderEvidence`,
+  `loadOrderVerifiedInGame = true`), their checks in
+  `tests/unit/games/hoi4_adapter_tests.cpp` and `registry_tests.cpp`, the
+  Hearts of Iron IV row of `ui/dev/Pmm/Backend/FakeGamesModel.qml`,
+  [`games/hoi4.md`](games/hoi4.md), the [support matrix](support-matrix.md),
+  the development status and the CHANGELOG. If the later mod in the list
+  wins (H1), CK3's wording and no note. If a sorted key decides (H2, H3 or
+  H4), keep writing the playset order, as for EU4 (it is what the launcher
+  writes, and share codes carry it), state the measured rule in the summary
+  and in a note like EU4's, and do not rename registrations to force an
+  order. If no rule shows, keep the "not verified" note and report to the
+  owner.

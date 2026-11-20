@@ -2,8 +2,9 @@
 
 // The game's own launcher-settings.json, which the Paradox launcher reads to
 // learn the game version, the user-data folder and how to start the game.
-// Stellaris and EU4 keep it in <install>/launcher-settings.json; Crusader Kings
-// III keeps it in <install>/launcher/launcher-settings.json, with an exePath
+// Stellaris, EU4 and Hearts of Iron IV keep it in
+// <install>/launcher-settings.json; Crusader Kings III and Victoria 3 keep it
+// in <install>/launcher/launcher-settings.json, with an exePath
 // ("../binaries/ck3.exe") relative to that folder.
 //
 // The file is local data written by the game's installer, but it decides what
@@ -59,5 +60,12 @@ Result<fs::path> resolveLauncherExecutable(const LauncherSettings& settings,
 // other form, empty base folders, or relative parts containing "..".
 std::optional<fs::path> resolveGameDataPath(std::string_view gameDataPath,
                                             const fs::path& documentsDir);
+
+// An absolute gameDataPath below a drive letter ("D:/Games/HOI4 data"),
+// lexically normalized: the form hoi4.exe tells users to write for a custom
+// user folder (GameTraits::gameDataPathOverridesUserDirFile). nullopt for
+// any other form (relative, UNC, %VARIABLE%), a drive root, a ".." part, a
+// ':' after the drive, control characters or ill-formed UTF-8.
+std::optional<fs::path> resolveAbsoluteGameDataPath(std::string_view gameDataPath);
 
 } // namespace pmm::games

@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "games/stellaris.hpp"
 #include "persistence/installation_repository.hpp"
 #include "persistence/inventory_repository.hpp"
@@ -37,6 +38,14 @@ bool hasMod(const std::vector<InstalledMod>& mods, const std::string& source,
         return m.identity.source == source && m.identity.id == id;
     });
 }
+
+// The fake adapter under the key of the catalog's unsupported test game.
+class UnsupportedGameAdapter : public FakeAdapter {
+public:
+    const GameCatalogEntry& catalog() const override {
+        return *findGame(pmm::testing::kUnsupportedGameKey);
+    }
+};
 
 } // namespace
 
@@ -79,10 +88,9 @@ TEST_CASE("Refreshing discovers, persists and scans supported games only", "[ser
     CHECK(hasMod(stellaris.inventory, source::SteamWorkshop, "2000000001"));
     CHECK(hasMod(stellaris.inventory, source::Local, "example_local_tweaks"));
 
-    // EU4 has a catalog adapter but none was injected; HOI4 is not supported yet.
+    // EU4 is supported in the catalog, but no adapter was injected for it.
     CHECK_FALSE(stateFor(states, "eu4").supported);
     CHECK_FALSE(stateFor(states, "eu4").installation);
-    CHECK_FALSE(stateFor(states, "hoi4").supported);
 
     persistence::InstallationRepository installations(*w.db);
     REQUIRE(require(installations.get(kGame)));
@@ -117,6 +125,31 @@ TEST_CASE("Refreshing discovers, persists and scans supported games only", "[ser
         REQUIRE(rescanned.installation);
         CHECK(hasMod(rescanned.inventory, source::SteamWorkshop, "2000000099"));
     }
+}
+
+TEST_CASE("A game the catalog does not support stays unsupported with an adapter",
+          "[services][games]") {
+    // The catalog decides as well as the adapters: an adapter injected for a
+    // known game without catalog support is never asked to discover or scan.
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    World w;
+    w.installFixtureMods();
+    UnsupportedGameAdapter other;
+    other.discovered = {w.installation()};
+    w.ctx.adapters.push_back(&other);
+    REQUIRE(w.ctx.adapterFor(GameKey(pmm::testing::kUnsupportedGameKey)) == &other);
+    GameService games(w.ctx);
+
+    const std::vector<GameState> states = games.refreshAll();
+    REQUIRE(states.size() == gameCatalog().size());
+    const GameState& unsupported = stateFor(states, pmm::testing::kUnsupportedGameKey);
+    CHECK(unsupported.displayName == "Example Unsupported Game");
+    CHECK_FALSE(unsupported.supported);
+    CHECK_FALSE(unsupported.installation);
+    CHECK(unsupported.inventory.empty());
+    CHECK(other.scans == 0);
+    CHECK(stateFor(states, kGame).supported);
+    CHECK(w.adapter.scans == 1);
 }
 
 TEST_CASE("Manual locations are validated, stored, re-inspected and clearable",

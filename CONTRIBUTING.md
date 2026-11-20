@@ -112,6 +112,11 @@ blocks the common ones).
 - Inject time and failures instead of sleeping or relying on the environment
   (see `FileTransactionFaults`, `persistence/testing.hpp`, `Tick` in the
   acquisition reducer).
+- Tests of a known game without an adapter (`UnsupportedGame`, "Other games")
+  do not depend on a real catalog entry staying unsupported: they use
+  `core/catalog_testing.hpp`, whose `ScopedGameCatalog(catalogWithUnsupportedGame())`
+  adds the game `pmm-test-unsupported` ("Example Unsupported Game") until the
+  guard ends. Create the guard before any thread that reads the catalog starts.
 - Every bug fix comes with a test that fails without the fix.
 
 ### Fixtures

@@ -4,7 +4,8 @@
 // (launcher-settings.json next to the game or in <install>/launcher/). A
 // family derives from it for each way the enabled mods are stored:
 //   - DlcLoadJsonAdapter (games/dlc_load_adapter.hpp): dlc_load.json plus
-//     mod/*.mod registrations (Stellaris, EU4, Crusader Kings III);
+//     mod/*.mod registrations (Stellaris, EU4, Crusader Kings III, Hearts of
+//     Iron IV);
 //   - ContentLoadJsonAdapter (games/content_load_adapter.hpp):
 //     content_load.json with absolute paths, mods described by their own
 //     .metadata/metadata.json (Victoria 3).
@@ -18,17 +19,20 @@
 // generic part of a launch plan (beginLaunchPlan).
 //
 // Files read here: <install>/launcher-settings.json (or launcher/...), the
-// GameTraits::userDirFile (<install>/userdir.txt, CK3:
+// GameTraits::userDirFile (<install>/userdir.txt, CK3 and Victoria 3:
 // <install>/game/userdir.txt), Steam libraryfolders.vdf and
 // appmanifest_<app>.acf.
 //
 // User data: a folder chosen by the user, else an absolute path in the
 // GameTraits::userDirFile, else launcher-settings.json "gameDataPath", else
-// the OS default.
+// the OS default. With GameTraits::gameDataPathOverridesUserDirFile (Hearts
+// of Iron IV) a gameDataPath that resolves comes before the userDirFile, and
+// an absolute gameDataPath with a drive letter resolves too.
 //
 // Launch: the executable from launcher-settings.json (else
 // GameTraits::executable), started in its own folder (the installation folder
-// for Stellaris and EU4, <install>/binaries for CK3 and Victoria 3).
+// for Stellaris, EU4 and Hearts of Iron IV, <install>/binaries for CK3 and
+// Victoria 3).
 
 #include "games/game_adapter.hpp"
 
@@ -73,6 +77,13 @@ struct GameTraits {
     // Further processes that count as the running game, e.g. a console
     // wrapper that starts the executable (Victoria 3).
     std::span<const std::string_view> extraGameProcesses = {};
+    // launcher-settings.json "gameDataPath" takes precedence over the
+    // userDirFile, and may also be an absolute folder (Hearts of Iron IV:
+    // hoi4.exe calls a game-folder userdir.txt "old style", overridden by
+    // gameDataPath, and tells users to point gameDataPath at their custom
+    // user folder). Otherwise the userDirFile comes first, and gameDataPath
+    // must have the %USER_DOCUMENTS% form.
+    bool gameDataPathOverridesUserDirFile = false;
 };
 
 class LauncherGameAdapter : public GameAdapter {

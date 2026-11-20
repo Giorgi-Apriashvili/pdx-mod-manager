@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "core/sha256.hpp"
 #include "sharing/codec.hpp"
 #include "sharing/share_code.hpp"
@@ -30,7 +31,8 @@ namespace {
 // Golden codes produced by this encoder (zlib 1.3.1). Never regenerate an
 // existing fixture: a mismatch means the protocol output changed.
 const char* const kGoldenFixtures[] = {"01-stellaris-basic", "02-eu4-unicode-local",
-                                       "03-minimal-empty", "05-ck3-basic", "06-vic3-basic"};
+                                       "03-minimal-empty",   "05-ck3-basic",
+                                       "06-vic3-basic",      "07-hoi4-basic"};
 
 Error decodeError(std::string_view input) {
     auto r = decodeShareCode(input);
@@ -242,6 +244,19 @@ TEST_CASE("Golden fixture content is what it claims", "[sharing][code][fixtures]
     CHECK(vic3->mods[1].id == "5000000002");
     CHECK(vic3->mods[3].id == "Example Bundle.zip");
     CHECK_FALSE(vic3->mods[3].enabled);
+
+    // Hearts of Iron IV: the playset order is carried as for every game,
+    // although whether the game applies it is not verified.
+    auto hoi4 = decodeShareCode(test::readFixture("v1/07-hoi4-basic.code"));
+    REQUIRE(hoi4.ok());
+    CHECK(hoi4->game == "hoi4");
+    CHECK(hoi4->gameVersionHint == "1.20.0.0");
+    REQUIRE(hoi4->mods.size() == 4);
+    CHECK(hoi4->mods[0].id == "6000000002");
+    CHECK(hoi4->mods[1].id == "6000000001");
+    CHECK(hoi4->mods[2].source == "local");
+    CHECK(hoi4->mods[2].id == "local_focus_tree");
+    CHECK_FALSE(hoi4->mods[3].enabled);
 }
 
 TEST_CASE("Codes from other encoders with non-canonical JSON decode", "[sharing][code][fixtures]") {
@@ -456,10 +471,12 @@ TEST_CASE("Decoded JSON is validated strictly", "[sharing][code]") {
         decodeJson(R"({"schemaVersion":1,"game":"skyrim","playsetName":"P","mods":[]})");
     CHECK(unknownGame.code == ErrorCode::ValidationFailed);
 
-    const Error hoi4 =
-        decodeJson(R"({"schemaVersion":1,"game":"hoi4","playsetName":"P","mods":[]})");
-    CHECK(hoi4.code == ErrorCode::UnsupportedGame);
-    CHECK_THAT(hoi4.message, ContainsSubstring("Hearts of Iron IV"));
+    // A game the catalog knows, without an adapter in this version.
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    const Error unsupported = decodeJson(
+        R"({"schemaVersion":1,"game":"pmm-test-unsupported","playsetName":"P","mods":[]})");
+    CHECK(unsupported.code == ErrorCode::UnsupportedGame);
+    CHECK_THAT(unsupported.message, ContainsSubstring("Example Unsupported Game"));
 }
 
 TEST_CASE("More than 10000 entries are rejected", "[sharing][code][limits]") {
@@ -554,9 +571,12 @@ TEST_CASE("encodeShareCode validates before encoding", "[sharing][code]") {
     Manifest m = test::sampleManifest();
     m.mods.push_back(m.mods[0]);
     CHECK(encodeShareCode(m).error().code == ErrorCode::ValidationFailed);
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
     m = test::sampleManifest();
-    m.game = "hoi4";
-    CHECK(encodeShareCode(m).error().code == ErrorCode::UnsupportedGame);
+    m.game = std::string(pmm::testing::kUnsupportedGameKey);
+    const Error unsupported = encodeShareCode(m).error();
+    CHECK(unsupported.code == ErrorCode::UnsupportedGame);
+    CHECK_THAT(unsupported.message, ContainsSubstring("Example Unsupported Game"));
 }
 
 TEST_CASE("Crusader Kings III playsets round-trip", "[sharing][code]") {
@@ -564,6 +584,20 @@ TEST_CASE("Crusader Kings III playsets round-trip", "[sharing][code]") {
     Manifest m = test::sampleManifest();
     m.game = "ck3";
     m.gameVersionHint = "1.20.1.2";
+    auto code = encodeShareCode(m);
+    REQUIRE(code.ok());
+    CHECK_THAT(*code, StartsWith("PMM1."));
+    auto decoded = decodeShareCode(*code);
+    REQUIRE(decoded.ok());
+    CHECK(*decoded == m);
+}
+
+TEST_CASE("Hearts of Iron IV playsets round-trip", "[sharing][code]") {
+    // A game newly marked supported in the catalog: the format is unchanged,
+    // and 0.2.0 and earlier reject such codes as a game they do not support.
+    Manifest m = test::sampleManifest();
+    m.game = "hoi4";
+    m.gameVersionHint = "1.20.0.0";
     auto code = encodeShareCode(m);
     REQUIRE(code.ok());
     CHECK_THAT(*code, StartsWith("PMM1."));

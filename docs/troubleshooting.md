@@ -295,6 +295,41 @@ launcher:
   launcher and without restarting through Steam; if your copy quits,
   restarts through Steam or opens the launcher, report it with the
   diagnostics ([Victoria 3 adapter](games/vic3.md)).
+- Hearts of Iron IV: the manager starts `hoi4.exe` in the installation
+  folder, where the game keeps its `steam_appid.txt`, with the arguments
+  from `launcher-settings.json` and the `SteamAppId`/`SteamGameId`
+  variables. A direct start has not been observed yet on the development
+  machine; if the game quits, restarts through Steam or opens the launcher,
+  report it with the diagnostics
+  ([Hearts of Iron IV adapter](games/hoi4.md)).
+
+## Hearts of Iron IV: user folder, version warnings and the launcher's cache
+
+- **Another user folder.** For Hearts of Iron IV the manager takes the
+  user-data folder from `gameDataPath` in the game's `launcher-settings.json`
+  (normally `%USER_DOCUMENTS%/Paradox Interactive/Hearts of Iron IV`, which
+  is `Documents\Paradox Interactive\Hearts of Iron IV`; an absolute folder
+  such as `D:/Games/HOI4 data` is taken too, as the game's own messages
+  suggest), and reads a `userdir.txt` in the game folder only when
+  `gameDataPath` is missing or not usable: the game itself calls such a file
+  "old style" and says `gameDataPath` overrides it. The other games read
+  `userdir.txt` first. If your mods live elsewhere, choose that folder with
+  **Locate installation…**; a folder chosen there always wins. Which folder
+  the game uses with both files present, or with an absolute
+  `gameDataPath`, is not verified.
+- **"Reports supported_version … as invalid".** Hearts of Iron IV writes
+  `Invalid supported_version in  file: mod/ugc_<id>.mod` to
+  `logs\error.log` for a mod made for `"1.*.*"` (a wildcard before the patch
+  number); the manager shows that as a warning on the mod. On the
+  development machine such mods were loaded all the same (the game's
+  `system.log` listed them as active); the pattern is the mod author's to
+  fix.
+- **After clearing the launcher's cache.** The Paradox launcher lists `mod/`
+  among the game's cache folders. Whether clearing its cache removes the
+  `mod\ugc_<id>.mod` registrations is not known. If it does, the manager
+  writes the missing registrations of the playset's Workshop mods again when
+  you press Play; a **Rescan** shows the mods as before. Local mods need
+  their `.mod` file in `mod\`.
 
 ## The game does not start (process start failures)
 

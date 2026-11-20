@@ -4,10 +4,11 @@ What works for which game and store, and how we know. The application runs on
 Windows only ([ADR 0009](adr/0009-windows-only.md)). Support for a combination
 depends on the game's own executable and a validated integration (spec section 1).
 
-Last reviewed: 2026-11-21 (Victoria 3 added: read-only checks on 2026-11-20,
-then its probe run with direct launches), after the Crusader Kings III probe
-run of 2026-11-13 and the live validation of 2026-10-30; application 0.2.0
-and the unreleased Victoria 3 support.
+Last reviewed: 2026-11-21 (Hearts of Iron IV added, read-only checks only),
+after Victoria 3 (read-only checks on 2026-11-20, then its probe run with
+direct launches on 2026-11-21), the Crusader Kings III probe run of
+2026-11-13 and the live validation of 2026-10-30; application 0.2.0 and the
+unreleased Victoria 3 and Hearts of Iron IV support.
 
 ## Status legend
 
@@ -82,6 +83,16 @@ tested. Results:
   order and the `supported_game_version` results observed in the game's own
   logs, restore of the previous configuration
   ([evidence](evidence/2026-11-21-vic3-load-order.md)).
+- Hearts of Iron IV "Operation Postern v1.20.0.0.8873 (0c4f)" (`rawVersion`
+  1.20.0.0) build 26733403, 2026-11-21, read-only: installation, user data
+  (from `gameDataPath`), executable, arguments, environment, mod inventory
+  (23 Workshop mods), the current `dlc_load.json` (21 enabled), compatibility
+  warnings, the launch plan for the launcher's selection, which writes
+  nothing although the launcher pretty-prints the file, the download check
+  over the 23 Workshop folders, and a share-code round trip between two new
+  profiles of the application
+  ([Hearts of Iron IV adapter](games/hoi4.md#real-machine-evidence)). The game
+  was not started.
 
 Not observed yet: other stores and Steam's own offline mode.
 
@@ -170,6 +181,37 @@ reports nothing about descriptors outside `enabled_mods`. As in Stellaris,
 | Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
 | In-game verification of enabled mods and order | **Verified (2026-11-13, 1.20.1.2)** with probe mods: enabled mods loaded, disabled not; the later mod in `enabled_mods` wins a shared file, and moving mods in the app moves the winner ([evidence](evidence/2026-11-13-ck3-load-order.md); [load order](load-order.md#crusader-kings-iii)) | Unverified |
 
+## Hearts of Iron IV (Steam app 394360)
+
+The `dlc_load.json` scheme of Stellaris, EU4 and CK3, with Stellaris's layout:
+`hoi4.exe`, `launcher-settings.json` and `steam_appid.txt` in the installation
+folder. Differences: `gameDataPath` in `launcher-settings.json` comes before a
+`userdir.txt` in the game folder, which `hoi4.exe` calls "old style" (inferred
+from its strings, untested); the launcher writes `dlc_load.json`
+pretty-printed, and this application writes it compact when the selection
+changes (that the game accepts it is unverified); only
+`supported_version="1.*.*"` was reported invalid (1.19.5.0). **Which mod wins a
+shared file is not verified**: the HOI4 wiki orders mods by the names of their
+`mod/*.mod` files, not by the list, and the launcher turns its own load-order
+controls off for this game; a note above a Hearts of Iron IV playset says so
+([Hearts of Iron IV adapter](games/hoi4.md); [load order](load-order.md#hearts-of-iron-iv)).
+Nothing here has run against the game yet.
+
+| Capability | Windows · Steam | Other stores |
+| --- | --- | --- |
+| Detect installation and user data | **Verified (2026-11-21, 1.20.0.0)** read-only (user data from `gameDataPath`); the precedence over `userdir.txt` and an absolute `gameDataPath` implemented, unverified | Implemented, unverified (manual location) |
+| Mod inventory | **Verified (2026-11-21, 1.20.0.0)** read-only: 23 Workshop mods, 0 problems, `dependencies` and repeated `replace_path` kept; registered Workshop items without content read as missing (replay) | Implemented, unverified (local mods only) |
+| Playsets | **Verified (2026-11-21, 1.20.0.0)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
+| Share codes | **Verified (2026-11-21, 1.20.0.0)** read-only between two new profiles on one machine. Releases up to 0.2.0 reject codes for `hoi4` as not supported | Implemented, unverified |
+| Generated configuration | **Verified (2026-11-21, 1.20.0.0)** computed, not written: no write for the launcher's selection (compared by meaning with the launcher's pretty-printed file); 21 of 23 regenerated descriptors identical, 2 registrations older than their content. A changed selection is written as compact JSON, unverified in the game | Implemented, unverified |
+| Workshop: Steam session and item state | Implemented, unverified | Unsupported: requires the game on a Steam account |
+| Workshop: subscribe and download | Implemented, unverified; the check that ends a download accepts the 23 installed items (read-only, 2026-11-21) | Unsupported: requires the game on a Steam account |
+| Workshop: manual fallback | Implemented, unverified | Unsupported |
+| Direct launch without the Paradox launcher | Implemented, unverified: `hoi4.exe -gdpr-compliant` in the installation folder (where `steam_appid.txt` lies) with `SteamAppId`/`SteamGameId` | Implemented, unverified |
+| Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
+| `supported_version` warnings | Implemented: a mismatch warns, and `"1.*.*"` as invalid (error.log of 1.19.5.0); `"*"`, `"1.*"`, `"1.20"` and `"1.20.0"` untested | Same code |
+| In-game verification of enabled mods and order | Unverified: the list order is written as for every game, but the game may not follow it (wiki: the `.mod` file names decide); a note above a Hearts of Iron IV playset says so. The probe run is prepared ([load order](load-order.md#hearts-of-iron-iv)) | Unverified |
+
 ## Victoria 3 (Steam app 529340)
 
 Differences from the other games: the enabled mods are in `content_load.json`
@@ -205,8 +247,7 @@ lone `"*"` matches no version. As in Stellaris and CK3, **the later mod in
 
 | Combination | Status | Reason |
 | --- | --- | --- |
-| Hearts of Iron IV | Unsupported | In the game catalog only (`adapterAvailable = false`); share codes for it are rejected with `UnsupportedGame`. The adapter interface is designed for it; no adapter exists. |
-| Victoria 3: Paradox Mods, the launcher's playsets, DLC toggling | Unsupported | As for every game: no Paradox Mods provider (`pdx_*` folders are skipped, as the launcher skips them), the launcher's database is never read, and `disabledDLC` is kept as it is. |
+| Victoria 3 and Hearts of Iron IV: Paradox Mods, the launcher's playsets, DLC toggling | Unsupported | As for every game: no Paradox Mods provider (Victoria 3 skips `pdx_*` folders, as its launcher does; in Hearts of Iron IV, as in the other `dlc_load.json` games, a `mod/pdx_<id>.mod` registration reads as a local mod), the launcher's database is never read, and `disabledDLC` (Victoria 3) or `disabled_dlcs` (Hearts of Iron IV) is kept as it is. |
 | EU4 versions before the Paradox launcher v2 (mods in `settings.txt`) | Unsupported | Not detected as such; their mods would not be enabled ([EU4 adapter](games/eu4.md)). |
 | Workshop acquisition with Steam offline or not signed in | Unsupported (by design) | Installed content is still accepted; network operations wait until Steam is online. |
 | Mods from Paradox Mods (mods.paradoxplaza.com) or other non-Steam sources | Unsupported | No provider exists; such mods can be used as local mods. |

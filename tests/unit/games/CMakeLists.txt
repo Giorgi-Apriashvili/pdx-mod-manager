@@ -4,6 +4,7 @@ pmm_add_test(pmm_games_tests
     content_check_tests.cpp
     descriptor_tests.cpp
     eu4_adapter_tests.cpp
+    hoi4_adapter_tests.cpp
     launcher_settings_tests.cpp
     mod_metadata_tests.cpp
     real_machine_tests.cpp
