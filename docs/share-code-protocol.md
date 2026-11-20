@@ -129,7 +129,7 @@ input do not matter; the encoder always writes the canonical form.
 | Field             | Type    | Required | Rules                                                                                       |
 | ----------------- | ------- | -------- | ------------------------------------------------------------------------------------------- |
 | `schemaVersion`   | integer | yes      | Must be `1`. Any other integer: `UnsupportedVersion`. Non-integer (including `1.0`, `"1"`): `ValidationFailed`. Checked before every other field, and takes precedence over the structural limits (section 1, "Version before limits"). |
-| `game`            | string  | yes      | A key from the game catalog (`src/core/catalog.cpp`). Unknown key: `ValidationFailed`. Known game without an adapter in this release (e.g. `hoi4`): `UnsupportedGame`. Checked right after `schemaVersion`. |
+| `game`            | string  | yes      | A key from the game catalog (`src/core/catalog.cpp`). Unknown key: `ValidationFailed`. Known game without an adapter in this release (e.g. `ck3` in releases up to 0.1.2): `UnsupportedGame`. Checked right after `schemaVersion`. |
 | `playsetName`     | string  | yes      | 1 to 256 bytes of UTF-8, no control characters.                                             |
 | `gameVersionHint` | string  | no       | At most 64 bytes, no control characters. Informational.                                     |
 | `mods`            | array   | yes      | At most 10,000 entries (more: `LimitExceeded`). Array position is the authoritative order.  |

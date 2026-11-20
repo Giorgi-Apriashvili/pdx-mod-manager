@@ -10,8 +10,8 @@ client, and starts the game directly with the selected mods, without the
 Paradox launcher.
 
 It supports **Stellaris**, **Europa Universalis IV** and **Crusader Kings III**,
-and in the next release **Victoria 3**, on Windows 10 and 11. Linux, macOS, the
-Steam Deck and Proton are not supported
+and in the next release **Victoria 3** and **Hearts of Iron IV**, on Windows 10
+and 11. Linux, macOS, the Steam Deck and Proton are not supported
 ([ADR 0009](docs/adr/0009-windows-only.md)). It needs no server, account or
 telemetry.
 
@@ -31,12 +31,15 @@ telemetry.
 > [support matrix](docs/support-matrix.md) and the
 > [development status](docs/development-status.md). The in-app update works
 > between published releases: on 2026-11-07 an installed 0.1.0 updated itself to
-> 0.1.1. Victoria 3 support is unreleased: on 2026-11-21 the application
-> started Victoria 3 1.15.2 directly with probe mods, and the later mod in the
-> playset won a shared file, as in Stellaris and Crusader Kings III
-> ([Victoria 3 probe run](docs/evidence/2026-11-21-vic3-load-order.md));
+> 0.1.1. Victoria 3 and Hearts of Iron IV support is unreleased. On 2026-11-21
+> the application started Victoria 3 1.15.2 directly with probe mods, and the
+> later mod in the playset won a shared file, as in Stellaris and Crusader
+> Kings III ([Victoria 3 probe run](docs/evidence/2026-11-21-vic3-load-order.md));
 > Workshop downloads have not been run for it yet
-> ([Victoria 3 adapter](docs/games/vic3.md)).
+> ([Victoria 3 adapter](docs/games/vic3.md)). Hearts of Iron IV has been
+> checked read-only only: its launch, Workshop downloads and load order have
+> not been run against the game yet
+> ([Hearts of Iron IV adapter](docs/games/hoi4.md)).
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
@@ -55,6 +58,7 @@ reason documented.
 | Stellaris and EU4: installation and user-data detection, mod inventory, current configuration, launch plan (executable, arguments, environment, configuration writes) | **Verified** read-only, 2026-10-29, Stellaris 4.5.2 and EU4 1.37.5, Steam, Windows 11 | [Real-data evidence](docs/evidence/real-scan-2026-10-29.md); registered Workshop items without content show as Missing |
 | Crusader Kings III (since 0.2.0): installation and user-data detection, mod inventory, current configuration, launch plan, share-code round trip | **Verified** read-only, 2026-11-13, CK3 1.20.1.2, Steam, Windows 11 | [CK3 adapter](docs/games/ck3.md); its direct launch and load order are verified too (rows below); Workshop downloads are **not verified** |
 | Victoria 3 (unreleased): installation and user-data detection, mod inventory from `.metadata/metadata.json`, current `content_load.json`, launch plan, share-code round trip | **Verified** read-only, 2026-11-20, Victoria 3 1.15.2, Steam, Windows 11 | [Victoria 3 adapter](docs/games/vic3.md); its direct launch and load order are verified too (rows below); Workshop downloads are **not verified** |
+| Hearts of Iron IV (unreleased): installation and user-data detection, mod inventory, current `dlc_load.json`, launch plan, share-code round trip | **Verified** read-only, 2026-11-21, Hearts of Iron IV 1.20.0.0, Steam, Windows 11 | [Hearts of Iron IV adapter](docs/games/hoi4.md); direct launch, Workshop downloads and which mod wins a shared file are **not verified** (the game may not follow the list order: a note says so above its playsets) |
 | Share codes: `PMM1` encoding, strict validation, size limits, frozen regression fixtures | Implemented | [Protocol](docs/share-code-protocol.md), versioned independently (protocol 1, schema 1) |
 | Workshop ID lists (since 0.2.0): export enabled Workshop mods as `id\|id\|…`, import lists and Workshop links; the import preview names missing mods from the Steam Web API | Implemented; tested against a local Web API stub only | [Protocol section 8](docs/share-code-protocol.md#8-workshop-id-lists), [Workshop names in the preview](docs/app.md#workshop-names-in-the-import-preview) |
 | Share-code round trip between two clean profiles (identities, order, enabled flags) | **Verified** read-only, 2026-10-29 and 2026-10-30, both games, Windows 11 | [Round-trip evidence](docs/evidence/app-round-trip-2026-10-30.md) |
@@ -70,7 +74,6 @@ reason documented.
 | Windows installer: per-user, no administrator rights, upgrades in place, a failed upgrade keeps the previous version | **Verified** 2026-10-30 with silent runs in a scratch folder | [Installer evidence](docs/evidence/installer-2026-10-30.md); the owner installed the published 0.1.0 with the wizard on 2026-11-06, and it worked; not code signed |
 | Updates: a daily check (can be turned off) and a button, verify the installer's SHA-256, install and restart | **Verified** 2026-11-07 with a real update from 0.1.0 to 0.1.1, and again from 0.1.1 to 0.1.2 | [Updates](docs/updates.md): the owner's installed 0.1.0 found the published 0.1.1, and **Update and restart** installed it. The installer's update run was tested with the exact arguments and the real application's mutex, with a stand-in for the relaunch. The values every released copy relies on are frozen and checked in CI ([compatibility contract](docs/updates.md#compatibility-contract-frozen-since-010)) |
 | GitHub releases from a workflow | **Verified** 2026-11-06: 0.1.0 published by it | [Releasing](docs/releasing.md), [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030) |
-| Hearts of Iron IV | Unsupported | Known to the catalog only; its share codes are rejected as "not supported by this version" |
 
 ## Prerequisites
 
@@ -225,8 +228,8 @@ folder that contains `bin\` below about 170 characters;
 [packaging](docs/packaging.md)).
 
 Options: `--profile <dir>` keeps every application file (database, journal,
-logs, cache) in `<dir>`; `--game <key>` selects `ck3`, `eu4`, `stellaris` or
-`vic3`; `--no-steam` never starts the Steam helper; `--read-only` never writes
+logs, cache) in `<dir>`; `--game <key>` selects `ck3`, `eu4`, `hoi4`,
+`stellaris` or `vic3`; `--no-steam` never starts the Steam helper; `--read-only` never writes
 game files or launches a game; `--verbose` writes debug logs. One instance runs
 per profile. Hidden verification switches (`--self-test`, `--screenshot`) drive
 the real application without input for headless checks and imply
@@ -270,7 +273,7 @@ src/platform/     OS paths, filesystem, processes, Steam discovery, file transac
 src/sharing/      share-code protocol (manifest, codec, envelope)
 src/persistence/  SQLite database, migrations, repositories
 src/providers/    Workshop helper protocol, acquisition state machine, metadata, fingerprints
-src/games/        game adapters: Crusader Kings III, EU4, Stellaris and Victoria 3
+src/games/        game adapters: Crusader Kings III, EU4, Hearts of Iron IV, Stellaris and Victoria 3
 src/services/     Qt-free use cases: games, playsets, sharing, acquisition, launch
 src/app/          Qt application (pmm-app): runtime, services worker, Backend and models
 ui/               QML module Pmm.Ui (presentation only) and its preview tools
@@ -291,7 +294,7 @@ scripts/          developer scripts (formatting, MSVC environment, share-code to
 - [Architecture](docs/architecture.md), [application services](docs/architecture-services.md) and [decision records](docs/adr/README.md)
 - [Desktop application](docs/app.md), [UI contract](docs/ui-contract.md) and [accessibility](docs/accessibility.md)
 - [Support matrix](docs/support-matrix.md) and [feasibility record](docs/feasibility.md)
-- Game adapters: [Stellaris](docs/games/stellaris.md), [Europa Universalis IV](docs/games/eu4.md), [Crusader Kings III](docs/games/ck3.md), [Victoria 3](docs/games/vic3.md), [load order](docs/load-order.md)
+- Game adapters: [Stellaris](docs/games/stellaris.md), [Europa Universalis IV](docs/games/eu4.md), [Crusader Kings III](docs/games/ck3.md), [Hearts of Iron IV](docs/games/hoi4.md), [Victoria 3](docs/games/vic3.md), [load order](docs/load-order.md)
 - [Share-code protocol](docs/share-code-protocol.md)
 - [Steam Workshop acquisition](docs/steam-workshop.md)
 - [Persistence](docs/persistence.md)
