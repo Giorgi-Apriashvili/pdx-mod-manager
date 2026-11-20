@@ -31,7 +31,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | EU4 and Stellaris adapters | `src/games`, [`games/`](games/), [`load-order.md`](load-order.md) | done; detection, inventory, current configuration and launch plan verified read-only | [real scan](evidence/real-scan-2026-10-29.md) |
 | Crusader Kings III adapter (for 0.2.0) | `src/games/ck3.{hpp,cpp}`, [`games/ck3.md`](games/ck3.md), [`load-order.md`](load-order.md#crusader-kings-iii) | done 2026-11-13 on `agent/ck3`, merged into `main` (`5013efe`). Owner's decisions of 2026-11-12/13: the game's own Steam API library is loaded as for the other games, the catalog lists the supported games alphabetically (`ck3`, `eu4`, `stellaris`), the load order ships unverified (`loadOrderVerifiedInGame = false`, and a temporary note above a CK3 playset says so) until a probe run approved by the owner. Also for every game: launches start in the executable's folder (unchanged for Stellaris and EU4), and a Workshop folder without `descriptor.mod` is described by its only `.mod` file, also by the content check after a download. Detection, inventory, current configuration, launch plan and a share-code round trip verified read-only on 1.20.1.2. **Probe run done 2026-11-13** with the owner's approval (recorded on `agent/ck3-probe`, merged `ab265ea`): two direct launches without the launcher or a restart through Steam, and **the later mod in `enabled_mods` wins**, as in Stellaris; `loadOrderVerifiedInGame = true` and the temporary note removed. **Workshop acquisition not run**; `supported_version="1.20"` still undetermined | [CK3 adapter](games/ck3.md#real-machine-evidence), [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
 | Victoria 3 adapter (unreleased) | `src/games/{launcher_adapter,content_load_adapter,mod_metadata,vic3}.{hpp,cpp}`, [`games/vic3.md`](games/vic3.md), [ADR 0010](adr/0010-content-load-adapter-family.md), [`load-order.md`](load-order.md#victoria-3) | done 2026-11-20 on `agent/vic3`, merged into `main` (`8225f35`). Owner's decisions of 2026-11-20 (the lead's recommendations L1-L11, O2/O3 skipped, O4 no release yet, O5 the brief's scope): a second adapter family (`ContentLoadJsonAdapter`, `content_load.json` and `.metadata/metadata.json`) on a base extracted from `DlcLoadJsonAdapter` (`LauncherGameAdapter`; a commit of its own, without a change in behaviour); the Workshop content check per game (`GameAdapter::verifyWorkshopContent`); the catalog lists `vic3` as supported (`ck3`, `eu4`, `stellaris`, `vic3`, then `hoi4`); the load order ships unverified with a temporary note. Detection, inventory, current configuration, launch plan, the download check and share-code round trips verified read-only on 1.15.2. **Probe run done 2026-11-21** with the owner's approval (O1; recorded on `agent/vic3-probe`): two direct launches without the launcher or a restart through Steam, and **the later mod in `enabledMods` wins** a whole file, as in Stellaris and CK3; `loadOrderVerifiedInGame = true` and the temporary note removed. The same run showed that 1.15.2 accepts `"1.*"` and `"1.15"` but counts a lone `"*"` as not matching (the application now warns about it: `loneWildcardMismatches`), and that a mod without `game_custom_data` is left out of the game's mod list but still loaded (it stays Ready; its problem text now says so). **Workshop acquisition not run** | [Victoria 3 adapter](games/vic3.md#real-machine-evidence), [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md) |
-| Hearts of Iron IV adapter (unreleased) | `src/games/hoi4.{hpp,cpp}`, `src/core/catalog_testing.hpp`, [`games/hoi4.md`](games/hoi4.md), [`load-order.md`](load-order.md#hearts-of-iron-iv) | done 2026-11-21 on `agent/hoi4`, not merged. Owner's decisions of 2026-11-20/21 (the lead's recommendations, pre-authorized): no real unsupported title is added to the catalog (O1): the paths for a known game without an adapter stay in the code and are tested through a test-only catalog (`pmm::testing::ScopedGameCatalog`, a commit of its own); merged with `loadOrderVerifiedInGame = false` and the temporary note "Hearts of Iron IV may not follow this order when two mods change the same file; this is not verified yet." (O2, T8); if the game ignores the list order, the playset order is still written, as for EU4 (O3); the probe run is a separate, later step (O4, O5); the preview and the screenshots lose the "Other games" section (O6). `Hoi4Adapter` on `DlcLoadJsonAdapter`; one new trait, `gameDataPathOverridesUserDirFile` (Hearts of Iron IV only: `gameDataPath` before `userdir.txt`, inferred from `hoi4.exe`); the catalog lists `ck3`, `eu4`, `hoi4`, `stellaris`, `vic3`, all supported. Detection, inventory, current configuration (the launcher's pretty-printed `dlc_load.json`: 0 writes), launch plan, the download check and a share-code round trip verified read-only on 1.20.0.0. **Probe run prepared, not run**; launch and Workshop acquisition not run | [Hearts of Iron IV adapter](games/hoi4.md#real-machine-evidence) |
+| Hearts of Iron IV adapter (unreleased) | `src/games/hoi4.{hpp,cpp}`, `src/core/catalog_testing.hpp`, [`games/hoi4.md`](games/hoi4.md), [`load-order.md`](load-order.md#hearts-of-iron-iv) | done 2026-11-21 on `agent/hoi4`, rebased onto `main` (`a294448`), not merged. Owner's decisions of 2026-11-20/21 (the lead's recommendations, pre-authorized): no real unsupported title is added to the catalog (O1): the paths for a known game without an adapter stay in the code and are tested through a test-only catalog (`pmm::testing::ScopedGameCatalog`, a commit of its own); merged with `loadOrderVerifiedInGame = false` and the temporary note "Hearts of Iron IV may not follow this order when two mods change the same file; this is not verified yet." (O2, T8); if the game ignores the list order, the playset order is still written, as for EU4 (O3); the probe run is a separate, later step (O4, O5); the preview and the screenshots lose the "Other games" section (O6). `Hoi4Adapter` on `DlcLoadJsonAdapter`; one new trait, `gameDataPathOverridesUserDirFile` (Hearts of Iron IV only: `gameDataPath`, also as an absolute folder, before `userdir.txt`, inferred from `hoi4.exe`); the catalog lists `ck3`, `eu4`, `hoi4`, `stellaris`, `vic3`, all supported. Detection, inventory, current configuration (the launcher's pretty-printed `dlc_load.json`: 0 writes), launch plan, the download check and a share-code round trip verified read-only on 1.20.0.0. **Probe run prepared, not run**; launch and Workshop acquisition not run | [Hearts of Iron IV adapter](games/hoi4.md#real-machine-evidence) |
 | Qt-free services (games, playsets, sharing, acquisition, launch) | `src/services`, [`architecture-services.md`](architecture-services.md) | done, tested | |
 | Desktop application (`pmm-app`): runtime, services worker, Steam helper and Web API hosts, Backend and models, profile lock, offline QML engine | `src/app`, [`app.md`](app.md), [`ui-contract.md`](ui-contract.md) | done, tested; share-code round trip verified read-only for both games | [round trip](evidence/app-round-trip-2026-10-30.md) |
 | Launch: wait for the game's Steam helper to exit before the game starts; refresh the downloads and mod rows after every launch outcome | `src/services/acquisition_coordinator`, `src/app/core/session_host`, `src/app/gui/launch_controller`, [`architecture-services.md`](architecture-services.md#data-flow-launch), [`app.md`](app.md#steam-helper-host) | done 2026-11-06, tested with the real `pmm-steam-helper` and the fake Steam API library; not run against a real game | |
@@ -47,6 +47,97 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13. `--game vic3` (2026-11-20: probe folders with `metadata.json`, `--no-shared`, `--no-game-custom-data`, `analyze` of the rotating debug logs) checked in scratch folders, then used for the Victoria 3 probe run of 2026-11-21. `--game hoi4` (2026-11-21: `add_namespace`, no BOM, LF; `rename` for the runs 3 and 4 of its procedure; `analyze --game hoi4` reads `system.log`) checked in scratch folders only | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md), [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md) |
+
+## Test status (2026-11-21, Hearts of Iron IV, `agent/hoi4`)
+
+Local runs only, with fakes, fixtures and new scratch profiles; no game, no
+launcher and no Steam client was started, nothing under Steam, the game
+folders or `Documents/Paradox Interactive` was written, and the launcher's
+databases and `playsets_backup` were not opened. A Victoria 3 probe run was
+under way on the machine at the same time, so the Victoria 3 `[.real]` case
+was not run and served as no gate. MSVC 19.52 (toolset 14.52.37025).
+
+- Before any change, the `debug` build of `main` (`8225f35`) passed 623/623
+  tests, and `pmm_games_tests "[.real]"` gave the Stellaris, EU4 and CK3
+  baseline.
+- Step 1, the test-only catalog (no change in behaviour): 627/627.
+  `core/catalog_testing.hpp` swaps the catalog for a test
+  (`ScopedGameCatalog`, `catalogWithUnsupportedGame()` adds
+  `pmm-test-unsupported`); every test that used `hoi4` as the unsupported
+  example uses it, and new cases cover the catalog's `adapterAvailable` on
+  its own (an adapter injected under the synthetic key), the share-code form
+  of "cannot manage" (refused at preview and import, nothing saved), the
+  Backend (the row cannot be selected) and the preview's "Other games"
+  section (`test_9e_otherGamesSection`).
+- After the review, the branch was rebased onto `main` (`a294448`, the
+  Victoria 3 probe run). The conflicts were resolved by keeping `main`'s
+  Victoria 3 results (verified load order, no note, `loneWildcardMismatches`)
+  and adding the Hearts of Iron IV parts; two comments that still named
+  Victoria 3 as unverified were corrected, and the registry test checks that
+  `loneWildcardMismatches` is off for Hearts of Iron IV (a lone `"*"` is
+  untested there). Review fixes on top: an absolute `gameDataPath` with a
+  drive letter is taken for Hearts of Iron IV (`resolveAbsoluteGameDataPath`;
+  the other games still take only the `%USER_DOCUMENTS%` form), step 7 of the
+  probe procedure restores once per launch that wrote (run 3 normally writes
+  nothing) and passes `--no-steam`, the registry's check that a known game
+  without an adapter has none runs on the test-only catalog, and wording and
+  layout in the docs and comments are corrected. Before the rebase, `[.real]`
+  on `main` (`a294448`) gave a new Stellaris, EU4 and CK3 baseline, identical
+  to the one of `8225f35`.
+- `debug` preset: **0 warnings**, **642/642 tests pass**, by label: core 51,
+  sharing 70, persistence 72, platform 59, providers 61, games 110, services
+  99, application 124, ui-preview 1. New: `hoi4_adapter_tests.cpp` (12 cases
+  on the fixture `tests/fixtures/games/hoi4`, ids 6000000001 up: discovery,
+  the games told apart both ways, the fallback executable, `gameDataPath`
+  before `userdir.txt`, also absolute, and Stellaris's order and form
+  unchanged, the identity rules, no write for the launcher's pretty-printed
+  `dlc_load.json`, the compact write and the missing registration, the
+  launcher's registrations regenerated byte for byte, the warnings, the
+  download check, process names and load-order information), the absolute
+  `gameDataPath` forms, a Hearts of Iron IV share-code round trip, the golden
+  fixture `07-hoi4-basic` (checked with `scripts/share-code.py` and with
+  Python's `zlib`, `base64` and `hashlib`), catalog and registry checks.
+- The catalog tests of `pmm_core_tests`, `[hoi4]`, `[registry]` and
+  `[content-check]` of `pmm_games_tests`, `pmm_sharing_tests`, the
+  diagnostics, games and share tests of `pmm_services_tests`, the two
+  changed application cases and the preview tests passed 10 times each
+  before the review; after it, the `[hoi4]`, `[launcher_settings]`,
+  `[registry]` and `[version]` cases and the catalog tests passed 10 times
+  each.
+- `pmm_games_tests "[.real]"` (read-only), last on the rebased branch with
+  the review fixes: Hearts of Iron IV 1.20.0.0, 23 Workshop mods, 0
+  problems, 23 with warnings (19 version mismatches, 4 `"1.*.*"` reported as
+  invalid), 21 enabled, 0 unresolved, **0 writes** for the launcher's
+  selection, the user data from `gameDataPath`, working directory the
+  installation folder, arguments `[-gdpr-compliant]`,
+  `SteamAppId`/`SteamGameId` 394360, 21 of 23 regenerated descriptors
+  identical (2 registrations older than their content, differing in
+  `supported_version`, one also in `version`; one item was updated by Steam
+  after the inspection of 2026-11-20), the download check accepts 23 of 23
+  (the same summary as before the review); the Stellaris, EU4 and CK3 output
+  identical, line for line, to the baseline of `main` (Catch2's seed line
+  aside; with `-s`, also apart from the line numbers of
+  `real_machine_tests.cpp`).
+- The application read-only with new scratch profiles (before the review):
+  `--game hoi4 --screenshot` (Hearts of Iron IV third in the games column,
+  Installed · 1.20.0.0, no "Other games" section, Play blocked by the
+  read-only mode); with `--self-test config` the note above the 21 entries;
+  the scripted share-code round trip from the game's configuration (21
+  entries, 20 enabled, 21 installed, 0 missing) with byte-identical dumps.
+  No file under the Hearts of Iron IV user data or installation changed.
+- `tools/probe-mods/probe_mods.py` into scratch folders (before the review):
+  `create` (default, `--game stellaris`, `eu4`, `ck3`, `vic3` and their
+  options), `remove` and `analyze` print and write exactly what the version
+  of `main` did; `--game hoi4` writes `add_namespace` events without a BOM
+  and with LF line ends, `rename --display` and `--file` and their reversal
+  restore every file byte for byte, `remove` after a rename leaves nothing
+  behind and keeps unrelated `.mod` files, and `analyze --game hoi4` reads
+  synthetic logs in the observed formats.
+- `scripts/check.sh --full` on `50cd716`, the rebased branch with the review
+  fixes: passed (ASan 517/517 and clang-cl with UBSan 517/517, the update
+  contract's 112 test cases, clang-tidy on the 18 C++ files changed since
+  `origin/main` without findings, the `ci` preset from a fresh checkout
+  642/642).
 
 ## Test status (2026-11-21, Victoria 3 probe run, `agent/vic3-probe`)
 
@@ -75,76 +166,6 @@ read or written for these checks (`[.real]` was not run).
   clang-cl with UBSan 500/500 each, the update contract's 112 test cases,
   clang-tidy on the 7 C++ files changed since `origin/main` without
   findings, the `ci` preset from a fresh checkout 624/624).
-
-## Test status (2026-11-21, Hearts of Iron IV, `agent/hoi4`)
-
-Local runs only, with fakes, fixtures and new scratch profiles; no game, no
-launcher and no Steam client was started, nothing under Steam, the game
-folders or `Documents/Paradox Interactive` was written, and the launcher's
-databases and `playsets_backup` were not opened. A Victoria 3 probe run was
-under way on the machine at the same time, so the Victoria 3 `[.real]` case
-was not run and served as no gate. MSVC 19.52 (toolset 14.52.37025).
-
-- Before any change, the `debug` build of `main` (`8225f35`) passed 623/623
-  tests, and `pmm_games_tests "[.real]"` gave the Stellaris, EU4 and CK3
-  baseline.
-- Step 1, the test-only catalog (`6022a64`, no change in behaviour): 627/627.
-  `core/catalog_testing.hpp` swaps the catalog for a test
-  (`ScopedGameCatalog`, `catalogWithUnsupportedGame()` adds
-  `pmm-test-unsupported`); every test that used `hoi4` as the unsupported
-  example uses it, and new cases cover the catalog's `adapterAvailable` on
-  its own (an adapter injected under the synthetic key), the share-code form
-  of "cannot manage" (refused at preview and import, nothing saved), the
-  Backend (the row cannot be selected) and the preview's "Other games"
-  section (`test_9e_otherGamesSection`).
-- `debug` preset: **0 warnings**, **640/640 tests pass**, by label: core 51,
-  sharing 70, persistence 72, platform 59, providers 61, games 108, services
-  99, application 124, ui-preview 1. New: `hoi4_adapter_tests.cpp` (12 cases
-  on the fixture `tests/fixtures/games/hoi4`, ids 6000000001 up: discovery,
-  the games told apart both ways, the fallback executable, `gameDataPath`
-  before `userdir.txt` and Stellaris's order unchanged, the identity rules,
-  no write for the launcher's pretty-printed `dlc_load.json`, the compact
-  write and the missing registration, the launcher's registrations
-  regenerated byte for byte, the warnings, the download check, process names
-  and load-order information), a Hearts of Iron IV share-code round trip,
-  the golden fixture `07-hoi4-basic` (checked with `scripts/share-code.py`
-  and with Python's `zlib`, `base64` and `hashlib`), catalog and registry
-  checks.
-- The catalog tests of `pmm_core_tests`, `[hoi4]`, `[registry]` and
-  `[content-check]` of `pmm_games_tests`, `pmm_sharing_tests`, the
-  diagnostics, games and share tests of `pmm_services_tests`, the two
-  changed application cases and the preview tests passed 10 times each.
-- `pmm_games_tests "[.real]"` (read-only): Hearts of Iron IV 1.20.0.0, 23
-  Workshop mods, 0 problems, 23 with warnings (19 version mismatches, 4
-  `"1.*.*"` reported as invalid), 21 enabled, 0 unresolved, **0 writes** for
-  the launcher's selection, the user data from `gameDataPath`, working
-  directory the installation folder, arguments `[-gdpr-compliant]`,
-  `SteamAppId`/`SteamGameId` 394360, 21 of 23 regenerated descriptors
-  identical (2 registrations older than their content, differing in
-  `supported_version`, one also in `version`; one item was updated by Steam
-  after the inspection of 2026-11-20), the download check accepts 23 of 23;
-  the Stellaris, EU4 and CK3 output identical, line for line, to the baseline
-  of `main` (Catch2's seed line aside; with `-s`, also apart from the line
-  numbers of `real_machine_tests.cpp`).
-- The application read-only with new scratch profiles: `--game hoi4
-  --screenshot` (Hearts of Iron IV third in the games column, Installed ·
-  1.20.0.0, no "Other games" section, Play blocked by the read-only mode);
-  with `--self-test config` the note above the 21 entries; the scripted
-  share-code round trip from the game's configuration (21 entries, 20
-  enabled, 21 installed, 0 missing) with byte-identical dumps. No file under
-  the Hearts of Iron IV user data or installation changed.
-- `tools/probe-mods/probe_mods.py` into scratch folders: `create` (default,
-  `--game stellaris`, `eu4`, `ck3`, `vic3` and their options), `remove` and
-  `analyze` print and write exactly what the version of `main` does;
-  `--game hoi4` writes `add_namespace` events without a BOM and with LF line
-  ends, `rename --display` and `--file` and their reversal restore every
-  file byte for byte, `remove` after a rename leaves nothing behind and keeps
-  unrelated `.mod` files, and `analyze --game hoi4` reads synthetic logs in
-  the observed formats.
-- `scripts/check.sh --full` on `cd477f8`: passed (ASan 515/515 and
-  clang-cl with UBSan 515/515, clang-tidy on the 16 C++ files changed
-  since `origin/main` without findings, the `ci` preset from a fresh checkout
-  640/640).
 
 ## Test status (2026-11-20, Victoria 3, `agent/vic3`)
 
@@ -1013,12 +1034,12 @@ Packaging ([`packaging.md`](packaging.md)):
     load-order sentence. Next: the release (O4: 0.3.0 after the probe run,
     with refreshed screenshots); a Workshop download for app 529340 needs
     the owner's approval (O2 skipped it).
-12. Done 2026-11-21 on `agent/hoi4` (not merged): Hearts of Iron IV support,
-    phase 1 (the test-only catalog for the unsupported-game paths, code,
-    tests, fixtures, the golden share-code fixture `07-hoi4-basic`, docs, the
-    probe tool with `rename`), verified read-only on 1.20.0.0
-    ([Hearts of Iron IV adapter](games/hoi4.md)). Next, each with the owner's
-    approval: the probe run of
+12. Done 2026-11-21 on `agent/hoi4` (rebased onto `main` `a294448`, not
+    merged): Hearts of Iron IV support, phase 1 (the test-only catalog for
+    the unsupported-game paths, code, tests, fixtures, the golden share-code
+    fixture `07-hoi4-basic`, docs, the probe tool with `rename`), verified
+    read-only on 1.20.0.0 ([Hearts of Iron IV adapter](games/hoi4.md)).
+    Next, each with the owner's approval: the probe run of
     [`load-order.md`](load-order.md#hearts-of-iron-iv) (up to four runs),
     recorded as `docs/evidence/<date>-hoi4-load-order.md`, then the traits
     and the note (O3: the EU4 way if a sorted key decides); release together
