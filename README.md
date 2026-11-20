@@ -229,9 +229,9 @@ folder that contains `bin\` below about 170 characters;
 
 Options: `--profile <dir>` keeps every application file (database, journal,
 logs, cache) in `<dir>`; `--game <key>` selects `ck3`, `eu4`, `hoi4`,
-`stellaris` or `vic3`; `--no-steam` never starts the Steam helper; `--read-only` never writes
-game files or launches a game; `--verbose` writes debug logs. One instance runs
-per profile. Hidden verification switches (`--self-test`, `--screenshot`) drive
+`stellaris` or `vic3`; `--no-steam` never starts the Steam helper;
+`--read-only` never writes game files or launches a game; `--verbose` writes
+debug logs. One instance runs per profile. Hidden verification switches (`--self-test`, `--screenshot`) drive
 the real application without input for headless checks and imply
 `--read-only` ([application](docs/app.md#command-line)).
 

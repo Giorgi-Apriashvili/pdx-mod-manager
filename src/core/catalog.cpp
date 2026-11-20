@@ -22,8 +22,9 @@ constexpr std::array<GameCatalogEntry, 5> kCatalog{{
 }};
 
 // The catalog in use: kCatalog, except while a testing::ScopedGameCatalog
-// replaces it.
-std::span<const GameCatalogEntry> g_catalog = kCatalog;
+// replaces it. constinit keeps gameCatalog() usable during the static
+// initialisation of other files.
+constinit std::span<const GameCatalogEntry> g_catalog = kCatalog;
 
 // testing::catalogWithUnsupportedGame(): kCatalog, then a known game without
 // an adapter.

@@ -3,8 +3,8 @@
 // Shared implementation for games whose mod configuration is
 // "<user data>/dlc_load.json + <user data>/mod/*.mod" (the scheme the Paradox
 // launcher v2 uses for Stellaris, EU4, Crusader Kings III and Hearts of Iron
-// IV, observed on all four). Discovery, launch arguments and the other parts every launcher-v2
-// game shares are in games/launcher_adapter.hpp.
+// IV, observed on all four). Discovery, launch arguments and the other parts
+// every launcher-v2 game shares are in games/launcher_adapter.hpp.
 //
 // Files read: those of LauncherGameAdapter, appworkshop_<app>.acf, the content
 // descriptor of <library>/steamapps/workshop/content/<app>/<id> (see

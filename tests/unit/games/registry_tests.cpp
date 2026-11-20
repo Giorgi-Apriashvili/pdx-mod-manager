@@ -1,4 +1,5 @@
 #include "core/catalog.hpp"
+#include "core/catalog_testing.hpp"
 #include "games/ck3.hpp"
 #include "games/dlc_load_adapter.hpp"
 #include "games/eu4.hpp"
@@ -41,10 +42,20 @@ TEST_CASE("The registry lists the CK3, EU4, Hearts of Iron IV, Stellaris and Vic
     CHECK(findAdapter("vic3") == list[4].get());
     CHECK(dynamic_cast<const DlcLoadJsonAdapter*>(list[2].get()) != nullptr);
     CHECK(dynamic_cast<const ContentLoadJsonAdapter*>(list[4].get()) != nullptr);
-    // Known games the catalog does not support have no adapter.
-    for (const GameCatalogEntry& entry : gameCatalog()) {
-        if (!entry.adapterAvailable)
+    // Known games the catalog does not support have no adapter. The real
+    // catalog has none at present, so a test-only one is added; adapters()
+    // was built above, before the swap.
+    {
+        const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+        int unsupported = 0;
+        for (const GameCatalogEntry& entry : gameCatalog()) {
+            if (entry.adapterAvailable)
+                continue;
+            ++unsupported;
             CHECK(findAdapter(entry.key) == nullptr);
+        }
+        CHECK(unsupported >= 1);
+        CHECK(findAdapter(pmm::testing::kUnsupportedGameKey) == nullptr);
     }
     CHECK(findAdapter("not-a-game") == nullptr);
     CHECK(findAdapter("") == nullptr);

@@ -1,10 +1,10 @@
 // Hidden tests ("[.real]") that run the CK3, EU4, Hearts of Iron IV, Stellaris
 // and Victoria 3 adapters against the REAL installations of the machine they
-// run on and print a redacted summary. They are strictly read-only: discovery, scanning and
-// reading dlc_load.json or content_load.json only read files,
-// buildLaunchPlan() only computes the writes it would make (nothing is
-// applied, nothing is started), and the Workshop content check only looks at
-// the folders. The replay steps copy the registered descriptors (Victoria 3:
+// run on and print a redacted summary. They are strictly read-only:
+// discovery, scanning and reading dlc_load.json or content_load.json only
+// read files, buildLaunchPlan() only computes the writes it would make
+// (nothing is applied, nothing is started), and the Workshop content check
+// only looks at the folders. The replay steps copy the registered descriptors (Victoria 3:
 // content_load.json) into a temporary folder and work on the copy. Run
 // explicitly:
 //   pmm_games_tests "[.real]" -s
@@ -168,12 +168,8 @@ void printLaunchPlan(const LaunchPlan& plan, const GameInstallation& inst) {
         CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
 }
 
-struct RealScan {
-    GameInstallation installation;
-    std::vector<InstalledMod> mods;
-};
-
-RealScan runRealScan(const DlcLoadJsonAdapter& adapter) {
+// Returns the scanned mods, for the Hearts of Iron IV download check.
+std::vector<InstalledMod> runRealScan(const DlcLoadJsonAdapter& adapter) {
     const GameInstallation inst = printInstallation(adapter);
     auto scanned = adapter.scanMods(inst);
     REQUIRE(scanned.ok());
@@ -268,7 +264,7 @@ RealScan runRealScan(const DlcLoadJsonAdapter& adapter) {
     }
     std::cout << "regenerated Workshop descriptors identical to the launcher's: " << identical
               << " of " << compared << "\n";
-    return {inst, mods};
+    return mods;
 }
 
 // The check that ends a Workshop download, over the folders on disk.
@@ -471,8 +467,8 @@ TEST_CASE("Real CK3 installation (read-only)", "[.real]") {
 }
 
 TEST_CASE("Real HOI4 installation (read-only)", "[.real]") {
-    const RealScan scan = runRealScan(Hoi4Adapter());
-    printDownloadCheck(Hoi4Adapter(), scan.mods);
+    const std::vector<InstalledMod> mods = runRealScan(Hoi4Adapter());
+    printDownloadCheck(Hoi4Adapter(), mods);
     replayWithoutWorkshopContent(Hoi4Adapter());
 }
 
