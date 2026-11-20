@@ -75,18 +75,21 @@ public:
                                                          const fs::path& userDataPath,
                                                          const DiscoveryEnvironment& env) const = 0;
 
-    // Installed inventory: registered descriptors in the user mod folder plus
-    // Workshop content folders (registered or not). A registered Workshop
-    // item whose content is not on disk is not installed and is left out.
-    // Problems are reported per mod, not as a failure of the whole scan.
+    // Installed inventory: the mods of the user mod folder (registered
+    // descriptors; Victoria 3: the mod folders and .zip files themselves)
+    // plus Workshop content folders (registered or not). A registered
+    // Workshop item whose content is not on disk is not installed and is left
+    // out. Problems are reported per mod, not as a failure of the whole scan.
     virtual Result<std::vector<InstalledMod>>
     scanMods(const GameInstallation& installation) const = 0;
 
     // The game's currently configured enabled mods in order (e.g. from
-    // dlc_load.json), resolved against the inventory. An entry that matches
-    // no installed mod keeps the identity its registration implies (a
-    // Workshop item stays steam-workshop, so it can be acquired); anything
-    // else is returned with source "local" and the reference stem as id.
+    // dlc_load.json or content_load.json), resolved against the inventory.
+    // An entry that matches no installed mod keeps the identity its
+    // registration or path implies (a Workshop item stays steam-workshop, so
+    // it can be acquired); anything else is returned with source "local" and
+    // the name the reference gives it as id (the descriptor's stem; Victoria
+    // 3: the last path component).
     virtual Result<std::vector<PlaysetEntry>>
     readCurrentConfiguration(const GameInstallation& installation,
                              std::span<const InstalledMod> inventory) const = 0;

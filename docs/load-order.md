@@ -210,7 +210,7 @@ measurement: the same "lower overrides" advice circulated for EU4, and EU4
 For Victoria 3, reverse engineering of 1.15.1 (v3x) reports that every
 mounted mod is searched before the earlier ones, so a later entry in
 `enabledMods` wins a shared file; the community gives the same advice, and the
-Paradox script validator (tiger) models it. `game_custom_data.replace_paths`
+third-party validator vic3-tiger models it. `game_custom_data.replace_paths`
 hides the files of lower mods in exactly that folder. Since 1.12 (December
 2025) many databases no longer let a later definition of the same key
 replace an earlier one: the first one, in file-name order, is kept, unless

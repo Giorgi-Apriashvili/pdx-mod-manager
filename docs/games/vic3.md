@@ -27,7 +27,7 @@ folder or `Documents/Paradox Interactive` was written.
 | Scan Workshop and local mods, identity rules | **Verified** (read-only): 9 Workshop mods and 1 local mod, 0 problems | Local mods only, unverified |
 | Read current `content_load.json` | **Verified** (read-only): 1 of 1 resolved | Unverified |
 | Generate `content_load.json` | **Verified** computed, not written: 0 writes for the launcher's selection; byte-identical to the launcher's layout in the fixture tests | Unverified |
-| Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, and one of the 9 Workshop items, with a disabled and moved entries, exported and imported into new profiles with byte-identical dumps | Unverified |
+| Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, and one of the 9 Workshop items with a disabled entry and moved entries, each exported and imported into new profiles with byte-identical dumps | Unverified |
 | `supported_game_version` warnings | Implemented: a mismatch is a warning (the game logs it and loads the mod). Which wildcard patterns the game rejects is not known, so none is reported as invalid | Same code |
 | Direct launch (bypassing the launcher) | Implemented, unverified: `binaries/victoria3.exe -gdpr-compliant` in `binaries/`, with `SteamAppId`/`SteamGameId`; third-party tools start 1.15 this way | Unverified, no Steam environment |
 | Workshop subscribe and download (helper in Victoria 3's app context) | Implemented, unverified. The content check that ends a download accepts all 9 installed items read-only (the previous check, which wanted `descriptor.mod`, would have rejected every one) | Unsupported: requires the game on a Steam account |
@@ -217,9 +217,10 @@ The game reads `content_load.json`'s `enabledMods` in order, index 0 first,
 as the other games read `enabled_mods`. Documented, **not yet verified on
 this machine**: when two enabled mods contain the **same file**, the later
 one in the list wins (reverse engineering of 1.15.1: every mounted mod is
-searched before the earlier ones; also the community rule and the Paradox
-script validator's file set). `game_custom_data.replace_paths` hides the
-files of lower mods in exactly that folder.
+searched before the earlier ones; also the community rule and the file
+set of the third-party validator vic3-tiger).
+`game_custom_data.replace_paths` hides the files of lower mods in exactly
+that folder.
 
 That rule is about **whole files**. Since 1.12 (December 2025) many of the
 game's databases no longer let a later definition of the same key replace an

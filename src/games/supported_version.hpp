@@ -23,7 +23,11 @@
 // so the disabled "1.20" probe was never read; see
 // docs/evidence/2026-11-13-ck3-load-order.md). No such rule is known for EU4:
 // its error.log files on that machine contain no such messages, although
-// v1.37.*.* and v1.37.* descriptors are registered.
+// v1.37.*.* and v1.37.* descriptors are registered. Victoria 3 names the key
+// supported_game_version (in .metadata/metadata.json) and logs whether it
+// matches; victoria3.exe has "Invalid supported_version in {}", but which
+// patterns it reports is not known yet (docs/games/vic3.md), so no such rule
+// is applied until a probe run shows one.
 
 #include <cstdint>
 #include <optional>
