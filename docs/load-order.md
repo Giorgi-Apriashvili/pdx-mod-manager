@@ -681,13 +681,19 @@ Notes on the procedure above, for that run (`<userdata>` is
   steps 4 and 5 with `--enabled a c` (the trigger names inside the folder
   still say a). Afterwards
   `python tools/probe-mods/probe_mods.py rename "<userdata>/mod" --name a --file a`.
-- Step 7: restore with the application once per launch:
-  `pmm-app --profile <scratch> --live-test "game:hoi4,restore"` restores the
-  configuration from before the last launch it has not restored yet, so run
-  it as many times as there were launches (two to four), the last launch
-  first. Then compare `dlc_load.json` with the backup (it must be
-  byte-identical, the launcher's pretty layout back) and the 23 registrations
-  with theirs, and run
+- Step 7: restore with the application once per launch that wrote the
+  configuration:
+  `pmm-app --profile <scratch> --no-steam --live-test "game:hoi4,restore"`
+  restores the configuration from before the last launch it has not
+  restored yet, the last launch first. Only a launch that writes something
+  can be restored: runs 1, 2 and 4 write `dlc_load.json`, but run 3 has run
+  2's `enabled_mods` and normally writes nothing, so it leaves nothing to
+  restore. That is 2 restores after runs 1 to 3 and 3 after runs 1 to 4. Or
+  repeat it until it fails with "there is no configuration to restore" (the
+  scratch profile holds only this run's launches); that failure then only
+  says that everything is restored. Then compare `dlc_load.json` with the
+  backup (it must be byte-identical, the launcher's pretty layout back) and
+  the 23 registrations with theirs, and run
   `python tools/probe-mods/probe_mods.py remove "<userdata>/mod"`, which also
   removes a registration left renamed by run 4. Record what the game itself
   changed in `<userdata>` (settings, `continue_game.json`, caches).
