@@ -25,7 +25,7 @@ on 2026-11-18.
 | `gameDataPath` before `userdir.txt`, also as an absolute folder | Implemented, inferred from `hoi4.exe`'s strings: none ships, and how the game treats a `userdir.txt` or an absolute `gameDataPath` is not observed | Unverified |
 | Scan Workshop and local mods, identity rules | **Verified** (read-only): 23 Workshop mods, 0 problems | Local mods only, unverified |
 | Read current `dlc_load.json` | **Verified** (read-only): 21 of 21 resolved, from the launcher's pretty-printed file | Unverified |
-| Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** computed, not written: 0 writes for the launcher's selection; 21 of 23 regenerated descriptors identical to the launcher's, the other 2 differ only in `supported_version` (see Mods). A changed selection is written as compact JSON; that the game reads it is unverified | Unverified |
+| Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** computed, not written: 0 writes for the launcher's selection; 21 of 23 regenerated descriptors identical to the launcher's, the other 2 differ in `supported_version`, one of them also in `version` (see Mods). A changed selection is written as compact JSON; that the game reads it is unverified | Unverified |
 | Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, a disabled and a moved entry, exported and imported into a new profile with byte-identical dumps | Unverified |
 | `supported_version` warnings | Implemented: `"1.*.*"` is reported as invalid, as the error.log of 1.19.5.0 does; `"*"`, `"1.*"` and `"1.20"` untested | Same code |
 | Direct launch (bypassing the launcher) | Implemented, unverified | Unverified, no Steam environment |
@@ -172,14 +172,16 @@ by count only):
   without making them required; this application does not use them for the
   order, and that is untested.
 - **Registrations older than their content.** On 2026-11-21, 2 of the 23
-  registrations differ from what their Workshop content would give, only in
-  `supported_version`: the launcher wrote them on 2026-11-18, and Steam updated
-  the items on 2026-11-19 and 2026-11-21. Their `path=` still points at the
-  content, so, as for every game, the application shows the registration's
-  values and a launch reuses it without rewriting it; the launcher refreshes
-  it the next time it starts. The real-machine test reports these 2 as
-  "regenerated descriptor differs". The read-only inspection of 2026-11-20
-  found 22 of 23 identical; the second item was updated after it.
+  registrations differ from what their Workshop content would give, in the
+  values the Workshop updates changed: `supported_version` in both, and
+  `version` in the one updated on 2026-11-21. The launcher wrote them on
+  2026-11-18, and Steam updated the items on 2026-11-19 and 2026-11-21. Their
+  `path=` still points at the content, so, as for every game, the application
+  shows the registration's values and a launch reuses it without rewriting it;
+  the launcher refreshes it the next time it starts. The real-machine test
+  reports these 2 as "regenerated descriptor differs". The read-only
+  inspection of 2026-11-20 found 22 of 23 identical; the second item was
+  updated after it.
 - **Paradox Mods items, zipped (`archive=`) mods and local mods**: none exist
   for Hearts of Iron IV on the development machine; they are covered by the
   shared code and the fixture tests only.
@@ -335,7 +337,7 @@ Reading it:
   older) and the invalid-wildcard warning for the four `"1.*.*"`
   registrations, which match the installed version otherwise.
 - 21 of 23: the other 2 are the registrations older than their content (see
-  Mods); for each, only `supported_version` differs.
+  Mods); they differ in `supported_version`, and one also in `version`.
 - `workshopAcquisition 1` and the download check say what the application
   would accept; Workshop acquisition for Hearts of Iron IV has not been run.
 - The replay copies the registered descriptors with the Steam library

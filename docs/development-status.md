@@ -116,16 +116,16 @@ was not run and served as no gate. MSVC 19.52 (toolset 14.52.37025).
   changed application cases and the preview tests passed 10 times each.
 - `pmm_games_tests "[.real]"` (read-only): Hearts of Iron IV 1.20.0.0, 23
   Workshop mods, 0 problems, 23 with warnings (19 version mismatches, 4
-  `"1.*.*"` reported as invalid), 21 enabled, 0 unresolved, **0 writes**
-  for the launcher's selection, the user data from `gameDataPath`, working
+  `"1.*.*"` reported as invalid), 21 enabled, 0 unresolved, **0 writes** for
+  the launcher's selection, the user data from `gameDataPath`, working
   directory the installation folder, arguments `[-gdpr-compliant]`,
   `SteamAppId`/`SteamGameId` 394360, 21 of 23 regenerated descriptors
-  identical (2 registrations older than their content, differing only in
-  `supported_version`; one item was updated by Steam after the inspection of
-  2026-11-20), the download check accepts 23 of 23; the Stellaris, EU4 and
-  CK3 output identical, line for line, to the baseline of `main` (Catch2's
-  seed line aside; with `-s`, also apart from the line numbers of
-  `real_machine_tests.cpp`).
+  identical (2 registrations older than their content, differing in
+  `supported_version`, one also in `version`; one item was updated by Steam
+  after the inspection of 2026-11-20), the download check accepts 23 of 23;
+  the Stellaris, EU4 and CK3 output identical, line for line, to the baseline
+  of `main` (Catch2's seed line aside; with `-s`, also apart from the line
+  numbers of `real_machine_tests.cpp`).
 - The application read-only with new scratch profiles: `--game hoi4
   --screenshot` (Hearts of Iron IV third in the games column, Installed ·
   1.20.0.0, no "Other games" section, Play blocked by the read-only mode);
