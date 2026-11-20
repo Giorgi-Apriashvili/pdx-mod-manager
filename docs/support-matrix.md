@@ -209,7 +209,7 @@ Nothing here has run against the game yet.
 | Workshop: manual fallback | Implemented, unverified | Unsupported |
 | Direct launch without the Paradox launcher | Implemented, unverified: `hoi4.exe -gdpr-compliant` in the installation folder (where `steam_appid.txt` lies) with `SteamAppId`/`SteamGameId` | Implemented, unverified |
 | Play only while the Steam client runs | Implemented, unverified: tested with fakes only | Not required: a copy located by hand outside a Steam library starts without Steam (implemented, unverified) |
-| `supported_version` warnings | Implemented: a mismatch warns, and `"1.*.*"` as invalid (error.log of 1.19.5.0); `"*"`, `"1.*"` and `"1.20"` untested | Same code |
+| `supported_version` warnings | Implemented: a mismatch warns, and `"1.*.*"` as invalid (error.log of 1.19.5.0); `"*"`, `"1.*"`, `"1.20"` and `"1.20.0"` untested | Same code |
 | In-game verification of enabled mods and order | Unverified: the list order is written as for every game, but the game may not follow it (wiki: the `.mod` file names decide); a note above a Hearts of Iron IV playset says so. The probe run is prepared ([load order](load-order.md#hearts-of-iron-iv)) | Unverified |
 
 ## Victoria 3 (Steam app 529340)

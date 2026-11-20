@@ -23,8 +23,8 @@
 // so the disabled "1.20" probe was never read; see
 // docs/evidence/2026-11-13-ck3-load-order.md). Hearts of Iron IV too: the
 // error.log of a 1.19.5.0 run reports each "1.*.*" registration, and not
-// "1.19.*", "1.17.*", "1.19.4.*" or the three- and four-part forms without a
-// wildcard; "*", "1.*" and "1.20" are untested for it (docs/games/hoi4.md).
+// "1.19.*", "1.17.*", "1.19.4.*" or the four-part forms without a wildcard;
+// "*", "1.*", "1.20" and "1.20.0" are untested for it (docs/games/hoi4.md).
 // No such rule is known for EU4: its error.log files on that machine contain
 // no such messages, although v1.37.*.* and v1.37.* descriptors are
 // registered. Victoria 3 names the key supported_game_version (in

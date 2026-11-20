@@ -27,7 +27,7 @@ on 2026-11-18.
 | Read current `dlc_load.json` | **Verified** (read-only): 21 of 21 resolved, from the launcher's pretty-printed file | Unverified |
 | Generate `dlc_load.json` and `mod/ugc_<id>.mod` | **Verified** computed, not written: 0 writes for the launcher's selection; 21 of 23 regenerated descriptors identical to the launcher's, the other 2 differ in `supported_version`, one of them also in `version` (see Mods). A changed selection is written as compact JSON; that the game reads it is unverified | Unverified |
 | Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, a disabled and a moved entry, exported and imported into a new profile with byte-identical dumps | Unverified |
-| `supported_version` warnings | Implemented: `"1.*.*"` is reported as invalid, as the error.log of 1.19.5.0 does; `"*"`, `"1.*"` and `"1.20"` untested | Same code |
+| `supported_version` warnings | Implemented: `"1.*.*"` is reported as invalid, as the error.log of 1.19.5.0 does; `"*"`, `"1.*"`, `"1.20"` and `"1.20.0"` untested | Same code |
 | Direct launch (bypassing the launcher) | Implemented, unverified | Unverified, no Steam environment |
 | Workshop subscribe and download (helper in Hearts of Iron IV's app context) | Implemented, unverified (the content check after a download accepts the 23 installed items, read-only) | Unsupported: requires the game on a Steam account |
 | Effective order / precedence in game | **Unverified.** The list order is written as for every game; the HOI4 wiki says the names of the `mod/*.mod` files decide, and the launcher turns its own load-order controls off for this game. A note above a Hearts of Iron IV playset says so. The probe run is prepared ([load order](../load-order.md#hearts-of-iron-iv)) | Unverified |
@@ -195,11 +195,13 @@ by count only):
 file: mod/ugc_<id>.mod line: <n>` (with two spaces before `file:`) for exactly
 the four `"1.*.*"` registrations, all enabled, each at its
 `supported_version=` line, and for none of the others, including `"1.19.*"`,
-`"1.17.*"`, `"1.19.4.*"` and the three- and four-part forms without a
-wildcard. The adapter therefore reports a wildcard in the major or minor
-position as a separate, non-blocking warning, as for Stellaris and CK3. That
-`"*"` and `"1.*"` are rejected too, and that `"1.20"` is accepted, is untested
-for Hearts of Iron IV and follows the assumption made for Stellaris and CK3.
+`"1.17.*"`, `"1.19.4.*"` and the four-part forms without a wildcard. The
+adapter therefore reports a wildcard in the major or minor position as a
+separate, non-blocking warning, as for Stellaris and CK3. That `"*"` and
+`"1.*"` are rejected too, and that `"1.20"` and a three-part form without a
+wildcard such as `"1.20.0"` are accepted, is untested for Hearts of Iron IV
+(no registration had such a pattern) and follows the assumption made for
+Stellaris and CK3.
 The rule was observed on 1.19.5.0 and has not been rechecked on 1.20.0.0.
 
 ## Load order

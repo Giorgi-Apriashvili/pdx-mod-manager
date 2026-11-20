@@ -28,8 +28,9 @@ constexpr GameTraits kTraits{
     .droppedArguments = kDroppedArguments,
     // error.log (1.19.5.0, started by the launcher) reports "Invalid
     // supported_version" for each "1.*.*" registration, and not for "1.19.*",
-    // "1.17.*", "1.19.4.*" or the 3- and 4-part plain forms. "*", "1.*" and
-    // "1.20" are untested.
+    // "1.17.*", "1.19.4.*" or the four-part forms without a wildcard
+    // ("1.19.4.2"). "*", "1.*", "1.20" and three-part forms without a
+    // wildcard ("1.20.0") are untested: no registration had one.
     .rejectsEarlyWildcards = true,
     .loadOrderSummary = "dlc_load.json enabled_mods, index 0 first; which mod wins when two "
                         "enabled mods contain the same file is not verified for Hearts of Iron IV",
