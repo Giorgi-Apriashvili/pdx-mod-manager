@@ -27,7 +27,7 @@ folder or `Documents/Paradox Interactive` was written.
 | Scan Workshop and local mods, identity rules | **Verified** (read-only): 9 Workshop mods and 1 local mod, 0 problems | Local mods only, unverified |
 | Read current `content_load.json` | **Verified** (read-only): 1 of 1 resolved | Unverified |
 | Generate `content_load.json` | **Verified** computed, not written: 0 writes for the launcher's selection; byte-identical to the launcher's layout in the fixture tests | Unverified |
-| Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, and one of the 9 Workshop items with a disabled entry and moved entries, each exported and imported into new profiles with byte-identical dumps | Unverified |
+| Playsets and share codes in the application | **Verified** (read-only): a playset from the game's configuration, and one made from a Workshop ID list of the 9 Workshop items, with a disabled entry and moved entries, each exported and imported into new profiles with byte-identical dumps | Unverified |
 | `supported_game_version` warnings | Implemented: a mismatch is a warning (the game logs it and loads the mod). Which wildcard patterns the game rejects is not known, so none is reported as invalid | Same code |
 | Direct launch (bypassing the launcher) | Implemented, unverified: `binaries/victoria3.exe -gdpr-compliant` in `binaries/`, with `SteamAppId`/`SteamGameId`; third-party tools start 1.15 this way | Unverified, no Steam environment |
 | Workshop subscribe and download (helper in Victoria 3's app context) | Implemented, unverified. The content check that ends a download accepts all 9 installed items read-only (the previous check, which wanted `descriptor.mod`, would have rejected every one) | Unsupported: requires the game on a Steam account |
@@ -370,8 +370,10 @@ dependency is not installed.
 
 ## Outstanding validation
 
-Each of the following needs the owner's approval, on 1.15.2. The probe run
-of [`../load-order.md`](../load-order.md#victoria-3) covers 1 to 5:
+All on 1.15.2. The probe run of
+[`../load-order.md`](../load-order.md#victoria-3) covers 1 to 5, and 6 with
+its optional probe; it is approved by the owner (O1) but has not been run.
+Each item of 7 needs the owner's approval:
 
 1. A direct start from the application: the game stays the same process,
    no launcher appears, no restart through Steam, all 18 DLC in the `DLC:`

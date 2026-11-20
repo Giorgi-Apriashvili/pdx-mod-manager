@@ -378,9 +378,10 @@ CK3 notes on the procedure above, as used for that run:
 
 ### Victoria 3
 
-**Not yet run.** The probe run needs the owner's approval; until then
-`src/games/vic3.cpp` ships `loadOrderVerifiedInGame = false` and the
-temporary note. Victoria 3 notes on the procedure above, for that run:
+**Not yet run.** The probe run is approved by the owner (O1) but has not
+been run; until then `src/games/vic3.cpp` ships
+`loadOrderVerifiedInGame = false` and the temporary note. Victoria 3 notes
+on the procedure above, for that run:
 
 - Run the read-only `[.real]` scan first, as a baseline
   ([`games/vic3.md`](games/vic3.md#real-machine-evidence)), and back up

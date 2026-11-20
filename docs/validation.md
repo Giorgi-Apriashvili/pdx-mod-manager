@@ -18,7 +18,8 @@ the probe run of step 6 (items 1 to 5, with a playset of the probes only)
 were run on 2026-11-13
 ([evidence](evidence/2026-11-13-ck3-load-order.md)). For Victoria 3 only the
 read-only steps were run, on 2026-11-20; its probe run is prepared
-([load order](load-order.md#victoria-3)) and needs the owner's approval.
+([load order](load-order.md#victoria-3)) and approved by the owner (O1), but
+not run yet.
 
 The procedure uses the desktop application `pmm-app` and the UI described in
 [`ui-contract.md`](ui-contract.md) (Import code, Export code, Play, ...).
@@ -377,4 +378,4 @@ One row per game, Windows version and distribution combination (repeat rows for 
 | Stellaris | Cygnus v4.5.2 (9776) (25664273) | Windows 11 23H2 | Steam | 0.1.0-dev (`19e4705`) | 2026-10-30 | 1-7 live (probe mods; step 4 with a separate approval, build `f809e91`; `--live-test`) | pass; 8-9 run for EU4 only (same code paths); step 7 found a stale Play blocker, fixed in `19e4705` and rerun | [live validation](evidence/live-validation-2026-10-30.md) |
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (branch `agent/ck3`, `e16268a`) | 2026-11-13 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles, playset from the game's configuration) | partial: 4, 6-9 not run (need the owner's approval) | [CK3 adapter](games/ck3.md#real-machine-evidence) |
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (`main`, `5013efe`) | 2026-11-13 | 6, items 1-5, live with the probes only (C, A, B disabled, imported from a share code; one isolated profile; `--live-test` with `--no-steam`), two launches, then restore | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, probes loaded as configured, **the later mod in `enabled_mods` wins**, configuration restored. Run 1 crashed while the game was being closed (after the evidence was written); `supported_version="1.20"` undetermined; 4, 6 items 6-7, 7-9 not run | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
-| Victoria 3 | 1.15.2 (Ivan-Chai) (26763837) | Windows 11 23H2 | Steam | after 0.2.0 (branch `agent/vic3`) | 2026-11-20 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles: the game's configuration, 1 entry; and a Workshop ID list of the 9 installed items, 9 entries, one disabled, two moved) | partial: 4, 6-9 not run (need the owner's approval) | [Victoria 3 adapter](games/vic3.md#real-machine-evidence) |
+| Victoria 3 | 1.15.2 (Ivan-Chai) (26763837) | Windows 11 23H2 | Steam | after 0.2.0 (branch `agent/vic3`) | 2026-11-20 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles: the game's configuration, 1 entry; and a Workshop ID list of the 9 installed items, 9 entries, one disabled, two moved) | partial: 4, 6-9 not run (the probe run of 6 is approved by the owner (O1) but not run yet; the others need the owner's approval) | [Victoria 3 adapter](games/vic3.md#real-machine-evidence) |

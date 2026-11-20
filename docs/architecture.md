@@ -139,7 +139,8 @@ validation; a new provider means a new provider module and a new `source` key
    items are verified instead of downloaded again and restored jobs are
    reconciled instead of re-subscribed.
 4. The game adapter's `verifyWorkshopContent(installPath)` checks the content
-   by the rule of its own scan; only then does a job become `Installed`. A rescan updates the inventory and readiness.
+   by the rule of its own scan; only then does a job become `Installed`. A
+   rescan updates the inventory and readiness.
 5. Identity gate: Subscribe and download requests are sent only for items the
    Web API (`GetPublishedFileDetails`) confirmed for this game. Deleted,
    private or wrong-game items become `Unavailable`; no verdict in time means
