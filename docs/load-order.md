@@ -398,33 +398,56 @@ temporary note. Victoria 3 notes on the procedure above, for that run:
   `--names w3 --supported-version "1.15"`. Optionally (step 6 of
   [`games/vic3.md`](games/vic3.md#outstanding-validation)):
   `create ... --game vic3 --names g --no-game-custom-data --no-shared --supported-version "1.15.*"`.
-- Step 3: make a playset with **only** the probes, from a share code built
-  with `scripts/share-code.py encode` (game `vic3`; local ids are the folder
-  names: `pmm_probe_c`, `pmm_probe_w1`, `pmm_probe_w2`, `pmm_probe_w3`,
-  `pmm_probe_g` if made, `pmm_probe_a`, all enabled, and `pmm_probe_b`
-  disabled; the version probes stay between c and a), imported into a scratch
-  profile, then `--live-test --profile <scratch>` with `play`. Check the
-  direct launch: `tasklist /FI "IMAGENAME eq victoria3.exe"` lists the game
-  and still the same process about 20 s later (no restart through Steam), no
+- Step 3: make a playset with **only** the probes and **one** installed
+  Workshop item (for step 6; pick one without warnings in the application),
+  from a share code built with `scripts/share-code.py encode` (game `vic3`;
+  local ids are the folder names). In this order: `pmm_probe_c`,
+  `pmm_probe_w1`, `pmm_probe_w2`, `pmm_probe_w3`, `pmm_probe_g` if made, the
+  Workshop item (`steam-workshop` and its id), `pmm_probe_a`, all enabled,
+  then `pmm_probe_b` disabled. The version probes and the Workshop item have
+  no shared file, so they stay between c and a. Save the code to a file,
+  then run `pmm-app --profile <scratch> --no-steam --live-test
+  "game:vic3,import:<file>,blockers,play"`. Check the direct launch:
+  `tasklist /FI "IMAGENAME eq victoria3.exe"` lists the game and still the
+  same process about 20 s later (no restart through Steam), no
   `Paradox Launcher.exe` or `dowser.exe` process runs, and the `DLC:` block
   of `debug.log` lists all 18 DLC.
 - Step 4: wait for the main menu, then quit the game.
 - Step 5: `python tools/probe-mods/probe_mods.py analyze "<Documents>/Paradox Interactive/Victoria 3/logs/error.log" --game vic3 --enabled c w1 w2 w3 a --disabled b`
   (add `g` after `w3` if it was made). Besides the `error.log` checks it
   reads `debug.log` and `debug.1.log` to `debug.5.log` (the log rotates
-  within a session) and reports the latest session's `Mod:` block (it must
-  be exactly the enabled probes, in order), its `Mounted Data:` lines, the
-  probes' "version ... matched / does not match" lines and every `Invalid
-  supported_version` line, which settle `rejectsEarlyWildcards` for `1.*`,
-  `*` and `1.15`. If `error.log` names no unknown trigger, the `Mod:` block
-  and the mount order still show what loaded, but not which mod won.
-- Step 6: repeat with the order **a, w1, w2, w3, c** (moved in the
-  application) and, in this run, one of the installed Workshop items
-  enabled between them: its `Mounted Data:` line proves that the game takes
-  the `...\steamapps\workshop\content\529340\<id>` path the application
-  writes.
-- Step 7: restore with the application (`restore`), compare
-  `content_load.json` with the backup (it must be byte-identical), then
+  within a session) and reports the latest session's `Mod:` block (the
+  probes in it, in order, and how many other mods: the Workshop item), its
+  `Mounted Data:` lines, the probes' "version ... matched / does not match"
+  lines and every `Invalid supported_version` line, which settle
+  `rejectsEarlyWildcards` for `1.*`, `*` and `1.15`. The version probes and
+  `g` test what the game accepts: `g` is expected to be left out, and so may
+  be a version probe whose pattern the game rejects. Then `loaded` and
+  `modBlock.probes` lack it, `allEnabledLoaded` and `modBlockIsEnabledOrder`
+  are false and the tool exits with 1; that is a result to record, not a
+  failed run. The run itself is judged by a and c (both loaded, and in the
+  `Mod:` block in playset order), by b (in neither) and by
+  `sharedFileWinner`. If `error.log` names no unknown trigger, the `Mod:`
+  block and the mount order still show what loaded, but not which mod won.
+- Step 6: repeat with the order **a, w1, w2, w3, (g,) the Workshop item,
+  c**, moved in the application: `pmm-app --profile <scratch> --no-steam
+  --live-test "game:vic3,select:<playset name>,move:5:0,move:1:5,dump:<file>,blockers,play"`
+  (with g: `move:6:0,move:1:6`; rows count from 0, b included). The dump
+  must list a, w1, w2, w3, (g,) the Workshop item, c and b (disabled). The
+  Workshop item's `Mounted Data:` line in `debug.log` (in both runs) proves
+  that the game takes the `...\steamapps\workshop\content\529340\<id>` path
+  the application writes. Note whether that path has the casing on disk:
+  the application upper-cases only the drive letter and keeps the casing of
+  the Steam library path it read (`libraryfolders.vdf`, else Steam's
+  registry entry, which can be lower-case), while a third-party tool writes
+  the casing on disk because a wrongly cased first entry reportedly breaks
+  the whole list.
+- Step 7: restore with the application once per launch, so twice:
+  `pmm-app --profile <scratch> --live-test "game:vic3,restore"` restores the
+  configuration from before the last launch it has not restored yet, so the
+  first run undoes step 6 and the second step 3, as in the CK3 run. Then
+  compare `content_load.json` with the backup (it must be byte-identical)
+  and run
   `python tools/probe-mods/probe_mods.py remove "<Documents>/Paradox Interactive/Victoria 3/mod" --game vic3 --names a b c w1 w2 w3 g`
   (folders only; there are no `.mod` files).
 - Step 8: record the evidence as `docs/evidence/<date>-vic3-load-order.md`
