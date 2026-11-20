@@ -4,9 +4,10 @@
 // the installation layout (binaries/victoria3.exe, launcher/
 // launcher-settings.json), content_load.json, the mods' metadata.json and
 // the Workshop layout were checked read-only against a real Windows
-// installation (1.15.2). Launching, game/userdir.txt, the in-game load order
-// and the supported_game_version rule are unverified. Details:
-// docs/games/vic3.md.
+// installation (1.15.2); the direct launch, the in-game load order (the later
+// mod wins a shared file) and the supported_game_version rule were observed
+// with probe mods on 1.15.2 (docs/evidence/2026-11-21-vic3-load-order.md).
+// game/userdir.txt is unverified. Details: docs/games/vic3.md.
 
 #include "games/content_load_adapter.hpp"
 

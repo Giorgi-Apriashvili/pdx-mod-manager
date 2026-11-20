@@ -54,12 +54,16 @@ InstalledMod folderMod(ModIdentity identity, const fs::path& folder, std::string
         return mod;
     }
     mod.descriptor = std::move(metadata->descriptor);
-    // Reported by reverse engineering of 1.15.1, not seen here: the game logs
-    // "Mod metadata read error" and leaves the mod out.
+    // Observed on 1.15.2 (docs/evidence/2026-11-21-vic3-load-order.md): the
+    // game logs "Mod metadata read error ... Expected member
+    // (game_custom_data)" and leaves the mod out of its "Mod:" list, but still
+    // mounts its folder in playset order and loads its files. So the mod is
+    // not Broken; the problem says what the game does.
     if (!metadata->hasGameCustomData)
-        mod.problems.push_back(
-            "Its " + std::string(kModMetadataFile) +
-            " has no \"game_custom_data\" entry; Victoria 3 reportedly leaves such a mod out.");
+        mod.problems.push_back("Its " + std::string(kModMetadataFile) +
+                               " has no \"game_custom_data\" entry; Victoria 3 reports a read "
+                               "error and leaves the mod out of its mod list, but still loads "
+                               "its files.");
     return mod;
 }
 

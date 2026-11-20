@@ -58,6 +58,10 @@ struct GameTraits {
     // Wildcards before the patch number make the game log "Invalid
     // supported_version" (see games/supported_version.hpp).
     bool rejectsEarlyWildcards = false;
+    // A pattern that is only "*" matches no version: the game logs that it
+    // does not match and lists the mod as out of date (Victoria 3 1.15.2; see
+    // games/supported_version.hpp).
+    bool loneWildcardMismatches = false;
     std::string_view loadOrderSummary;
     std::string_view loadOrderEvidence;
     bool loadOrderVerifiedInGame = false; // probe-mod run recorded in the evidence

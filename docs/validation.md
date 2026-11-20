@@ -16,10 +16,11 @@ step is a valid result and must be written down as such. The
 For Crusader Kings III the read-only steps and, with the owner's approval,
 the probe run of step 6 (items 1 to 5, with a playset of the probes only)
 were run on 2026-11-13
-([evidence](evidence/2026-11-13-ck3-load-order.md)). For Victoria 3 only the
-read-only steps were run, on 2026-11-20; its probe run is prepared
-([load order](load-order.md#victoria-3)) and approved by the owner (O1), but
-not run yet.
+([evidence](evidence/2026-11-13-ck3-load-order.md)). For Victoria 3 the
+read-only steps were run on 2026-11-20 and, with the owner's approval (O1),
+the probe run of step 6 (items 1 to 5, with the probes and one installed
+Workshop item; [load order](load-order.md#victoria-3)) on 2026-11-21
+([evidence](evidence/2026-11-21-vic3-load-order.md)).
 
 The procedure uses the desktop application `pmm-app` and the UI described in
 [`ui-contract.md`](ui-contract.md) (Import code, Export code, Play, ...).
@@ -135,7 +136,9 @@ nothing about descriptors outside `enabled_mods`).
 For Victoria 3, `--game vic3` writes `mod/pmm_probe_{a,b,c}` folders with
 `.metadata/metadata.json` and no `.mod` files, and prints the absolute folder
 paths that `content_load.json` will hold; the version probes and the rest of
-its procedure are in [load order](load-order.md#victoria-3).
+its procedure are in [load order](load-order.md#victoria-3) (run on
+2026-11-21: `"1.*"` and `"1.15"` matched 1.15.2, `"*"` did not, and none was
+reported as invalid).
 Remove them at the end with `probe_mods.py remove "<userdata>/mod"` (Victoria
 3: add `--game vic3`).
 
@@ -263,10 +266,15 @@ and wait until `workshop/content/<appid>/<W3>` disappears.
      Workshop item as `<Steam library>\steamapps\workshop\content\529340\<id>`),
      `disabledDLC` and `enabledUGC` are unchanged, and no file in `mod/` was
      written. The `Mod:` block of `<userdata>/logs/debug.log` lists the same
-     mods, and the `DLC:` block all DLC.
+     mods, and the `DLC:` block all DLC (2026-11-21: the same process after
+     27 s, no restart through Steam, 18 DLC; a mod without
+     `game_custom_data` is missing from the `Mod:` block but still mounted).
 3. Wait for the main menu (CK3: also for the `debug.log` line `Setup
    completion (history loaded)`; on 2026-11-13 a run closed before that line
-   crashed while closing), quit the game, then analyse its log:
+   crashed while closing; Victoria 3: for the `logs/custom_automated_stats.log`
+   line `time-to-reach-title-menu`, then 60 s without a change in the logs,
+   because `debug.log` writes its own title-menu line only when the game
+   closes), quit the game, then analyse its log:
 
    ```sh
    python tools/probe-mods/probe_mods.py analyze "<userdata>/logs/error.log" --enabled c a --disabled b
@@ -379,3 +387,4 @@ One row per game, Windows version and distribution combination (repeat rows for 
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (branch `agent/ck3`, `e16268a`) | 2026-11-13 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles, playset from the game's configuration) | partial: 4, 6-9 not run (need the owner's approval) | [CK3 adapter](games/ck3.md#real-machine-evidence) |
 | Crusader Kings III | 1.20.1.2 (Crozier) (26046173) | Windows 11 23H2 | Steam | after 0.1.2 (`main`, `5013efe`) | 2026-11-13 | 6, items 1-5, live with the probes only (C, A, B disabled, imported from a share code; one isolated profile; `--live-test` with `--no-steam`), two launches, then restore | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, probes loaded as configured, **the later mod in `enabled_mods` wins**, configuration restored. Run 1 crashed while the game was being closed (after the evidence was written); `supported_version="1.20"` undetermined; 4, 6 items 6-7, 7-9 not run | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md) |
 | Victoria 3 | 1.15.2 (Ivan-Chai) (26763837) | Windows 11 23H2 | Steam | after 0.2.0 (branch `agent/vic3`) | 2026-11-20 | 1 read-only, without the probe mods (`[.real]`); 2, 3, 5 read-only, scripted variant (one machine, new profiles: the game's configuration, 1 entry; and a Workshop ID list of the 9 installed items, 9 entries, one disabled, two moved) | partial: 4, 6-9 not run (the probe run of 6 is approved by the owner (O1) but not run yet; the others need the owner's approval) | [Victoria 3 adapter](games/vic3.md#real-machine-evidence) |
+| Victoria 3 | 1.15.2 (Ivan-Chai) (26763837) | Windows 11 23H2 | Steam | after 0.2.0 (`main`, `8225f35`) | 2026-11-21 | 6, items 1-5, live with the probes (C, W1, W2, W3, G, A, B disabled) and one installed Workshop item, imported from a share code (one isolated profile; `--live-test` with `--no-steam`), two launches, then restore | partial: step 6 items 1-5 pass: direct launch without the launcher and without a restart through Steam, the written `content_load.json` loaded as configured (the Workshop item by its absolute path), **the later mod in `enabledMods` wins**, configuration restored, both runs closed cleanly. `supported_game_version`: `"1.*"` and `"1.15"` match, `"*"` does not, none invalid; a mod without `game_custom_data` is left out of the mod list but loaded; 4, 6 items 6-7, 7-9 not run | [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md) |

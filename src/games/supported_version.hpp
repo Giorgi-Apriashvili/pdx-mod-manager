@@ -25,9 +25,12 @@
 // its error.log files on that machine contain no such messages, although
 // v1.37.*.* and v1.37.* descriptors are registered. Victoria 3 names the key
 // supported_game_version (in .metadata/metadata.json) and logs whether it
-// matches; victoria3.exe has "Invalid supported_version in {}", but which
-// patterns it reports is not known yet (docs/games/vic3.md), so no such rule
-// is applied until a probe run shows one.
+// matches. Its probe run on 1.15.2 (docs/evidence/2026-11-21-vic3-load-order.md)
+// found no early-wildcard rule: "1.*", "1.15" and "1.15.*" were logged as
+// matching 1.15.2, and no pattern as invalid. But a lone "*" was logged as
+// not matching 1.15.2, and the game listed that mod as out of date (it still
+// loaded it); GameTraits::loneWildcardMismatches warns about that, from
+// SupportedVersionCheck::loneWildcard.
 
 #include <cstdint>
 #include <optional>
@@ -48,6 +51,7 @@ enum class VersionMatch {
 struct SupportedVersionCheck {
     VersionMatch match = VersionMatch::NotDeclared;
     bool wildcardBeforePatch = false; // '*' as major or minor component
+    bool loneWildcard = false;        // the whole pattern is "*" ("v*")
 };
 
 // "v4.5.2" -> {4, 5, 2}. Also finds the version inside a label such as

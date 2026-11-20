@@ -29,18 +29,20 @@ constexpr GameTraits kTraits{
     // where it reads it from. Unverified.
     .userDirFile = "game/userdir.txt",
     .droppedArguments = kDroppedArguments,
-    // victoria3.exe has "Invalid supported_version in {}", but which patterns
-    // it rejects is not known yet; a mismatch does not stop a mod loading.
+    // Probe run on 1.15.2 (2026-11-21): "1.*", "1.15" and "1.15.*" were
+    // logged as matching 1.15.2 and none as invalid, but "*" as not matching;
+    // every probe loaded, as a mismatch does not stop a mod loading.
     .rejectsEarlyWildcards = false,
+    .loneWildcardMismatches = true,
     .loadOrderSummary = "content_load.json enabledMods, index 0 first; when two enabled mods "
                         "contain the same file, the one later in the list wins",
-    .loadOrderEvidence = "documented, not yet verified in the game: reverse engineering of "
-                         "Victoria 3 1.15.1 (each mounted mod is searched before the earlier "
-                         "ones); see docs/games/vic3.md",
-    .loadOrderVerifiedInGame = false,
-    // Shown above a Victoria 3 playset until a probe-mod run settles it.
-    .loadOrderUserNote = "It is not yet verified that Victoria 3 follows this order when two "
-                         "mods change the same file.",
+    .loadOrderEvidence = "docs/evidence/2026-11-21-vic3-load-order.md (probe mods, Victoria 3 "
+                         "1.15.2, Windows 11)",
+    .loadOrderVerifiedInGame = true,
+    // The playset order is the order the game applies to whole files; which
+    // definition of a database entry wins follows the game's own rules
+    // (docs/games/vic3.md#load-order).
+    .loadOrderUserNote = {},
     .logComponent = "games.vic3",
     .supportedVersionKey = "supported_game_version",
     .extraGameProcesses = kExtraGameProcesses,

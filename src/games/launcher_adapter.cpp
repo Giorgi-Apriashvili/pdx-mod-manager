@@ -410,6 +410,11 @@ LauncherGameAdapter::compatibilityWarnings(const GameInstallation& installation,
         warnings.push_back("The " + key + " \"" + pattern + "\" is not a version pattern.");
         break;
     }
+    if (m_traits.loneWildcardMismatches && check.loneWildcard &&
+        check.match == VersionMatch::Matches)
+        warnings.push_back(gameName + " does not count " + key + " \"" + pattern +
+                           "\" as matching the installed version " + installed +
+                           " and lists the mod as out of date.");
     if (m_traits.rejectsEarlyWildcards && check.wildcardBeforePatch)
         warnings.push_back(gameName + " reports " + key + " \"" + pattern +
                            "\" as invalid (wildcards are only accepted in the patch number).");

@@ -39,8 +39,9 @@ inline constexpr std::string_view kModMetadataFile = ".metadata/metadata.json";
 
 struct ModMetadata {
     ModDescriptor descriptor;
-    // "game_custom_data" is an object. Without it, the game reportedly logs
-    // "Mod metadata read error" and leaves the mod out (unverified).
+    // "game_custom_data" is an object. Without it, Victoria 3 1.15.2 logs
+    // "Mod metadata read error" and leaves the mod out of its "Mod:" list,
+    // but still mounts and loads its files (observed 2026-11-21).
     bool hasGameCustomData = false;
 };
 

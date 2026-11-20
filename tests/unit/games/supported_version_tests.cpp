@@ -67,3 +67,19 @@ TEST_CASE("supported_version patterns are compared with the installed version",
     CHECK(check.match == c.match);
     CHECK(check.wildcardBeforePatch == c.early);
 }
+
+TEST_CASE("A pattern that is only a wildcard is flagged", "[games][version]") {
+    // Victoria 3 1.15.2 logged "version * does not match game version 1.15.2"
+    // (2026-11-21); the comparison itself still treats '*' as any value.
+    for (const char* lone : {"*", " * ", "v*"}) {
+        CAPTURE(lone);
+        const SupportedVersionCheck check = checkSupportedVersion(lone, "1.15.2");
+        CHECK(check.loneWildcard);
+        CHECK(check.match == VersionMatch::Matches);
+        CHECK(checkSupportedVersion(lone, "").loneWildcard);
+    }
+    for (const char* other : {"1.*", "*.*", "1.15", "1.15.*", "", "latest"}) {
+        CAPTURE(other);
+        CHECK_FALSE(checkSupportedVersion(other, "1.15.2").loneWildcard);
+    }
+}
