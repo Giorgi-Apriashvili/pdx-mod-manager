@@ -710,7 +710,7 @@ Notes on the procedure above, for that run (`<userdata>` is
   `Executing History ... to 1936.1.1.12` comes 1 to 5 s earlier. On
   2026-11-21 no line reached the disk late (copies before the close and after
   the exit were identical), the game writes no quit line, and each close took
-  about 3.5 s.
+  about 3.3 s.
 - Step 5:
   `python tools/probe-mods/probe_mods.py analyze "<userdata>/logs/error.log" --game hoi4 --enabled c a --disabled b`
   reports, besides the `error.log` checks, the probes among the `system.log`

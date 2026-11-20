@@ -281,7 +281,7 @@ launcher or "run with last settings"; Paradox staff confirm that starting
 `hoi4.exe` directly skips the launcher. Verified on 1.20.0.0 (2026-11-21,
 four runs): no launcher process appeared, the game stayed up until it was
 closed, `system.log` listed 43 active DLC (as in the launcher-started
-1.19.5.0 session), and `CloseMainWindow` closed it cleanly in about 3.5 s.
+1.19.5.0 session), and `CloseMainWindow` closed it cleanly in about 3.3 s.
 Unverified: what the game does without Steam, DLC over a long time without
 the launcher, and multiplayer without the launcher's session arguments.
 

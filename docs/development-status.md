@@ -78,6 +78,11 @@ was not run).
   pmm_persistence_tests 72, pmm_platform_tests 59, pmm_providers_tests 61,
   pmm_games_tests 110, pmm_services_tests 99, pmm_app_tests 124, ui-preview
   1 (no new test cases; changed checks only).
+- `scripts/check.sh --full` on `f21cdcf`: passed in 7 minutes (ASan and
+  clang-cl with UBSan 517/517 each, the update contract's 112 test cases,
+  clang-tidy on the 6 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 642/642). The commit after
+  it changes docs only (the close times of the runs, a rewording).
 
 ## Test status (2026-11-21, Hearts of Iron IV, `agent/hoi4`)
 

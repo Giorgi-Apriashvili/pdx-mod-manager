@@ -6,10 +6,10 @@ section 3 and step 6): four direct launches by the application with probe mods
 only, on 1.20.0.0, on the development machine. **Result: when two enabled
 mods contain the same file, the mod whose registration file name
 (`mod/<file>.mod`) sorts later wins; the order of `enabled_mods` and the
-mods' `name=` do not matter.** That is hypothesis H3 of the procedure, the
-rule the HOI4 wiki and a 2018 developer diary describe, and unlike every other
-game measured so far (the list order in Stellaris, Crusader Kings III and
-Victoria 3, `name=` in Europa Universalis IV). The same runs showed that the
+mods' `name=` do not matter.** That is hypothesis H3 of the procedure and
+the rule the HOI4 wiki and a 2018 developer diary describe; it differs from
+every other game measured so far (the list order decides in Stellaris,
+Crusader Kings III and Victoria 3, `name=` in Europa Universalis IV). The same runs showed that the
 game reads the compact `dlc_load.json` the application writes, that a direct
 start stays up without the launcher or a restart through Steam, and that
 1.20.0.0 still reports `supported_version="1.*.*"` as invalid but not `"1.20"`.
@@ -44,7 +44,7 @@ Workshop ids.
 | Which mod wins a shared file | **the mod whose registration file name sorts later**: c (`pmm_probe_c.mod` against `pmm_probe_a.mod`) with the order c, a, with a, c, and with a named "PMM Probe Z"; a once its registration was `pmm_probe_z.mod` |
 | `supported_version` | `"1.20.*"` accepted; `"1.20"` (probe b, disabled) not reported; `"1.*.*"` reported as invalid for the owner's 4 such registrations, none of them enabled: 1.20.0.0 reads every `mod/*.mod` at start-up |
 | Restore | **pass**: `dlc_load.json` byte-identical to the backup (the launcher's pretty layout back), `mod/` identical to before, probes removed |
-| Shutdown | all four runs quit about 3.3 to 3.5 s after `CloseMainWindow`, without a crash (exit code 0 where it was captured) |
+| Shutdown | all four runs quit within about 3.3 s of `CloseMainWindow`, without a crash (exit code 0 where it was captured) |
 
 ## Preparation
 
@@ -474,7 +474,8 @@ Not tested: `"*"`, `"1.*"` and three-part forms without a wildcard such as
   at 0.00 to 0.02 CPU cores, then closed it with `CloseMainWindow`. No log
   line reached the disk late: the copies taken before the close and after the
   exit were identical in every run. Hearts of Iron IV writes no quit line.
-  Each close took about 3.3 to 3.5 s.
+  Each close took about 3.2 to 3.3 s (the process's exit time; run 1's was
+  not captured, and it had exited 3.3 s after the close).
 
 ## Direct launch: processes, Steam
 
