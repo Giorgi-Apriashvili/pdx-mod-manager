@@ -16,11 +16,9 @@ constexpr std::array<std::string_view, 2> kWorkshopAndLocal{source::SteamWorksho
 constexpr std::array<GameCatalogEntry, 5> kCatalog{{
     {"ck3", "Crusader Kings III", "1158310", "Crusader Kings III", kWorkshopAndLocal, true},
     {"eu4", "Europa Universalis IV", "236850", "Europa Universalis IV", kWorkshopAndLocal, true},
+    {"hoi4", "Hearts of Iron IV", "394360", "Hearts of Iron IV", kWorkshopAndLocal, true},
     {"stellaris", "Stellaris", "281990", "Stellaris", kWorkshopAndLocal, true},
     {"vic3", "Victoria 3", "529340", "Victoria 3", kWorkshopAndLocal, true},
-    // Known, not yet supported: listed so the architecture and UI can name it
-    // without advertising support.
-    {"hoi4", "Hearts of Iron IV", "394360", "Hearts of Iron IV", kWorkshopAndLocal, false},
 }};
 
 // The catalog in use: kCatalog, except while a testing::ScopedGameCatalog

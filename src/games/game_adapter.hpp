@@ -47,7 +47,7 @@ struct LoadOrderInfo {
     std::string evidence;        // where the evidence is documented
     // Shown to users when the playset order is not the order the game applies
     // (EU4 picks the winner of a shared file by mod name), or while that is
-    // not verified for the game (CK3); empty otherwise.
+    // not verified for the game (Hearts of Iron IV); empty otherwise.
     std::string userNote;
 };
 
@@ -116,8 +116,8 @@ public:
     virtual Status verifyWorkshopContent(const fs::path& installPath) const = 0;
 };
 
-// Registry of implemented adapters (CK3, EU4, Stellaris, Victoria 3), in
-// catalog order.
+// Registry of implemented adapters (CK3, EU4, Hearts of Iron IV, Stellaris,
+// Victoria 3), in catalog order.
 std::span<const std::unique_ptr<GameAdapter>> adapters();
 const GameAdapter* findAdapter(std::string_view gameKey);
 

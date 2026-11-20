@@ -21,15 +21,19 @@
 // parts". The probe run on 1.20.1.2 could not settle it either: started
 // directly, the game reported nothing about descriptors outside enabled_mods,
 // so the disabled "1.20" probe was never read; see
-// docs/evidence/2026-11-13-ck3-load-order.md). No such rule is known for EU4:
-// its error.log files on that machine contain no such messages, although
-// v1.37.*.* and v1.37.* descriptors are registered. Victoria 3 names the key
-// supported_game_version (in .metadata/metadata.json) and logs whether it
-// matches. Its probe run on 1.15.2 (docs/evidence/2026-11-21-vic3-load-order.md)
-// found no early-wildcard rule: "1.*", "1.15" and "1.15.*" were logged as
-// matching 1.15.2, and no pattern as invalid. But a lone "*" was logged as
-// not matching 1.15.2, and the game listed that mod as out of date (it still
-// loaded it); GameTraits::loneWildcardMismatches warns about that, from
+// docs/evidence/2026-11-13-ck3-load-order.md). Hearts of Iron IV too: the
+// error.log of a 1.19.5.0 run reports each "1.*.*" registration, and not
+// "1.19.*", "1.17.*", "1.19.4.*" or the three- and four-part forms without a
+// wildcard; "*", "1.*" and "1.20" are untested for it (docs/games/hoi4.md).
+// No such rule is known for EU4: its error.log files on that machine contain
+// no such messages, although v1.37.*.* and v1.37.* descriptors are
+// registered. Victoria 3 names the key supported_game_version (in
+// .metadata/metadata.json) and logs whether it matches. Its probe run on
+// 1.15.2 (docs/evidence/2026-11-21-vic3-load-order.md) found no early-wildcard
+// rule: "1.*", "1.15" and "1.15.*" were logged as matching 1.15.2, and no
+// pattern as invalid. But a lone "*" was logged as not matching 1.15.2, and
+// the game listed that mod as out of date (it still loaded it);
+// GameTraits::loneWildcardMismatches warns about that, from
 // SupportedVersionCheck::loneWildcard.
 
 #include <cstdint>

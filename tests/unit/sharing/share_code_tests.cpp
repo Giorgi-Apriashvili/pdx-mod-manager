@@ -578,6 +578,20 @@ TEST_CASE("Crusader Kings III playsets round-trip", "[sharing][code]") {
     CHECK(*decoded == m);
 }
 
+TEST_CASE("Hearts of Iron IV playsets round-trip", "[sharing][code]") {
+    // A game newly marked supported in the catalog: the format is unchanged,
+    // and 0.2.0 and earlier reject such codes as a game they do not support.
+    Manifest m = test::sampleManifest();
+    m.game = "hoi4";
+    m.gameVersionHint = "1.20.0.0";
+    auto code = encodeShareCode(m);
+    REQUIRE(code.ok());
+    CHECK_THAT(*code, StartsWith("PMM1."));
+    auto decoded = decodeShareCode(*code);
+    REQUIRE(decoded.ok());
+    CHECK(*decoded == m);
+}
+
 TEST_CASE("Victoria 3 playsets round-trip", "[sharing][code]") {
     // A game newly marked supported in the catalog: the format is unchanged,
     // and 0.2.0 and earlier reject such codes as a game they do not support.

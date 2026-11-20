@@ -243,7 +243,7 @@ TEST_CASE("Workshop ID lists format with '|' and round-trip", "[sharing][idlist]
 
 TEST_CASE("A Workshop ID list maps to a manifest for the selected game", "[sharing][idlist]") {
     const Ids ids{"3818297502", "3149445431"};
-    for (const char* game : {"ck3", "eu4", "stellaris"}) {
+    for (const char* game : {"ck3", "eu4", "hoi4", "stellaris", "vic3"}) {
         INFO(game);
         auto manifest = manifestFromWorkshopIds(game, ids);
         REQUIRE(manifest.ok());

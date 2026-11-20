@@ -1,0 +1,33 @@
+{
+	"gameId": "hoi4",
+	"displayName": "Hearts of Iron IV",
+	"version": "Operation Postern v1.20.0.0.8873 (0c4f)",
+	"rawVersion": "1.20.0.0",
+	"distPlatform": "steam",
+	"ingameSettingsPath": "pdx_settings.json",
+	"gameDataPath": "%USER_DOCUMENTS%/Paradox Interactive/Hearts of Iron IV",
+	"dlcPath": ".",
+	"ingameSettingsLayoutPath": "settings-layout.json",
+	"themeFile": "./assets/theme-settings.json",
+	"browserDlcUrl": "https://store.steampowered.com/dlc/394360/Hearts_of_Iron_IV/",
+	"browserModUrl": "",
+	"exePath": "./hoi4.exe",
+	"exeArgs": [ "-gdpr-compliant" ],
+	"alternativeExecutables": [
+		{
+			"label": {
+				"en": "Open game in Debug Mode"
+			},
+			"exePath": "./hoi4.exe",
+			"exeArgs": [ "-gdpr-compliant","-debug_mode" ]
+		}
+	],
+	"gameCachePaths": [
+		"cache/",
+		"continue_game.json",
+		"game rules/",
+		"map/",
+		"mod/",
+		"shadercache/"
+	]
+}

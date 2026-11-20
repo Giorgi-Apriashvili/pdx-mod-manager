@@ -2,8 +2,9 @@
 
 // The game's own launcher-settings.json, which the Paradox launcher reads to
 // learn the game version, the user-data folder and how to start the game.
-// Stellaris and EU4 keep it in <install>/launcher-settings.json; Crusader Kings
-// III keeps it in <install>/launcher/launcher-settings.json, with an exePath
+// Stellaris, EU4 and Hearts of Iron IV keep it in
+// <install>/launcher-settings.json; Crusader Kings III and Victoria 3 keep it
+// in <install>/launcher/launcher-settings.json, with an exePath
 // ("../binaries/ck3.exe") relative to that folder.
 //
 // The file is local data written by the game's installer, but it decides what

@@ -124,9 +124,11 @@ written to `Backend.settings` and saved on close.
 
 `dev/Pmm/Backend` is a QML-only stand-in for the whole contract surface:
 2,000 synthetic mods in all states (missing, queued, downloading, failed,
-unavailable, broken, warnings), Stellaris installed, EU4, Crusader Kings III
-and Victoria 3 not found, one unsupported game, download jobs, history
-snapshots and an import preview. A pasted Workshop ID list (any text not
+unavailable, broken, warnings), Stellaris installed, EU4, Crusader Kings III,
+Hearts of Iron IV and Victoria 3 not found, download jobs, history snapshots
+and an import preview. Every game in it is supported, as in the application,
+so the "Other games" section stays hidden; the preview tests add an
+unsupported game to check it. A pasted Workshop ID list (any text not
 starting with `PMM`) is previewed with its missing mods shown by ID; about a
 second later (`autoLookup`, or at once with `Backend.sharing.finishLookup()`)
 their Workshop names arrive in the same preview.

@@ -366,6 +366,7 @@ Item {
         function test_9e_otherGamesSection() {
             const pane = named("gamesPane")
             const before = pane.otherGameCount
+            compare(before, 0)
             const current = Backend.games.currentKey
             Backend.games.append({key: "pmm-test", name: "Test Game", supported: false, installed: false,
                                   manualLocation: false, statusText: "Not supported yet", version: "",

@@ -2,8 +2,9 @@
 
 // Static catalog of games this application knows about. A game being listed here
 // does not mean it is supported: only entries with `adapterAvailable == true`
-// have an implemented, tested adapter. Share codes for other games are rejected
-// with an actionable "not supported by this version" message.
+// have an implemented, tested adapter. Share codes for other games (none at
+// present) are rejected with an actionable "not supported by this version"
+// message.
 
 #include <span>
 #include <string_view>

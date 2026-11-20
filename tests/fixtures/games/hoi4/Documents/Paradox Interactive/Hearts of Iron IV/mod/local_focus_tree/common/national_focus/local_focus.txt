@@ -1,0 +1,3 @@
+focus_tree = {
+	id = local_focus_tree
+}

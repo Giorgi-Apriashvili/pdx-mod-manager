@@ -3,6 +3,7 @@
 #include "games/ck3.hpp"
 #include "games/eu4.hpp"
 #include "games/game_adapter.hpp"
+#include "games/hoi4.hpp"
 #include "games/stellaris.hpp"
 #include "games/vic3.hpp"
 #include "platform/paths.hpp"
@@ -24,9 +25,10 @@ DiscoveryEnvironment DiscoveryEnvironment::current() {
 
 std::span<const std::unique_ptr<GameAdapter>> adapters() {
     // Catalog order.
-    static const std::array<std::unique_ptr<GameAdapter>, 4> kAdapters{
+    static const std::array<std::unique_ptr<GameAdapter>, 5> kAdapters{
         std::make_unique<Ck3Adapter>(), std::make_unique<Eu4Adapter>(),
-        std::make_unique<StellarisAdapter>(), std::make_unique<Vic3Adapter>()};
+        std::make_unique<Hoi4Adapter>(), std::make_unique<StellarisAdapter>(),
+        std::make_unique<Vic3Adapter>()};
     return kAdapters;
 }
 

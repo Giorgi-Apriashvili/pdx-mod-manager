@@ -14,7 +14,8 @@ ListModel {
     signal gameSelected(string key)
     signal configurationImported()
 
-    // Catalog order: the supported games alphabetically, then the others.
+    // Catalog order: the supported games alphabetically, then the others
+    // (none at present; the preview tests add one).
     ListElement {
         key: "ck3"; name: "Crusader Kings III"; supported: true; installed: false; manualLocation: false
         statusText: "Not found"; version: ""
@@ -30,6 +31,13 @@ ListModel {
         loadOrderNote: "Europa Universalis IV does not use this order when two mods change the same file: the mod whose name comes first alphabetically wins. The order is still saved, shared and written for the game."
     }
     ListElement {
+        key: "hoi4"; name: "Hearts of Iron IV"; supported: true; installed: false; manualLocation: false
+        statusText: "Not found"; version: ""
+        installPath: ""
+        userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Hearts of Iron IV"
+        loadOrderNote: "Hearts of Iron IV may not follow this order when two mods change the same file; this is not verified yet."
+    }
+    ListElement {
         key: "stellaris"; name: "Stellaris"; supported: true; installed: true; manualLocation: false
         statusText: "Installed \u00b7 v4.5.2"; version: "4.5.2"
         installPath: "C:/Games/Steam/steamapps/common/Stellaris"
@@ -42,10 +50,6 @@ ListModel {
         installPath: ""
         userDataPath: "C:/Users/Player/Documents/Paradox Interactive/Victoria 3"
         loadOrderNote: ""
-    }
-    ListElement {
-        key: "hoi4"; name: "Hearts of Iron IV"; supported: false; installed: false; manualLocation: false
-        statusText: "Not supported yet"; version: ""; installPath: ""; userDataPath: ""; loadOrderNote: ""
     }
 
     function indexOfKey(key: string): int {
