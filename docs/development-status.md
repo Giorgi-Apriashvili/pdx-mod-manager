@@ -47,6 +47,34 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13. `--game vic3` (2026-11-20: probe folders with `metadata.json`, `--no-shared`, `--no-game-custom-data`, `analyze` of the rotating debug logs) checked in scratch folders, then used for the Victoria 3 probe run of 2026-11-21 | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md), [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md) |
 
+## Test status (2026-11-21, Victoria 3 probe run, `agent/vic3-probe`)
+
+The live run itself is recorded in the
+[Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md): two direct
+launches of 1.15.2 by the debug build of `main` (`8225f35`) with a scratch
+profile, `--live-test` and `--no-steam`, approved by the owner (O1); the
+configuration restored and the probes removed afterwards. The branch then
+records it: Victoria 3's traits (`loadOrderEvidence`,
+`loadOrderVerifiedInGame = true`, no `loadOrderUserNote`, and the new
+`loneWildcardMismatches = true` with `SupportedVersionCheck::loneWildcard`),
+the corrected `game_custom_data` problem, their checks in
+`vic3_adapter_tests.cpp`, `registry_tests.cpp` and
+`supported_version_tests.cpp`, the Victoria 3 row of the preview's
+`FakeGamesModel.qml`, and the docs. No game was started, and no game file was
+read or written for these checks (`[.real]` was not run).
+
+- `debug` preset: **0 warnings** (a full build of the worktree), **624/624
+  tests pass**, by label: core 51, sharing 69, persistence 72, platform 59,
+  providers 61, games 97, services 96, application 123, ui-preview 1. New:
+  a lone `"*"` (also `" * "` and `"v*"`) is flagged by
+  `checkSupportedVersion` and warned about for Victoria 3, not when the
+  installed version is unknown, and not for `"1.15"`, `"1.*"` or `"1.*.*"`.
+  The `[vic3]`, `[registry]` and `[version]` cases passed 10 times each.
+- `scripts/check.sh --full` on `95d2efe`: passed in 8 minutes (ASan and
+  clang-cl with UBSan 500/500 each, the update contract's 112 test cases,
+  clang-tidy on the 7 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 624/624).
+
 ## Test status (2026-11-20, Victoria 3, `agent/vic3`)
 
 Local runs only, with fakes, fixtures and new scratch profiles; no game, no
