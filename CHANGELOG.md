@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+### Added
+
+- **Victoria 3.** Paradox Mod Manager now finds Victoria 3 installed through Steam, reads and edits its playsets, and starts the game directly with the chosen mods. Its mods are read from their own `.metadata/metadata.json`: local mod folders and Steam Workshop items, with their version and dependency warnings (the `load_before`, `load_after` and `incompatible_with` relationships are not checked yet); zipped local mods are listed and launched, but their details are not read. **Play** writes only the game's `content_load.json`, in playset order, and keeps the DLC choices in it as they are; Victoria 3 has no `.mod` files to write. Workshop downloads for Victoria 3 are checked for the item's `metadata.json`. Share codes for Victoria 3 (`"game":"vic3"`) are now accepted; the share-code format is unchanged (envelope `PMM1`, manifest schema 1), and 0.2.0 and earlier still reject such codes as not supported. A local Victoria 3 mod is identified by its folder's name in the game's `mod` folder (or its `.zip` file's name). Which of two mods that change the same file wins has not been checked in Victoria 3 yet, and a note above its mod list says so; since Victoria 3 1.12, mods also need `REPLACE:` or `INJECT:` to change most of the game's database entries, whatever their order ([Victoria 3](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/main/docs/games/vic3.md)). Paradox Mods and the Paradox launcher's playsets are not supported, as for the other games.
+
 ## [0.2.0] - 2026-11-13
 
 Crusader Kings III support, Workshop ID lists next to share codes, the Steam Workshop names of missing mods in the import preview, and a window that fits small and high-DPI screens. Installed copies update to this version from the update banner or **Settings > Updates**.

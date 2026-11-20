@@ -34,8 +34,9 @@ without Qt (ADR 0001), so it builds and tests with the `core-debug` preset.
   |           |             |             |               |             |
   games       providers     sharing       persistence     platform
   CK3, EU4,   Workshop      share codes   SQLite state,   OS paths, files, processes,
-  Stellaris   protocol,     (PMM1)        migrations      Steam discovery,
-  adapters    state machine |             |               file transactions
+  Stellaris,  protocol,     (PMM1)        migrations      Steam discovery,
+  Victoria 3  state machine |             |               file transactions
+  adapters    |             |             |               |
   +-----------+-------------+-------------+---------------+
                             |
   core                      domain model, Result/Error, logging, catalog, SHA-256, UTF-8,
@@ -73,7 +74,7 @@ Link dependencies as declared in CMake:
 | `sharing` | Share-code protocol v1: strict manifest parsing and canonical serialization, bounded zlib/Base64URL codec, envelope and digest | `share_code.hpp`, `manifest.hpp`, `codec.hpp`, `utf8.hpp` |
 | `persistence` | One SQLite database: migrations, upgrade backups, integrity checks, repositories for settings, installations, inventory, playsets (with undo history), acquisition jobs and launch history | `database.hpp`, `*_repository.hpp` ([details](persistence.md)) |
 | `providers` | Steam Workshop: helper wire protocol, pure acquisition reducer, EResult classification, Web API metadata request/response, manual fallback links, local mod fingerprints | `helper_protocol.hpp`, `acquisition.hpp`, `workshop_item.hpp`, `web_metadata.hpp`, `fallback.hpp`, `local_fingerprint.hpp` ([details](steam-workshop.md)) |
-| `games` | One adapter per game: discovery per store, descriptor parsing, version and capability detection, load-order translation, generated configuration, executable/arguments/environment, process names, compatibility warnings. Adapters return plans; they never write files. CK3, EU4 and Stellaris share `DlcLoadJsonAdapter` with per-game traits ([CK3](games/ck3.md), [EU4](games/eu4.md), [Stellaris](games/stellaris.md)) | `game_adapter.hpp`, `dlc_load_adapter.hpp`, `ck3.hpp`, `eu4.hpp`, `stellaris.hpp` |
+| `games` | One adapter per game: discovery per store, descriptor parsing, version and capability detection, load-order translation, generated configuration, executable/arguments/environment, process names, compatibility warnings. Adapters return plans; they never write files. Two families on a shared launcher-v2 base (`LauncherGameAdapter`, [ADR 0010](adr/0010-content-load-adapter-family.md)), each with per-game traits: CK3, EU4 and Stellaris use `DlcLoadJsonAdapter` (`dlc_load.json` and `.mod` files), Victoria 3 uses `ContentLoadJsonAdapter` (`content_load.json` and `.metadata/metadata.json`) ([CK3](games/ck3.md), [EU4](games/eu4.md), [Stellaris](games/stellaris.md), [Victoria 3](games/vic3.md)). Each adapter also checks downloaded Workshop content by the rule of its scan | `game_adapter.hpp`, `launcher_adapter.hpp`, `dlc_load_adapter.hpp`, `content_load_adapter.hpp`, `mod_metadata.hpp`, `ck3.hpp`, `eu4.hpp`, `stellaris.hpp`, `vic3.hpp` |
 | `services` | Qt-free use cases called by the application on one worker thread: game discovery and scans, playset editing with undo, export/import, the acquisition coordinator (helper sessions, Web API identity gate, ticks, persistence), the launch check, launch and configuration recovery, diagnostics, application folders ([details](architecture-services.md)) | `game_service.hpp`, `playset_service.hpp`, `share_service.hpp`, `acquisition_coordinator.hpp`, `launch_service.hpp`, `app_paths.hpp` |
 | `app` | Qt composition root (`AppRuntime`), the services worker (`ServiceRunner`), `QProcess` host for the Steam helper, `QNetworkAccessManager` host for Web API metadata, the per-profile lock, GUI-ready snapshots; the `Backend` with the models and controllers of the UI contract, settings and window state, clipboard and file dialogs, the offline QML network factory, the verification switches ([details](app.md)) | `app_runtime.hpp`, `service_runner.hpp`, `session_host.hpp`, `metadata_host.hpp`, `profile_lock.hpp`, `backend.hpp` |
 | `ui` | QML module `Pmm.Ui`: the three-column window, panes, dialogs and controls; presentation and interaction only, data shown as plain text ([contract](ui-contract.md), [accessibility](accessibility.md)) | `Main.qml`, `panes/`, `dialogs/`, `controls/` |
@@ -137,8 +138,8 @@ validation; a new provider means a new provider module and a new `source` key
 3. Before deciding anything, every run queries the item state, so installed
    items are verified instead of downloaded again and restored jobs are
    reconciled instead of re-subscribed.
-4. `verifyWorkshopContent(installPath)` checks the content; only then does a
-   job become `Installed`. A rescan updates the inventory and readiness.
+4. The game adapter's `verifyWorkshopContent(installPath)` checks the content
+   by the rule of its own scan; only then does a job become `Installed`. A rescan updates the inventory and readiness.
 5. Identity gate: Subscribe and download requests are sent only for items the
    Web API (`GetPublishedFileDetails`) confirmed for this game. Deleted,
    private or wrong-game items become `Unavailable`; no verdict in time means

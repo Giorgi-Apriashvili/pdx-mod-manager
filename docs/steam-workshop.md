@@ -21,6 +21,7 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
 | Europa Universalis IV | **Verified live** 2026-10-30 with EU4 1.37.5: the helper session in EU4's app context, with the `steam_api64.dll` from the game root, and subscribe and download (see the "Subscribe" row and the [evidence](evidence/live-validation-2026-10-30.md)) |
 | Crusader Kings III | Implemented, **unverified**: the same mechanism, with the Steam API library from `<install>/binaries`, where CK3 keeps it next to `ck3.exe`; the helper has not been run for app 1158310 |
+| Victoria 3 | Implemented, **unverified**: the same mechanism; the helper has not been run for app 529340. Its Workshop items have no `descriptor.mod`: the check that ends a download wants a non-empty `.metadata/metadata.json`, and accepts the 9 items installed on the development machine (read-only, 2026-11-20) |
 
 ## 1. Architecture
 
@@ -263,10 +264,13 @@ its transitions and the helper.
 - Map helper events with `observationFromHelperEvent()` and actions with `helperCommandFor()`.
   Batch `QueryState` actions from several jobs into one `state` command.
 - Hold Subscribe and RequestDownload behind the identity gate (above).
-- Run `verifyWorkshopContent()` on a worker thread, then feed `ContentVerified`: a non-empty
+- Run the game adapter's `verifyWorkshopContent()` on a worker thread, then feed
+  `ContentVerified`. Each adapter family applies the rule of its own scan (since 2026-11-20;
+  [ADR 0010](adr/0010-content-load-adapter-family.md)): for Stellaris, EU4 and CK3 a non-empty
   `descriptor.mod` in the folder, else exactly one other `.mod` file there, non-empty, and no
-  `.zip` (the rule of `games::contentDescriptorFile()`, since 2026-11-13; some items ship
-  `<Name>.mod`), or a non-empty single file for legacy items.
+  `.zip` (`games::contentDescriptorFile()`; some items ship `<Name>.mod`); for Victoria 3 a
+  non-empty `.metadata/metadata.json`. For every game a single file (a legacy item) must not
+  be empty.
 - Feed `Tick` about once per second. Save `context.job` when `persist` is set; progress-only
   changes may be coalesced.
 - On start-up, call `startAcquisition()` for every stored non-terminal job.
@@ -335,7 +339,7 @@ reported as 2. A result that takes longer than 120 s is reported as 16 (Timeout)
 | Web API gives no verdict within 15 s (offline, blocked) | NeedsUserAction (timeout) | nothing was subscribed; Retry asks the Web API again, or use the manual fallback |
 | Offline / timeouts / Steam busy | Failed, retried with backoff | after 3 runs: "Automatic retries are exhausted" |
 | Download stalls (no progress for 5 min) | Failed (timeout) | check Steam's Downloads page (paused, disk space), retry |
-| Installed content unusable (no `descriptor.mod` and not exactly one other `.mod` file) | Failed (validation_failed) | verify files in Steam or resubscribe there, retry |
+| Installed content unusable (no `descriptor.mod` and not exactly one other `.mod` file; Victoria 3: no `.metadata/metadata.json`) | Failed (validation_failed) | verify files in Steam or resubscribe there, retry |
 | Unsubscribed in Steam during the download | NeedsUserAction | retry to subscribe again |
 | Cancel | Cancelled | the message says whether a subscription or download already happened and remains in Steam |
 | Application restarted mid-job | resumes in the stored state, re-queries Steam first | no blind re-subscribe |

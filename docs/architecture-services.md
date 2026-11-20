@@ -138,7 +138,8 @@ obscurely.
 - `cachedStates()` / `cachedInventory()`: the last known state, read from the
   database without touching the filesystem, for a fast start-up.
 - `importCurrentConfiguration(key)` creates a new active playset from
-  `adapter.readCurrentConfiguration()` (for example `dlc_load.json`).
+  `adapter.readCurrentConfiguration()` (for example `dlc_load.json`, or
+  Victoria 3's `content_load.json`).
 
 ### PlaysetService (`playset_service.hpp`)
 
@@ -228,7 +229,10 @@ helper session per game. Its responsibilities:
   no subscribe or response timeout fires for a command that was never sent.
   Without a verdict within `CoordinatorOptions::identityTimeoutMs` the job
   needs the user rather than subscribing unverified.
-- Verify content (`verifyWorkshopContent()`).
+- Verify content with the game adapter's `verifyWorkshopContent()`, the rule
+  of the adapter's own scan (`descriptor.mod` or a sole `.mod` file for the
+  `dlc_load.json` games, `.metadata/metadata.json` for Victoria 3).
+  `CoordinatorOptions::verifyContent` replaces it in tests.
 - Persist jobs when the reducer asks, coalescing progress-only changes.
 - Run at most one job per mod. A job that starts (a new import, a retry)
   supersedes the older, finished in-memory jobs of the same mod; their rows
@@ -389,7 +393,7 @@ enabled.
                         confirm"); Retry / retryAllFailed ask the Web API again
      QueryState and verifying content Steam already installed never wait
  helper events -> observationFromHelperEvent -> reduceAcquisition -> persist if asked
- action VerifyContent -> verifyWorkshopContent(installPath) -> ContentVerified
+ action VerifyContent -> adapter.verifyWorkshopContent(installPath) -> ContentVerified
  job Installed -> GameService::rescanMods(game) -> CoordinatorUpdate::rescanned
  tick(nowMs)  -> timeouts, polling, automatic retries, coalesced progress writes
  idle (no job of the game waits for Steam) -> host.close(game)
@@ -485,7 +489,8 @@ every service against:
 
 - an in-memory database on a fake clock;
 - temporary folders whose names contain spaces and non-ASCII characters;
-- a fake Stellaris adapter that scans plain folders;
+- a fake Stellaris adapter that scans plain folders and checks downloaded
+  content with the real Stellaris adapter's rule;
 - a simulated Steam helper that subscribes, downloads, fails, refuses sessions
   and crashes on demand, and records its open, close and wait calls in order
   (a launch test appends the process start to prove close, wait, start);

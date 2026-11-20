@@ -81,9 +81,11 @@ Roles:
   not use this order when two mods change the same file: the mod whose name
   comes first alphabetically wins. The order is still saved, shared and
   written for the game." Stellaris and Crusader Kings III (observed in-game
-  2026-10-30 and 2026-11-13): empty. The mods pane shows it as a
-  closable info banner above the list (hidden for that game for the rest of
-  the session once closed).
+  2026-10-30 and 2026-11-13): empty. Victoria 3 (not yet observed in-game):
+  "It is not yet verified that Victoria 3 follows this order when two mods
+  change the same file." The mods pane shows it as a closable info banner
+  above the list of a playset with more than one mod (hidden for that game
+  for the rest of the session once closed).
 
 Properties: `currentKey` (string), `currentName`, `currentInstalled` (bool),
 `currentSupported` (bool), `currentLoadOrderNote` (string), `scanning`
@@ -101,7 +103,8 @@ Invokables:
   when the folders are rejected.
 - `clearManualLocation(key)`: back to automatic detection.
 - `importCurrentConfiguration() -> bool`: creates and activates a new playset
-  from the game's current mod configuration (e.g. `dlc_load.json`).
+  from the game's current mod configuration (e.g. `dlc_load.json`, or
+  Victoria 3's `content_load.json`).
 
 ## `PlaysetsModel` (QAbstractListModel)
 

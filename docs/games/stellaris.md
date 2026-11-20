@@ -2,7 +2,9 @@
 
 Steam app 281990, catalog key `stellaris`. Code: `src/games/stellaris.{hpp,cpp}`
 (traits) on top of the shared `DlcLoadJsonAdapter`
-(`src/games/dlc_load_adapter.{hpp,cpp}`), plus `descriptor`,
+(`src/games/dlc_load_adapter.{hpp,cpp}`), which shares discovery and launch
+with Victoria 3 through `LauncherGameAdapter`
+(`src/games/launcher_adapter.{hpp,cpp}`), plus `descriptor`,
 `launcher_settings` and `supported_version` in the same folder. Load order:
 [`../load-order.md`](../load-order.md).
 
@@ -121,11 +123,12 @@ Nothing is ever written below a Steam folder or the game installation.
   `descriptorPath` and `descriptorRef = "mod/ugc_<id>.mod"`; that descriptor
   is generated at launch.
 - A Workshop content folder is described by its `descriptor.mod`, else by its
-  only `*.mod` file (since 2026-11-13, for every game; some items ship
-  `<Name>.mod` instead, seen for Crusader Kings III). The content check after
-  a Workshop download (`providers::verifyWorkshopContent()`) applies the same
-  rule. With no `.mod` file the item is `Broken` as before; with several it
-  is `Broken` and the problem names them. A folder that holds a `.zip` stays
+  only `*.mod` file (since 2026-11-13, for every game that uses `.mod`
+  files; some items ship `<Name>.mod` instead, seen for Crusader Kings III).
+  The content check after a Workshop download (the adapter's
+  `verifyWorkshopContent()`) applies the same rule. With no `.mod` file the
+  item is `Broken` as before; with several it is `Broken` and the problem
+  names them. A folder that holds a `.zip` stays
   a legacy zipped item (see [`eu4.md`](eu4.md)), unless a registration's
   `path=` names the folder itself: then the folder stays the content and the
   registration is reused.

@@ -1,7 +1,9 @@
 # Crusader Kings III adapter
 
 Steam app 1158310, catalog key `ck3`. Code: `src/games/ck3.{hpp,cpp}` (traits)
-on top of the shared `DlcLoadJsonAdapter` (`src/games/dlc_load_adapter.{hpp,cpp}`).
+on top of the shared `DlcLoadJsonAdapter` (`src/games/dlc_load_adapter.{hpp,cpp}`),
+which shares discovery and launch with Victoria 3 through `LauncherGameAdapter`
+(`src/games/launcher_adapter.{hpp,cpp}`).
 Load order: [`../load-order.md`](../load-order.md#crusader-kings-iii).
 
 ## Status
