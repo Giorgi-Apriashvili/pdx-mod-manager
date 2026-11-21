@@ -137,8 +137,9 @@ second later (`autoLookup`, or at once with `Backend.sharing.finishLookup()`)
 their Workshop names arrive in the same preview.
 `Backend.details.game = "hoi4"` shows the selected mod's dependencies as
 Hearts of Iron IV treats them ("Loads after"; the installed ones of rows 3,
-10, 17, … name four example mods), over Stellaris's list, since the preview
-has no Hearts of Iron IV mods.
+10, 17, … name four example mods, and the details leave out the fake
+"Requires …" warnings), over Stellaris's list, since the preview has no
+Hearts of Iron IV mods.
 Nothing is read from or written to disk.
 
 ```sh

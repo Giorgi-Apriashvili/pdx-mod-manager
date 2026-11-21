@@ -238,10 +238,11 @@ Read-only properties:
 - `dependenciesLoadAfter` (bool): the game loads a mod after the mods it
   names when they are enabled and does not need them (Hearts of Iron IV).
   The names are then not checked: no row warnings and no dependency
-  feedback. Each one's `text` says what it is in this playset ("Enabled in
-  this playset; the game loads it first", "Disabled in this playset; not
-  needed", "Installed, not in this playset; not needed", "Not installed; not
-  needed"), and the pane heads them "Loads after" instead of "Dependencies";
+  feedback. Each mod is listed once, under its first spelling, and its
+  `text` says what it is in this playset ("Enabled in this playset",
+  "Disabled in this playset; not needed", "Installed, not in this playset;
+  not needed", "Not installed; not needed"), and the pane heads them "Loads
+  after" instead of "Dependencies";
 - `dependenciesNote`: for such a game, "<Game> loads this mod after these
   mods when they are enabled. It does not need them."; otherwise empty;
 - `warnings`, `problems` (scan problems, and for entries that are not

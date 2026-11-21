@@ -317,8 +317,9 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
     FakeAdapter adapter(world);
     auto runtime = require(AppRuntime::create(hermeticOptions(temp.path() / "profile", adapter)));
     // In each game the overhaul (#1) names a mod that comes after it (#2), a
-    // disabled one (#3), one installed elsewhere and one that is not
-    // installed; #2 names #1, and the disabled #3 names #2.
+    // disabled one (#3), one installed elsewhere, one that is not installed
+    // and #2 again in other letter case; #2 names #1, and the disabled #3
+    // names #2.
     const auto playsetOf = [&runtime](const GameKey& game) {
         const auto mod = [&game](const std::string& id, const std::string& name,
                                  std::vector<std::string> dependencies) {
@@ -330,12 +331,12 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
         };
         persistence::InventoryRepository inventory(runtime->database());
         requireOk(inventory.replaceForGame(
-            game,
-            {mod("6000000001", "Example Overhaul",
-                 {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing"}),
-             mod("6000000002", "Example Map", {"Example Overhaul"}),
-             mod("6000000003", "Example Conversion", {"Example Map"}),
-             mod("6000000004", "Example Elsewhere", {})}));
+            game, {mod("6000000001", "Example Overhaul",
+                       {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing",
+                        "example MAP"}),
+                   mod("6000000002", "Example Map", {"Example Overhaul"}),
+                   mod("6000000003", "Example Conversion", {"Example Map"}),
+                   mod("6000000004", "Example Elsewhere", {})}));
         Playset playset;
         playset.game = game;
         playset.name = "Main";
@@ -372,23 +373,21 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
     CHECK(details.dependenciesLoadAfter());
     CHECK(details.dependenciesNote() == "Hearts of Iron IV loads this mod after these mods when "
                                         "they are enabled. It does not need them.");
+    // Each mod once, whatever the spelling.
     CHECK(shown(details) ==
-          QStringList{"Example Map | load_after | Enabled in this playset; the game loads it first",
+          QStringList{"Example Map | load_after | Enabled in this playset",
                       "Example Conversion | load_after | Disabled in this playset; not needed",
                       "Example Elsewhere | load_after | Installed, not in this playset; not needed",
                       "Example Missing | load_after | Not installed; not needed"});
     details.setRow(1);
-    CHECK(shown(details) == QStringList{"Example Overhaul | load_after | Enabled in this playset; "
-                                        "the game loads it first"});
+    CHECK(shown(details) == QStringList{"Example Overhaul | load_after | Enabled in this playset"});
     details.setRow(2);
-    CHECK(
-        shown(details) ==
-        QStringList{"Example Map | load_after | Enabled in this playset; the game loads it first"});
+    CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset"});
 
     // Stellaris requires them: the same states and texts as before.
     const PlaysetStateData stellaris = playsetOf("stellaris");
     REQUIRE(stellaris.rows.size() == 3);
-    CHECK(stellaris.rows[0].warnings.size() == 4);
+    CHECK(stellaris.rows[0].warnings.size() == 5);
     CHECK(stellaris.counts.warning == 1);
     model.resetTo(stellaris);
     details.setRow(0);
@@ -402,7 +401,9 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
                       "Example Elsewhere | not_in_playset | Requires \"Example Elsewhere\", which "
                       "is installed but not in this playset.",
                       "Example Missing | missing | Requires \"Example Missing\", which is not "
-                      "installed."});
+                      "installed.",
+                      "example MAP | order | Requires \"example MAP\" (#2), which must load before "
+                      "this mod (#1). Move it above this mod."});
     details.setRow(1);
     CHECK(shown(details) ==
           QStringList{"Example Overhaul | ok | Enabled in this playset and loads earlier"});

@@ -53,7 +53,10 @@ QtObject {
         supportedVersion = m.supportedVersion
         statusText = m.statusText
         tags = m.tags.length > 0 ? m.tags.split(",") : []
-        warnings = m.warnings.length > 0 ? m.warnings.split("\n") : []
+        // Hearts of Iron IV never warns about dependencies (the fake list's
+        // "Requires …" warnings stand for Stellaris's).
+        warnings = (m.warnings.length > 0 ? m.warnings.split("\n") : [])
+                   .filter(w => game !== "hoi4" || !w.startsWith("Requires"))
         problems = m.status === "broken" ? ["descriptor.mod has no name; the game may skip this mod."]
                  : m.status === "failed" ? ["The last download attempt failed: Steam reported a timeout (k_EResultTimeout)."]
                  : []
@@ -72,7 +75,7 @@ QtObject {
         const deps = []
         if (dependenciesLoadAfter) {
             if (row % 7 === 3 && installed) {
-                deps.push({ name: "Example Overhaul", state: "load_after", text: "Enabled in this playset; the game loads it first" })
+                deps.push({ name: "Example Overhaul", state: "load_after", text: "Enabled in this playset" })
                 deps.push({ name: "Example Map Expansion", state: "load_after", text: "Disabled in this playset; not needed" })
                 deps.push({ name: "Example Total Conversion", state: "load_after", text: "Installed, not in this playset; not needed" })
                 deps.push({ name: "Example Alternate History", state: "load_after", text: "Not installed; not needed" })

@@ -51,7 +51,7 @@ QString loadAfterText(DependencyResolution resolution) {
     case DependencyResolution::EnabledEarlier:
     case DependencyResolution::EnabledLater:
         // The game orders them itself, whatever their place in the list.
-        return QStringLiteral("Enabled in this playset; the game loads it first");
+        return QStringLiteral("Enabled in this playset");
     case DependencyResolution::Disabled:
         return QStringLiteral("Disabled in this playset; not needed");
     case DependencyResolution::NotInPlayset:

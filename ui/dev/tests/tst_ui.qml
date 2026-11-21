@@ -424,7 +424,7 @@ Item {
                                           + "they are enabled. It does not need them.")
             tryVerify(() => dependencyRows().length === 4)
             const rows = dependencyRows()
-            compare(rows[0].Accessible.name, "Example Overhaul: Enabled in this playset; the game loads it first")
+            compare(rows[0].Accessible.name, "Example Overhaul: Enabled in this playset")
             compare(rows[3].Accessible.name, "Example Alternate History: Not installed; not needed")
             for (const dependency of rows) {
                 verify(!dependency.Accessible.name.includes("Requires"), dependency.Accessible.name)
@@ -434,6 +434,22 @@ Item {
             Backend.details.game = "stellaris"
             compare(heading.text, "Dependencies")
             verify(!note.visible)
+
+            // A mod that Stellaris warns about for a dependency has no such
+            // warning in Hearts of Iron IV.
+            let warned = 0
+            while (warned < Backend.mods.count
+                   && !(Backend.mods.get(warned).status === "ready"
+                        && Backend.mods.get(warned).warnings.includes("Requires")))
+                ++warned
+            verify(warned < Backend.mods.count, "no fake mod with a dependency warning")
+            win.selectMod(warned)
+            tryCompare(Backend.details, "row", warned)
+            verify(Backend.details.warnings.join("\n").includes("Requires"))
+            Backend.details.game = "hoi4"
+            verify(!Backend.details.warnings.join("\n").includes("Requires"),
+                   Backend.details.warnings.join("\n"))
+            Backend.details.game = "stellaris"
         }
 
         // --- keyboard and accessibility (docs/accessibility.md) ---------------
