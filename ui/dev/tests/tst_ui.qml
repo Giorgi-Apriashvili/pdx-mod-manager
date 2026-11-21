@@ -8,8 +8,8 @@ import Pmm.Backend
 // searching, delete confirmation, drag-and-drop, column-width persistence,
 // theme switching, the import flow, discarding an interrupted change that
 // Recover cannot undo, the "Other games" section with an unsupported game
-// added by the test, the details of a mod whose game only orders the load by
-// its dependencies (Hearts of Iron IV), keyboard accessibility (Tab order, F6,
+// added by the test, the details of a mod's dependencies as each game treats
+// them (required in Victoria 3 only), keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
 // Updates section, the update banner, the discard action, a blocked Play and
 // column widths from the keyboard), and the smallest window.
@@ -146,9 +146,10 @@ Item {
             // Shift+click extends the selection from row 0 to row 19.
             mouseClick(list.itemAtIndex(19), 100, Theme.rowHeight / 2, Qt.LeftButton, Qt.ShiftModifier)
             compare(pane.selectedCount, 20)
-            // Row 18 of the fake data needs a dependency that is not in the playset.
+            // Row 18 of the fake data names a mod that comes later in the list.
             pane.setEnabledSelected(true)
-            verify(pane.dependencyFeedback.length > 0)
+            verify(pane.dependencyFeedback.includes("to load before this mod"), pane.dependencyFeedback)
+            verify(!pane.dependencyFeedback.includes("Requires"), pane.dependencyFeedback)
             for (let r = 0; r < 20; ++r)
                 verify(Backend.mods.get(r).enabled)
             press(Qt.Key_Z, Qt.ControlModifier)
@@ -402,19 +403,30 @@ Item {
             return rows
         }
 
+        // The first ready fake mod from `row` on, in steps of `step`, that
+        // `accept` takes.
+        function readyRow(row: int, step: int, accept: var): int {
+            while (row < Backend.mods.count
+                   && !(Backend.mods.get(row).status === "ready" && accept(row)))
+                row += step
+            verify(row < Backend.mods.count, "no such fake mod")
+            return row
+        }
+
+        function selectDetails(row: int) {
+            win.selectMod(row)
+            tryCompare(Backend.details, "row", row)
+        }
+
+        readonly property string orderHintText: "to load before this mod"
+
         // Hearts of Iron IV loads a mod after the mods it names when they are
         // enabled and does not need them: the details list them under "Loads
         // after" with a note, in a neutral colour, and never say "Requires".
         function test_9f_loadAfterDependencies() {
-            let row = 3
-            while (Backend.mods.get(row).status !== "ready")
-                row += 7
-            win.selectMod(row)
-            tryCompare(Backend.details, "row", row)
+            selectDetails(readyRow(3, 7, () => true))
             const heading = named("dependenciesHeading")
             const note = named("dependenciesNote")
-            compare(heading.text, "Dependencies")
-            verify(!note.visible)
 
             Backend.details.game = "hoi4"
             compare(heading.text, "Loads after")
@@ -431,24 +443,70 @@ Item {
                 verify(Qt.colorEqual(dependency.children[0].color, Theme.textMuted))
             }
 
-            Backend.details.game = "stellaris"
-            compare(heading.text, "Dependencies")
-            verify(!note.visible)
-
             // A mod that Stellaris warns about for a dependency has no such
             // warning in Hearts of Iron IV.
-            let warned = 0
-            while (warned < Backend.mods.count
-                   && !(Backend.mods.get(warned).status === "ready"
-                        && Backend.mods.get(warned).warnings.includes("Requires")))
-                ++warned
-            verify(warned < Backend.mods.count, "no fake mod with a dependency warning")
-            win.selectMod(warned)
-            tryCompare(Backend.details, "row", warned)
-            verify(Backend.details.warnings.join("\n").includes("Requires"))
+            Backend.details.game = "stellaris"
+            selectDetails(readyRow(0, 1, r => Backend.mods.get(r).warnings.includes(orderHintText)))
+            verify(Backend.details.warnings.join("\n").includes(orderHintText))
             Backend.details.game = "hoi4"
-            verify(!Backend.details.warnings.join("\n").includes("Requires"),
+            verify(!Backend.details.warnings.join("\n").includes(orderHintText),
                    Backend.details.warnings.join("\n"))
+            Backend.details.game = "stellaris"
+        }
+
+        // Stellaris and Crusader Kings III do not need the mods a mod names
+        // either, but warn (never "Requires") about an enabled one that comes
+        // later in the list; Europa Universalis IV never warns; Victoria 3
+        // requires them.
+        function test_9g_dependenciesPerGame() {
+            const warned = readyRow(0, 1, r => Backend.mods.get(r).warnings.includes(orderHintText))
+            selectDetails(warned)
+            const heading = named("dependenciesHeading")
+            const note = named("dependenciesNote")
+            const library = () => dependencyRows().find(
+                    dependency => dependency.Accessible.name.startsWith("Compact Interface"))
+            const notes = {
+                stellaris: "Stellaris does not need these mods. This mod names them to load before "
+                           + "it when they are enabled.",
+                ck3: "Crusader Kings III does not need these mods. This mod names them to load "
+                     + "before it when they are enabled.",
+                eu4: "Europa Universalis IV does not need these mods. This mod names them to load "
+                     + "before it when they are enabled."
+            }
+            for (const game of ["stellaris", "ck3", "eu4"]) {
+                Backend.details.game = game
+                compare(heading.text, "Loads after", game)
+                verify(note.visible, game)
+                compare(note.Accessible.name, notes[game])
+                verify(library(), game)
+                const hint = game !== "eu4"
+                compare(Backend.details.warnings.join("\n").includes(orderHintText), hint, game)
+                compare(library().Accessible.name.includes(orderHintText), hint, game)
+                verify(Qt.colorEqual(library().children[0].color,
+                                     hint ? Theme.warning : Theme.textMuted), game)
+                for (const dependency of dependencyRows())
+                    verify(!dependency.Accessible.name.includes("Requires"),
+                           dependency.Accessible.name)
+            }
+
+            Backend.details.game = "vic3"
+            compare(heading.text, "Dependencies")
+            verify(!note.visible)
+            verify(library().Accessible.name.includes("Requires"), library().Accessible.name)
+            verify(Qt.colorEqual(library().children[0].color, Theme.warning))
+            verify(Backend.details.warnings.join("\n").includes("Requires"))
+
+            // A mod that names none: "Dependencies" and "None declared." in
+            // every game.
+            const plain = readyRow(0, 1, r => r % 7 !== 3 && r % 11 !== 5 && r % 13 !== 6
+                                           && !Backend.mods.get(r).warnings.includes(orderHintText))
+            selectDetails(plain)
+            for (const game of ["ck3", "eu4", "hoi4", "stellaris", "vic3"]) {
+                Backend.details.game = game
+                compare(heading.text, "Dependencies", game)
+                verify(!note.visible, game)
+                compare(dependencyRows().length, 0, game)
+            }
             Backend.details.game = "stellaris"
         }
 

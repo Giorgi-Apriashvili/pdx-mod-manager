@@ -59,6 +59,26 @@ const forced = {
     24: { status: "broken", enabled: true, warning: "version" }
 };
 
+// The dependency warning of a fake mod at `position` (its place in the first
+// playset), in Stellaris's words (core/dependencies.cpp): Stellaris does not
+// need the mods a mod names, but warns when an enabled one comes later.
+// FakeModDetails rewords or drops it for the other games.
+function orderHint(position) {
+    return "Lists \"Compact Interface - Core Library\" (#" + (position + 394)
+            + ") to load before this mod (#" + position + "), but that mod comes later in this playset.";
+}
+
+function isOrderHint(warning) {
+    return /^Lists ".*" \(#\d+\) to load before this mod/.test(warning);
+}
+
+// The same issue where the named mods are required (Victoria 3).
+function requiredOrderWarning(hint) {
+    const m = /^Lists "(.*)" \((#\d+)\) to load before this mod \((#\d+)\)/.exec(hint);
+    return "Requires \"" + m[1] + "\" (" + m[2] + "), which must load before this mod (" + m[3]
+            + "). Move it above this mod.";
+}
+
 // Catalog of installed + referenced mods for one game.
 function makeCatalog(seed, count) {
     const r = rng(seed);
@@ -93,7 +113,7 @@ function makeCatalog(seed, count) {
         if (w === "version")
             warnings.push("Declares supported version 3.14.* but the game is 4.5.2.");
         if (w === "dependency")
-            warnings.push("Requires “Compact Interface - Core Library”, which is not in this playset.");
+            warnings.push(orderHint(i + 1));
         const tags = [];
         const tagCount = 1 + Math.floor(r() * 3);
         for (let t = 0; t < tagCount; ++t) {

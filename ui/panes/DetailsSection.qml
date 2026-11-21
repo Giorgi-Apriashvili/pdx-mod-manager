@@ -140,11 +140,15 @@ ColumnLayout {
             }
         }
 
-        // Dependencies; in Hearts of Iron IV they only order the load.
+        // Dependencies. Where the game does not need the named mods (every
+        // game but Victoria 3), a mod that names some lists them under "Loads
+        // after" with the note; a mod that names none shows "Dependencies"
+        // and "None declared." in every game.
         Text {
             objectName: "dependenciesHeading"
             Layout.topMargin: 2
-            text: root.details.dependenciesLoadAfter ? qsTr("Loads after") : qsTr("Dependencies")
+            text: root.details.dependenciesLoadAfter && root.details.dependencies.length > 0
+                  ? qsTr("Loads after") : qsTr("Dependencies")
             textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             font.weight: Font.DemiBold

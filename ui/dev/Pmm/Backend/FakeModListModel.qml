@@ -159,8 +159,10 @@ ListModel {
                 continue
             setProperty(row, "enabled", on)
             const m = get(row)
-            if (on && m.warnings.indexOf("Requires") >= 0)
-                feedback.push("“" + m.name + "” requires “Compact Interface - Core Library”, which is not in this playset.")
+            // Stellaris's order hints, as the C++ model reports them.
+            const hint = m.warnings.split("\n").find(w => FakeData.isOrderHint(w))
+            if (on && hint)
+                feedback.push(hint)
             else if (on && m.status !== "ready")
                 feedback.push("“" + m.name + "” is enabled but not installed (" + m.statusText.toLowerCase() + ").")
         }
