@@ -1115,6 +1115,21 @@ Packaging ([`packaging.md`](packaging.md)):
     (reported by the owner: "update went very well"). Also noted on
     2026-11-21: Steam updated Crusader Kings III on this machine to
     1.21.0.3, which is untested (1.20.1.2 is the verified version).
+14. Done 2026-11-21 on `agent/hoi4-dependencies` (the owner's report of
+    2026-11-21: a popular Hearts of Iron IV mod lists about a dozen total
+    conversions under `dependencies`, and each showed as a missing
+    requirement with a warning): the catalog says per game what dependencies
+    mean (`DependencyMeaning`: `Required`, or `LoadAfter` for `hoi4` only,
+    after the HOI4 wiki); for Hearts of Iron IV there are no dependency
+    warnings or feedback, and the details list the names under "Loads after"
+    with a neutral state each (core `resolveDependencies()`, shared with the
+    checks). Read-only on 1.20.0.0: 20 warnings in 4 of the 21 enabled mods
+    before, none after ([Hearts of Iron IV](games/hoi4.md#real-machine-evidence)).
+    Whether the game orders mods by `dependencies` is untested in-game. The
+    other games keep `Required`: on this machine none of their enabled mods
+    lists dependencies (Stellaris 3 of 39 installed mods do, Victoria 3 1
+    of 10, EU4 and CK3 none); whether they are requirements there is not
+    established either. Not merged.
 
 ## Working rules
 

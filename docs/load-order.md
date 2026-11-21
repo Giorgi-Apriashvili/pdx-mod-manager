@@ -621,6 +621,14 @@ deterministic order of file names (such as the order NTFS lists them in,
 which is the same for these names) is not strictly excluded. For Workshop
 items (`mod/ugc_<id>.mod`) the rule is inferred, not measured.
 
+`dependencies` follow the wiki in the application, untested in-game: a mod's
+`dependencies` are not checked as requirements in Hearts of Iron IV (no
+warnings, nothing enabled, added or reordered for them, the playset order
+written as it is), and the selected mod's details list them under "Loads
+after" ([Hearts of Iron IV](games/hoi4.md#mods)). Whether the game loads a
+mod after the mods it names, and how that combines with the file-name rule,
+is still untested.
+
 `supported_version`: started directly, 1.20.0.0 reads every `mod/*.mod` at
 start-up, enabled or not (unlike CK3 1.20.1.2). It reported the owner's four
 `"1.*.*"` registrations as invalid, none of them enabled, and not probe b's
