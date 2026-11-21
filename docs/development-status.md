@@ -88,10 +88,31 @@ databases and `playsets_backup` were not opened. Item 15 below.
   the current configurations give 0 dependency warnings in every game with
   `main`'s rules and with the new ones (no enabled mod of Stellaris, EU4,
   CK3 or Victoria 3 lists dependencies). A playset of every installed mod,
-  enabled, in identity order (new line of the test): Stellaris 3 warnings in
-  2 mods with `main`'s rules (2 not installed, 1 ordered after), 1 in 1 mod
-  after (ordered after); Victoria 3 1 (not installed) either way; EU4, CK3
-  and Hearts of Iron IV 0.
+  enabled, in identity order (new line of the test, so `main`'s rules there
+  are the branch's test with the catalog's `ck3`, `eu4` and `stellaris` set
+  back to `Required`): Stellaris 3 warnings in 2 mods with `main`'s rules (2
+  not installed, 1 ordered after), 1 in 1 mod after (ordered after);
+  Victoria 3 1 (not installed) either way; EU4, CK3 and Hearts of Iron IV 0.
+- Review fixes (`b48a6f7` to `53f8213`: the app details test now has a
+  disabled mod naming an enabled mod after it, which stays a neutral
+  "load_after" row; a core test pins that an enabled mod of the name earlier
+  in the list satisfies it in Stellaris and CK3; the preview's fake order
+  hints are placed for each mod's place in its playset, never past its end;
+  made-up names in two older test files; the changelog, CK3, Stellaris,
+  accessibility and evidence wording): `debug` **656/656** (pmm_core_tests
+  61, the others as above; ui-preview with the new
+  `test_9h_fakeOrderHintsFitThePlayset`). The app details test fails with a
+  details rule that marks a disabled mod's later names as "order" (the
+  reviewer's mutation), and `test_9h` fails against the earlier fakes (a
+  hint naming #2016 in the 2,000-mod playset). A capture of the preview
+  matches the committed PNGs except for scattered pixels and the run-to-run
+  difference of `a11y-shortcuts-dark.png`, so none was replaced.
+  `scripts/check.sh --full` on `53f8213`: passed in 8 min 39 s (ASan and
+  clang-cl with UBSan 530/530 each, the update contract's 112 checks,
+  clang-tidy on the 13 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 656/656). The commit after
+  it changes this file only. Read-only again (counts only): the same counts
+  as above, with the branch's rules and with `main`'s.
 
 ## Test status (2026-11-21, Hearts of Iron IV dependencies, `agent/hoi4-dependencies`)
 
