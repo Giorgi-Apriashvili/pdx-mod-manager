@@ -170,10 +170,27 @@ void printLaunchPlan(const LaunchPlan& plan, const GameInstallation& inst) {
         CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
 }
 
+// The issues checkDependencies() reports for `entries`, by kind.
+void printDependencyIssues(const std::vector<PlaysetEntry>& entries,
+                           const InstalledModMap& inventory) {
+    const std::vector<DependencyIssue> issues = checkDependencies(entries, inventory);
+    std::map<std::string, int> byKind;
+    std::set<std::size_t> withIssues;
+    for (const DependencyIssue& issue : issues) {
+        ++byKind[toString(issue.kind)];
+        withIssues.insert(issue.entryIndex);
+    }
+    std::cout << "dependency warnings: " << issues.size() << " in " << withIssues.size()
+              << " enabled mod(s)\n";
+    for (const auto& [kind, count] : byKind)
+        std::cout << "  " << kind << ": " << count << "\n";
+}
+
 // What the enabled mods of the current configuration list under
 // dependencies, where the names lead, and the issues checkDependencies()
-// reports for a playset made from that configuration (none for Hearts of Iron
-// IV, whose dependencies only order the load), by count only.
+// reports for a playset made from that configuration, and for one of every
+// installed mod, enabled, in identity order (what the game's catalog entry
+// makes of them), by count only.
 void printDependencies(const std::vector<PlaysetEntry>& current,
                        const std::vector<InstalledMod>& mods) {
     InstalledModMap inventory;
@@ -196,25 +213,26 @@ void printDependencies(const std::vector<PlaysetEntry>& current,
         for (const ResolvedDependency& dependency : listed)
             ++byResolution[dependency.resolution];
     }
-    const std::vector<DependencyIssue> issues = checkDependencies(current, inventory);
-    std::map<std::string, int> byKind;
-    std::set<std::size_t> withIssues;
-    for (const DependencyIssue& issue : issues) {
-        ++byKind[toString(issue.kind)];
-        withIssues.insert(issue.entryIndex);
-    }
     std::cout << "dependencies:   listed by " << installedListing << " of " << mods.size()
               << " installed mod(s); " << listing << " enabled mod(s) list " << names
-              << " name(s); dependency warnings: " << issues.size() << " in " << withIssues.size()
-              << " enabled mod(s)\n";
-    for (const auto& [kind, count] : byKind)
-        std::cout << "  " << kind << ": " << count << "\n";
+              << " name(s); ";
+    printDependencyIssues(current, inventory);
     using R = DependencyResolution;
     std::cout << "  the names lead to: enabled earlier " << byResolution[R::EnabledEarlier]
               << ", enabled later " << byResolution[R::EnabledLater] << ", disabled "
               << byResolution[R::Disabled] << ", not in the playset "
               << byResolution[R::NotInPlayset] << ", not installed "
               << byResolution[R::NotInstalled] << "\n";
+
+    std::vector<PlaysetEntry> everyMod;
+    for (const auto& [identity, mod] : inventory) {
+        PlaysetEntry entry;
+        entry.identity = identity;
+        entry.enabled = true;
+        everyMod.push_back(std::move(entry));
+    }
+    std::cout << "  every installed mod enabled, in identity order: ";
+    printDependencyIssues(everyMod, inventory);
 }
 
 // Returns the scanned mods, for the Hearts of Iron IV download check.
