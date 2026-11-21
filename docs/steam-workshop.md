@@ -1,8 +1,9 @@
 # Steam Workshop acquisition
 
 This document describes how Paradox Mod Manager acquires missing Steam Workshop mods
-(spec section 6): the per-game helper process, its wire protocol, the acquisition state
-machine, error mapping, the manual fallback, and what is and is not verified.
+(spec section 6), and updates or downloads again installed ones when the user asks: the
+per-game helper process, its wire protocol, the acquisition state machine, error mapping, the
+manual fallback, the update check, and what is and is not verified.
 
 Code: `src/providers/` (library `pmm_providers`), `tools/steam-helper/` (`pmm-steam-helper`).
 Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md).
@@ -16,6 +17,8 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 | Read session facts (`BLoggedOn`, `BIsSubscribedApp`, subscribed count) | **Experimentally verified** 2026-10-29 |
 | Subscribe (`SubscribeItem` + call result 1313) and download (`DownloadItem`) | **Verified live** 2026-10-30 on Windows 11 for EU4 1.37.5: an item not subscribed before went subscribing → download requested → downloading → installed in about 3 s through the application; a job pending at quit resumed after a restart without a duplicate; an item of another game was rejected by the identity gate without contacting Steam. The same for Stellaris 4.5.2 (one item, about 5.6 s) ([evidence](evidence/live-validation-2026-10-30.md)) |
 | Acquisition state machine (retry, cancel, restart reconciliation, stall detection) | Implemented, unit tested (pure logic) |
+| Updates of installed items: "Check for mod updates" (the Web API's `time_updated` against the acf's `timeupdated`), Steam's own record (`latest_manifest`), "Update mods" / "Update from Workshop" (`DownloadItem` on an installed item, done when the install time reaches the Workshop's) and `update_not_seen` | Implemented (2026-11-22), tested with the fake Steam library, the services fakes and the local Web API stub; **not verified live** (section 11, item 4) |
+| "Re-download from scratch…" (`UnsubscribeItem` and call result 1315, then subscribe and download again) | Implemented (2026-11-22), tested with the fake Steam library and a hand-written transcript (`helper_transcript_update.jsonl`); **not verified live**: whether Steam removes the files while the helper session runs, and whether it downloads anything when they stay (section 11, item 4) |
 | Manual fallback (open Workshop page, then rescan) | Implemented. **Limited**: does not satisfy automatic download |
 | Web API metadata (names, sizes, wrong-game check) | Request builder and parser in `providers`; the app layer's `QtWorkshopMetadataHost` makes the call (tested against a local stub) |
 | Identity gate (Subscribe/RequestDownload only for items the Web API confirmed) | Implemented in the services coordinator, unit tested (section 3, "Identity gate") |
@@ -435,6 +438,13 @@ reported as 2. A result that takes longer than 120 s is reported as 16 (Timeout)
 | Download stalls (no progress for 5 min) | Failed (timeout) | check Steam's Downloads page (paused, disk space), retry |
 | Installed content unusable (no `descriptor.mod` and not exactly one other `.mod` file; Victoria 3: no `.metadata/metadata.json`) | Failed (validation_failed) | verify files in Steam or resubscribe there, retry |
 | Unsubscribed in Steam during the download | NeedsUserAction | retry to subscribe again |
+| Update: Steam does not fetch the newer version (it reports the item current, also after a second request 30 s later) | Failed (`update_not_seen`), no automatic retry | "Steam has not picked up this update yet. Steam checks for updates about every 45 minutes; restarting Steam makes it check right away." **Retry**, or **Re-download from scratch…** on the job. Nothing is deleted; the installed version stays and the mod stays Ready, with a warning |
+| Update of an item that is not subscribed in Steam | NeedsUserAction | "Workshop item … is not subscribed in Steam, so Steam does not update it. Subscribe to it on its Workshop page, or use Re-download from scratch, then retry." An update never subscribes |
+| Update or re-download while the game runs (the launch check's process list) | refused, no job (`ConflictingProcess`) | "Stellaris is running (…). Close it before updating mods: Steam would change the files of mods the game has loaded." Also for Retry of such a job; Play waits while one runs |
+| Re-download fails after the unsubscribe (subscribe refused, timeout, cancelled) | Failed / NeedsUserAction / Cancelled | the message ends "Workshop item … is now unsubscribed in Steam: Retry subscribes to it again and downloads it." The mod stays in the playsets, missing until then |
+| Re-download without the Web API (no metadata host, or no verdict within 15 s) | refused / NeedsUserAction (timeout) | nothing is unsubscribed: the Web API must confirm first that the item still exists |
+| The update check finds the item removed, private, banned or another game's | no update for it | a warning on the row: the installed copy stays as it is; neither Update nor Re-download touches it |
+| The update check cannot reach the Workshop (offline, blocked) | (no job) | the result line says so, with **Retry**; Steam's own record still counts |
 | Cancel | Cancelled | the message says whether a subscription or download already happened and remains in Steam |
 | Application restarted mid-job | resumes in the stored state, re-queries Steam first | no blind re-subscribe |
 
@@ -547,9 +557,39 @@ tests against the fake library.
    16-byte struct against the real client. Then send `state` and expect `subscribed:true`. Send
    `download` with `highPriority:true` and expect `accepted:true`. Poll `state` until
    `installed:true` with an install path that contains `descriptor.mod`. Record the transcript in
-   `docs/evidence/`. Afterwards, the user may unsubscribe manually in Steam; the application never
-   does.
+   `docs/evidence/`. Afterwards, the user may unsubscribe manually in Steam; the application
+   unsubscribes only for a "Re-download from scratch…" the user confirmed.
 2. Behaviour with the game running at the same time, in Steam offline mode, and with Steam not
    running (the `ready` failure path against the real client).
 3. EU4 (app 236850): repeat the read-only probe (`ping`, `state`) on the development machine,
    where it is installed, with the user's approval.
+4. **Updates and re-downloads of installed items** (implemented 2026-11-22; a live run needs
+   the owner's approval, because it downloads into and, for a re-download, unsubscribes from the
+   owner's account). Open questions, from the design of 2026-11-21:
+   - L1: does `DownloadItem` on an installed item that Steam flagged update it through the
+     state machine, in a Paradox game? Every real scan so far found no pending update.
+   - L2 (decisive): does `DownloadItem` fetch a version Steam has **not** noticed yet, or is it
+     a no-op until Steam's next check (about every 45 minutes)? Without it, "Update mods" ends
+     in `update_not_seen` for updates only the Web API knows about.
+   - L3: is the Web API's `time_updated` the acf's `timeupdated` of the same version, and
+     `hcontent_file` the acf's `manifest`? Only `time_updated` decides today.
+   - L4: does an edit of only the title or description move `time_updated` or
+     `hcontent_file` (a false "Update available")?
+   - L5: how long after an author's update does the Web API report it?
+   - L6: which flags does Steam report while it updates an installed item, and does the acf
+     stay "installed" meanwhile?
+   - L7: does a helper session (Steam shows the game as running) hold back Steam's own
+     background update for that game?
+   - L8: what does a download request do for an installed item that was removed, made private
+     or banned?
+   - L9: how long does a high-priority request for several items take, and how does it affect
+     Steam's other downloads?
+   - Re-download: does `UnsubscribeItem` answer with callback 1315 as the struct expects; does
+     Steam remove the files while the helper session runs (Steamworks: "after the game quits"),
+     and when they stay, does subscribing again download anything?
+
+   Suggested, opportunistic: when "Check for mod updates" reports an item Steam has not
+   flagged, press **Update from Workshop** for it and read Steam's `workshop_log.txt`
+   (read-only); that answers L1, L2, L3 and L5. A re-download is best tried on a small item of
+   the owner's choice. Record the results in `docs/evidence/` and the
+   [support matrix](support-matrix.md).

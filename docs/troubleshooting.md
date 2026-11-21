@@ -151,8 +151,44 @@ offline is up to the game and Steam.
   limited and does not count as automatic download.
 
 Cancelling an import stops the manager's own jobs; subscriptions and downloads
-that already happened stay in Steam. The manager never unsubscribes or deletes
-mods.
+that already happened stay in Steam. The manager never deletes mods, and it
+unsubscribes from one only for a **Re-download from scratch…** that you
+confirmed (below).
+
+## Steam has not picked up the update
+
+**Check for mod updates** in the Downloads area asks the Steam Workshop whether
+the installed Workshop mods of the playset have newer versions (only their
+Workshop IDs are sent, and only when you press it). Mods with a newer version
+show "Update available"; they stay usable, and Play only warns about them.
+**Update mods** (or **Update from Workshop** in a mod's right-click menu) asks
+Steam to download the new versions.
+
+- "Steam has not picked up this update yet. Steam checks for updates about
+  every 45 minutes; restarting Steam makes it check right away." means Steam
+  still reported the installed version as current after the request and a
+  second one 30 s later. Nothing was deleted, and the installed version is
+  still used. Wait a while, or restart Steam, then press **Retry** on the
+  download. Whether Steam fetches a version it has not noticed yet when asked
+  is not verified ([steam-workshop.md](steam-workshop.md#11-not-verified-yet-and-how-to-verify-it)).
+- **Re-download from scratch…** (on the failed download, or in a mod's
+  right-click menu) unsubscribes the mod in Steam, which deletes its files, then
+  subscribes again and downloads it. The mod is missing until the download
+  finishes; it stays in your playsets. Other games or launchers that use the
+  same subscription see it disappear briefly. If anything fails after the
+  unsubscribe, the download says that the mod is now unsubscribed, and
+  **Retry** subscribes to it again.
+- "… is not subscribed in Steam, so Steam does not update it" means the mod's
+  files are there but your Steam account is not subscribed to it. Subscribe on
+  its Workshop page, or use **Re-download from scratch…**, then retry.
+- "Close it before updating mods" means the game is running: Steam would change
+  the files of mods the game has loaded. Quit the game, then try again. Play
+  also waits while an update runs.
+- "The Steam Workshop could not be reached" after **Check for mod updates**:
+  check the internet connection and press **Retry** next to the result. What
+  Steam itself already knows about updates is shown either way.
+- A mod the check reports as removed, private or banned keeps its installed
+  copy; it gets a warning and no update.
 
 ## Several descriptor files give a mod the same id
 
@@ -380,12 +416,14 @@ side by side, give the second one its own profile (`--profile <dir>`).
 
 `--no-steam` turns Workshop downloads off for the session: missing mods stay
 listed as missing, nothing is subscribed or downloaded, and an import queues
-no downloads. `--read-only` does the same and also never writes game files
-or launches a game; Play then shows "Read-only verification mode". Start the
-manager without these options to download or play; imported entries that are
-still missing can then be fetched with **Download missing** (or **Retry**
-after an earlier failed download), and downloads queued before resume on
-their own.
+no downloads. **Check for mod updates**, **Update mods** and the update items
+of the right-click menu are disabled and send nothing; "Update available"
+still shows where Steam's own record knows a newer version. `--read-only`
+does the same and also never writes game files or launches a game; Play then
+shows "Read-only verification mode". Start the manager without these options
+to download or play; imported entries that are still missing can then be
+fetched with **Download missing** (or **Retry** after an earlier failed
+download), and downloads queued before resume on their own.
 
 ## The database was created by a newer version
 

@@ -148,16 +148,30 @@ Roles:
   `providerId`, `identityKey` ("source:id");
 - `status` ("ready" | "missing" | "pending" | "downloading" | "failed" |
   "unavailable" | "needs_user_action" | "broken");
-- `statusText` ("Ready", "Missing", "Queued", "Waiting for Steam",
-  "Downloading 45 %", "Verifying", "Failed", "Action needed", ...);
+- `statusText` ("Ready", "Update available", "Missing", "Queued", "Waiting
+  for Steam", "Downloading 45 %", "Updating", "Updating 45 %",
+  "Re-downloading", "Unsubscribing", "Subscribing again", "Verifying",
+  "Failed", "Action needed", ...);
 - `warnings` (string list), `hasWarnings` (bool);
 - `progress` (real, -1 when not downloading);
 - `blocking` (bool: enabled and not ready);
+- `updateAvailable` (bool): the row is Ready and a newer version is on the
+  Workshop, according to Steam's own `appworkshop_<app>.acf` or to this
+  session's "Check for mod updates". There is no status of its own: the row
+  stays `"ready"`, launchable, with the `statusText` "Update available" and
+  its own glyph (`Theme.statusIcons["update_available"]`, a circle with an
+  arrow up). While an update or re-download of the mod runs, the row is
+  `"pending"` or `"downloading"` ("Updating", "Re-downloading", ...) and
+  blocks Play like any entry that is not ready; a failed one leaves it Ready
+  with a warning ("Update failed: ...");
 - `version`.
 
 Properties: `count`, `enabledCount`, `readyCount`, `missingCount`,
-`warningCount`, `blockingCount`, `canUndo`, `canRedo`, `undoText`,
-`redoText`, `busy` (edits are being saved).
+`warningCount`, `blockingCount`, `updateCount` (rows with `updateAvailable`,
+enabled or not: "Update mods" is offered while it is above 0),
+`installedWorkshopCount` (installed Workshop mods, enabled or not: "Check for
+mod updates" is offered while it is above 0), `canUndo`, `canRedo`,
+`undoText`, `redoText`, `busy` (edits are being saved).
 
 Invokables. Every edit is persisted and undoable. Edits apply to the model
 immediately, then the saved state is reconciled once no other edit is in
@@ -205,8 +219,10 @@ invokable.
 ## `ModFilterModel` (QSortFilterProxyModel over `mods`)
 
 Properties: `search` (string; name or provider id, case-insensitive),
-`statusFilter` ("all" | "enabled" | "disabled" | "missing" | "warning"),
-`sortMode` ("order" | "name" | "source" | "status"), `reorderAllowed` (bool,
+`statusFilter` ("all" | "enabled" | "disabled" | "missing" | "warning" |
+"updates": rows with `updateAvailable`, the list's "With updates"),
+`sortMode` ("order" | "name" | "source" | "status"; by status, Ready rows
+with an update come right before the other Ready rows), `reorderAllowed` (bool,
 read-only: true only for the unfiltered load-order view),
 `reorderBlockedReason` (string). Both reorder properties come from core
 `reorderPolicy()`, the rule `PlaysetService` enforces.
@@ -265,7 +281,12 @@ Read-only properties:
 - `warnings`, `problems` (scan problems, and for entries that are not
   usable, what to do);
 - `workshopUrl` (an `https://steamcommunity.com/` page or empty);
-- `contentPath` (display), `canOpenFolder`.
+- `contentPath` (display), `canOpenFolder`;
+- `updateAvailable` (the row's role): the context menu lists "Update from
+  Workshop";
+- `canReinstall` (bool): an installed Workshop mod that no job is changing
+  (not `"pending"` or `"downloading"`): the context menu lists "Re-download
+  from scratch…".
 
 Invokables: `openWorkshopPage()`, `openContentFolder()`. They open only the
 Workshop page URLs the app builds from validated ids, and existing local
@@ -368,17 +389,65 @@ Properties:
   "not_owned" | "unavailable" | "unknown"; "unknown" until a Steam session
   was opened), `providerMessage` (recovery text);
 - `downloadsEnabled` (bool, constant: false when the session runs with
-  `--no-steam` or read-only).
+  `--no-steam` or read-only);
+- `checkingUpdates` (bool): "Check for mod updates" runs for the active
+  playset;
+- `updateCheckSummary` (string): the result line of the active playset's
+  last check in this session, "" before one: "Checked 12 Workshop mods: 3
+  have an update.", "All 12 Workshop mods are up to date.", "The Steam
+  Workshop could not be reached, so 12 Workshop mods were not checked. Check
+  the internet connection and retry.", with extra sentences for mods that
+  could not be compared, are no longer on the Workshop or got no answer. It
+  is kept per playset and, after the playset is reloaded (a rescan, a
+  finished download), rebuilt from what the session knows, without asking
+  again; a failed check keeps its words;
+- `updateCheckFailed` (bool): that check could not reach the Steam
+  Workshop for every mod; the Downloads area offers Retry.
 
-`JobsModel` roles: `jobId`, `name`, `providerId`, `state` (AcquisitionState
-name), `stateText`, `progress` (real, -1 unknown), `errorMessage`, `canRetry`,
-`canOpenFallback`. The model is updated in place by job id.
+Signal: `updateCheckFinished()`, when a check ended, also when it failed
+(the result line is announced then).
+
+`JobsModel` roles: `jobId`, `name`, `providerId`, `kind` ("acquire" for a
+missing mod, "update", "reinstall" for a re-download from scratch), `state`
+(AcquisitionState name, also "unsubscribing"), `stateText` ("Update
+requested", "Updating 45 %", "Unsubscribing", "Subscribing again",
+"Downloaded again", ...), `progress` (real, -1 unknown), `errorMessage`,
+`errorCode` (e.g. "update_not_seen"), `canRetry`, `canOpenFallback`,
+`canReinstall` (a failed update: "Re-download from scratch…" is offered).
+The model is updated in place by job id.
 
 Invokables: `acquireMissing()`, `retry(jobId)`, `retryAllFailed()`,
 `cancelAll()` (explains that completed subscriptions/downloads remain),
 `openFallback(jobId)` (the clearly labelled manual Steam page fallback: the
 `steam://` page when a handler is registered, else the web page),
-`rescanNow()`. With downloads off, they explain that and do nothing.
+`rescanNow()`, and for installed Workshop mods:
+
+- `checkForUpdates()`: "Check for mod updates" for the active playset. It
+  rescans the game's mods (Steam's own record), then asks the Steam Web API
+  about the playset's installed Workshop mods, enabled and disabled: their
+  item ids only, in batches of 100, nothing for ids answered in the last 5
+  minutes. Ignored while a check runs. Only this invokable sends anything;
+  nothing is checked automatically;
+- `updateMods()`: "Update mods", every mod of the active playset with an
+  update, enabled and disabled;
+- `updateMod(providerId)`: "Update from Workshop" for one row;
+- `reinstallMod(providerId)`: "Re-download from scratch…" for one row, after
+  the QML's confirmation (Steam unsubscribes the mod, deletes its files and
+  downloads it again);
+- `reinstallJob(jobId)`: the same for the mod of a failed update job.
+
+The four actions post their result as a notification ("Updates requested",
+"Update requested", "Downloading again"; a warning names the mods that were
+skipped and why) and are refused with a warning while the game runs ("Close
+it before updating mods: ..."). With downloads off, all of them explain that
+("Workshop downloads are off") and do nothing; nothing is sent.
+
+objectNames for the tests (`tests/app/qml_tests.cpp`, `ui/dev/tests`):
+`checkModUpdatesButton`, `updateModsButton`, `updateCheckLine`,
+`updateCheckRetry`, `downloadsEmptyText` and `jobList` in the Downloads
+area, `jobReinstallLink` in a job row, `updateFromWorkshopItem` and
+`reinstallItem` in the mod list's context menu (`ModsPane.rowMenu`), and
+`confirmDialog` for the re-download's confirmation.
 
 ## `LaunchController` (QObject)
 
@@ -397,7 +466,11 @@ Properties:
   cannot be loaded, or an active playset that cannot be read, still blocks:
   Play never falls back to a launch without mods;
 - `warnings` (string list), for example "No playset is selected, so the game
-  starts without mods.";
+  starts without mods." or "3 enabled mods have an update on the Workshop."
+  (an update never blocks Play; an update or re-download that runs does: the
+  entry is not ready, and for mods of the game outside the playset's enabled
+  entries a blocker says "N other Workshop mods of <Game> are being updated
+  or downloaded again. ...");
 - `busy` (bool), `state` ("idle" | "validating" | "applying" | "starting" |
   "started" | "failed"). "started" goes back to "idle" once the game was seen
   running and has exited, and "failed" once Play, blocked after the failure
