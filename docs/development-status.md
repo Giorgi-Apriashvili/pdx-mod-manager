@@ -78,6 +78,23 @@ databases and `playsets_backup` were not opened.
   mods with `main`'s rules, none after; Stellaris, EU4, CK3 and Victoria 3
   unchanged (no enabled mod lists dependencies). The application's captures
   of the owner's Hearts of Iron IV mods stayed in the scratch folder.
+- Review fixes (`66c918a` to `bd7655e`: each mod once in the "Loads after"
+  list, "Enabled in this playset" without "the game loads it first", the
+  launch check's line without "(versions or dependencies)" where they only
+  order the load, no fake "Requires" warnings in the preview's Hearts of Iron
+  IV details, no name index built for a playset without a game that requires
+  dependencies): `debug` **652/652** (pmm_core_tests 58, pmm_services_tests
+  101, the others as above). Without the fixes the 5 tests that cover them
+  fail (two core resolver tests, the launch-check test, the app details test,
+  `test_9f_loadAfterDependencies`). `scripts/check.sh --full` on `bd7655e`:
+  passed in 8 min 24 s (ASan and clang-cl with UBSan 526/526 each, the update
+  contract's 112 checks, clang-tidy on the 13 C++ files changed since
+  `origin/main` without findings, the `ci` preset from a fresh checkout
+  652/652). Read-only again (counts only): Hearts of Iron IV 24 names in 6
+  enabled mods, 0 dependency warnings, none spelled twice; on the whole
+  inventories, Stellaris 3 of 39 installed mods list 6 names (4 distinct, 2
+  of them not installed) and Victoria 3 1 of 10 lists 1 (not installed),
+  none of those mods enabled; EU4 and CK3 none.
 
 ## Test status (2026-11-21, Hearts of Iron IV probe run, `agent/hoi4-probe`)
 
