@@ -173,19 +173,24 @@ by count only):
   are. The HOI4 wiki says a dependency makes a mod load after the named ones
   without making them required, and popular mods name big total conversions
   they do not need. So the application does not check them as requirements
-  (the catalog's `dependencyMeaning` is `LoadAfter` for `hoi4` only): no
+  (the catalog's `dependencyMeaning` is `LoadAfter`, as for Europa
+  Universalis IV since 2026-11-21; see
+  [load order](../load-order.md#dependencies)): no
   warning on the row, nothing counted under "with warnings" or in the launch
   check (whose line about them reads "N enabled mods have warnings; see the
   mod list.", without "(versions or dependencies)"), no feedback when mods
   are enabled or disabled. The selected mod's details list them under "Loads
   after", each mod once, with what each is in the playset (enabled,
   disabled, installed but not in the playset, not installed) and the note
-  that the game does not need them. Nothing is enabled, added or
-  reordered for them, and the written order stays the playset's (the game
-  applies dependencies itself, according to the wiki). Whether the game
-  really orders mods by them is untested in-game. Before this change, 4 of
-  the 21 enabled mods on the development machine had 20 warnings about
-  dependencies that were not installed (2026-11-21, read-only; counts only).
+  that the game does not need them (the only note that says the game loads
+  the mod after them, because only Hearts of Iron IV documents it); a mod
+  that names none shows "Dependencies" and "None declared.". Nothing is
+  enabled, added or reordered for them, and the written order stays the
+  playset's (the game applies dependencies itself, according to the wiki).
+  Whether the game really orders mods by them is untested in-game. Before
+  this change, 4 of the 21 enabled mods on the development machine had 20
+  warnings about dependencies that were not installed (2026-11-21,
+  read-only; counts only).
 - **Registrations older than their content.** On 2026-11-21, 2 of the 23
   registrations differ from what their Workshop content would give, in the
   values the Workshop updates changed: `supported_version` in both, and

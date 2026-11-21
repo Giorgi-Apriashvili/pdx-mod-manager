@@ -198,7 +198,12 @@ forms: objects with `rel_type` `dependency` (by `display_name`, else `id`;
 `load_before`, `load_after` and `incompatible_with` are not checked yet),
 and the older plain list of names. A dependency is matched by name, as for
 the other games; on the development machine one Workshop item depends on a
-mod that is not installed, and the application says so.
+mod that is not installed, and the application says so. Victoria 3 is the
+only game where the application checks dependencies as requirements (the
+catalog's `dependencyMeaning` is `Required`), since the Paradox launcher
+treats a `"dependency"` relationship as one too; in the other games the mods
+a `.mod` descriptor lists are not needed
+([load order](../load-order.md#dependencies)).
 
 **`game_custom_data`.** All 10 metadata files on the machine have it. Reverse
 engineering of 1.15.1 reports that the game logs "Mod metadata read error"

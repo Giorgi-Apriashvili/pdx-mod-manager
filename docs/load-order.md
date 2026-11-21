@@ -278,6 +278,42 @@ so they cannot be attributed to individual posts. None of them is official
 Paradox documentation. Hence the precedence rule is measured in-game, not
 assumed.
 
+## Dependencies
+
+A `.mod` descriptor can name other mods, by their exact `name`, under
+`dependencies = { "Exact Name" }` (Victoria 3: `metadata.json`
+relationships of `rel_type` `"dependency"`). What that does is untested
+in-game in every game; read-only research of 2026-11-21
+([evidence](evidence/2026-11-21-descriptor-dependencies.md)) found:
+
+- The executables of Stellaris, Europa Universalis IV, Crusader Kings III
+  and Hearts of Iron IV read the key, and none of their messages about
+  loading mods is about a missing or misplaced dependency. The Paradox
+  launcher checks only Paradox Mods dependencies and Victoria 3's
+  `metadata.json` relationships, not these names, and does not reorder a
+  playset by them.
+- **Hearts of Iron IV:** documented: the HOI4 wiki says they make a mod load
+  after the named ones without making them required.
+- **Stellaris:** a summary of the wiki says the same ("if they're
+  installed"); unverified. The later mod in the list wins a shared file
+  (measured).
+- **Europa Universalis IV:** a summary of the wiki says a submod naming mods
+  there overrides them; unverified. EU4 ignores the list order (measured).
+- **Crusader Kings III:** no documentation found. The later mod in the list
+  wins a shared file (measured).
+- **Victoria 3:** a `"dependency"` relationship is a requirement in the
+  launcher too.
+
+So the application (the catalog's `DependencyMeaning`, owner's decision of
+2026-11-21) treats them as required in Victoria 3 only. In Stellaris and
+Crusader Kings III, where the list order decides, it keeps an order hint: a
+named mod that is enabled but comes later in the list than the mod naming
+it is a warning ("Lists "<name>" (#n) to load before this mod (#m), but that
+mod comes later in this playset."); a missing, disabled or absent one is
+not. In Europa Universalis IV and Hearts of Iron IV, which ignore the list
+order, nothing is a warning. Nothing is ever enabled, added or reordered for
+them, and the order written is the playset's.
+
 ## In-game verification procedure
 
 Only run this with the user's explicit approval: it writes probe mods into
@@ -366,8 +402,9 @@ sorts first wins a shared file, whatever its position in `enabled_mods`. The
 official launcher writes the same file, so reordering a playset there has the
 same (lack of) effect. This application still writes the playset order (it
 is what the launcher writes, and share codes carry it) and states the rule in
-EU4's `LoadOrderInfo`. Untested: mods with `dependencies`, names that differ
-only in case or start with non-ASCII characters.
+EU4's `LoadOrderInfo`. Untested: mods with `dependencies` (see
+[Dependencies](#dependencies)), names that differ only in case or start with
+non-ASCII characters.
 
 ### Crusader Kings III
 
@@ -625,9 +662,9 @@ items (`mod/ugc_<id>.mod`) the rule is inferred, not measured.
 `dependencies` are not checked as requirements in Hearts of Iron IV (no
 warnings, nothing enabled, added or reordered for them, the playset order
 written as it is), and the selected mod's details list them under "Loads
-after" ([Hearts of Iron IV](games/hoi4.md#mods)). Whether the game loads a
-mod after the mods it names, and how that combines with the file-name rule,
-is still untested.
+after" ([Hearts of Iron IV](games/hoi4.md#mods), [Dependencies](#dependencies)).
+Whether the game loads a mod after the mods it names, and how that combines
+with the file-name rule, is still untested.
 
 `supported_version`: started directly, 1.20.0.0 reads every `mod/*.mod` at
 start-up, enabled or not (unlike CK3 1.20.1.2). It reported the owner's four

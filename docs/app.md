@@ -418,10 +418,12 @@ platform:
   folder, has Cancel focused, closes on Enter and Escape without a change,
   and discards on **Discard**;
 - the dependencies in the selected mod's details (`ModDetails`), from the
-  playset view of a temporary profile: in Hearts of Iron IV, which loads a
-  mod after the mods it names when they are enabled and does not need them,
-  "Loads after" with its note and a neutral state for each name, and no row
-  warnings; in Stellaris the same playset gives the dependency states and
+  playset view of a temporary profile, one playset in each game: in Europa
+  Universalis IV and Hearts of Iron IV, which do not need the mods a mod
+  names, "Loads after" with each game's note and a neutral state for each
+  name, and no row warnings; in Stellaris and Crusader Kings III the same,
+  except an order warning for an enabled named mod that comes later in the
+  list; in Victoria 3, which requires them, the dependency states and
   messages as before;
 - a 2,000-entry playset with a time budget for each GUI-thread operation;
 - the real QML module against the real Backend, without QML warnings, with a

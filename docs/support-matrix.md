@@ -126,6 +126,7 @@ Not observed yet: other stores and Steam's own offline mode.
 | --- | --- | --- |
 | Detect installation and user data | **Verified (2026-10-29, 4.5.2)** read-only | Implemented, unverified (manual location) |
 | Mod inventory (descriptors, Workshop content) | **Verified (2026-10-29, 4.5.2)** read-only: 36 mods; registered Workshop items without content read as missing | Implemented, unverified (local mods only) |
+| `dependencies` (the mods a mod names) | Implemented, unverified: not required (no warning for a named mod that is missing, disabled or not in the playset); a named mod that is enabled but later in the list than the mod naming it is an order warning, since the later mod wins a shared file. From 2026-11-21; what the game does with them is untested in-game ([evidence](evidence/2026-11-21-descriptor-dependencies.md)) | Implemented, unverified |
 | Playsets (create, order, enable, persist, undo) | **Verified (2026-10-30, 4.5.2)** read-only in the application (create from the game's configuration, disable, move, persist); undo unit tested | Implemented, unverified |
 | Share codes (export, import preview, exact reconciliation) | **Verified (2026-10-30, 4.5.2)** read-only between two clean profiles on one machine | Implemented, unverified |
 | Generated configuration (`dlc_load.json`, `mod/ugc_<id>.mod`) | **Verified (2026-10-29, 4.5.2)** computed, not written: identical to the launcher's | Implemented, unverified |
@@ -150,6 +151,7 @@ name sorts first wins ([evidence](evidence/live-validation-2026-10-30.md); [EU4 
 | --- | --- | --- |
 | Detect installation and user data | **Verified (2026-10-29, 1.37.5)** read-only | Implemented, unverified (manual location) |
 | Mod inventory | **Verified (2026-10-29, 1.37.5)** read-only: 13 mods; registered Workshop items without content read as missing (replay of the state after a reinstall) | Implemented, unverified (local mods only) |
+| `dependencies` (the mods a mod names) | Implemented, unverified: not required and not checked, also not their place in the list, which EU4 ignores; listed under "Loads after". From 2026-11-21; what the game does with them is untested in-game ([evidence](evidence/2026-11-21-descriptor-dependencies.md)) | Implemented, unverified |
 | Playsets | **Verified (2026-10-30, 1.37.5)** read-only in the application; undo unit tested | Implemented, unverified |
 | Share codes | **Verified (2026-10-30, 1.37.5)** read-only between two clean profiles on one machine | Implemented, unverified |
 | Generated configuration | **Verified (2026-10-29, 1.37.5)** computed, not written: identical to the launcher's | Implemented, unverified |
@@ -176,6 +178,7 @@ reports nothing about descriptors outside `enabled_mods`. As in Stellaris,
 | --- | --- | --- |
 | Detect installation and user data | **Verified (2026-11-13, 1.20.1.2)** read-only; `game/userdir.txt` implemented, unverified | Implemented, unverified (manual location) |
 | Mod inventory | **Verified (2026-11-13, 1.20.1.2)** read-only: 11 mods, including an item without `descriptor.mod`; registered Workshop items without content read as missing (replay) | Implemented, unverified (local mods only) |
+| `dependencies` (the mods a mod names) | Implemented, unverified: not required (no warning for a named mod that is missing, disabled or not in the playset); a named mod that is enabled but later in the list than the mod naming it is an order warning, since the later mod wins a shared file. From 2026-11-21; what the game does with them is untested in-game ([evidence](evidence/2026-11-21-descriptor-dependencies.md)) | Implemented, unverified |
 | Playsets | **Verified (2026-11-13, 1.20.1.2)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
 | Share codes | **Verified (2026-11-13, 1.20.1.2)** read-only between two new profiles on one machine. Releases up to 0.1.2 reject codes for `ck3` as not supported | Implemented, unverified |
 | Generated configuration | **Verified (2026-11-13, 1.20.1.2)** computed, not written: no write for the launcher's selection; 7 of 11 regenerated descriptors identical, 4 registrations older than their content | Implemented, unverified |
@@ -206,7 +209,7 @@ EU4 ([evidence](evidence/2026-11-21-hoi4-load-order.md);
 | Capability | Windows · Steam | Other stores |
 | --- | --- | --- |
 | Detect installation and user data | **Verified (2026-11-21, 1.20.0.0)** read-only (user data from `gameDataPath`); the precedence over `userdir.txt` and an absolute `gameDataPath` implemented, unverified | Implemented, unverified (manual location) |
-| Mod inventory | **Verified (2026-11-21, 1.20.0.0)** read-only: 23 Workshop mods, 0 problems, `dependencies` and repeated `replace_path` kept; registered Workshop items without content read as missing (replay). `dependencies` are shown under "Loads after", not checked as requirements (the wiki's rule; whether the game orders mods by them is untested) | Implemented, unverified (local mods only) |
+| Mod inventory | **Verified (2026-11-21, 1.20.0.0)** read-only: 23 Workshop mods, 0 problems, `dependencies` and repeated `replace_path` kept; registered Workshop items without content read as missing (replay). `dependencies` are shown under "Loads after", not checked as requirements (the wiki's rule; whether the game orders mods by them is untested; [evidence](evidence/2026-11-21-descriptor-dependencies.md)) | Implemented, unverified (local mods only) |
 | Playsets | **Verified (2026-11-21, 1.20.0.0)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
 | Share codes | **Verified (2026-11-21, 1.20.0.0)** read-only between two new profiles on one machine. Releases up to 0.2.0 reject codes for `hoi4` as not supported | Implemented, unverified |
 | Generated configuration | **Verified (2026-11-21, 1.20.0.0)** computed, not written: no write for the launcher's selection (compared by meaning with the launcher's pretty-printed file); 21 of 23 regenerated descriptors identical, 2 registrations older than their content. **Verified (2026-11-21, 1.20.0.0)** written for the probe run: a changed selection is written as compact JSON, the game loaded exactly the listed mods and did not rewrite the file ([evidence](evidence/2026-11-21-hoi4-load-order.md)) | Implemented, unverified |
@@ -238,6 +241,7 @@ lone `"*"` matches no version. As in Stellaris and CK3, **the later mod in
 | --- | --- | --- |
 | Detect installation and user data | **Verified (2026-11-20, 1.15.2)** read-only; `game/userdir.txt` implemented, unverified (where the game reads it from is not known) | Implemented, unverified (manual location) |
 | Mod inventory (`metadata.json`, Workshop content) | **Verified (2026-11-20, 1.15.2)** read-only: 9 Workshop mods and 1 local mod, 0 problems; zipped local mods listed without reading their metadata (fixture-tested; none on the machine) | Implemented, unverified (local mods only) |
+| Dependencies (`relationships` of `rel_type` `"dependency"`) | Implemented, unverified: checked as requirements, as the Paradox launcher does ([evidence](evidence/2026-11-21-descriptor-dependencies.md)) | Implemented, unverified |
 | Playsets | **Verified (2026-11-20, 1.15.2)** read-only in the application (create from the game's configuration, disable, move); undo unit tested | Implemented, unverified |
 | Share codes | **Verified (2026-11-20, 1.15.2)** read-only between new profiles on one machine (the game's configuration, and a 9-item playset from a Workshop ID list). Releases up to 0.2.0 reject codes for `vic3` as not supported | Implemented, unverified |
 | Generated configuration (`content_load.json`) | **Verified (2026-11-20, 1.15.2)** computed, not written: no write for the launcher's selection; only `enabledMods` changes, the launcher's layout byte for byte (fixture-tested). **Verified (2026-11-21, 1.15.2)** written for the probe run: the game loaded exactly the listed mods, a Workshop item by its absolute path among them, and did not rewrite the file ([evidence](evidence/2026-11-21-vic3-load-order.md)) | Implemented, unverified |

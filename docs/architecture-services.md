@@ -154,8 +154,11 @@ obscurely.
 - The active playset per game is stored in settings
   (`game.<key>.activePlaysetId`), together with `app.lastGameKey`.
 - Editing (core `playset_ops`): `setEnabled(indices, on)` returns the
-  dependency issues the change introduces (none in Hearts of Iron IV, whose
-  dependencies only order the load: the catalog's `dependencyMeaning`).
+  dependency issues the change introduces, as the catalog's
+  `dependencyMeaning` says: every kind in Victoria 3 (`Required`), only a
+  named mod that comes later in the list in Stellaris and Crusader Kings III
+  (`LoadAfterInList`), none in Europa Universalis IV and Hearts of Iron IV
+  (`LoadAfter`).
   `move`, `moveUp`/`moveDown` (selection), `moveBlock` (drag and drop),
   `addMods` (installed mods, appended) and `removeEntries` (snapshotted into
   the history first).
@@ -177,9 +180,10 @@ id), readiness (`core/readiness`: installed content wins over job state,
 dependency warnings, plus the adapter's compatibility warnings), the latest
 job, and where each name its descriptor lists under dependencies leads
 (`resolveDependencies()`: enabled earlier or later, disabled, not in the
-playset, not installed), which the details show for a game whose
-dependencies only order the load (Hearts of Iron IV) instead of warnings,
-each mod once. The view also carries the footer counts and the
+playset, not installed), which the details show, each mod once, for every
+game that does not need the named mods (all but Victoria 3), with the order
+warning where Stellaris or Crusader Kings III has one. The view also carries
+the footer counts and the
 `LaunchReadiness` verdict. `loadPlaysetView()` reads everything from the
 database and overlays the coordinator's live jobs, which carry fresher
 progress than the coalesced database rows.
