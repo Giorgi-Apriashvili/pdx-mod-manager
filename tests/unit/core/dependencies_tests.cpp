@@ -145,3 +145,99 @@ TEST_CASE("Bulk enable reports only the issues it introduces", "[core][dependenc
         CHECK(introduced[0].entryIndex == 2);
     }
 }
+
+namespace {
+
+// A playset of `game` whose patch (#2) names one mod of every kind: one
+// enabled before it, one enabled after it (#4), a disabled one (#3), one
+// installed elsewhere, one not installed, and itself.
+struct EveryKind {
+    std::vector<PlaysetEntry> entries;
+    InstalledModMap inventory;
+
+    explicit EveryKind(const GameKey& game) {
+        entries = {
+            workshop("6000000001", "Base", true, game), workshop("6000000002", "Patch", true, game),
+            workshop("6000000003", "Off", false, game), workshop("6000000004", "Late", true, game)};
+        add(inventory, installed(entries[0].identity, "Example Base"));
+        add(inventory, installed(entries[1].identity, "Example Patch",
+                                 {"Example Base", "Example Late", "Example Off",
+                                  "Example Elsewhere", "Example Missing", "Example Patch"}));
+        add(inventory, installed(entries[2].identity, "Example Off"));
+        add(inventory, installed(entries[3].identity, "Example Late"));
+        add(inventory, installed({game, "steam-workshop", "6000000005"}, "Example Elsewhere"));
+    }
+};
+
+} // namespace
+
+TEST_CASE("CK3, EU4, Stellaris and Victoria 3 report each kind of dependency issue as before",
+          "[core][dependencies]") {
+    for (const char* game : {"ck3", "eu4", "stellaris", "vic3"}) {
+        INFO(game);
+        const EveryKind playset(game);
+        const auto issues = checkDependencies(playset.entries, playset.inventory);
+        REQUIRE(issues.size() == 4);
+        CHECK(issues[0].kind == DependencyIssueKind::OrderedAfter);
+        CHECK(issues[0].message == "Requires \"Example Late\" (#4), which must load before this "
+                                   "mod (#2). Move it above this mod.");
+        CHECK(issues[1].kind == DependencyIssueKind::Disabled);
+        CHECK(issues[1].message == "Requires \"Example Off\" (#3), which is disabled in this "
+                                   "playset.");
+        CHECK(issues[2].kind == DependencyIssueKind::NotInPlayset);
+        CHECK(issues[2].message == "Requires \"Example Elsewhere\", which is installed but not in "
+                                   "this playset.");
+        CHECK(issues[3].kind == DependencyIssueKind::NotInstalled);
+        CHECK(issues[3].message == "Requires \"Example Missing\", which is not installed.");
+        for (const DependencyIssue& issue : issues)
+            CHECK(issue.entryIndex == 1);
+    }
+}
+
+TEST_CASE("Resolved dependencies say where each name leads, whatever the game",
+          "[core][dependencies]") {
+    for (const char* game : {"hoi4", "stellaris"}) {
+        INFO(game);
+        EveryKind playset(game);
+        // Resolved for a disabled entry too.
+        playset.entries[1].enabled = false;
+        playset.entries.push_back(workshop("6000000009", "Not installed", true, game));
+        const auto resolved = resolveDependencies(playset.entries, playset.inventory);
+        REQUIRE(resolved.size() == 5);
+        CHECK(resolved[0].empty());
+        CHECK(resolved[4].empty()); // not installed: no descriptor
+        using R = DependencyResolution;
+        const std::vector<ResolvedDependency> expected{
+            {"Example Base", R::EnabledEarlier, 0},   {"Example Late", R::EnabledLater, 3},
+            {"Example Off", R::Disabled, 2},          {"Example Elsewhere", R::NotInPlayset, {}},
+            {"Example Missing", R::NotInstalled, {}}, // and not itself
+        };
+        CHECK(resolved[1] == expected);
+    }
+}
+
+TEST_CASE("Resolved names follow the matching rules of the checks", "[core][dependencies]") {
+    // Trimmed, listed once, matched case-insensitively, and an earlier enabled
+    // entry wins over a later one of the same name.
+    const std::vector<PlaysetEntry> entries{workshop("6000000011", "Core", true, "hoi4"),
+                                            workshop("6000000012", "Addon", true, "hoi4"),
+                                            workshop("6000000013", "Core copy", true, "hoi4")};
+    InstalledModMap inventory;
+    add(inventory, installed(entries[0].identity, "Example Core"));
+    add(inventory, installed(entries[1].identity, "Example Addon",
+                             {" example CORE ", "example CORE", "Example Core", ""}));
+    add(inventory, installed(entries[2].identity, "Example Core"));
+    // Same name in another game: not a match for Hearts of Iron IV.
+    add(inventory, installed({"stellaris", "steam-workshop", "1"}, "Example Other"));
+    const auto resolved = resolveDependencies(entries, inventory);
+    REQUIRE(resolved[1].size() == 2);
+    CHECK(resolved[1][0] ==
+          ResolvedDependency{"example CORE", DependencyResolution::EnabledEarlier, 0});
+    CHECK(resolved[1][1] ==
+          ResolvedDependency{"Example Core", DependencyResolution::EnabledEarlier, 0});
+
+    add(inventory, installed(entries[1].identity, "Example Addon", {"Example Other"}));
+    CHECK(resolveDependencies(entries, inventory)[1] ==
+          std::vector<ResolvedDependency>{
+              {"Example Other", DependencyResolution::NotInstalled, std::nullopt}});
+}

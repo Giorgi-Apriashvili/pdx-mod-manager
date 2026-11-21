@@ -66,6 +66,95 @@ private:
     std::unordered_map<std::string, std::vector<std::size_t>> m_folded;
 };
 
+// Resolves the names one playset's entries list (the rules in the header).
+class Resolver {
+public:
+    Resolver(std::span<const PlaysetEntry> entries, const InstalledModMap& inventory)
+        : m_entries(entries), m_inventory(inventory) {
+        for (std::size_t i = 0; i < entries.size(); ++i) {
+            const std::string name = displayName(entries[i], inventory);
+            if (!name.empty())
+                m_playsetNames.add(entries[i].identity.game, name, i);
+        }
+        for (const auto& [identity, mod] : inventory) {
+            const std::string name = trimmed(mod.descriptor.name);
+            if (name.empty())
+                continue;
+            m_installedExact.insert(scopedKey(identity.game, name));
+            m_installedFolded.insert(scopedKey(identity.game, folded(name)));
+        }
+    }
+
+    // Empty when entries[i] is not installed.
+    std::vector<ResolvedDependency> resolve(std::size_t i) const {
+        std::vector<ResolvedDependency> out;
+        const PlaysetEntry& entry = m_entries[i];
+        const auto installed = m_inventory.find(entry.identity);
+        if (installed == m_inventory.end())
+            return out;
+        const GameKey& game = entry.identity.game;
+
+        std::set<std::string> seen;
+        for (const std::string& raw : installed->second.descriptor.dependencies) {
+            std::string name = trimmed(raw);
+            if (name.empty() || !seen.insert(name).second)
+                continue;
+
+            std::vector<std::size_t> candidates;
+            bool self = false;
+            if (const auto* found = m_playsetNames.find(game, name)) {
+                for (const std::size_t c : *found) {
+                    if (c == i)
+                        self = true;
+                    else
+                        candidates.push_back(c);
+                }
+            }
+            if (candidates.empty()) {
+                if (self)
+                    continue; // a mod listing its own name names no other mod
+                const bool isInstalled =
+                    m_installedExact.count(scopedKey(game, name)) != 0 ||
+                    m_installedFolded.count(scopedKey(game, folded(name))) != 0;
+                out.push_back({std::move(name),
+                               isInstalled ? DependencyResolution::NotInPlayset
+                                           : DependencyResolution::NotInstalled,
+                               std::nullopt});
+                continue;
+            }
+
+            std::optional<std::size_t> enabledBefore;
+            std::optional<std::size_t> enabledAfter;
+            for (const std::size_t c : candidates) {
+                if (!m_entries[c].enabled)
+                    continue;
+                if (c < i) {
+                    if (!enabledBefore)
+                        enabledBefore = c;
+                } else if (!enabledAfter) {
+                    enabledAfter = c;
+                }
+            }
+            if (enabledBefore)
+                out.push_back(
+                    {std::move(name), DependencyResolution::EnabledEarlier, enabledBefore});
+            else if (enabledAfter)
+                out.push_back({std::move(name), DependencyResolution::EnabledLater, enabledAfter});
+            else
+                out.push_back(
+                    {std::move(name), DependencyResolution::Disabled, candidates.front()});
+        }
+        return out;
+    }
+
+private:
+    std::span<const PlaysetEntry> m_entries;
+    const InstalledModMap& m_inventory;
+    NameIndex m_playsetNames;
+    std::unordered_set<std::string> m_installedExact;
+    std::unordered_set<std::string> m_installedFolded;
+};
+
 std::string position(std::size_t index) {
     return "#" + std::to_string(index + 1);
 }
@@ -110,80 +199,44 @@ const char* toString(DependencyIssueKind kind) noexcept {
     return "not_installed";
 }
 
+std::vector<std::vector<ResolvedDependency>>
+resolveDependencies(std::span<const PlaysetEntry> entries, const InstalledModMap& inventory) {
+    const Resolver resolver(entries, inventory);
+    std::vector<std::vector<ResolvedDependency>> out;
+    out.reserve(entries.size());
+    for (std::size_t i = 0; i < entries.size(); ++i)
+        out.push_back(resolver.resolve(i));
+    return out;
+}
+
 std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> entries,
                                                const InstalledModMap& inventory) {
-    NameIndex playsetNames;
-    for (std::size_t i = 0; i < entries.size(); ++i) {
-        const std::string name = displayName(entries[i], inventory);
-        if (!name.empty())
-            playsetNames.add(entries[i].identity.game, name, i);
-    }
-    std::unordered_set<std::string> installedExact;
-    std::unordered_set<std::string> installedFolded;
-    for (const auto& [identity, mod] : inventory) {
-        const std::string name = trimmed(mod.descriptor.name);
-        if (name.empty())
-            continue;
-        installedExact.insert(scopedKey(identity.game, name));
-        installedFolded.insert(scopedKey(identity.game, folded(name)));
-    }
-
+    const Resolver resolver(entries, inventory);
     std::vector<DependencyIssue> issues;
     for (std::size_t i = 0; i < entries.size(); ++i) {
-        const PlaysetEntry& entry = entries[i];
-        if (!entry.enabled)
+        if (!entries[i].enabled)
             continue;
-        const auto installed = inventory.find(entry.identity);
-        if (installed == inventory.end())
-            continue;
-        const GameKey& game = entry.identity.game;
-
-        std::set<std::string> seen;
-        for (const std::string& raw : installed->second.descriptor.dependencies) {
-            const std::string name = trimmed(raw);
-            if (name.empty() || !seen.insert(name).second)
-                continue;
-
-            std::vector<std::size_t> candidates;
-            bool self = false;
-            if (const auto* found = playsetNames.find(game, name)) {
-                for (const std::size_t c : *found) {
-                    if (c == i)
-                        self = true;
-                    else
-                        candidates.push_back(c);
-                }
-            }
-            if (candidates.empty()) {
-                if (self)
-                    continue; // a mod listing its own name is not a missing dependency
-                const bool isInstalled = installedExact.count(scopedKey(game, name)) != 0 ||
-                                         installedFolded.count(scopedKey(game, folded(name))) != 0;
-                issues.push_back(makeIssue(i, name,
-                                           isInstalled ? DependencyIssueKind::NotInPlayset
-                                                       : DependencyIssueKind::NotInstalled,
-                                           std::nullopt));
-                continue;
-            }
-
-            std::optional<std::size_t> enabledAfter;
-            bool satisfied = false;
-            for (const std::size_t c : candidates) {
-                if (!entries[c].enabled)
-                    continue;
-                if (c < i)
-                    satisfied = true;
-                else if (!enabledAfter)
-                    enabledAfter = c;
-            }
-            if (satisfied)
-                continue;
-            if (enabledAfter)
+        for (const ResolvedDependency& dependency : resolver.resolve(i)) {
+            switch (dependency.resolution) {
+            case DependencyResolution::EnabledEarlier:
+                break;
+            case DependencyResolution::EnabledLater:
+                issues.push_back(makeIssue(i, dependency.name, DependencyIssueKind::OrderedAfter,
+                                           dependency.index));
+                break;
+            case DependencyResolution::Disabled:
                 issues.push_back(
-                    makeIssue(i, name, DependencyIssueKind::OrderedAfter, enabledAfter));
-            else
+                    makeIssue(i, dependency.name, DependencyIssueKind::Disabled, dependency.index));
+                break;
+            case DependencyResolution::NotInPlayset:
                 issues.push_back(
-                    makeIssue(i, name, DependencyIssueKind::Disabled, candidates.front()));
+                    makeIssue(i, dependency.name, DependencyIssueKind::NotInPlayset, std::nullopt));
+                break;
+            case DependencyResolution::NotInstalled:
+                issues.push_back(
+                    makeIssue(i, dependency.name, DependencyIssueKind::NotInstalled, std::nullopt));
+                break;
+            }
         }
     }
     return issues;
