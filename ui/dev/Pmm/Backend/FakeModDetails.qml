@@ -37,6 +37,8 @@ QtObject {
     property string workshopUrl
     property string contentPath
     property bool canOpenFolder: false
+    property bool updateAvailable: false
+    property bool canReinstall: false
 
     onRowChanged: refresh()
     onGameChanged: refresh()
@@ -83,6 +85,9 @@ QtObject {
                                    : "C:/Games/Steam/steamapps/workshop/content/281990/" + m.providerId)
                                 : ""
         canOpenFolder = installed
+        updateAvailable = m.updateAvailable === true
+        // An installed Workshop mod that no job is changing.
+        canReinstall = installed && m.source === "steam-workshop"
         dependenciesLoadAfter = !required
         dependenciesNote = required ? ""
                 : game === "hoi4" ? "Hearts of Iron IV loads this mod after these mods when they are enabled. It does not need them."

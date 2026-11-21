@@ -12,7 +12,10 @@ import Pmm.Backend
 // them (required in Victoria 3 only), keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
 // Updates section, the update banner, the discard action, a blocked Play and
-// column widths from the keyboard), and the smallest window.
+// column widths from the keyboard), the smallest window, and the updates of
+// installed Workshop mods (rows, filter, "Check for mod updates", "Update
+// mods", the context menu, the re-download confirmation, a failed update job
+// and a session without Steam).
 // Run: ui/dev/preview.sh --test, or ctest -L ui-preview
 Item {
     width: 120
@@ -1171,6 +1174,293 @@ Item {
             mouseDrag(win.contentItem, handle.x + 40, handle.y, -40, 0)
             tryCompare(games, "width", width)
             compare(Backend.settings.leftPaneWidth, width)
+        }
+
+        // --- Updates of installed Workshop mods ---------------------------
+
+        // The rows and jobs the update tests change, put back afterwards.
+        function restoreUpdates(rows: var) {
+            const acquisition = Backend.acquisition
+            acquisition.downloadsEnabled = true
+            acquisition.workshopReachable = true
+            acquisition.checks = ({})
+            acquisition.reload()
+            Backend.modView.statusFilter = "all"
+            Backend.mods.restore(rows)
+            tryCompare(named("modList"), "count", Backend.mods.count)
+        }
+
+        // An item of the mod list's context menu by its objectName.
+        function menuItem(name: string): var {
+            const menu = named("modsPane").rowMenu
+            for (let i = 0; menu && i < menu.count; ++i) {
+                const item = menu.itemAt(i)
+                if (item && item.objectName === name)
+                    return item
+            }
+            return null
+        }
+
+        // The delegate of the job list whose job has `jobId`.
+        function jobDelegate(jobId: int): Item {
+            const list = named("jobList")
+            list.positionViewAtEnd()
+            for (const child of list.contentItem.children) {
+                if (child.model && child.model.jobId === jobId)
+                    return child
+            }
+            return null
+        }
+
+        // A Ready row with an update keeps its status, gets its own text and
+        // glyph, is counted, and has a filter of its own.
+        function test_c1_updateRowsCountAndFilter() {
+            const mods = Backend.mods
+            verify(mods.updateCount > 1, "the fake playset has no updates")
+            verify(mods.installedWorkshopCount > mods.updateCount)
+            const entry = mods.get(3)
+            verify(entry.updateAvailable)
+            compare(entry.status, "ready")
+            compare(entry.statusText, "Update available")
+            win.selectMod(3)
+            const row = named("modList").currentItem
+            compare(row.statusKey, "update_available")
+            compare(Theme.statusIcon(row.statusKey), "circle-arrow-up")
+            verify(row.Accessible.name.endsWith("Update available"), row.Accessible.name)
+            verify(!row.model.blocking)
+            compare(Backend.details.statusText, "Update available")
+            verify(Backend.details.updateAvailable)
+            verify(Backend.details.canReinstall)
+
+            const filter = named("statusFilter")
+            verify(named("modsPane").filterOptions.some(o => o.value === "updates" && o.text === "With updates"))
+            Backend.modView.statusFilter = "updates"
+            tryCompare(named("modList"), "count", mods.updateCount)
+            verify(!Backend.modView.reorderAllowed)
+            for (let i = 0; i < Backend.modView.count; ++i)
+                verify(Backend.modView.get(i).updateAvailable)
+            compare(filter.displayText, "Show: With updates")
+            // One enabled mod with an update is a launch warning, not a blocker.
+            verify(Backend.launcher.warnings.some(w => w.indexOf("an update on the Workshop") >= 0))
+        }
+
+        // "Check for mod updates" answers in a result line; "Update mods" is
+        // there while mods have an update, and gives its focus to the check
+        // button once the updates are queued.
+        function test_c2_checkAndUpdateMods() {
+            requireFocus()
+            const rows = Backend.mods.snapshot()
+            const acquisition = Backend.acquisition
+            const check = named("checkModUpdatesButton")
+            const update = named("updateModsButton")
+            const line = named("updateCheckLine")
+            verify(check.visible && check.enabled)
+            compare(check.text, "Check for mod updates")
+            verify(check.toolTipText.indexOf("Sends only their Workshop IDs") >= 0, check.toolTipText)
+            verify(update.visible && update.enabled)
+            compare(update.text, "Update mods")
+            verify(!line.visible)
+
+            check.forceActiveFocus(Qt.TabFocusReason)
+            press(Qt.Key_Space)
+            verify(acquisition.checkingUpdates)
+            tryVerify(() => line.visible)
+            tryVerify(() => !acquisition.checkingUpdates)
+            const updates = Backend.mods.updateCount
+            compare(line.text, "Checked " + Backend.mods.installedWorkshopCount + " Workshop mods: " + updates
+                    + " have an update.")
+            compare(line.level, "info")
+            verify(!named("updateCheckRetry").visible)
+            verify(check.activeFocus)
+            // The result belongs to the playset that was checked.
+            const playset = Backend.playsets.activeId
+            Backend.playsets.activate(2)
+            tryVerify(() => !line.visible)
+            Backend.playsets.activate(playset)
+            tryCompare(Backend.mods, "count", 2000)
+            tryVerify(() => line.visible)
+
+            notificationSpy.clear()
+            update.forceActiveFocus(Qt.TabFocusReason)
+            press(Qt.Key_Return)
+            compare(notificationSpy.count, 1)
+            compare(notificationSpy.signalArguments[0][1], "Updates requested")
+            compare(Backend.mods.updateCount, 0)
+            compare(Backend.mods.get(3).statusText, "Updating")
+            tryVerify(() => !update.visible)
+            tryVerify(() => check.activeFocus, 2000, "the focus did not move to Check for mod updates")
+            restoreUpdates(rows)
+        }
+
+        // A check that could not reach the Workshop says so and offers Retry;
+        // Retry gives its focus to the check button while it is hidden.
+        function test_c3_failedCheckOffersRetry() {
+            requireFocus()
+            const rows = Backend.mods.snapshot()
+            const acquisition = Backend.acquisition
+            acquisition.workshopReachable = false
+            acquisition.checkForUpdates()
+            const line = named("updateCheckLine")
+            const retry = named("updateCheckRetry")
+            tryVerify(() => acquisition.updateCheckFailed)
+            tryVerify(() => retry.visible)
+            compare(line.level, "warning")
+            verify(line.Accessible.name.startsWith("Warning: The Steam Workshop could not be reached"),
+                   line.Accessible.name)
+            compare(retry.Accessible.name, "Check for mod updates again")
+
+            acquisition.workshopReachable = true
+            const checks = acquisition.checkCount
+            retry.forceActiveFocus(Qt.TabFocusReason)
+            press(Qt.Key_Return)
+            tryVerify(() => named("checkModUpdatesButton").activeFocus, 2000, "the focus was lost with Retry")
+            tryCompare(acquisition, "checkCount", checks + 1)
+            verify(!acquisition.updateCheckFailed)
+            verify(!retry.visible)
+            restoreUpdates(rows)
+        }
+
+        // The context menu offers "Update from Workshop" only for a row with
+        // an update and "Re-download from scratch…" for installed Workshop
+        // mods; the keyboard skips what is not offered. The re-download asks
+        // first, with Cancel as the default.
+        function test_c4_contextMenuUpdateAndReinstall() {
+            requireFocus()
+            const rows = Backend.mods.snapshot()
+            const updateItem = menuItem("updateFromWorkshopItem")
+            const reinstallItem = menuItem("reinstallItem")
+            verify(updateItem !== null && reinstallItem !== null)
+            const dialog = named("confirmDialog")
+
+            // A local mod: neither.
+            win.selectMod(19)
+            compare(Backend.mods.get(19).source, "local")
+            // (`offered`: listed in the menu; `visible` is false while it is closed.)
+            verify(!updateItem.offered && !updateItem.enabled)
+            verify(!reinstallItem.offered && !reinstallItem.enabled)
+            // A Workshop mod without an update: only the re-download.
+            win.selectMod(0)
+            verify(!updateItem.offered && !updateItem.enabled)
+            verify(reinstallItem.offered && reinstallItem.enabled)
+            // The keyboard skips the item that is not listed.
+            press(Qt.Key_F10, Qt.ShiftModifier)
+            tryVerify(() => win.activeFocusItem && win.activeFocusItem.text === qsTr("Enable"))
+            for (let i = 0; i < 12 && win.activeFocusItem.text !== qsTr("Open folder"); ++i)
+                press(Qt.Key_Down)
+            press(Qt.Key_Down)
+            compare(win.activeFocusItem, reinstallItem)
+            compare(updateItem.height, 0)
+            press(Qt.Key_Escape)
+            tryVerify(() => named("modList").activeFocus)
+
+            // A row with an update: both, in order after "Open folder".
+            win.selectMod(3)
+            const name = Backend.mods.get(3).name
+            press(Qt.Key_F10, Qt.ShiftModifier)
+            tryVerify(() => win.activeFocusItem && win.activeFocusItem.text === qsTr("Enable"))
+            for (let i = 0; i < 12 && win.activeFocusItem.text !== qsTr("Open folder"); ++i)
+                press(Qt.Key_Down)
+            press(Qt.Key_Down)
+            compare(win.activeFocusItem, updateItem)
+            press(Qt.Key_Down)
+            compare(win.activeFocusItem, reinstallItem)
+            compare(reinstallItem.text, "Re-download from scratch…")
+
+            // Asks first; Escape (and Enter on the focused Cancel) change nothing.
+            notificationSpy.clear()
+            press(Qt.Key_Return)
+            tryVerify(() => dialog.opened)
+            compare(dialog.title, "Re-download from scratch")
+            verify(dialog.message.indexOf("Steam unsubscribes “" + name + "”, deletes its files and downloads it again") === 0,
+                   dialog.message)
+            verify(dialog.message.indexOf("The mod is missing until the download finishes.") >= 0)
+            verify(dialog.detail.indexOf("It stays in your playsets.") === 0, dialog.detail)
+            verify(dialog.detail.indexOf("see it disappear briefly") >= 0)
+            compare(findChild(dialog.footer, "confirmButton").text, "Re-download")
+            tryVerify(() => findChild(dialog.footer, "cancelButton").activeFocus)
+            press(Qt.Key_Return)
+            tryVerify(() => !dialog.visible)
+            compare(notificationSpy.count, 0)
+            compare(Backend.mods.get(3).statusText, "Update available")
+
+            // Confirmed: the mod is downloaded again.
+            named("modsPane").reinstallRequested(Backend.mods.get(3).providerId, name)
+            tryVerify(() => dialog.opened)
+            press(Qt.Key_Tab)
+            verify(findChild(dialog.footer, "confirmButton").activeFocus)
+            press(Qt.Key_Return)
+            tryVerify(() => !dialog.visible)
+            compare(notificationSpy.count, 1)
+            compare(notificationSpy.signalArguments[0][1], "Downloading again")
+            compare(Backend.mods.get(3).statusText, "Unsubscribing")
+            verify(!Backend.mods.get(3).updateAvailable)
+
+            // "Update from Workshop" on another row with an update.
+            win.selectMod(1)
+            verify(updateItem.offered && updateItem.enabled)
+            updateItem.triggered()
+            compare(Backend.mods.get(1).statusText, "Updating")
+            restoreUpdates(rows)
+        }
+
+        // A failed update in Downloads says why and offers Retry and
+        // "Re-download from scratch…", which asks first.
+        function test_c5_failedUpdateJobOffersReinstall() {
+            requireFocus()
+            const rows = Backend.mods.snapshot()
+            const job = jobDelegate(15)
+            verify(job !== null, "the failed update job is not listed")
+            compare(job.kind, "update")
+            verify(job.model.errorMessage.startsWith("Steam has not picked up this update yet."))
+            const link = findChild(job, "jobReinstallLink")
+            verify(link.visible && link.enabled)
+            compare(link.Accessible.name, "Re-download " + job.model.name + " from scratch…")
+            // The other jobs do not offer it.
+            const other = jobDelegate(13)
+            verify(!findChild(other, "jobReinstallLink").visible)
+
+            const dialog = named("confirmDialog")
+            link.clicked()
+            tryVerify(() => dialog.opened)
+            compare(dialog.title, "Re-download from scratch")
+            verify(dialog.message.indexOf(job.model.name) >= 0)
+            mouseClick(findChild(dialog.footer, "confirmButton"))
+            tryVerify(() => !dialog.visible)
+            const after = jobDelegate(15)
+            compare(after.model.state, "unsubscribing")
+            compare(after.kind, "reinstall")
+            verify(after.active)
+            restoreUpdates(rows)
+        }
+
+        // Without Steam (--no-steam, read-only) the update actions are
+        // disabled, and the controller refuses with the existing text and
+        // sends nothing; Steam's own "Update available" still shows.
+        function test_c6_withoutSteam() {
+            requireFocus()
+            const rows = Backend.mods.snapshot()
+            const acquisition = Backend.acquisition
+            acquisition.downloadsEnabled = false
+            const check = named("checkModUpdatesButton")
+            const update = named("updateModsButton")
+            verify(check.visible && !check.enabled)
+            verify(update.visible && !update.enabled)
+            win.selectMod(3)
+            verify(menuItem("updateFromWorkshopItem").offered && !menuItem("updateFromWorkshopItem").enabled)
+            verify(menuItem("reinstallItem").offered && !menuItem("reinstallItem").enabled)
+            compare(Backend.mods.get(3).statusText, "Update available")
+
+            notificationSpy.clear()
+            const checks = acquisition.checkCount
+            acquisition.checkForUpdates()
+            acquisition.updateMods()
+            wait(500)
+            compare(acquisition.checkCount, checks)
+            verify(!acquisition.checkingUpdates)
+            compare(notificationSpy.count, 2)
+            compare(notificationSpy.signalArguments[0][1], "Workshop downloads are off")
+            verify(Backend.mods.get(3).updateAvailable)
+            restoreUpdates(rows)
         }
 
         SignalSpy {

@@ -46,8 +46,12 @@ function textFor(status, progress) {
 }
 
 // Forced states for the first rows so previews/screenshots show every state.
+// `update`: the mod has a newer version on the Workshop (it must be a Ready
+// Workshop mod; it does not change the generated names).
 const forced = {
+    1: { update: true },
     2: { status: "missing", enabled: true },
+    3: { update: true },
     5: { status: "downloading", progress: 0.45, enabled: true },
     8: { warning: "version" },
     10: { status: "failed", enabled: true },
@@ -140,13 +144,17 @@ function makeCatalog(seed, count) {
             if (tags.indexOf(tag) < 0)
                 tags.push(tag);
         }
+        // About one Ready Workshop mod in a hundred has an update; drawn
+        // without the generator, so the names and states stay as they were.
+        const updateAvailable = (f.update === true || i % 97 === 41) && status === "ready" && !local;
         mods.push({
             name: name,
             source: local ? "local" : "steam-workshop",
             sourceLabel: local ? "Local" : "Workshop",
             providerId: id,
             status: status,
-            statusText: textFor(status, progress),
+            statusText: updateAvailable ? "Update available" : textFor(status, progress),
+            updateAvailable: updateAvailable,
             progress: progress,
             warnings: warnings.join("\n"),
             hasWarnings: warnings.length > 0,
