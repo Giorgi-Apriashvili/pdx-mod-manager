@@ -7,6 +7,11 @@ QtObject {
     property FakeModListModel mods
     property FakeNotificationCenter notifications
     property int row: -1
+    // The selected game. "hoi4" lists the dependencies as Hearts of Iron IV
+    // treats them: it loads the mod after them when they are enabled and does
+    // not need them. The preview has no Hearts of Iron IV mods, so the
+    // preview tests set it while Stellaris's list is shown.
+    property string game: "stellaris"
 
     property bool hasSelection: false
     property string name
@@ -18,6 +23,8 @@ QtObject {
     property string statusText
     property list<string> tags
     property var dependencies: []
+    property bool dependenciesLoadAfter: false
+    property string dependenciesNote
     property list<string> warnings
     property list<string> problems
     property string workshopUrl
@@ -25,6 +32,7 @@ QtObject {
     property bool canOpenFolder: false
 
     onRowChanged: refresh()
+    onGameChanged: refresh()
     property Connections modsConnection: Connections {
         target: details.mods
         function onContentChanged() { details.refresh() }
@@ -45,7 +53,10 @@ QtObject {
         supportedVersion = m.supportedVersion
         statusText = m.statusText
         tags = m.tags.length > 0 ? m.tags.split(",") : []
-        warnings = m.warnings.length > 0 ? m.warnings.split("\n") : []
+        // Hearts of Iron IV never warns about dependencies (the fake list's
+        // "Requires …" warnings stand for Stellaris's).
+        warnings = (m.warnings.length > 0 ? m.warnings.split("\n") : [])
+                   .filter(w => game !== "hoi4" || !w.startsWith("Requires"))
         problems = m.status === "broken" ? ["descriptor.mod has no name; the game may skip this mod."]
                  : m.status === "failed" ? ["The last download attempt failed: Steam reported a timeout (k_EResultTimeout)."]
                  : []
@@ -57,7 +68,21 @@ QtObject {
                                    : "C:/Games/Steam/steamapps/workshop/content/281990/" + m.providerId)
                                 : ""
         canOpenFolder = installed
+        dependenciesLoadAfter = game === "hoi4"
+        dependenciesNote = dependenciesLoadAfter
+                ? "Hearts of Iron IV loads this mod after these mods when they are enabled. It does not need them."
+                : ""
         const deps = []
+        if (dependenciesLoadAfter) {
+            if (row % 7 === 3 && installed) {
+                deps.push({ name: "Example Overhaul", state: "load_after", text: "Enabled in this playset" })
+                deps.push({ name: "Example Map Expansion", state: "load_after", text: "Disabled in this playset; not needed" })
+                deps.push({ name: "Example Total Conversion", state: "load_after", text: "Installed, not in this playset; not needed" })
+                deps.push({ name: "Example Alternate History", state: "load_after", text: "Not installed; not needed" })
+            }
+            dependencies = deps
+            return
+        }
         if (row % 7 === 3)
             deps.push({ name: "Unofficial Patch Collection", state: "ok", text: "In playset, loads earlier" })
         if (m.warnings.indexOf("Requires") >= 0)

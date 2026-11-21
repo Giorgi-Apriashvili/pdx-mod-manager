@@ -12,6 +12,7 @@
 // Stellaris), docs/games/ck3.md (CK3), docs/games/hoi4.md (Hearts of Iron IV)
 // and docs/games/vic3.md (Victoria 3).
 
+#include "core/dependencies.hpp"
 #include "core/log.hpp"
 #include "games/ck3.hpp"
 #include "games/descriptor.hpp"
@@ -30,6 +31,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -168,6 +170,53 @@ void printLaunchPlan(const LaunchPlan& plan, const GameInstallation& inst) {
         CHECK_FALSE(steam::keyEquals(arg, "-enabletelemetry"));
 }
 
+// What the enabled mods of the current configuration list under
+// dependencies, where the names lead, and the issues checkDependencies()
+// reports for a playset made from that configuration (none for Hearts of Iron
+// IV, whose dependencies only order the load), by count only.
+void printDependencies(const std::vector<PlaysetEntry>& current,
+                       const std::vector<InstalledMod>& mods) {
+    InstalledModMap inventory;
+    int installedListing = 0;
+    for (const InstalledMod& mod : mods) {
+        inventory[mod.identity] = mod;
+        installedListing += mod.descriptor.dependencies.empty() ? 0 : 1;
+    }
+    int listing = 0;
+    std::size_t names = 0;
+    for (const PlaysetEntry& entry : current) {
+        const auto it = inventory.find(entry.identity);
+        if (it == inventory.end() || it->second.descriptor.dependencies.empty())
+            continue;
+        ++listing;
+        names += it->second.descriptor.dependencies.size();
+    }
+    std::map<DependencyResolution, int> byResolution;
+    for (const std::vector<ResolvedDependency>& listed : resolveDependencies(current, inventory)) {
+        for (const ResolvedDependency& dependency : listed)
+            ++byResolution[dependency.resolution];
+    }
+    const std::vector<DependencyIssue> issues = checkDependencies(current, inventory);
+    std::map<std::string, int> byKind;
+    std::set<std::size_t> withIssues;
+    for (const DependencyIssue& issue : issues) {
+        ++byKind[toString(issue.kind)];
+        withIssues.insert(issue.entryIndex);
+    }
+    std::cout << "dependencies:   listed by " << installedListing << " of " << mods.size()
+              << " installed mod(s); " << listing << " enabled mod(s) list " << names
+              << " name(s); dependency warnings: " << issues.size() << " in " << withIssues.size()
+              << " enabled mod(s)\n";
+    for (const auto& [kind, count] : byKind)
+        std::cout << "  " << kind << ": " << count << "\n";
+    using R = DependencyResolution;
+    std::cout << "  the names lead to: enabled earlier " << byResolution[R::EnabledEarlier]
+              << ", enabled later " << byResolution[R::EnabledLater] << ", disabled "
+              << byResolution[R::Disabled] << ", not in the playset "
+              << byResolution[R::NotInPlayset] << ", not installed "
+              << byResolution[R::NotInstalled] << "\n";
+}
+
 // Returns the scanned mods, for the Hearts of Iron IV download check.
 std::vector<InstalledMod> runRealScan(const DlcLoadJsonAdapter& adapter) {
     const GameInstallation inst = printInstallation(adapter);
@@ -233,6 +282,7 @@ std::vector<InstalledMod> runRealScan(const DlcLoadJsonAdapter& adapter) {
                   << "\"" << (resolved ? "" : " (not installed)") << "\n";
     }
     std::cout << "  unresolved: " << unresolved << "\n";
+    printDependencies(*current, mods);
 
     auto plan = adapter.buildLaunchPlan(inst, ordered);
     REQUIRE(plan.ok());
@@ -410,6 +460,7 @@ void runRealVic3Scan(const Vic3Adapter& adapter) {
                   << "\"" << (resolved ? "" : " (not installed)") << "\n";
     }
     std::cout << "  unresolved: " << unresolved << "\n";
+    printDependencies(*current, mods);
     auto plan = adapter.buildLaunchPlan(inst, ordered);
     REQUIRE(plan.ok());
     printLaunchPlan(*plan, inst);

@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <string_view>
 #include <vector>
 
 using namespace pmm;
@@ -161,6 +162,35 @@ TEST_CASE("Playset readiness uses the latest job and adds dependency warnings",
     CHECK_THAT(readiness[0].warnings[0], ContainsSubstring("must load before"));
     CHECK(readiness[1].status == EntryStatus::Ready);
     CHECK(readiness[2].status == EntryStatus::Downloading);
+}
+
+TEST_CASE("Hearts of Iron IV readiness carries no dependency warnings", "[core][readiness]") {
+    // The patch names a mod that loads later, a disabled one and one that is
+    // not installed: warnings in Stellaris, nothing in Hearts of Iron IV.
+    for (const char* game : {"hoi4", "stellaris"}) {
+        INFO(game);
+        const std::vector<PlaysetEntry> entries{workshop("6000000001", "Patch", true, game),
+                                                workshop("6000000002", "Base", true, game),
+                                                workshop("6000000003", "Off", false, game)};
+        InstalledModMap inventory;
+        add(inventory, installed(entries[0].identity, "Example Patch",
+                                 {"Example Base", "Example Off", "Example Missing"}));
+        add(inventory, installed(entries[1].identity, "Example Base"));
+        add(inventory, installed(entries[2].identity, "Example Off"));
+        const auto readiness = computePlaysetReadiness(entries, inventory, {});
+        REQUIRE(readiness.size() == 3);
+        for (const EntryReadiness& entry : readiness)
+            CHECK(entry.status == EntryStatus::Ready);
+        if (std::string_view(game) == "hoi4") {
+            CHECK(readiness[0].warnings.empty());
+        } else {
+            REQUIRE(readiness[0].warnings.size() == 3);
+            CHECK_THAT(readiness[0].warnings[2], ContainsSubstring("not installed"));
+        }
+        CHECK(readiness[1].warnings.empty());
+        CHECK(readiness[2].warnings.empty());
+        CHECK(evaluateLaunch(entries, readiness).canLaunch);
+    }
 }
 
 TEST_CASE("Launch requires every enabled entry to be ready", "[core][readiness]") {

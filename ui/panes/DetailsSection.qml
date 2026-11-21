@@ -23,12 +23,14 @@ ColumnLayout {
         case "not_in_playset": return "circle-minus"
         case "disabled": return "circle-minus"
         case "order": return "arrow-up"
+        case "load_after": return "layers"
         default: return "circle-help"
         }
     }
 
     function dependencyColor(state: string): color {
-        return state === "ok" ? Theme.success : state === "missing" ? Theme.danger : Theme.warning
+        return state === "ok" ? Theme.success : state === "missing" ? Theme.danger
+             : state === "load_after" ? Theme.textMuted : Theme.warning
     }
 
     SectionHeader {
@@ -138,14 +140,28 @@ ColumnLayout {
             }
         }
 
-        // Dependencies
+        // Dependencies; in Hearts of Iron IV they only order the load.
         Text {
+            objectName: "dependenciesHeading"
             Layout.topMargin: 2
-            text: qsTr("Dependencies")
+            text: root.details.dependenciesLoadAfter ? qsTr("Loads after") : qsTr("Dependencies")
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSizeSmall
             font.weight: Font.DemiBold
             color: Theme.textMuted
             Accessible.role: Accessible.Heading
+            Accessible.name: text
+        }
+        Text {
+            objectName: "dependenciesNote"
+            Layout.fillWidth: true
+            visible: root.details.dependenciesNote.length > 0 && root.details.dependencies.length > 0
+            text: root.details.dependenciesNote
+            textFormat: Text.PlainText
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.textMuted
+            wrapMode: Text.Wrap
+            Accessible.role: Accessible.StaticText
             Accessible.name: text
         }
         Text {
@@ -162,6 +178,7 @@ ColumnLayout {
             delegate: RowLayout {
                 id: dep
                 required property var modelData
+                objectName: "dependencyRow"
                 Layout.fillWidth: true
                 spacing: 6
                 Accessible.role: Accessible.StaticText
@@ -190,7 +207,8 @@ ColumnLayout {
                         text: dep.modelData.text
                         textFormat: Text.PlainText
                         font.pixelSize: Theme.fontSizeSmall
-                        color: dep.modelData.state === "ok" ? Theme.textMuted : root.dependencyColor(dep.modelData.state)
+                        color: dep.modelData.state === "ok" || dep.modelData.state === "load_after"
+                               ? Theme.textMuted : root.dependencyColor(dep.modelData.state)
                         wrapMode: Text.Wrap
                     }
                 }

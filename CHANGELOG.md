@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hearts of Iron IV dependencies.** Hearts of Iron IV mods whose descriptor lists other mods under `dependencies` no longer show them as missing requirements or get a warning (on the row, in the "with warnings" count, in the launch check, whose line about mods with warnings no longer mentions dependencies there, or when mods are enabled or disabled): the game only loads a mod after those mods when they are enabled, as its wiki describes, and does not need them. The selected mod's details list them under "Loads after", with what each one is in the playset; nothing is enabled, added or reordered for them, and whether the game orders mods by them is not yet checked in the game ([Hearts of Iron IV](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/main/docs/games/hoi4.md#mods)). The other games still warn about the mods a mod depends on.
+
 ## [0.3.0] - 2026-11-21
 
 Victoria 3 and Hearts of Iron IV support, so every game in the games column is now supported, and a corrected message for position suffixes in Workshop ID lists. Installed copies update to this version from the update banner or **Settings > Updates**.

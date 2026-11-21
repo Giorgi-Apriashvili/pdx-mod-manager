@@ -35,7 +35,10 @@ struct GameRowData {
 
 struct DependencyData {
     QString name;
-    QString state; // ok | missing | not_in_playset | disabled | order | unchecked
+    // ok | missing | not_in_playset | disabled | order | unchecked, or
+    // load_after for every name in a game whose dependencies only order the
+    // load (Hearts of Iron IV; core DependencyMeaning::LoadAfter)
+    QString state;
     QString text;
 };
 

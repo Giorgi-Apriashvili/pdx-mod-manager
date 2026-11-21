@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "games/stellaris.hpp"
 #include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
@@ -232,6 +233,40 @@ TEST_CASE("Only enabled entries block a launch", "[services][launch]") {
         CHECK_FALSE(launcher.launch(kGame, gone));
         CHECK(w.started.empty());
     }
+}
+
+TEST_CASE("The launch check names dependencies only where the game requires them",
+          "[services][launch]") {
+    World w;
+    // #1 names a mod that is not installed; #2's version is not the one the
+    // shared setup used.
+    writeText(w.workshop / "6000000001" / "descriptor.mod",
+              "name=\"Example Overhaul\"\ndependencies={\"Example Missing\"}\n");
+    writeText(w.workshop / "6000000002" / "descriptor.mod",
+              "name=\"Example Map\"\nversion=\"2.0\"\n");
+    w.refresh();
+    PlaysetEntry map = workshopEntry("6000000002", "Map");
+    map.versionHint = "1.0";
+    const std::int64_t id = makePlayset(w, {workshopEntry("6000000001", "Overhaul"), map});
+    LaunchService launcher(w.ctx, nullptr);
+
+    const LaunchCheck required = launcher.check(kGame, id);
+    CHECK(required.canLaunch);
+    CHECK(contains(required.warnings,
+                   "2 enabled mods have warnings (versions or dependencies); see the mod list."));
+
+    // A game whose dependencies only order the load, as Hearts of Iron IV's
+    // do: the fake adapter is Stellaris's, so Stellaris's entry is changed.
+    std::vector<GameCatalogEntry> loadAfter(gameCatalog().begin(), gameCatalog().end());
+    for (GameCatalogEntry& entry : loadAfter) {
+        if (entry.key == kGame)
+            entry.dependencyMeaning = DependencyMeaning::LoadAfter;
+    }
+    const pmm::testing::ScopedGameCatalog scoped(loadAfter);
+    const LaunchCheck orderOnly = launcher.check(kGame, id);
+    CHECK(orderOnly.canLaunch);
+    CHECK(contains(orderOnly.warnings, "1 enabled mod has warnings; see the mod list."));
+    CHECK_FALSE(contains(orderOnly.warnings, "dependencies"));
 }
 
 TEST_CASE("Without a playset the game starts without mods, journaled like any launch",

@@ -72,7 +72,10 @@ Things the QML relies on beyond the tables in the contract:
   `workshopIdListField`, `workshopIdListNote`, `copyWorkshopIdListButton`,
   `confirmDialog`,
   `confirmScroller` (its scrolling text), `confirmButton`, `cancelButton`,
-  `settingsDialog`, `shortcutsDialog`, `shortcutList`.
+  `settingsDialog`, `shortcutsDialog`, `shortcutList`, and in the selected
+  mod's details `dependenciesHeading` ("Dependencies", or "Loads after" for
+  Hearts of Iron IV), `dependenciesNote` and `dependencyRow` (each listed
+  dependency).
 - The window's minimum size is 900x440 (it fits a 1920x1080 screen at
   200 %); `docs/accessibility.md` ("Smallest window") describes how the
   columns, the toolbar, the actions column and the dialogs adapt.
@@ -132,6 +135,11 @@ unsupported game to check it. A pasted Workshop ID list (any text not
 starting with `PMM`) is previewed with its missing mods shown by ID; about a
 second later (`autoLookup`, or at once with `Backend.sharing.finishLookup()`)
 their Workshop names arrive in the same preview.
+`Backend.details.game = "hoi4"` shows the selected mod's dependencies as
+Hearts of Iron IV treats them ("Loads after"; the installed ones of rows 3,
+10, 17, … name four example mods, and the details leave out the fake
+"Requires …" warnings), over Stellaris's list, since the preview has no
+Hearts of Iron IV mods.
 Nothing is read from or written to disk.
 
 ```sh

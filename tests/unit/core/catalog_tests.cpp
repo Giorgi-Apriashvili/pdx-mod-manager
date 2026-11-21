@@ -90,6 +90,21 @@ TEST_CASE("Catalog lists a known game without claiming support", "[core][catalog
     CHECK(pmm::findGame("not-a-game") == nullptr);
 }
 
+TEST_CASE("Only Hearts of Iron IV's dependencies merely order the load", "[core][catalog]") {
+    using pmm::DependencyMeaning;
+    CHECK(pmm::dependencyMeaningOf("hoi4") == DependencyMeaning::LoadAfter);
+    for (const char* key : {"ck3", "eu4", "stellaris", "vic3"})
+        CHECK(pmm::dependencyMeaningOf(key) == DependencyMeaning::Required);
+    CHECK(pmm::dependencyMeaningOf("not-a-game") == DependencyMeaning::Required);
+    for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog())
+        CHECK(entry.dependencyMeaning == pmm::dependencyMeaningOf(entry.key));
+    // A known game without an adapter checks them as required too.
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    CHECK(pmm::dependencyMeaningOf(pmm::testing::kUnsupportedGameKey) ==
+          DependencyMeaning::Required);
+    CHECK(pmm::dependencyMeaningOf("hoi4") == DependencyMeaning::LoadAfter);
+}
+
 TEST_CASE("Provider/game combinations are validated", "[core][catalog]") {
     CHECK(pmm::isSourceValidForGame("stellaris", pmm::source::SteamWorkshop));
     CHECK(pmm::isSourceValidForGame("eu4", pmm::source::Local));

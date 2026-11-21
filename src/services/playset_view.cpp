@@ -47,6 +47,8 @@ PlaysetView buildPlaysetView(const Playset& playset, std::span<const InstalledMo
     const InstalledModMap installed = detail::toMap(inventory);
     std::vector<EntryReadiness> readiness = computePlaysetReadiness(entries, installed, jobs);
     view.dependencyIssues = checkDependencies(entries, installed);
+    std::vector<std::vector<ResolvedDependency>> dependencies =
+        resolveDependencies(entries, installed);
 
     std::map<ModIdentity, AcquisitionJob> latestJobs;
     for (AcquisitionJob& job : detail::latestPerIdentity(jobs))
@@ -75,6 +77,7 @@ PlaysetView buildPlaysetView(const Playset& playset, std::span<const InstalledMo
             row.displayName = detail::entryLabel(entries[i]);
         row.readiness = readiness[i];
         row.blocking = entries[i].enabled && readiness[i].status != EntryStatus::Ready;
+        row.dependencies = std::move(dependencies[i]);
 
         ++view.counts.total;
         if (entries[i].enabled)

@@ -34,7 +34,7 @@ private:
 
 // The real catalog followed by {"pmm-test-unsupported", "Example Unsupported
 // Game", Steam app "1", user-data folder "Example Unsupported Game", Steam
-// Workshop and local mods, no adapter}. Static storage.
+// Workshop and local mods, no adapter, dependencies Required}. Static storage.
 std::span<const GameCatalogEntry> catalogWithUnsupportedGame() noexcept;
 
 } // namespace pmm::testing

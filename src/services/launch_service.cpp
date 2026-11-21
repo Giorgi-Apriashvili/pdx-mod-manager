@@ -1,5 +1,6 @@
 #include "services/launch_service.hpp"
 
+#include "core/catalog.hpp"
 #include "core/log.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/installation_repository.hpp"
@@ -287,10 +288,15 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                 if (entries[i].enabled && !readiness[i].warnings.empty())
                     ++withWarnings;
             }
+            // Where dependencies only order the load (Hearts of Iron IV), they
+            // never cause a warning, so the line does not name them.
             if (withWarnings > 0)
-                check.warnings.push_back(std::to_string(withWarnings) + " enabled " +
-                                         (withWarnings == 1 ? "mod has" : "mods have") +
-                                         " warnings (versions or dependencies); see the mod list.");
+                check.warnings.push_back(
+                    std::to_string(withWarnings) + " enabled " +
+                    (withWarnings == 1 ? "mod has" : "mods have") +
+                    (dependencyMeaningOf(game) == DependencyMeaning::Required
+                         ? " warnings (versions or dependencies); see the mod list."
+                         : " warnings; see the mod list."));
             if (check.readiness.canLaunch) {
                 for (const PlaysetEntry& entry : entries) {
                     if (entry.enabled)

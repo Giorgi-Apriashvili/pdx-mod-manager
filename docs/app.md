@@ -417,6 +417,12 @@ platform:
   action appearing only then, and a confirmation that names the file and the
   folder, has Cancel focused, closes on Enter and Escape without a change,
   and discards on **Discard**;
+- the dependencies in the selected mod's details (`ModDetails`), from the
+  playset view of a temporary profile: in Hearts of Iron IV, which loads a
+  mod after the mods it names when they are enabled and does not need them,
+  "Loads after" with its note and a neutral state for each name, and no row
+  warnings; in Stellaris the same playset gives the dependency states and
+  messages as before;
 - a 2,000-entry playset with a time budget for each GUI-thread operation;
 - the real QML module against the real Backend, without QML warnings, with a
   playset and a mod named like rich text with a remote image: nothing tries

@@ -171,8 +171,21 @@ by count only):
   dropped when the registration is generated, as the launcher does.
 - **`dependencies`.** Names, kept in the descriptor and written back as they
   are. The HOI4 wiki says a dependency makes a mod load after the named ones
-  without making them required; this application does not use them for the
-  order, and that is untested.
+  without making them required, and popular mods name big total conversions
+  they do not need. So the application does not check them as requirements
+  (the catalog's `dependencyMeaning` is `LoadAfter` for `hoi4` only): no
+  warning on the row, nothing counted under "with warnings" or in the launch
+  check (whose line about them reads "N enabled mods have warnings; see the
+  mod list.", without "(versions or dependencies)"), no feedback when mods
+  are enabled or disabled. The selected mod's details list them under "Loads
+  after", each mod once, with what each is in the playset (enabled,
+  disabled, installed but not in the playset, not installed) and the note
+  that the game does not need them. Nothing is enabled, added or
+  reordered for them, and the written order stays the playset's (the game
+  applies dependencies itself, according to the wiki). Whether the game
+  really orders mods by them is untested in-game. Before this change, 4 of
+  the 21 enabled mods on the development machine had 20 warnings about
+  dependencies that were not installed (2026-11-21, read-only; counts only).
 - **Registrations older than their content.** On 2026-11-21, 2 of the 23
   registrations differ from what their Workshop content would give, in the
   values the Workshop updates changed: `supported_version` in both, and
@@ -390,6 +403,24 @@ imported the code (21 entries, 20 enabled, 21 installed, 0 missing) with a
 byte-identical dump; `scripts/share-code.py decode` read the same code (game
 `hoi4`, version hint `1.20.0.0`). No file under the game folder or
 `Documents/Paradox Interactive/Hearts of Iron IV` changed.
+
+`dependencies`, read-only on the same day after the owner's report (branch
+`agent/hoi4-dependencies`): the real-machine test now prints what the
+enabled mods list and where the names lead, by count only:
+
+```text
+dependencies:   listed by 7 of 23 installed mod(s); 6 enabled mod(s) list 24 name(s); dependency warnings: 0 in 0 enabled mod(s)
+  the names lead to: enabled earlier 4, enabled later 0, disabled 0, not in the playset 0, not installed 20
+```
+
+With `main`'s rules (Hearts of Iron IV's dependencies checked as required)
+the same configuration gave `dependency warnings: 20 in 4 enabled mod(s)`,
+all of them `not_installed`. In the application (`--self-test config`, then
+`--screenshot` with `--filter warning` and with `--select-row`, new scratch
+profiles), the debug build of `main` showed such a mod's names in red as
+"Requires …, which is not installed." and the branch shows them under "Loads
+after" as "Not installed; not needed"; the footer says "18 with warnings" in
+both, because those 4 mods also carry a `supported_version` warning.
 
 The probe run of the same day, with the application of `main` (`11b73aa`),
 started the game directly four times; it is recorded in the

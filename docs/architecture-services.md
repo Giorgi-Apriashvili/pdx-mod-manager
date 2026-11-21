@@ -154,9 +154,11 @@ obscurely.
 - The active playset per game is stored in settings
   (`game.<key>.activePlaysetId`), together with `app.lastGameKey`.
 - Editing (core `playset_ops`): `setEnabled(indices, on)` returns the
-  dependency issues the change introduces. `move`, `moveUp`/`moveDown`
-  (selection), `moveBlock` (drag and drop), `addMods` (installed mods,
-  appended) and `removeEntries` (snapshotted into the history first).
+  dependency issues the change introduces (none in Hearts of Iron IV, whose
+  dependencies only order the load: the catalog's `dependencyMeaning`).
+  `move`, `moveUp`/`moveDown` (selection), `moveBlock` (drag and drop),
+  `addMods` (installed mods, appended) and `removeEntries` (snapshotted into
+  the history first).
   Reordering takes the view's `ViewFilter` and is refused with
   `reorderPolicy()`'s explanation while the view is searched, filtered or
   browse-sorted.
@@ -172,11 +174,15 @@ obscurely.
 `buildPlaysetView()` is a pure function that derives what the mod list shows.
 Each row has a display name (installed descriptor name, else name hint, else
 id), readiness (`core/readiness`: installed content wins over job state,
-dependency warnings, plus the adapter's compatibility warnings) and the latest
-job. The view also carries the footer counts and the `LaunchReadiness`
-verdict. `loadPlaysetView()` reads everything from the database and overlays
-the coordinator's live jobs, which carry fresher progress than the coalesced
-database rows.
+dependency warnings, plus the adapter's compatibility warnings), the latest
+job, and where each name its descriptor lists under dependencies leads
+(`resolveDependencies()`: enabled earlier or later, disabled, not in the
+playset, not installed), which the details show for a game whose
+dependencies only order the load (Hearts of Iron IV) instead of warnings,
+each mod once. The view also carries the footer counts and the
+`LaunchReadiness` verdict. `loadPlaysetView()` reads everything from the
+database and overlays the coordinator's live jobs, which carry fresher
+progress than the coalesced database rows.
 
 ### ShareService (`share_service.hpp`)
 
