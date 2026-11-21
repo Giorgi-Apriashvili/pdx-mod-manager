@@ -8,7 +8,7 @@ QtObject {
 
     property FakeNotificationCenter notifications
     property string state: "idle"
-    readonly property string currentVersion: "0.2.0"
+    readonly property string currentVersion: "0.3.0"
     property string latestVersion: ""
     property real progress: 0
     property string errorMessage: ""
@@ -66,7 +66,7 @@ QtObject {
     property Timer checkTimer: Timer {
         interval: 600
         onTriggered: {
-            updates.latestVersion = "0.2.0"
+            updates.latestVersion = "0.4.0"
             updates.state = "available"
         }
     }

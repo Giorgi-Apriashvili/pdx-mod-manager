@@ -577,7 +577,7 @@ Item {
             Backend.updates.checkDaily()
             tryCompare(Backend.updates, "state", "available")
             verify(banner.visible)
-            compare(banner.Accessible.name, "Paradox Mod Manager 0.2.0 is available.")
+            compare(banner.Accessible.name, "Paradox Mod Manager 0.4.0 is available.")
             // Non-modal: the list keeps the keyboard. Tab reaches the banner's buttons.
             verify(list.activeFocus)
             const action = findChild(banner, "updateBannerAction")
