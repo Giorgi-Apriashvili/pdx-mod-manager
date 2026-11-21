@@ -1,6 +1,7 @@
 #include "app/core/view_data.hpp"
 
 #include "app/core/qt_util.hpp"
+#include "core/catalog.hpp"
 #include "core/dependencies.hpp"
 #include "persistence/acquisition_job_repository.hpp"
 #include "persistence/playset_repository.hpp"
@@ -42,11 +43,36 @@ QString dependencyState(DependencyIssueKind kind) {
     return QStringLiteral("missing");
 }
 
+// A game that loads a mod after the mods it names, when they are enabled, and
+// does not need them (Hearts of Iron IV): what each name is in this playset,
+// without a warning.
+QString loadAfterText(DependencyResolution resolution) {
+    switch (resolution) {
+    case DependencyResolution::EnabledEarlier:
+    case DependencyResolution::EnabledLater:
+        // The game orders them itself, whatever their place in the list.
+        return QStringLiteral("Enabled in this playset; the game loads it first");
+    case DependencyResolution::Disabled:
+        return QStringLiteral("Disabled in this playset; not needed");
+    case DependencyResolution::NotInPlayset:
+        return QStringLiteral("Installed, not in this playset; not needed");
+    case DependencyResolution::NotInstalled:
+        return QStringLiteral("Not installed; not needed");
+    }
+    return QStringLiteral("Not installed; not needed");
+}
+
 std::vector<DependencyData> dependenciesOf(const services::PlaysetRow& row,
                                            const std::vector<const DependencyIssue*>& issues) {
     std::vector<DependencyData> out;
     if (!row.installed)
         return out;
+    if (dependencyMeaningOf(row.entry.identity.game) == DependencyMeaning::LoadAfter) {
+        for (const ResolvedDependency& dependency : row.dependencies)
+            out.push_back(DependencyData{qs(dependency.name), QStringLiteral("load_after"),
+                                         loadAfterText(dependency.resolution)});
+        return out;
+    }
     for (const std::string& raw : row.installed->descriptor.dependencies) {
         const QString name = trimmedQ(raw);
         if (name.isEmpty())

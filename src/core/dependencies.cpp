@@ -1,5 +1,7 @@
 #include "core/dependencies.hpp"
 
+#include "core/catalog.hpp"
+
 #include <algorithm>
 #include <set>
 #include <string_view>
@@ -214,7 +216,9 @@ std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> ent
     const Resolver resolver(entries, inventory);
     std::vector<DependencyIssue> issues;
     for (std::size_t i = 0; i < entries.size(); ++i) {
-        if (!entries[i].enabled)
+        const PlaysetEntry& entry = entries[i];
+        if (!entry.enabled ||
+            dependencyMeaningOf(entry.identity.game) != DependencyMeaning::Required)
             continue;
         for (const ResolvedDependency& dependency : resolver.resolve(i)) {
             switch (dependency.resolution) {

@@ -1,7 +1,9 @@
 #include "app/gui/mod_details.hpp"
 
+#include "app/core/qt_util.hpp"
 #include "app/gui/mod_list_model.hpp"
 #include "app/gui/notification_center.hpp"
+#include "core/catalog.hpp"
 
 #include <QDesktopServices>
 #include <QDir>
@@ -75,6 +77,20 @@ QVariantList ModDetails::dependencies() const {
                                   {QStringLiteral("text"), dependency.text}});
     }
     return out;
+}
+
+bool ModDetails::dependenciesLoadAfter() const {
+    const ModRowData* r = current();
+    return r && dependencyMeaningOf(r->entry.identity.game) == DependencyMeaning::LoadAfter;
+}
+
+QString ModDetails::dependenciesNote() const {
+    const ModRowData* r = current();
+    const GameCatalogEntry* game = r ? findGame(r->entry.identity.game) : nullptr;
+    if (!game || game->dependencyMeaning != DependencyMeaning::LoadAfter)
+        return {};
+    return tr("%1 loads this mod after these mods when they are enabled. It does not need them.")
+        .arg(qs(game->displayName));
 }
 
 bool ModDetails::isTrustedWorkshopUrl(const QString& url) {

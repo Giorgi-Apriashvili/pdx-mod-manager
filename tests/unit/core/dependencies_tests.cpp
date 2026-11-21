@@ -194,6 +194,18 @@ TEST_CASE("CK3, EU4, Stellaris and Victoria 3 report each kind of dependency iss
     }
 }
 
+TEST_CASE("Hearts of Iron IV dependencies only order the load and raise no issues",
+          "[core][dependencies]") {
+    EveryKind playset("hoi4");
+    CHECK(checkDependencies(playset.entries, playset.inventory).empty());
+    // Enabling or disabling anything reports nothing either.
+    playset.entries[1].enabled = false;
+    CHECK(dependencyIssuesIntroducedByEnabling(playset.entries, playset.inventory,
+                                               std::vector<std::size_t>{1, 2})
+              .empty());
+    CHECK_FALSE(playset.entries[2].enabled); // nothing is enabled automatically
+}
+
 TEST_CASE("Resolved dependencies say where each name leads, whatever the game",
           "[core][dependencies]") {
     for (const char* game : {"hoi4", "stellaris"}) {

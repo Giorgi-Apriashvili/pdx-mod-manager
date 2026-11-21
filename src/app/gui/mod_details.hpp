@@ -29,6 +29,11 @@ class ModDetails : public QObject {
     Q_PROPERTY(QString statusText READ statusText NOTIFY changed)
     Q_PROPERTY(QStringList tags READ tags NOTIFY changed)
     Q_PROPERTY(QVariantList dependencies READ dependencies NOTIFY changed)
+    // True when the game loads a mod after the mods it names and does not
+    // need them (Hearts of Iron IV): the pane lists them under "Loads after"
+    // with dependenciesNote, and every one has the state "load_after".
+    Q_PROPERTY(bool dependenciesLoadAfter READ dependenciesLoadAfter NOTIFY changed)
+    Q_PROPERTY(QString dependenciesNote READ dependenciesNote NOTIFY changed)
     Q_PROPERTY(QStringList warnings READ warnings NOTIFY changed)
     Q_PROPERTY(QStringList problems READ problems NOTIFY changed)
     Q_PROPERTY(QString workshopUrl READ workshopUrl NOTIFY changed)
@@ -51,6 +56,8 @@ public:
     QString statusText() const;
     QStringList tags() const;
     QVariantList dependencies() const;
+    bool dependenciesLoadAfter() const;
+    QString dependenciesNote() const;
     QStringList warnings() const;
     QStringList problems() const;
     QString workshopUrl() const;

@@ -1,3 +1,4 @@
+#include "persistence/inventory_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/settings_repository.hpp"
 #include "services/playset_service.hpp"
@@ -259,6 +260,63 @@ TEST_CASE("Bulk enabling and disabling surfaces the dependency issues it introdu
     CHECK(disabling[0].entryIndex == 1);
     // Nothing is ever enabled or reordered automatically.
     CHECK(enabledFlags(stored(w, id)) == std::vector<bool>{false, true});
+}
+
+TEST_CASE("Hearts of Iron IV playsets report no dependency issues when enabling or viewing",
+          "[services][playsets]") {
+    World w;
+    PlaysetService service(w.ctx);
+    // The overhaul (#1) names a mod that loads after it (#2), a disabled one
+    // (#3), one installed elsewhere and one that is not installed. Hearts of
+    // Iron IV loads it after them when they are enabled and does not need them.
+    const auto mod = [](const std::string& id, const std::string& name,
+                        std::vector<std::string> dependencies = {}) {
+        InstalledMod m;
+        m.identity = ModIdentity{"hoi4", source::SteamWorkshop, id};
+        m.descriptor.name = name;
+        m.descriptor.dependencies = std::move(dependencies);
+        return m;
+    };
+    persistence::InventoryRepository inventory(*w.db);
+    requireOk(inventory.replaceForGame(
+        "hoi4", {mod("6000000001", "Example Overhaul",
+                     {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing"}),
+                 mod("6000000002", "Example Map"), mod("6000000003", "Example Conversion"),
+                 mod("6000000004", "Example Elsewhere")}));
+    persistence::PlaysetRepository repo(*w.db);
+    Playset playset;
+    playset.game = "hoi4";
+    playset.name = "Main";
+    playset.entries = {workshopEntry("6000000001", "Overhaul", false),
+                       workshopEntry("6000000002", "Map", true),
+                       workshopEntry("6000000003", "Conversion", false)};
+    for (PlaysetEntry& entry : playset.entries)
+        entry.identity.game = "hoi4";
+    const std::int64_t id = require(repo.create(playset));
+
+    const std::size_t overhaul[] = {0};
+    CHECK(require(service.setEnabled(id, overhaul, true)).empty());
+    const std::size_t conversion[] = {2};
+    CHECK(require(service.setEnabled(id, conversion, true)).empty());
+    const std::size_t map[] = {1};
+    CHECK(require(service.setEnabled(id, map, false)).empty());
+    // Nothing else is ever enabled or reordered.
+    CHECK(enabledFlags(stored(w, id)) == std::vector<bool>{true, false, true});
+    CHECK(ids(stored(w, id)) == std::vector<std::string>{"6000000001", "6000000002", "6000000003"});
+
+    const PlaysetView view = require(loadPlaysetView(w.ctx, id));
+    CHECK(view.dependencyIssues.empty());
+    REQUIRE(view.rows.size() == 3);
+    CHECK(view.rows[0].readiness.status == EntryStatus::Ready);
+    CHECK(view.rows[0].readiness.warnings.empty());
+    CHECK(view.counts.warning == 0);
+    CHECK(view.launch.canLaunch);
+    using R = DependencyResolution;
+    CHECK(view.rows[0].dependencies ==
+          std::vector<ResolvedDependency>{{"Example Map", R::Disabled, 1},
+                                          {"Example Conversion", R::EnabledLater, 2},
+                                          {"Example Elsewhere", R::NotInPlayset, std::nullopt},
+                                          {"Example Missing", R::NotInstalled, std::nullopt}});
 }
 
 TEST_CASE("Removing entries snapshots the playset first; foreign changes invalidate undo",

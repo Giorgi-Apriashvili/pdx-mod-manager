@@ -8,7 +8,8 @@ import Pmm.Backend
 // searching, delete confirmation, drag-and-drop, column-width persistence,
 // theme switching, the import flow, discarding an interrupted change that
 // Recover cannot undo, the "Other games" section with an unsupported game
-// added by the test, keyboard accessibility (Tab order, F6,
+// added by the test, the details of a mod whose game only orders the load by
+// its dependencies (Hearts of Iron IV), keyboard accessibility (Tab order, F6,
 // Escape and focus return, Alt+Up/Down, context menu, accessible names, the
 // Updates section, the update banner, the discard action, a blocked Play and
 // column widths from the keyboard), and the smallest window.
@@ -77,6 +78,8 @@ Item {
                 Backend.playsets.activate(firstPlaysetId)
                 tryCompare(Backend.mods, "count", 2000)
             }
+            // test_9f shows the details as Hearts of Iron IV's.
+            Backend.details.game = Backend.games.currentKey
             Backend.modView.search = ""
             Backend.modView.statusFilter = "all"
             Backend.modView.sortMode = "order"
@@ -385,6 +388,52 @@ Item {
             Backend.games.remove(Backend.games.indexOfKey("pmm-test"))
             tryCompare(pane, "otherGameCount", before)
             compare(gameRow("pmm-test"), null)
+        }
+
+        // The dependency rows of the details pane, in order.
+        function dependencyRows(): var {
+            const column = named("dependenciesHeading").parent
+            const rows = []
+            for (let i = 0; i < column.children.length; ++i) {
+                const child = column.children[i]
+                if (child.objectName === "dependencyRow" && child.visible)
+                    rows.push(child)
+            }
+            return rows
+        }
+
+        // Hearts of Iron IV loads a mod after the mods it names when they are
+        // enabled and does not need them: the details list them under "Loads
+        // after" with a note, in a neutral colour, and never say "Requires".
+        function test_9f_loadAfterDependencies() {
+            let row = 3
+            while (Backend.mods.get(row).status !== "ready")
+                row += 7
+            win.selectMod(row)
+            tryCompare(Backend.details, "row", row)
+            const heading = named("dependenciesHeading")
+            const note = named("dependenciesNote")
+            compare(heading.text, "Dependencies")
+            verify(!note.visible)
+
+            Backend.details.game = "hoi4"
+            compare(heading.text, "Loads after")
+            compare(heading.Accessible.name, "Loads after")
+            verify(note.visible)
+            compare(note.Accessible.name, "Hearts of Iron IV loads this mod after these mods when "
+                                          + "they are enabled. It does not need them.")
+            tryVerify(() => dependencyRows().length === 4)
+            const rows = dependencyRows()
+            compare(rows[0].Accessible.name, "Example Overhaul: Enabled in this playset; the game loads it first")
+            compare(rows[3].Accessible.name, "Example Alternate History: Not installed; not needed")
+            for (const dependency of rows) {
+                verify(!dependency.Accessible.name.includes("Requires"), dependency.Accessible.name)
+                verify(Qt.colorEqual(dependency.children[0].color, Theme.textMuted))
+            }
+
+            Backend.details.game = "stellaris"
+            compare(heading.text, "Dependencies")
+            verify(!note.visible)
         }
 
         // --- keyboard and accessibility (docs/accessibility.md) ---------------

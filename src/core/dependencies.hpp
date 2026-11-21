@@ -6,10 +6,14 @@
 // then against the installed inventory of the same game. Exact matches win;
 // an ASCII case-insensitive match is accepted when no exact match exists.
 //
-// Only ENABLED entries that are installed (and therefore have a descriptor) are
-// checked. Dependencies load first: index 0 is handed to the game first (see
-// core/model.hpp), so a dependency must have a lower index than its dependent.
-// resolveDependencies() says where each name leads, for any entry.
+// What a dependency means depends on the game (GameCatalogEntry's
+// dependencyMeaning). Where it is Required, only ENABLED entries that are
+// installed (and therefore have a descriptor) are checked. Dependencies load
+// first: index 0 is handed to the game first (see core/model.hpp), so a
+// dependency must have a lower index than its dependent. Where it is LoadAfter
+// (Hearts of Iron IV), the game loads a mod after the named mods when they
+// are enabled and does not need them, so nothing is reported;
+// resolveDependencies() still says where each name leads.
 //
 // These functions only report. They never enable, add or reorder anything;
 // fixing an issue is an explicit user action.
@@ -46,7 +50,7 @@ struct DependencyIssue {
     bool operator==(const DependencyIssue&) const = default;
 };
 
-// Where a dependency name leads.
+// Where a dependency name leads, whatever the game makes of it.
 enum class DependencyResolution {
     EnabledEarlier, // an enabled playset entry before the dependent
     EnabledLater,   // enabled playset entries, all of them after the dependent
@@ -73,8 +77,9 @@ struct ResolvedDependency {
 std::vector<std::vector<ResolvedDependency>>
 resolveDependencies(std::span<const PlaysetEntry> entries, const InstalledModMap& inventory);
 
-// Issues for every enabled, installed entry, ordered by entryIndex and then by
-// the order of the descriptor's dependency list.
+// Issues for every enabled, installed entry of a game whose dependencies are
+// Required (none for a LoadAfter game), ordered by entryIndex and then by the
+// order of the descriptor's dependency list.
 std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> entries,
                                                const InstalledModMap& inventory);
 

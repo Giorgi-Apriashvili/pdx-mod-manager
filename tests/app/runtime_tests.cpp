@@ -6,7 +6,11 @@
 #include "app/core/profile_lock.hpp"
 #include "app/core/qt_util.hpp"
 #include "app/core/view_data.hpp"
+#include "app/gui/mod_details.hpp"
+#include "app/gui/mod_list_model.hpp"
+#include "app/gui/notification_center.hpp"
 #include "persistence/acquisition_job_repository.hpp"
+#include "persistence/inventory_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/sqlite.hpp"
 #include "test_support.hpp"
@@ -21,6 +25,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace pmm;
@@ -303,6 +308,107 @@ TEST_CASE("Launch data says when Play waits for the Steam client", "[app][runtim
     CHECK(open.canPlay);
     CHECK_FALSE(open.steamNotRunning);
     CHECK(open.blockers.isEmpty());
+}
+
+TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellaris requires",
+          "[app][runtime]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    auto runtime = require(AppRuntime::create(hermeticOptions(temp.path() / "profile", adapter)));
+    // In each game the overhaul (#1) names a mod that comes after it (#2), a
+    // disabled one (#3), one installed elsewhere and one that is not
+    // installed; #2 names #1, and the disabled #3 names #2.
+    const auto playsetOf = [&runtime](const GameKey& game) {
+        const auto mod = [&game](const std::string& id, const std::string& name,
+                                 std::vector<std::string> dependencies) {
+            InstalledMod m;
+            m.identity = ModIdentity{game, source::SteamWorkshop, id};
+            m.descriptor.name = name;
+            m.descriptor.dependencies = std::move(dependencies);
+            return m;
+        };
+        persistence::InventoryRepository inventory(runtime->database());
+        requireOk(inventory.replaceForGame(
+            game,
+            {mod("6000000001", "Example Overhaul",
+                 {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing"}),
+             mod("6000000002", "Example Map", {"Example Overhaul"}),
+             mod("6000000003", "Example Conversion", {"Example Map"}),
+             mod("6000000004", "Example Elsewhere", {})}));
+        Playset playset;
+        playset.game = game;
+        playset.name = "Main";
+        for (const char* id : {"6000000001", "6000000002", "6000000003"}) {
+            PlaysetEntry entry;
+            entry.identity = ModIdentity{game, source::SteamWorkshop, id};
+            entry.enabled = std::string_view(id) != "6000000003";
+            playset.entries.push_back(entry);
+        }
+        persistence::PlaysetRepository repo(runtime->database());
+        return queries::playsetState(*runtime, require(repo.create(playset)));
+    };
+    const auto shown = [](const ModDetails& details) {
+        QStringList out;
+        for (const QVariant& item : details.dependencies()) {
+            const QVariantMap map = item.toMap();
+            out.push_back(map.value(QStringLiteral("name")).toString() + " | " +
+                          map.value(QStringLiteral("state")).toString() + " | " +
+                          map.value(QStringLiteral("text")).toString());
+        }
+        return out;
+    };
+    ModListModel model(nullptr);
+    NotificationCenter notifications;
+    ModDetails details(&model, &notifications);
+
+    const PlaysetStateData hoi4 = playsetOf("hoi4");
+    REQUIRE(hoi4.rows.size() == 3);
+    for (const ModRowData& row : hoi4.rows)
+        CHECK(row.warnings.isEmpty());
+    CHECK(hoi4.counts.warning == 0);
+    model.resetTo(hoi4);
+    details.setRow(0);
+    CHECK(details.dependenciesLoadAfter());
+    CHECK(details.dependenciesNote() == "Hearts of Iron IV loads this mod after these mods when "
+                                        "they are enabled. It does not need them.");
+    CHECK(shown(details) ==
+          QStringList{"Example Map | load_after | Enabled in this playset; the game loads it first",
+                      "Example Conversion | load_after | Disabled in this playset; not needed",
+                      "Example Elsewhere | load_after | Installed, not in this playset; not needed",
+                      "Example Missing | load_after | Not installed; not needed"});
+    details.setRow(1);
+    CHECK(shown(details) == QStringList{"Example Overhaul | load_after | Enabled in this playset; "
+                                        "the game loads it first"});
+    details.setRow(2);
+    CHECK(
+        shown(details) ==
+        QStringList{"Example Map | load_after | Enabled in this playset; the game loads it first"});
+
+    // Stellaris requires them: the same states and texts as before.
+    const PlaysetStateData stellaris = playsetOf("stellaris");
+    REQUIRE(stellaris.rows.size() == 3);
+    CHECK(stellaris.rows[0].warnings.size() == 4);
+    CHECK(stellaris.counts.warning == 1);
+    model.resetTo(stellaris);
+    details.setRow(0);
+    CHECK_FALSE(details.dependenciesLoadAfter());
+    CHECK(details.dependenciesNote().isEmpty());
+    CHECK(shown(details) ==
+          QStringList{"Example Map | order | Requires \"Example Map\" (#2), which must load before "
+                      "this mod (#1). Move it above this mod.",
+                      "Example Conversion | disabled | Requires \"Example Conversion\" (#3), which "
+                      "is disabled in this playset.",
+                      "Example Elsewhere | not_in_playset | Requires \"Example Elsewhere\", which "
+                      "is installed but not in this playset.",
+                      "Example Missing | missing | Requires \"Example Missing\", which is not "
+                      "installed."});
+    details.setRow(1);
+    CHECK(shown(details) ==
+          QStringList{"Example Overhaul | ok | Enabled in this playset and loads earlier"});
+    details.setRow(2);
+    CHECK(shown(details) ==
+          QStringList{"Example Map | unchecked | Checked when this mod is enabled"});
 }
 
 TEST_CASE("An active playset that cannot be read blocks Play instead of a launch without mods",

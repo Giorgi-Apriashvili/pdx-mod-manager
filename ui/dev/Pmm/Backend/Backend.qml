@@ -29,6 +29,7 @@ QtObject {
             backend.mods.catalog = cat
             backend.inventory.catalog = cat
             backend.acquisition.gameKey = key
+            backend.details.game = key
             backend.playsets.load(key)
         }
         onConfigurationImported: backend.playsets.create("Imported from game configuration")

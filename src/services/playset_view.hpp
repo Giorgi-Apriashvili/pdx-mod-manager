@@ -35,6 +35,9 @@ struct PlaysetRow {
     std::optional<InstalledMod> installed;
     std::optional<AcquisitionJob> job; // most recent job for this identity
     bool blocking = false;             // enabled and not Ready
+    // Where each name the installed descriptor lists under dependencies
+    // leads (core resolveDependencies()), whatever the game makes of it.
+    std::vector<ResolvedDependency> dependencies;
 };
 
 struct PlaysetCounts {
@@ -53,7 +56,8 @@ struct PlaysetView {
     std::vector<PlaysetRow> rows;
     PlaysetCounts counts;
     LaunchReadiness launch; // entry readiness only; LaunchService adds installation checks
-    std::vector<DependencyIssue> dependencyIssues;
+    std::vector<DependencyIssue> dependencyIssues; // none for a game whose dependencies only
+                                                   // order the load (Hearts of Iron IV)
 };
 
 // `installation` and `adapter` may be null (game not installed / unsupported):
