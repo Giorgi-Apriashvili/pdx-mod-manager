@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <string_view>
 #include <vector>
 
 using namespace pmm;
@@ -229,8 +230,9 @@ TEST_CASE("Resolved dependencies say where each name leads, whatever the game",
 }
 
 TEST_CASE("Resolved names follow the matching rules of the checks", "[core][dependencies]") {
-    // Trimmed, listed once, matched case-insensitively, and an earlier enabled
-    // entry wins over a later one of the same name.
+    // Trimmed, matched case-insensitively, listed once per mod (whatever the
+    // spelling), and an earlier enabled entry wins over a later one of the
+    // same name.
     const std::vector<PlaysetEntry> entries{workshop("6000000011", "Core", true, "hoi4"),
                                             workshop("6000000012", "Addon", true, "hoi4"),
                                             workshop("6000000013", "Core copy", true, "hoi4")};
@@ -242,14 +244,53 @@ TEST_CASE("Resolved names follow the matching rules of the checks", "[core][depe
     // Same name in another game: not a match for Hearts of Iron IV.
     add(inventory, installed({"stellaris", "steam-workshop", "1"}, "Example Other"));
     const auto resolved = resolveDependencies(entries, inventory);
-    REQUIRE(resolved[1].size() == 2);
-    CHECK(resolved[1][0] ==
-          ResolvedDependency{"example CORE", DependencyResolution::EnabledEarlier, 0});
-    CHECK(resolved[1][1] ==
-          ResolvedDependency{"Example Core", DependencyResolution::EnabledEarlier, 0});
+    CHECK(resolved[1] == std::vector<ResolvedDependency>{
+                             {"example CORE", DependencyResolution::EnabledEarlier, 0}});
 
     add(inventory, installed(entries[1].identity, "Example Addon", {"Example Other"}));
     CHECK(resolveDependencies(entries, inventory)[1] ==
           std::vector<ResolvedDependency>{
               {"Example Other", DependencyResolution::NotInstalled, std::nullopt}});
+}
+
+TEST_CASE("Spellings of one mod are resolved once, and an enabled copy wins over a disabled one",
+          "[core][dependencies]") {
+    for (const char* game : {"hoi4", "stellaris"}) {
+        INFO(game);
+        // #1 and #3 are copies of one name (#1 disabled); #4 is another,
+        // disabled mod whose name differs from theirs only in case.
+        const std::vector<PlaysetEntry> entries{workshop("6000000021", "Core", false, game),
+                                                workshop("6000000022", "Addon", true, game),
+                                                workshop("6000000023", "Core copy", true, game),
+                                                workshop("6000000024", "Loud", false, game)};
+        InstalledModMap inventory;
+        add(inventory, installed(entries[0].identity, "Example Core"));
+        add(inventory, installed(entries[1].identity, "Example Addon",
+                                 {"example core", "Example Core", "EXAMPLE CORE", "Example Missing",
+                                  "example MISSING"}));
+        add(inventory, installed(entries[2].identity, "Example Core"));
+        add(inventory, installed(entries[3].identity, "EXAMPLE CORE"));
+
+        using R = DependencyResolution;
+        CHECK(resolveDependencies(entries, inventory)[1] ==
+              std::vector<ResolvedDependency>{{"example core", R::EnabledLater, 2},
+                                              {"EXAMPLE CORE", R::Disabled, 3},
+                                              {"Example Missing", R::NotInstalled, std::nullopt}});
+
+        // The checks report every exact spelling, as before.
+        const auto issues = checkDependencies(entries, inventory);
+        if (std::string_view(game) == "hoi4") {
+            CHECK(issues.empty());
+            continue;
+        }
+        REQUIRE(issues.size() == 5);
+        CHECK(issues[0].message == "Requires \"example core\" (#3), which must load before this "
+                                   "mod (#2). Move it above this mod.");
+        CHECK(issues[1].message == "Requires \"Example Core\" (#3), which must load before this "
+                                   "mod (#2). Move it above this mod.");
+        CHECK(issues[2].message == "Requires \"EXAMPLE CORE\" (#4), which is disabled in this "
+                                   "playset.");
+        CHECK(issues[3].message == "Requires \"Example Missing\", which is not installed.");
+        CHECK(issues[4].message == "Requires \"example MISSING\", which is not installed.");
+    }
 }

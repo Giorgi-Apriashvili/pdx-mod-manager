@@ -98,6 +98,11 @@ TEST_CASE("Only Hearts of Iron IV's dependencies merely order the load", "[core]
     CHECK(pmm::dependencyMeaningOf("not-a-game") == DependencyMeaning::Required);
     for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog())
         CHECK(entry.dependencyMeaning == pmm::dependencyMeaningOf(entry.key));
+    // A known game without an adapter checks them as required too.
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    CHECK(pmm::dependencyMeaningOf(pmm::testing::kUnsupportedGameKey) ==
+          DependencyMeaning::Required);
+    CHECK(pmm::dependencyMeaningOf("hoi4") == DependencyMeaning::LoadAfter);
 }
 
 TEST_CASE("Provider/game combinations are validated", "[core][catalog]") {

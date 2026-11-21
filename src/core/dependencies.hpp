@@ -71,9 +71,12 @@ struct ResolvedDependency {
 };
 
 // For every entry (result[i] belongs to entries[i], enabled or not): the
-// distinct non-empty names its installed descriptor lists, in the
-// descriptor's order, with where each leads. A name that matches only the
-// entry itself is left out. Empty for an entry that is not installed.
+// non-empty names its installed descriptor lists, in the descriptor's order,
+// with where each leads, each mod once: a later name is left out when it
+// leads to the same playset entry as an earlier one or, leading to none,
+// matches an earlier name up to ASCII case (checkDependencies() still reports
+// every exact spelling). A name that matches only the entry itself is left
+// out. Empty for an entry that is not installed.
 std::vector<std::vector<ResolvedDependency>>
 resolveDependencies(std::span<const PlaysetEntry> entries, const InstalledModMap& inventory);
 

@@ -51,6 +51,7 @@ constexpr auto kCatalogWithUnsupportedGame = [] {
     unsupported.userDataFolder = "Example Unsupported Game";
     unsupported.sources = kWorkshopAndLocal;
     unsupported.adapterAvailable = false;
+    unsupported.dependencyMeaning = kRequired;
     return entries;
 }();
 

@@ -157,6 +157,23 @@ private:
     std::unordered_set<std::string> m_installedFolded;
 };
 
+// Each mod once: a later name is left out when it leads to the same playset
+// entry as an earlier one or, leading to none, matches an earlier name up to
+// ASCII case. (The checks keep every exact spelling, as they always have.)
+std::vector<ResolvedDependency> onePerMod(std::vector<ResolvedDependency> resolved) {
+    std::set<std::size_t> entries;
+    std::set<std::string> names;
+    std::vector<ResolvedDependency> out;
+    out.reserve(resolved.size());
+    for (ResolvedDependency& dependency : resolved) {
+        const bool first = dependency.index ? entries.insert(*dependency.index).second
+                                            : names.insert(folded(dependency.name)).second;
+        if (first)
+            out.push_back(std::move(dependency));
+    }
+    return out;
+}
+
 std::string position(std::size_t index) {
     return "#" + std::to_string(index + 1);
 }
@@ -207,18 +224,22 @@ resolveDependencies(std::span<const PlaysetEntry> entries, const InstalledModMap
     std::vector<std::vector<ResolvedDependency>> out;
     out.reserve(entries.size());
     for (std::size_t i = 0; i < entries.size(); ++i)
-        out.push_back(resolver.resolve(i));
+        out.push_back(onePerMod(resolver.resolve(i)));
     return out;
 }
 
 std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> entries,
                                                const InstalledModMap& inventory) {
-    const Resolver resolver(entries, inventory);
+    const auto checked = [](const PlaysetEntry& entry) {
+        return entry.enabled &&
+               dependencyMeaningOf(entry.identity.game) == DependencyMeaning::Required;
+    };
     std::vector<DependencyIssue> issues;
+    if (std::none_of(entries.begin(), entries.end(), checked))
+        return issues; // e.g. any Hearts of Iron IV playset: no names to resolve
+    const Resolver resolver(entries, inventory);
     for (std::size_t i = 0; i < entries.size(); ++i) {
-        const PlaysetEntry& entry = entries[i];
-        if (!entry.enabled ||
-            dependencyMeaningOf(entry.identity.game) != DependencyMeaning::Required)
+        if (!checked(entries[i]))
             continue;
         for (const ResolvedDependency& dependency : resolver.resolve(i)) {
             switch (dependency.resolution) {
