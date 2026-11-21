@@ -72,6 +72,7 @@ TEST_CASE("Details response fixture parses found, missing, wrong-game and banned
     CHECK(stellaris.fileSize == 300000); // a string in the reply
     CHECK(stellaris.timeCreated == 1440000000);
     CHECK(stellaris.timeUpdated == 1708000000);
+    CHECK(stellaris.contentManifest == "1100000000000000104"); // hcontent_file
     CHECK_FALSE(stellaris.banned);
     CHECK(stellaris.visibility == static_cast<int>(WorkshopVisibility::Public));
     CHECK(stellaris.tags == std::vector<std::string>{"Gameplay", "Graphics"});
@@ -216,4 +217,106 @@ TEST_CASE("Details parsing tolerates odd field types without trusting them", "[p
     CHECK(item.banned);
     CHECK(item.title == "42");
     CHECK(item.tags.empty());
+    CHECK(item.contentManifest.empty());
+
+    // hcontent_file as a number, and "0" for no content.
+    auto numbers = parsePublishedFileDetailsResponse(
+        R"({"response":{"result":1,"publishedfiledetails":[)"
+        R"({"publishedfileid":"6","result":1,"hcontent_file":1100000000000000501},)"
+        R"({"publishedfileid":"7","result":1,"hcontent_file":"0"}]}})");
+    REQUIRE(numbers.ok());
+    REQUIRE(numbers->size() == 2);
+    CHECK((*numbers)[0].contentManifest == "1100000000000000501");
+    CHECK((*numbers)[1].contentManifest.empty());
+}
+
+namespace {
+
+InstalledMod installedItem(const std::string& id, std::int64_t timeUpdated, bool fromSteam,
+                           const std::string& manifest = "1100000000000000104") {
+    InstalledMod mod;
+    mod.identity = ModIdentity{"stellaris", source::SteamWorkshop, id};
+    mod.contentUpdatedAt = timeUpdated;
+    mod.contentTimeFromSteam = fromSteam;
+    mod.workshopManifest = manifest;
+    return mod;
+}
+
+WorkshopItemMetadata workshopItem(const std::string& id, std::int64_t timeUpdated,
+                                  const std::string& manifest = "1100000000000000105") {
+    WorkshopItemMetadata item;
+    item.id = id;
+    item.found = true;
+    item.resultCode = 1;
+    item.title = "Example Item";
+    item.consumerAppId = "281990";
+    item.creatorAppId = "281990";
+    item.timeUpdated = timeUpdated;
+    item.contentManifest = manifest;
+    return item;
+}
+
+} // namespace
+
+TEST_CASE("Installed items are compared with the Workshop by time_updated", "[providers][web]") {
+    SECTION("a later time_updated is an update, and both manifests are recorded") {
+        const auto c = compareWithWorkshop(installedItem("1200000019", 1708000000, true),
+                                           workshopItem("1200000019", 1708000500), "281990");
+        CHECK(c.verdict == WorkshopUpdateVerdict::UpdateAvailable);
+        CHECK(c.installedTimeUpdated == 1708000000);
+        CHECK(c.workshopTimeUpdated == 1708000500);
+        CHECK(c.installedManifest == "1100000000000000104");
+        CHECK(c.workshopManifest == "1100000000000000105");
+        CHECK(c.message.empty());
+        CHECK(std::string(toString(c.verdict)) == "update_available");
+    }
+    SECTION("the same or an older time is up to date, whatever the manifests say") {
+        for (std::int64_t workshopTime : {std::int64_t{1708000000}, std::int64_t{1707000000}}) {
+            const auto c = compareWithWorkshop(installedItem("1200000019", 1708000000, true),
+                                               workshopItem("1200000019", workshopTime), "281990");
+            CHECK(c.verdict == WorkshopUpdateVerdict::UpToDate);
+        }
+    }
+    SECTION("a folder time is never compared") {
+        // The folder was modified long before the Workshop version: a false
+        // "update available" if it were compared.
+        const auto c = compareWithWorkshop(installedItem("1200000019", 1600000000, false),
+                                           workshopItem("1200000019", 1708000500), "281990");
+        CHECK(c.verdict == WorkshopUpdateVerdict::NotCompared);
+        CHECK(c.installedTimeUpdated == 0);
+        CHECK(c.message.find("Steam's records") != std::string::npos);
+    }
+    SECTION("a reply without time_updated is not compared") {
+        const auto c = compareWithWorkshop(installedItem("1200000019", 1708000000, true),
+                                           workshopItem("1200000019", 0), "281990");
+        CHECK(c.verdict == WorkshopUpdateVerdict::NotCompared);
+    }
+    SECTION("a manifest of \"0\" is unknown") {
+        const auto c = compareWithWorkshop(installedItem("1200000019", 1708000000, true, "0"),
+                                           workshopItem("1200000019", 1708000500, "0"), "281990");
+        CHECK(c.verdict == WorkshopUpdateVerdict::UpdateAvailable);
+        CHECK(c.installedManifest.empty());
+        CHECK(c.workshopManifest.empty());
+    }
+    SECTION("removed, banned and other-game items are refused, and the copy stays") {
+        WorkshopItemMetadata missing;
+        missing.id = "1200000019";
+        missing.resultCode = 9;
+        const auto gone =
+            compareWithWorkshop(installedItem("1200000019", 1708000000, true), missing, "281990");
+        CHECK(gone.verdict == WorkshopUpdateVerdict::Refused);
+        CHECK(gone.refusal == ErrorCode::ItemUnavailable);
+        CHECK(gone.message.find("not found") != std::string::npos);
+        CHECK(gone.message.find("installed copy stays") != std::string::npos);
+
+        WorkshopItemMetadata banned = workshopItem("1200000019", 1708000500);
+        banned.banned = true;
+        CHECK(compareWithWorkshop(installedItem("1200000019", 1708000000, true), banned, "281990")
+                  .verdict == WorkshopUpdateVerdict::Refused);
+
+        const auto other = compareWithWorkshop(installedItem("1200000019", 1708000000, true),
+                                               workshopItem("1200000019", 1708000500), "236850");
+        CHECK(other.verdict == WorkshopUpdateVerdict::Refused);
+        CHECK(other.refusal == ErrorCode::WrongGame);
+    }
 }

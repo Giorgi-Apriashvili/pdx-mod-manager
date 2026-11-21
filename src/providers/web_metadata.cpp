@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <charconv>
 #include <limits>
 #include <type_traits>
@@ -138,6 +139,9 @@ Result<std::vector<WorkshopItemMetadata>> parsePublishedFileDetailsResponse(std:
             m.fileSize = numberOr<std::uint64_t>(d, "file_size", 0);
             m.timeCreated = numberOr<std::int64_t>(d, "time_created", 0);
             m.timeUpdated = numberOr<std::int64_t>(d, "time_updated", 0);
+            m.contentManifest = stringOr(d, "hcontent_file");
+            if (m.contentManifest == "0")
+                m.contentManifest.clear();
             m.banned = numberOr<int>(d, "banned", 0) != 0;
             m.banReason = stringOr(d, "ban_reason");
             m.visibility = numberOr<int>(d, "visibility", 0);
@@ -198,6 +202,53 @@ Status validateWorkshopItemForGame(const WorkshopItemMetadata& item,
         break;
     }
     return {};
+}
+
+const char* toString(WorkshopUpdateVerdict verdict) noexcept {
+    switch (verdict) {
+    case WorkshopUpdateVerdict::UpToDate:
+        return "up_to_date";
+    case WorkshopUpdateVerdict::UpdateAvailable:
+        return "update_available";
+    case WorkshopUpdateVerdict::NotCompared:
+        return "not_compared";
+    case WorkshopUpdateVerdict::Refused:
+        return "refused";
+    }
+    return "not_compared";
+}
+
+WorkshopUpdateComparison compareWithWorkshop(const InstalledMod& installed,
+                                             const WorkshopItemMetadata& item,
+                                             std::string_view expectedAppId) {
+    WorkshopUpdateComparison c;
+    c.installedManifest = installed.workshopManifest == "0" ? "" : installed.workshopManifest;
+    c.workshopManifest = item.contentManifest == "0" ? "" : item.contentManifest;
+    c.workshopTimeUpdated = std::max<std::int64_t>(0, item.timeUpdated);
+    if (installed.contentTimeFromSteam)
+        c.installedTimeUpdated = std::max<std::int64_t>(0, installed.contentUpdatedAt);
+    if (Status valid = validateWorkshopItemForGame(item, expectedAppId); !valid) {
+        c.verdict = WorkshopUpdateVerdict::Refused;
+        c.refusal = valid.error().code;
+        c.message = valid.error().message + " The installed copy stays as it is.";
+        return c;
+    }
+    if (c.installedTimeUpdated <= 0) {
+        c.verdict = WorkshopUpdateVerdict::NotCompared;
+        c.message = "Steam's records do not say which version of Workshop item " + item.id +
+                    " is installed, so it was not compared with the Workshop.";
+        return c;
+    }
+    if (c.workshopTimeUpdated <= 0) {
+        c.verdict = WorkshopUpdateVerdict::NotCompared;
+        c.message = "The Steam Workshop did not say when item " + item.id +
+                    " was last updated, so it was not compared.";
+        return c;
+    }
+    c.verdict = c.workshopTimeUpdated > c.installedTimeUpdated
+                    ? WorkshopUpdateVerdict::UpdateAvailable
+                    : WorkshopUpdateVerdict::UpToDate;
+    return c;
 }
 
 } // namespace pmm::providers
