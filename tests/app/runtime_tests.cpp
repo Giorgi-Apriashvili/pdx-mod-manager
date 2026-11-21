@@ -319,7 +319,7 @@ TEST_CASE("Mod details list the mods a mod names as each game treats them", "[ap
     // In each game the overhaul (#1) names a mod that comes after it (#2), a
     // disabled one (#3), one installed elsewhere, one that is not installed
     // and #2 again in other letter case; #2 names #1, and the disabled #3
-    // names #2.
+    // names #2 and #4, which comes after it.
     const auto playsetOf = [&runtime](const GameKey& game) {
         const auto mod = [&game](const std::string& id, const std::string& name,
                                  std::vector<std::string> dependencies) {
@@ -331,16 +331,17 @@ TEST_CASE("Mod details list the mods a mod names as each game treats them", "[ap
         };
         persistence::InventoryRepository inventory(runtime->database());
         requireOk(inventory.replaceForGame(
-            game, {mod("6000000001", "Example Overhaul",
-                       {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing",
-                        "example MAP"}),
-                   mod("6000000002", "Example Map", {"Example Overhaul"}),
-                   mod("6000000003", "Example Conversion", {"Example Map"}),
-                   mod("6000000004", "Example Elsewhere", {})}));
+            game,
+            {mod("6000000001", "Example Overhaul",
+                 {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing",
+                  "example MAP"}),
+             mod("6000000002", "Example Map", {"Example Overhaul"}),
+             mod("6000000003", "Example Conversion", {"Example Map", "Example Late"}),
+             mod("6000000004", "Example Elsewhere", {}), mod("6000000005", "Example Late", {})}));
         Playset playset;
         playset.game = game;
         playset.name = "Main";
-        for (const char* id : {"6000000001", "6000000002", "6000000003"}) {
+        for (const char* id : {"6000000001", "6000000002", "6000000003", "6000000005"}) {
             PlaysetEntry entry;
             entry.identity = ModIdentity{game, source::SteamWorkshop, id};
             entry.enabled = std::string_view(id) != "6000000003";
@@ -379,7 +380,7 @@ TEST_CASE("Mod details list the mods a mod names as each game treats them", "[ap
     for (const auto& [game, note] : notes) {
         INFO(game);
         const PlaysetStateData loadAfter = playsetOf(game);
-        REQUIRE(loadAfter.rows.size() == 3);
+        REQUIRE(loadAfter.rows.size() == 4);
         for (const ModRowData& row : loadAfter.rows)
             CHECK(row.warnings.isEmpty());
         CHECK(loadAfter.counts.warning == 0);
@@ -393,7 +394,8 @@ TEST_CASE("Mod details list the mods a mod names as each game treats them", "[ap
         CHECK(shown(details) ==
               QStringList{"Example Overhaul | load_after | Enabled in this playset"});
         details.setRow(2);
-        CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset"});
+        CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset",
+                                            "Example Late | load_after | Enabled in this playset"});
     }
 
     // Stellaris and CK3 do not need them either, but an enabled one that comes
@@ -401,11 +403,13 @@ TEST_CASE("Mod details list the mods a mod names as each game treats them", "[ap
     for (const char* game : {"ck3", "stellaris"}) {
         INFO(game);
         const PlaysetStateData orderHint = playsetOf(game);
-        REQUIRE(orderHint.rows.size() == 3);
+        REQUIRE(orderHint.rows.size() == 4);
         const QString hint = "Lists \"Example Map\" (#2) to load before this mod (#1), but that "
                              "mod comes later in this playset.";
         CHECK(orderHint.rows[0].warnings == QStringList{hint});
         CHECK(orderHint.rows[1].warnings.isEmpty());
+        CHECK(orderHint.rows[2].warnings.isEmpty());
+        CHECK(orderHint.rows[3].warnings.isEmpty());
         CHECK(orderHint.counts.warning == 1);
         model.resetTo(orderHint);
         details.setRow(0);
@@ -418,14 +422,16 @@ TEST_CASE("Mod details list the mods a mod names as each game treats them", "[ap
         details.setRow(1);
         CHECK(shown(details) ==
               QStringList{"Example Overhaul | load_after | Enabled in this playset"});
-        // A disabled mod is not checked: no warning for the one after it.
+        // A disabled mod is not checked: the enabled mod it names after it
+        // (#4) is no warning.
         details.setRow(2);
-        CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset"});
+        CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset",
+                                            "Example Late | load_after | Enabled in this playset"});
     }
 
     // Victoria 3 requires them: the same states and texts as Stellaris had.
     const PlaysetStateData vic3 = playsetOf("vic3");
-    REQUIRE(vic3.rows.size() == 3);
+    REQUIRE(vic3.rows.size() == 4);
     CHECK(vic3.rows[0].warnings.size() == 5);
     CHECK(vic3.counts.warning == 1);
     model.resetTo(vic3);
@@ -451,7 +457,8 @@ TEST_CASE("Mod details list the mods a mod names as each game treats them", "[ap
           QStringList{"Example Overhaul | ok | Enabled in this playset and loads earlier"});
     details.setRow(2);
     CHECK(shown(details) ==
-          QStringList{"Example Map | unchecked | Checked when this mod is enabled"});
+          QStringList{"Example Map | unchecked | Checked when this mod is enabled",
+                      "Example Late | unchecked | Checked when this mod is enabled"});
 }
 
 TEST_CASE("An active playset that cannot be read blocks Play instead of a launch without mods",

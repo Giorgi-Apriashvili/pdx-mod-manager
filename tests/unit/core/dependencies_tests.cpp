@@ -224,6 +224,36 @@ TEST_CASE("Stellaris and CK3 report only a named mod that comes later, never as 
     }
 }
 
+TEST_CASE("In Stellaris and CK3 an enabled mod of the name earlier in the list satisfies it",
+          "[core][dependencies]") {
+    // As where they are required: a name is satisfied by an enabled mod of
+    // that name before the mod naming it, even when another enabled one comes
+    // later. Only when every enabled one comes later is it an order hint.
+    for (const char* game : {"ck3", "stellaris"}) {
+        INFO(game);
+        // #1 and #3 are two mods of one name; #2 names it.
+        std::vector<PlaysetEntry> entries{workshop("6000000031", "Copy", true, game),
+                                          workshop("6000000032", "Addon", true, game),
+                                          workshop("6000000033", "Other copy", true, game)};
+        InstalledModMap inventory;
+        add(inventory, installed(entries[0].identity, "Example Shared"));
+        add(inventory, installed(entries[1].identity, "Example Addon", {"Example Shared"}));
+        add(inventory, installed(entries[2].identity, "Example Shared"));
+        CHECK(checkDependencies(entries, inventory).empty()); // both enabled
+        entries[2].enabled = false;
+        CHECK(checkDependencies(entries, inventory).empty()); // only the earlier one
+        entries[0].enabled = false;
+        entries[2].enabled = true;
+        const auto issues = checkDependencies(entries, inventory); // only the later one
+        REQUIRE(issues.size() == 1);
+        CHECK(issues[0].message == "Lists \"Example Shared\" (#3) to load before this mod (#2), "
+                                   "but that mod comes later in this playset.");
+        // Enabling the earlier one as well introduces nothing.
+        CHECK(dependencyIssuesIntroducedByEnabling(entries, inventory, std::vector<std::size_t>{0})
+                  .empty());
+    }
+}
+
 TEST_CASE("EU4 and Hearts of Iron IV dependencies raise no issues", "[core][dependencies]") {
     for (const char* game : {"eu4", "hoi4"}) {
         INFO(game);

@@ -246,9 +246,10 @@ Read-only properties:
   then no warning and no dependency feedback. Stellaris and Crusader Kings
   III (`LoadAfterInList`), where the later mod in the list wins a shared
   file, keep one warning: a named mod that is enabled but comes later in the
-  list than the mod naming it (state "order", `text` "Lists "<name>" (#n) to
-  load before this mod (#m), but that mod comes later in this playset.", also
-  a row warning and feedback). Europa Universalis IV and Hearts of Iron IV
+  list than the enabled mod naming it (state "order", `text` "Lists
+  "<name>" (#n) to load before this mod (#m), but that mod comes later in
+  this playset.", also a row warning and feedback; the names a disabled mod
+  lists are never a warning). Europa Universalis IV and Hearts of Iron IV
   (`LoadAfter`) have none. Each mod is listed once, under its first
   spelling, and its `text` otherwise says what it is in this playset
   ("Enabled in this playset", "Disabled in this playset; not needed",

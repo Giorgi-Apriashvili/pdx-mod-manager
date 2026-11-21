@@ -13,17 +13,19 @@ namespace pmm {
 
 // What a mod's dependencies (the descriptor's `dependencies`; Victoria 3: the
 // metadata's relationships of rel_type "dependency") mean in a game, and so
-// what core/dependencies.hpp reports about them.
+// what core/dependencies.hpp reports about them. Only the names an enabled
+// mod lists are checked, and a name is satisfied by an enabled mod of that
+// name earlier in the list, even when another enabled one comes later.
 enum class DependencyMeaning {
     // The named mods are needed: each one that is not installed, not in the
-    // playset, disabled, or enabled but later in the list than the mod that
-    // names it is reported, and the application warns about it.
+    // playset, disabled, or enabled but later in the list than the enabled
+    // mod that names it is reported, and the application warns about it.
     Required,
     // The named mods are not needed, but the list order decides which mod
     // wins a shared file, and the mod names them to load before it: only a
-    // named mod that is enabled and comes later in the list than the mod that
-    // names it is reported (an order hint). A missing, disabled or absent one
-    // is not.
+    // named mod that is enabled and comes later in the list than the enabled
+    // mod that names it is reported (an order hint). A missing, disabled or
+    // absent one is not.
     LoadAfterInList,
     // The named mods are not needed, and their place in the list is not
     // checked either: nothing is reported, and the details only list them.
