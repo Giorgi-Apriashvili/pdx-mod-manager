@@ -165,7 +165,9 @@ says which one a copy has, at start-up: `update mode mode=installer` or
 
 **Verified 2026-11-07:** the owner's installed 0.1.0 updated itself to the published
 0.1.1 with **Update and restart**, the first update between two published releases,
-and the same copy then updated itself from 0.1.1 to 0.1.2 (reported 2026-11-12).
+and the same copy then updated itself from 0.1.1 to 0.1.2 (reported 2026-11-12),
+and the owner's installed copy updated itself to 0.3.0 on 2026-11-21, the day it
+was published.
 What had been run before is listed in the
 [installer evidence](evidence/installer-2026-10-30.md#after-merging-the-update-check):
 the installer with these exact arguments, waiting for the real `pmm-app`, with a

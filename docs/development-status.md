@@ -1111,7 +1111,8 @@ Packaging ([`packaging.md`](packaging.md)):
     afterwards as an installed copy reads it (the request by repository id
     answers `v0.3.0` without a redirect, the real update client reads it, the
     assets match `SHA256SUMS.txt` and pass `check-update-contract.sh assets`).
-    Not yet seen: an installed copy updating itself to 0.3.0. Also noted on
+    The owner's installed copy updated itself to 0.3.0 the same day
+    (reported by the owner: "update went very well"). Also noted on
     2026-11-21: Steam updated Crusader Kings III on this machine to
     1.21.0.3, which is untested (1.20.1.2 is the verified version).
 

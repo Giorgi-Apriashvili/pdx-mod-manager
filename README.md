@@ -37,7 +37,7 @@ telemetry.
 > the order. See the [support matrix](docs/support-matrix.md) and the
 > [development status](docs/development-status.md). The in-app update works
 > between published releases: on 2026-11-07 an installed 0.1.0 updated itself to
-> 0.1.1.
+> 0.1.1, and on 2026-11-21 an installed copy to 0.3.0.
 
 ![Main window with a real Stellaris installation, read-only verification mode](docs/screenshots/app-main-light.png)
 
