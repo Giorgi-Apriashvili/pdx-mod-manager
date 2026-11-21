@@ -14,16 +14,16 @@ QtObject {
     property ListModel jobs: ListModel {}
 
     readonly property var sampleJobs: [
-        { jobId: 11, name: "Stellar Ship Designs Redux", providerId: "1834502911", state: "downloading",
+        { jobId: 11, name: "Stellar Ship Designs Redux", providerId: "2900000011", state: "downloading",
           stateText: "Downloading 45 % (12.4 of 27.6 MB)", progress: 0.45, errorMessage: "",
           canRetry: false, canOpenFallback: false },
-        { jobId: 12, name: "Diverse Event Chains", providerId: "2208311470", state: "download_requested",
+        { jobId: 12, name: "Diverse Event Chains", providerId: "2900000012", state: "download_requested",
           stateText: "Waiting for Steam", progress: -1, errorMessage: "", canRetry: false, canOpenFallback: false },
-        { jobId: 13, name: "Hidden Relics Plus", providerId: "1990047312", state: "failed",
+        { jobId: 13, name: "Hidden Relics Plus", providerId: "2900000013", state: "failed",
           stateText: "Failed after 3 attempts", progress: -1,
           errorMessage: "Steam reported a timeout. Check your connection and retry.",
           canRetry: true, canOpenFallback: true },
-        { jobId: 14, name: "Ancient Civics [Legacy]", providerId: "1688204417", state: "unavailable",
+        { jobId: 14, name: "Ancient Civics [Legacy]", providerId: "2900000014", state: "unavailable",
           stateText: "Unavailable", progress: -1,
           errorMessage: "The item was removed from the Workshop or is private.",
           canRetry: false, canOpenFallback: true }

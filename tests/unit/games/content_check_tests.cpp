@@ -25,8 +25,8 @@ TEST_CASE("The dlc_load.json family's download check requires a usable descripto
     TempDir dir("pmm verify");
     const fs::path base = dir.path() / u8path("Ünïcødé dir") / u8path("日本語");
 
-    const fs::path good = base / "700000901";
-    writeText(good / "descriptor.mod", "name=\"Example Camera\"\n");
+    const fs::path good = base / "1200000019";
+    writeText(good / "descriptor.mod", "name=\"Example Mod D\"\n");
     CHECK(adapter.verifyWorkshopContent(good).ok());
 
     const fs::path noDescriptor = base / "2";
@@ -172,14 +172,14 @@ TEST_CASE("The download check reports paths with unpaired surrogates", "[games][
     const fs::path folder = dir.path() / fs::path(L"caf\xD800");
 
     const StellarisAdapter adapter;
-    Status gone = adapter.verifyWorkshopContent(folder / "700000901");
+    Status gone = adapter.verifyWorkshopContent(folder / "1200000019");
     REQUIRE_FALSE(gone.ok());
     CHECK(gone.error().code == ErrorCode::NotFound);
     CHECK(isValidUtf8(gone.error().detail));
     CHECK(gone.error().detail.find("caf\xEF\xBF\xBD") != std::string::npos);
 
-    writeText(folder / "700000901" / "descriptor.mod", "name=\"x\"\n");
-    CHECK(adapter.verifyWorkshopContent(folder / "700000901").ok());
+    writeText(folder / "1200000019" / "descriptor.mod", "name=\"x\"\n");
+    CHECK(adapter.verifyWorkshopContent(folder / "1200000019").ok());
     writeText(folder / "1" / "common" / "x.txt", "x");
     Status missing = adapter.verifyWorkshopContent(folder / "1");
     REQUIRE_FALSE(missing.ok());

@@ -21,7 +21,7 @@ namespace {
 const QByteArray kReply = R"({"response":{"result":1,"resultcount":1,"publishedfiledetails":[
 {"publishedfileid":"123456789","result":1,"creator":"76561190000000001","creator_app_id":281990,
 "consumer_app_id":281990,"filename":"","file_size":"2048","title":"Example Workshop Mod",
-"time_created":1465800000,"time_updated":1782400000,"visibility":0,"banned":0,"ban_reason":"",
+"time_created":1440000000,"time_updated":1708000000,"visibility":0,"banned":0,"ban_reason":"",
 "tags":[{"tag":"Gameplay"}]}]}})";
 
 struct Capture {

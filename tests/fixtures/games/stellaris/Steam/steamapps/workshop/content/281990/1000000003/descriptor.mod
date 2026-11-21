@@ -1,15 +1,15 @@
 version="2.6"
-name="Example Battles"
+name="Example Mod W"
 tags={
 	"Gameplay"
 	"Graphics"
 }
 picture="thumbnail.png"
 supported_version="v4.*.*"
-replace_path="common/example_battles"
+replace_path="common/example_scripts"
 user_list={
 	"alpha"
 	"beta"
 }
-path="C:/Users/Author/Documents/Paradox Interactive/Stellaris/mod/Example Battles"
+path="C:/Users/Author/Documents/Paradox Interactive/Stellaris/mod/Example Mod W"
 remote_file_id="1000000003"

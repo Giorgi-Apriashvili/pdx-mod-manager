@@ -1,7 +1,7 @@
 "AppWorkshop"
 {
 	"appid"		"281990"
-	"SizeOnDisk"		"233409630"
+	"SizeOnDisk"		"800000"
 	"NeedsUpdate"		"1"
 	"NeedsDownload"		"0"
 	"TimeLastUpdated"		"1793271176"
@@ -10,60 +10,60 @@
 	"LastBuildID"		"25664273"
 	"WorkshopItemsInstalled"
 	{
-		"700000901"
+		"1200000019"
 		{
-			"size"		"420000"
-			"timeupdated"		"1782400000"
+			"size"		"300000"
+			"timeupdated"		"1708000000"
 			"manifest"		"1100000000000000104"
 		}
-		"1000000902"
+		"1200000020"
 		{
-			"size"		"230000000"
-			"timeupdated"		"1791400000"
+			"size"		"400000"
+			"timeupdated"		"1709000000"
 			"manifest"		"1100000000000000101"
 		}
-		"1000000903"
+		"1200000025"
 		{
-			"size"		"1200000"
-			"timeupdated"		"1782000000"
+			"size"		"100000"
+			"timeupdated"		"1707000000"
 			"manifest"		"1100000000000000102"
 		}
 	}
 	"WorkshopItemDetails"
 	{
-		"700000901"
+		"1200000019"
 		{
 			"manifest"		"1100000000000000104"
-			"timeupdated"		"1782400000"
+			"timeupdated"		"1708000000"
 			"timetouched"		"1793099198"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1782400000"
+			"latest_timeupdated"		"1708000000"
 			"latest_manifest"		"1100000000000000104"
 		}
-		"1000000902"
+		"1200000020"
 		{
 			"manifest"		"1100000000000000101"
-			"timeupdated"		"1791400000"
+			"timeupdated"		"1709000000"
 			"timetouched"		"1793099198"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1791400000"
+			"latest_timeupdated"		"1709000000"
 			"latest_manifest"		"1100000000000000101"
 		}
-		"1000000903"
+		"1200000025"
 		{
 			"manifest"		"1100000000000000102"
-			"timeupdated"		"1782000000"
+			"timeupdated"		"1707000000"
 			"timetouched"		"1793099198"
-			"latest_timeupdated"		"1792500000"
+			"latest_timeupdated"		"1709500000"
 			"latest_manifest"		"1100000000000000103"
 		}
-		"3000000901"
+		"1200000022"
 		{
 			"manifest"		"0"
 			"timeupdated"		"0"
 			"timetouched"		"1793099300"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1782000700"
+			"latest_timeupdated"		"1707500000"
 			"latest_manifest"		"110000000000000105"
 		}
 	}

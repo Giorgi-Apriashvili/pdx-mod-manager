@@ -18,8 +18,9 @@ and checked afterwards (see [Clean-up](#clean-up)).
 
 Paths below: `<scratch>` is a temporary folder, `~` the user's home. The
 SteamID printed by the Steam API library is omitted. The Workshop item
-ids, the mod names and one item's size were replaced with made-up ones on
-2026-11-21 (the owner's decision); the counts and results are unchanged.
+ids and the mod names were replaced with made-up ones, and two item sizes
+and two file hashes left out, on 2026-11-21 (the owner's decision); the
+counts and results are unchanged.
 
 ## Summary
 
@@ -28,7 +29,7 @@ ids, the mod names and one item's size were replaced with made-up ones on
 | 1 Detect installation and mods | pass (also [real scan](real-scan-2026-10-29.md)) | pass |
 | 2 Playset with ≥ 3 mods, a disabled entry, non-default order | pass: 6 entries, 2 disabled, probes C before A, local and Workshop mixed | pass (same shape) |
 | 3 Export, import into a clean profile | pass: profile A to profile B, same machine | pass (code imported into a clean profile) |
-| 4 Acquire an initially missing Workshop mod | **pass**: Example Interface Mod (2000000901), not subscribed before; subscribe, download, verify through the app | **pass** (rerun the same night): Example Topbar (1000000904), not subscribed before |
+| 4 Acquire an initially missing Workshop mod | **pass**: Example Mod P (1200000008), not subscribed before; subscribe, download, verify through the app | **pass** (rerun the same night): Example Mod Q (1200000009), not subscribed before |
 | 5 Exact equality after import | pass: `share-code.py compare` equal, dumps byte-identical | pass: `compare` equal |
 | 6 Launch without the Paradox launcher; enabled mods and order in-game | **pass**: no launcher process, same game process after 20 s (no restart through Steam), probes loaded / not loaded as configured. **Order: EU4 ignores the `enabled_mods` order for file overrides** (below) | **pass**: no launcher process; probes as configured; the later mod in `enabled_mods` wins a shared file |
 | 7 Missing enabled content blocks; unavailable disabled entry stays visible | (covered by step 9 "offline") | pass: enabled wrong-game item blocks Play with the reason; disabled one stays listed as unavailable, Play allowed, not written to `dlc_load.json`, re-export equal |
@@ -43,11 +44,11 @@ profile A read-only and exported by the app as `validation.code`:
 | # | Mod | Source | Enabled |
 | --- | --- | --- | --- |
 | 1 | PMM Probe C | local `pmm_probe_c` | yes |
-| 2 | Example Font | Workshop 2000000902 | yes |
+| 2 | Example Mod F | Workshop 1200000007 | yes |
 | 3 | PMM Probe A | local `pmm_probe_a` | yes |
-| 4 | Example Interface Mod | Workshop 2000000901 (**not subscribed**: Steam API item state 0) | yes |
+| 4 | Example Mod P | Workshop 1200000008 (**not subscribed**: Steam API item state 0) | yes |
 | 5 | PMM Probe B | local `pmm_probe_b` | no |
-| 6 | Example Map Modes | Workshop 3000000909 | no |
+| 6 | Example Mod G | Workshop 1200000006 | no |
 
 Profile B, run 1, with the Web API endpoint pointed at a local server that
 accepts connections and never answers (`PMM_WORKSHOP_METADATA_URL`), quit
@@ -56,25 +57,25 @@ after 5 s:
 ```text
 01:13:05.359 preview: 6 entries, 4 enabled, 5 installed, 1 missing
 01:13:05.378 notification info: Import complete - "PMM validation" was created with 6 entries. 1 missing Workshop mod queued for download.
-01:13:05.382 job 1 2000000901 "Example Interface Mod": pending - Queued
+01:13:05.382 job 1 1200000008 "Example Mod P": pending - Queued
 01:13:05.612 provider: ready - Steam is running and signed in.
-01:13:10.599   job 1 2000000901 "Example Interface Mod": pending - Checking the item with Steam
+01:13:10.599   job 1 1200000008 "Example Mod P": pending - Checking the item with Steam
 ```
 
 Profile B, run 2 (restart, real Web API): the stored job resumed by itself.
 
 ```text
-01:13:30.625 job 1 2000000901 "Example Interface Mod": subscribing - Subscribing
-01:13:30.709 job 1 2000000901 "Example Interface Mod": download_requested - Download requested
-01:13:32.335 job 1 2000000901 "Example Interface Mod": downloading 0% - Downloading 0 %
-01:13:33.468 job 1 2000000901 "Example Interface Mod": installed 100% - Installed
+01:13:30.625 job 1 1200000008 "Example Mod P": subscribing - Subscribing
+01:13:30.709 job 1 1200000008 "Example Mod P": download_requested - Download requested
+01:13:32.335 job 1 1200000008 "Example Mod P": downloading 0% - Downloading 0 %
+01:13:33.468 job 1 1200000008 "Example Mod P": installed 100% - Installed
 01:13:33.469 every enabled entry is ready; Play is available
 ```
 
 - The entry became Ready only after the content was verified on disk.
 - Profile B's database afterwards holds one job for the item (`installed`,
-  1 attempt, 750,000 bytes), so the restart created no duplicate. The Steam
-  API reported the item as subscribed and installed (state 5).
+  1 attempt, its size recorded), so the restart created no duplicate. The
+  Steam API reported the item as subscribed and installed (state 5).
 - `share-code.py compare validation.code b.code`: `equal: game 'eu4', 6
   entries, same order and enabled flags`; the A and B dumps are
   byte-identical.
@@ -82,19 +83,19 @@ Profile B, run 2 (restart, real Web API): the stored job resumed by itself.
 ### Stellaris acquisition (step 4)
 
 Run later the same night (build `f809e91`) with a separate approval. A clean
-profile imported a code with Example Fixes (installed, enabled),
-**Example Topbar** (1000000904, 1.0 MB, Steam API
-item state 0 before the run, enabled) and Example Trade (installed, disabled):
+profile imported a code with Example Mod R (installed, enabled),
+**Example Mod Q** (1200000009, Steam API item
+state 0 before the run, enabled) and Example Mod S (installed, disabled):
 
 ```text
 03:30:57.901 preview: 3 entries, 2 enabled, 2 installed, 1 missing
-03:30:58.129 job 1 1000000904 "Example Topbar": pending - Queued
-03:30:58.674 job 1 1000000904 "Example Topbar": subscribing - Subscribing
-03:30:59.051 job 1 1000000904 "Example Topbar": subscribed - Subscribed, waiting for the download
-03:30:59.059 job 1 1000000904 "Example Topbar": download_requested - Download requested
-03:31:00.567 job 1 1000000904 "Example Topbar": downloading 0% - Downloading 0 %
-03:31:01.571 job 1 1000000904 "Example Topbar": downloading 100% - Downloading 100 %
-03:31:03.726 job 1 1000000904 "Example Topbar": installed 100% - Installed
+03:30:58.129 job 1 1200000009 "Example Mod Q": pending - Queued
+03:30:58.674 job 1 1200000009 "Example Mod Q": subscribing - Subscribing
+03:30:59.051 job 1 1200000009 "Example Mod Q": subscribed - Subscribed, waiting for the download
+03:30:59.059 job 1 1200000009 "Example Mod Q": download_requested - Download requested
+03:31:00.567 job 1 1200000009 "Example Mod Q": downloading 0% - Downloading 0 %
+03:31:01.571 job 1 1200000009 "Example Mod Q": downloading 100% - Downloading 100 %
+03:31:03.726 job 1 1200000009 "Example Mod Q": installed 100% - Installed
 03:31:03.729 every enabled entry is ready; Play is available
 03:31:03.742 canPlay=true blockers=[] warnings=[1 enabled mod has warnings (versions or dependencies); see the mod list.]
 ```
@@ -126,9 +127,9 @@ itself through Steam although it ships no `steam_appid.txt`):
 [01:14:04] pid=8404 eu4.exe started=01:13:33 cmd="C:\Program Files (x86)\Steam\steamapps\common\Europa Universalis IV\eu4.exe" -gdpr-compliant
 ```
 
-Written configuration: `{"enabled_mods":["mod/pmm_probe_c.mod","mod/ugc_2000000902.mod","mod/pmm_probe_a.mod","mod/ugc_2000000901.mod"],"disabled_dlcs":[]}`
+Written configuration: `{"enabled_mods":["mod/pmm_probe_c.mod","mod/ugc_1200000007.mod","mod/pmm_probe_a.mod","mod/ugc_1200000008.mod"],"disabled_dlcs":[]}`
 (the four enabled entries in playset order; `disabled_dlcs` unchanged), plus
-the registration `mod/ugc_2000000901.mod` for the new item.
+the registration `mod/ugc_1200000008.mod` for the new item.
 
 The probes as first created (unknown triggers inside scripted triggers)
 produced no lines in EU4's `error.log`: EU4 1.37 does not check scripted
@@ -163,12 +164,12 @@ case or start with non-ASCII characters.
 ### Stellaris
 
 Playset `PMM validation (disabled unavailable)`: Probe C, Example
-Fixes (3000000913), Probe A, Example Trade (3000000911), all enabled; Probe B
-disabled; and EU4's Workshop item 3000000909 disabled (an item of another
+Fixes (1200000010), Probe A, Example Mod S (1200000011), all enabled; Probe B
+disabled; and EU4's Workshop item 1200000006 disabled (an item of another
 game, as the unavailable entry U).
 
 ```text
-01:28:43.218 job 1 3000000909 "Example Map Modes": unavailable - Unavailable [Workshop item 3000000909 (Example Map Modes) belongs to a different game (Steam app 236850).]
+01:28:43.218 job 1 1200000006 "Example Mod G": unavailable - Unavailable [Workshop item 1200000006 (Example Mod G) belongs to a different game (Steam app 236850).]
 01:28:45.960 every enabled entry is ready; Play is available
 01:28:46.021 canPlay=true blockers=[] warnings=[1 disabled entry is not available; disabled entries do not block launching.]
 01:28:46.170 launch state: started
@@ -176,7 +177,7 @@ game, as the unavailable entry U).
 [01:28:46] pid=10516 stellaris.exe cmd="C:\Program Files (x86)\Steam\steamapps\common\Stellaris\stellaris.exe" -gdpr-compliant
 ```
 
-`dlc_load.json`: `["mod/pmm_probe_c.mod","mod/ugc_3000000913.mod","mod/pmm_probe_a.mod","mod/ugc_3000000911.mod"]`,
+`dlc_load.json`: `["mod/pmm_probe_c.mod","mod/ugc_1200000010.mod","mod/pmm_probe_a.mod","mod/ugc_1200000011.mod"]`,
 no entry for the disabled unavailable item. Re-export compared `equal` with
 the imported code.
 
@@ -202,8 +203,8 @@ now set for Stellaris.
 The same playset with the wrong-game item **enabled**, in a clean profile:
 
 ```text
-01:28:08.351 job 1 3000000909 "Example Map Modes": unavailable - Unavailable [Workshop item 3000000909 (Example Map Modes) belongs to a different game (Steam app 236850).]
-01:28:15.984 canPlay=false blockers=[#6 an EU4 item (wrong game): unavailable - Workshop item 3000000909 (Example Map Modes) belongs to a different game (Steam app 236850).]
+01:28:08.351 job 1 1200000006 "Example Mod G": unavailable - Unavailable [Workshop item 1200000006 (Example Mod G) belongs to a different game (Steam app 236850).]
+01:28:15.984 canPlay=false blockers=[#6 an EU4 item (wrong game): unavailable - Workshop item 1200000006 (Example Mod G) belongs to a different game (Steam app 236850).]
 01:28:22.240 Play is blocked, as expected
 ```
 
@@ -223,7 +224,7 @@ that ends unavailable"). The run above is the rerun with the fix.
 
 | Case | How | Observed | Result |
 | --- | --- | --- | --- |
-| Offline (Web API unreachable) | `PMM_WORKSHOP_METADATA_URL=http://127.0.0.1:9/`, import `validation.code` (EU4) | job `pending` then, after the 15 s identity timeout, `needs_user_action`: "could not confirm with Steam that Workshop item 2000000901 exists and belongs to Europa Universalis IV, so it did not subscribe to it. Retry when this computer is online, or open the item's Workshop page manually."; Play blocked naming the entry; the Steam API still reported the item as not subscribed | pass |
+| Offline (Web API unreachable) | `PMM_WORKSHOP_METADATA_URL=http://127.0.0.1:9/`, import `validation.code` (EU4) | job `pending` then, after the 15 s identity timeout, `needs_user_action`: "could not confirm with Steam that Workshop item 1200000008 exists and belongs to Europa Universalis IV, so it did not subscribe to it. Retry when this computer is online, or open the item's Workshop page manually."; Play blocked naming the entry; the Steam API still reported the item as not subscribed | pass |
 | Failed download | enabled wrong-game item (step 7) | `unavailable` with the reason; entry stays in the playset; Play blocked | pass |
 | Bad share code | `--self-test import:` of four damaged copies of `validation.code` | (a) last character removed: "The code is damaged … its checksum is incomplete. Copy the complete code again." (b) `PMM2.`: "Unsupported share-code version … update the app and try again." (c) plain text: "Not a valid share code … Share codes start with "PMM1."" (d) space inserted: "The share code is malformed: it contains a character that is not allowed." A dump afterwards: 0 entries, no playset created | pass |
 | Configuration permission failure | a scratch copy of EU4's user-data folder (descriptors and `dlc_load.json`, path with a space and "Ü"), its `dlc_load.json` made read-only; the real EU4 installation located with that copy as user-data folder; Play | `launch state: failed` before any start: "Writing the game configuration failed, so the game was not started; the previous configuration is unchanged. Could not replace "dlc_load.json". Check that the location is not read-only and that you have permission to change it." Detail: `…\dlc_load.json: Access is denied. (Windows error 5)`. Hash unchanged; the descriptor written earlier in the same transaction was rolled back; no game process; no interrupted transaction afterwards | pass |
@@ -241,15 +242,14 @@ first.
 The app's **Restore** (the `restore` step, i.e. `restoreLastBackup`) undid
 the launches one transaction at a time. After two restores per game the real
 `dlc_load.json` files were byte-identical to the backups taken before the
-session (SHA-256 `b59815f2…cfb157` for EU4, `26795db1…435e53` for
-Stellaris), and the registration descriptor created for the new Workshop
-item was removed again.
+session (their SHA-256 hashes matched; the values are left out), and the
+registration descriptor created for the new Workshop item was removed again.
 
 ## Clean-up
 
 - Probe mods removed from both games (`probe_mods.py remove`); both `mod/`
   listings identical to before the session.
-- Example Interface Mod unsubscribed again through the Steam API in
+- Example Mod P unsubscribed again through the Steam API in
   EU4's app context (state 5 → 4; Steam deleted the content folder shortly
   after). pmm-steam-helper deliberately has no unsubscribe command; a one-off
   script outside the repository was used.

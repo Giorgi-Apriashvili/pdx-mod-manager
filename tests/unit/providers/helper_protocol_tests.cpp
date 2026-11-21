@@ -32,10 +32,10 @@ template <class T> const T& as(const HelperEvent& e) {
 TEST_CASE("Commands round-trip through the wire format", "[providers][protocol]") {
     const HelperCommand commands[] = {
         PingCommand{},
-        StateCommand{{"700000901", "1000000901"}},
-        SubscribeCommand{"1000000901"},
-        DownloadCommand{"1000000901", true},
-        DownloadCommand{"1000000901", false},
+        StateCommand{{"1200000019", "1200000023"}},
+        SubscribeCommand{"1200000023"},
+        DownloadCommand{"1200000023", true},
+        DownloadCommand{"1200000023", false},
         QuitCommand{},
     };
     for (const auto& command : commands) {
@@ -145,7 +145,7 @@ TEST_CASE("Events round-trip through the wire format", "[providers][protocol]") 
     failed.message = "Steam is not running.";
 
     ItemStateEvent state;
-    state.status.id = "700000901";
+    state.status.id = "1200000019";
     state.status.flags = 1 | 16;
     state.status.bytesDownloaded = 5;
     state.status.bytesTotal = 10'000'000'000ull;
@@ -154,15 +154,15 @@ TEST_CASE("Events round-trip through the wire format", "[providers][protocol]") 
                                "c\xC3\xB8"
                                "d\xC3\xA9/\xE6\x97\xA5";
     state.status.sizeOnDisk = 4096;
-    state.status.timestamp = 1782400000;
+    state.status.timestamp = 1708000000;
 
     const HelperEvent events[] = {
         ready,
         failed,
         state,
-        SubscribeResultEvent{"1000000901", true, 1},
-        SubscribeResultEvent{"1000000901", false, 9},
-        DownloadRequestedEvent{"1000000901", true},
+        SubscribeResultEvent{"1200000023", true, 1},
+        SubscribeResultEvent{"1200000023", false, 9},
+        DownloadRequestedEvent{"1200000023", true},
         PongEvent{},
         ErrorEvent{"invalid_id", "bad id", "state"},
     };
@@ -242,14 +242,14 @@ TEST_CASE("Recorded Stellaris helper transcript decodes", "[providers][protocol]
     CHECK(std::holds_alternative<PongEvent>(events[1]));
 
     const ItemStatus& installed = as<ItemStateEvent>(events[2]).status;
-    CHECK(installed.id == "700000901");
+    CHECK(installed.id == "1200000019");
     CHECK(decodeItemFlags(installed.flags).installedAndCurrent());
-    CHECK(installed.sizeOnDisk == 420000);
+    CHECK(installed.sizeOnDisk == 300000);
     CHECK(installed.installPath ==
-          R"(D:\SteamLibrary\steamapps\workshop\content\281990\700000901)");
+          R"(D:\SteamLibrary\steamapps\workshop\content\281990\1200000019)");
 
     const ItemStatus& missing = as<ItemStateEvent>(events[6]).status;
-    CHECK(missing.id == "1000000901");
+    CHECK(missing.id == "1200000023");
     CHECK(missing.flags == 0);
     CHECK(missing.installPath.empty());
 

@@ -1,7 +1,7 @@
 #pragma once
 
 // Workshop ID lists (docs/share-code-protocol.md section 8): a plain list of
-// Steam Workshop item ids, such as "3000000914|3000000902|3000000908", as other
+// Steam Workshop item ids, such as "1200000001|1200000002|1200000003", as other
 // mod managers share them. Unlike a share code a list carries no game, no
 // playset name, no local mods, no disabled entries and no checksum, and it is
 // not versioned. Readers accept more than writers produce: ids separated by

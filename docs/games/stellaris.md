@@ -307,9 +307,9 @@ mods:           36
   with scan problems: 0
   with compatibility warnings: 23
 dlc_load.json enabled mods: 17
-  #1 stellaris:steam-workshop:1000000905 "Example Mod A"
+  #1 stellaris:steam-workshop:1200000004 "Example Mod A"
   #2 stellaris:local:example_mod_b "Example Mod B"
-  #3 stellaris:steam-workshop:3000000912 "Example Mod C"
+  #3 stellaris:steam-workshop:1200000005 "Example Mod C"
   ...
   unresolved: 0
 launch plan for the current configuration: 0 write(s)

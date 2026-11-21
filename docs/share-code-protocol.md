@@ -21,7 +21,7 @@ Both are versioned separately from the application (`PMM_SHARE_PROTOCOL_VERSION`
 in the top-level `CMakeLists.txt`).
 
 A **Workshop ID list** (section 8) is a second, plain format next to the share
-code: Steam Workshop item ids such as `3000000914|3000000902|3000000908`, as
+code: Steam Workshop item ids such as `1200000001|1200000002|1200000003`, as
 other mod managers share them. It carries less (enabled Workshop mods in
 order, no game, no name, no checksum) and is not versioned. Text starting with
 `PMM` is always a share code; the share-code format above is unaffected.
@@ -296,7 +296,7 @@ enforce that limit; otherwise they report "too large" or "invalid" instead of
 ### Purpose
 
 Players share mod lists as plain Steam Workshop ids, for example
-`3000000914|3000000902|3000000908` (WH3 Mod Manager's form). Such a list is
+`1200000001|1200000002|1200000003` (WH3 Mod Manager's form). Such a list is
 short, readable and easy to check on the Workshop, but it carries only
 Workshop mods and their order: no game, no playset name, no local mods, no
 disabled entries and no checksum. It is offered **next to** the share code,
@@ -363,14 +363,14 @@ fragment   = *( %x00-FF except separators )
 
 Messages name the 1-based entry and quote it shortened, with control
 characters, direction marks and line separators replaced by `?`, for example `Entry 3 of the Workshop ID list, "12a4", is
-not a Workshop ID or a Steam Workshop link.` or `Workshop ID 3000000902 is
+not a Workshop ID or a Steam Workshop link.` or `Workshop ID 1200000002 is
 listed twice, as entry 2 and entry 7.` Byte offsets go into the error detail.
 
 **Position suffixes are refused.** WH3 Mod Manager writes `<id>;<n>` to pin a
 mod's load position, because Total War loads unpinned mods alphabetically.
 Paradox Mod Manager imports and writes the mods in list order, and ignoring
 the pins would silently import a different order, so such an entry is
-refused: `Entry 2, "3000000902;2", has a ";2" suffix. Other mod managers use
+refused: `Entry 2, "1200000002;2", has a ";2" suffix. Other mod managers use
 it to pin a load position; Paradox Mod Manager writes the mods in list order,
 the order most Paradox games load them in, so remove the suffixes and put the
 IDs in the order the mods should load.` Most, not all: Stellaris, Crusader
@@ -400,8 +400,8 @@ has an empty list. The form never changes; anything new is for readers only.
 
 ### Integrity
 
-A list has no checksum. A list cut short or mistyped (`300000091` for
-`3000000914`) still parses. The only check is the Steam Web API's answer in
+A list has no checksum. A list cut short or mistyped (`120000000` for
+`1200000001`) still parses. The only check is the Steam Web API's answer in
 the import preview, which names the missing items and marks those that were
 not found or belong to another game ([`app.md`](app.md#workshop-names-in-the-import-preview));
 sessions without the Web API host show the ids alone. The preview shows every

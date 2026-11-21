@@ -164,7 +164,7 @@ function identityKey(m) {
 }
 
 // A Workshop ID list as other mod managers share it: enabled mods, load order.
-const sampleIdList = "3000000914|3000000902|3000000908|2961234560|2876543210|3012345678|2899887766";
+const sampleIdList = "1200000001|1200000002|1200000003|2961234560|2876543210|3012345678|2899887766";
 
 const sampleCode = "PMM1.eNqtVk1v2zAM_SuGz2nTtGu7uYdh2GHAgB12GoYdaJm2hUiiJ1FO0qL_fZQ_8tGmW4dhF0Ok"
     + "SD3yPYrUXZ5r4PKDr0kDtfCbGZpd3iTrqv8PbPHdT6xxuw23gTz6cr4CSY7htqbclXMDbRslVsYw5zSxDTsSNcw9h"

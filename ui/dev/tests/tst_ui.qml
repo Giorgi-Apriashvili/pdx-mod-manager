@@ -318,7 +318,7 @@ Item {
         }
 
         function test_9c_importIdListErrors() {
-            win.openImport("3000000914|12a4")
+            win.openImport("1200000001|12a4")
             const dialog = named("importDialog")
             tryVerify(() => dialog.opened)
             tryVerify(() => Backend.sharing.hasPreview)

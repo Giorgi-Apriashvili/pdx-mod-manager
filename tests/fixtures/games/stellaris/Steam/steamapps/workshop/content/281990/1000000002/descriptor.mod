@@ -1,4 +1,4 @@
-name="Example Outliner Patch"
+name="Example Mod T"
 dependencies={
 	"Example Overhaul"
 	"Missing Dependency"

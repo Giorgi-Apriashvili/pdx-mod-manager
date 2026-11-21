@@ -207,7 +207,7 @@ Error badEntry(std::string_view token, std::size_t entry, std::size_t offset) {
     return makeError(ErrorCode::ParseError,
                      label + " of the Workshop ID list, " + quotedSnippet(token) +
                          ", is not a Workshop ID or a Steam Workshop link. Workshop IDs are "
-                         "numbers such as 3000000914.",
+                         "numbers such as 1200000001.",
                      where);
 }
 
@@ -264,7 +264,7 @@ Result<std::vector<std::string>> parseWorkshopIdList(std::string_view input) {
     if (ids.empty())
         return makeError(ErrorCode::ParseError,
                          "The text contains no Workshop IDs. Paste a share code (PMM1.…) or "
-                         "IDs such as 3000000914|3000000902.");
+                         "IDs such as 1200000001|1200000002.");
     return ids;
 }
 
