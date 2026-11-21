@@ -1093,14 +1093,27 @@ Packaging ([`packaging.md`](packaging.md)):
     (item 13). Next: a Workshop download for app 394360 needs the owner's
     approval.
 13. 0.3.0 (owner's approval of 2026-11-21), prepared on `release-0.3.0`
-    (version, notes, docs and screenshots), to be merged into `main` and
-    released there by pushing the tag `v0.3.0`: Victoria 3 (item 11), Hearts
-    of Iron IV (item 12) and the Workshop ID list's `;N` message, with the
-    notes of [`../CHANGELOG.md`](../CHANGELOG.md). The screenshots were
-    refreshed on 2026-11-21: every game in the games column is supported,
-    and there is no "Other games" section any more. Nothing in the
-    updater, the installer, the packaging or the workflows changed since
-    0.2.0, so no dry run is needed ([`releasing.md`](releasing.md), step 4).
+    (version, notes, docs and screenshots) and merged into `main`
+    (`bb081fd`): Victoria 3 (item 11), Hearts of Iron IV (item 12) and the
+    Workshop ID list's `;N` message, with the notes of
+    [`../CHANGELOG.md`](../CHANGELOG.md). The screenshots were refreshed on
+    2026-11-21: every game in the games column is supported, and there is no
+    "Other games" section any more. Nothing in the updater, the installer or
+    the packaging changed since 0.2.0, so no dry run was needed
+    ([`releasing.md`](releasing.md), step 4). The same branch fixed a race
+    in two runner tests of Recover, which had once timed out under load.
+    The first release run failed in CI's clang-cl job: the runner image of
+    2026-11-11 carries MSVC 14.52, whose standard library refuses clang-cl
+    older than Clang 22, next to LLVM 20.1.8. `ci.yml` now installs the
+    pinned LLVM 22.1.8 for that job (`6bf6e4f`, checked by a manual CI run),
+    and with the owner's OK the tag, which had no release, was moved there.
+    Published 2026-11-21 from `6bf6e4f` ([release](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.3.0), [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/44891023186)); checked
+    afterwards as an installed copy reads it (the request by repository id
+    answers `v0.3.0` without a redirect, the real update client reads it, the
+    assets match `SHA256SUMS.txt` and pass `check-update-contract.sh assets`).
+    Not yet seen: an installed copy updating itself to 0.3.0. Also noted on
+    2026-11-21: Steam updated Crusader Kings III on this machine to
+    1.21.0.3, which is untested (1.20.1.2 is the verified version).
 
 ## Working rules
 

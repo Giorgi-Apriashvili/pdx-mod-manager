@@ -12,7 +12,13 @@ it changed neither the updater nor the packaging. On 2026-11-07 the owner's
 installed 0.1.0 updated itself to 0.1.1, the first real update, and later to 0.1.2. 0.1.2 was the
 first release started by pushing its tag ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42359177117)), the procedure since
 2026-11-07. 0.2.0 (Crusader Kings III, Workshop ID lists) followed on 2026-11-13
-([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/43448512713)).
+([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/43448512713)), and 0.3.0 (Victoria 3, Hearts of Iron IV) on 2026-11-21
+([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/44891023186)). The first run for 0.3.0
+([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/44887654170)) stopped in CI before anything was
+built for the release: the runner image's new Visual Studio refused its older
+clang-cl. A re-run uses the workflows of the tagged commit, so with the owner's
+OK the tag, which had no release, was deleted and pushed again at the commit
+that pins LLVM for that job.
 
 Every release must keep the [update contract](#the-update-contract): copies that are
 already installed find and install it only through the values frozen in 0.1.0.
