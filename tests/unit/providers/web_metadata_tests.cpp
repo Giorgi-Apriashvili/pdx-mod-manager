@@ -23,11 +23,11 @@ std::string readFixture(const char* relative) {
 } // namespace
 
 TEST_CASE("Details request body encodes item ids in order", "[providers][web]") {
-    const std::vector<std::string> ids{"703156866", "1121692237"};
+    const std::vector<std::string> ids{"1200000019", "1200000023"};
     auto body = buildPublishedFileDetailsRequest(ids);
     REQUIRE(body.ok());
     CHECK(*body ==
-          "itemcount=2&publishedfileids%5B0%5D=703156866&publishedfileids%5B1%5D=1121692237");
+          "itemcount=2&publishedfileids%5B0%5D=1200000019&publishedfileids%5B1%5D=1200000023");
     CHECK(kPublishedFileDetailsUrl ==
           "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/");
     CHECK(kPublishedFileDetailsContentType == "application/x-www-form-urlencoded");
@@ -62,20 +62,20 @@ TEST_CASE("Details response fixture parses found, missing, wrong-game and banned
     const auto& items = *parsed;
     REQUIRE(items.size() == 5);
 
-    const WorkshopItemMetadata& camera = items[0];
-    CHECK(camera.id == "703156866");
-    CHECK(camera.found);
-    CHECK(camera.resultCode == 1);
-    CHECK(camera.title == "Cinematic Camera");
-    CHECK(camera.consumerAppId == "281990");
-    CHECK(camera.creatorAppId == "281990");
-    CHECK(camera.fileSize == 429416); // a string in the reply
-    CHECK(camera.timeCreated == 1465842499);
-    CHECK(camera.timeUpdated == 1782489192);
-    CHECK_FALSE(camera.banned);
-    CHECK(camera.visibility == static_cast<int>(WorkshopVisibility::Public));
-    CHECK(camera.tags == std::vector<std::string>{"Gameplay", "Camera"});
-    CHECK(validateWorkshopItemForGame(camera, "281990").ok());
+    const WorkshopItemMetadata& stellaris = items[0];
+    CHECK(stellaris.id == "1200000019");
+    CHECK(stellaris.found);
+    CHECK(stellaris.resultCode == 1);
+    CHECK(stellaris.title == "Example Mod D");
+    CHECK(stellaris.consumerAppId == "281990");
+    CHECK(stellaris.creatorAppId == "281990");
+    CHECK(stellaris.fileSize == 300000); // a string in the reply
+    CHECK(stellaris.timeCreated == 1440000000);
+    CHECK(stellaris.timeUpdated == 1708000000);
+    CHECK_FALSE(stellaris.banned);
+    CHECK(stellaris.visibility == static_cast<int>(WorkshopVisibility::Public));
+    CHECK(stellaris.tags == std::vector<std::string>{"Gameplay", "Graphics"});
+    CHECK(validateWorkshopItemForGame(stellaris, "281990").ok());
 
     const WorkshopItemMetadata& missing = items[1];
     CHECK(missing.id == "1");

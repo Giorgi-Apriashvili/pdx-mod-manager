@@ -55,7 +55,7 @@ Observed files in `Documents/Paradox Interactive/Stellaris/`:
 - `launcher-v2.sqlite`: the launcher's own database (tables `playsets`,
   `playsets_mods(playsetId, modId, enabled, position)`, `mods`). It is the
   launcher's private state. **This application never reads or writes it.**
-- `dlc_load.json`: `{"enabled_mods":["mod/ugc_1880071041.mod", ...],"disabled_dlcs":[]}`.
+- `dlc_load.json`: `{"enabled_mods":["mod/ugc_1200000004.mod", ...],"disabled_dlcs":[]}`.
   For the active launcher playset, the order of `enabled_mods` matches
   `playsets_mods.position` ascending (position 0 first), and only enabled
   entries are listed.
@@ -64,7 +64,7 @@ Observed files in `Documents/Paradox Interactive/Stellaris/`:
   and `remote_file_id="<id>"`; local mods as `mod/<name>.mod` pointing at a
   folder under `mod/`.
 - `logs/error.log` from the last game start contains lines such as
-  `[dlc.cpp:346]: Invalid supported_version in file: mod/ugc_703156866.mod`
+  `[dlc.cpp:346]: Invalid supported_version in file: mod/ugc_<id>.mod`
   for descriptors that are **not** enabled in `dlc_load.json`: the game parses
   every descriptor in `mod/` at startup and enables those listed in
   `dlc_load.json`.

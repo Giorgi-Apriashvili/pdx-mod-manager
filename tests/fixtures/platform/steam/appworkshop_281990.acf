@@ -1,7 +1,7 @@
 "AppWorkshop"
 {
 	"appid"		"281990"
-	"SizeOnDisk"		"233409630"
+	"SizeOnDisk"		"800000"
 	"NeedsUpdate"		"1"
 	"NeedsDownload"		"0"
 	"TimeLastUpdated"		"1793271176"
@@ -10,61 +10,61 @@
 	"LastBuildID"		"25664273"
 	"WorkshopItemsInstalled"
 	{
-		"703156866"
+		"1200000019"
 		{
-			"size"		"429416"
-			"timeupdated"		"1782489192"
-			"manifest"		"6872566738308309249"
+			"size"		"300000"
+			"timeupdated"		"1708000000"
+			"manifest"		"1100000000000000104"
 		}
-		"1623423360"
+		"1200000020"
 		{
-			"size"		"231762225"
-			"timeupdated"		"1791477347"
-			"manifest"		"1070831328046085548"
+			"size"		"400000"
+			"timeupdated"		"1709000000"
+			"manifest"		"1100000000000000101"
 		}
-		"1628912584"
+		"1200000025"
 		{
-			"size"		"1217211"
-			"timeupdated"		"1782071960"
-			"manifest"		"1742551613808667893"
+			"size"		"100000"
+			"timeupdated"		"1707000000"
+			"manifest"		"1100000000000000102"
 		}
 	}
 	"WorkshopItemDetails"
 	{
-		"703156866"
+		"1200000019"
 		{
-			"manifest"		"6872566738308309249"
-			"timeupdated"		"1782489192"
+			"manifest"		"1100000000000000104"
+			"timeupdated"		"1708000000"
 			"timetouched"		"1793099198"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1782489192"
-			"latest_manifest"		"6872566738308309249"
+			"latest_timeupdated"		"1708000000"
+			"latest_manifest"		"1100000000000000104"
 		}
-		"1623423360"
+		"1200000020"
 		{
-			"manifest"		"1070831328046085548"
-			"timeupdated"		"1791477347"
+			"manifest"		"1100000000000000101"
+			"timeupdated"		"1709000000"
 			"timetouched"		"1793099198"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1791477347"
-			"latest_manifest"		"1070831328046085548"
+			"latest_timeupdated"		"1709000000"
+			"latest_manifest"		"1100000000000000101"
 		}
-		"1628912584"
+		"1200000025"
 		{
-			"manifest"		"1742551613808667893"
-			"timeupdated"		"1782071960"
+			"manifest"		"1100000000000000102"
+			"timeupdated"		"1707000000"
 			"timetouched"		"1793099198"
-			"latest_timeupdated"		"1792511498"
-			"latest_manifest"		"5586399916248390046"
+			"latest_timeupdated"		"1709500000"
+			"latest_manifest"		"1100000000000000103"
 		}
-		"3090328185"
+		"1200000022"
 		{
 			"manifest"		"0"
 			"timeupdated"		"0"
 			"timetouched"		"1793099300"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1782072748"
-			"latest_manifest"		"173799869651628932"
+			"latest_timeupdated"		"1707500000"
+			"latest_manifest"		"110000000000000105"
 		}
 	}
 }

@@ -48,9 +48,10 @@ TEST_CASE("Item flags have readable descriptions", "[providers][workshop]") {
 
 TEST_CASE("Published file ids must be canonical decimal uint64", "[providers][workshop]") {
     CHECK(isValidPublishedFileId("1"));
-    CHECK(isValidPublishedFileId("703156866"));
+    CHECK(isValidPublishedFileId("1200000019"));
     CHECK(isValidPublishedFileId("18446744073709551615")); // 2^64-1
-    CHECK(parsePublishedFileId("3090328185") == std::uint64_t{3090328185});
+    // Above 2^31, so not read as a 32-bit signed number.
+    CHECK(parsePublishedFileId("3000000000") == std::uint64_t{3000000000});
 
     const char* bad = GENERATE("", "0", "0123", "-1", "+1", " 1", "1 ", "12a", "1.0", "0x10",
                                "18446744073709551616", "999999999999999999999", "\xD9\xA1");
@@ -124,18 +125,18 @@ TEST_CASE("Steam result errors carry context and the numeric EResult", "[provide
 }
 
 TEST_CASE("Manual fallback links are built only from valid ids", "[providers][fallback]") {
-    auto client = steamClientItemUrl("703156866");
+    auto client = steamClientItemUrl("1200000019");
     REQUIRE(client.ok());
-    CHECK(*client == "steam://url/CommunityFilePage/703156866");
+    CHECK(*client == "steam://url/CommunityFilePage/1200000019");
 
-    auto web = workshopWebItemUrl("703156866");
+    auto web = workshopWebItemUrl("1200000019");
     REQUIRE(web.ok());
-    CHECK(*web == "https://steamcommunity.com/sharedfiles/filedetails/?id=703156866");
+    CHECK(*web == "https://steamcommunity.com/sharedfiles/filedetails/?id=1200000019");
 
-    auto links = manualFallbackLinks("1121692237");
+    auto links = manualFallbackLinks("1200000023");
     REQUIRE(links.ok());
-    CHECK(links->steamClientUrl == "steam://url/CommunityFilePage/1121692237");
-    CHECK(links->webUrl == "https://steamcommunity.com/sharedfiles/filedetails/?id=1121692237");
+    CHECK(links->steamClientUrl == "steam://url/CommunityFilePage/1200000023");
+    CHECK(links->webUrl == "https://steamcommunity.com/sharedfiles/filedetails/?id=1200000023");
 
     for (const char* bad :
          {"", "0", "12&evil=1", "../../x", "javascript:alert(1)", "123456789012345678901", "1 2"}) {

@@ -1,7 +1,7 @@
 "AppWorkshop"
 {
 	"appid"		"236850"
-	"SizeOnDisk"		"233409630"
+	"SizeOnDisk"		"6000"
 	"NeedsUpdate"		"1"
 	"NeedsDownload"		"0"
 	"TimeLastUpdated"		"1793271176"
@@ -10,7 +10,7 @@
 		"2000000001"
 		{
 			"size"		"1000"
-			"timeupdated"		"1782489192"
+			"timeupdated"		"1708000000"
 			"manifest"		"111"
 		}
 		"2000000002"

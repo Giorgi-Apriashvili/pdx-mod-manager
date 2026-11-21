@@ -369,15 +369,18 @@ fixes the same captures, also at 911x512 with `QT_SCALE_FACTOR` 1.5 and at
 1120x700, and the real application with `--filter disabled` at 900x440
 (scale 1 and 2), showed nothing clipped or covered.
 
-The two captures below were refreshed on 2026-11-21 for 0.3.0 with
-`--screenshot` and `QT_SCALE_FACTOR` 1.5 and 2 (the real application,
-read-only, Stellaris 4.5.4, a new scratch profile with a playset from the
-game's configuration, light theme): 2100x1290 pixels, and at 2 again the
-window limited to the screen, 2800x1422.
+The two captures below show the real application, read-only, with
+`--screenshot` and `QT_SCALE_FACTOR` 1.5 and 2, a new scratch profile with a
+playset from the game's configuration and the light theme, but a made-up
+Stellaris installation with invented mods instead of the development
+machine's: `scripts/app-screenshots.py` makes them
+([`app.md`](app.md#hidden-verification-switches)). They were last taken on
+2026-11-21, on the 2560x1440 screen at 100 %: 2100x1290 pixels, and at 2 again
+the window limited to the screen, 2800x1422.
 
-![Real application at scale factor 1.5](screenshots/a11y-scale-150.png)
+![Real application with made-up mods at scale factor 1.5](screenshots/a11y-scale-150.png)
 
-![Real application at scale factor 2, limited to the screen height](screenshots/a11y-scale-200.png)
+![Real application with made-up mods at scale factor 2, limited to the screen height](screenshots/a11y-scale-200.png)
 
 ## Verification
 

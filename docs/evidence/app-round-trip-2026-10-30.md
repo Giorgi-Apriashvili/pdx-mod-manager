@@ -16,6 +16,10 @@ nothing was sent to Steam, and nothing was written under Steam, the game folders
 `Documents/Paradox Interactive`. Afterwards `dlc_load.json` was still dated 2026-10-27 15:05
 (Stellaris) and 2026-08-23 19:52 (EU4). `<scratch>` stands for the private scratch folder.
 
+The Workshop item ids and mod names below were replaced with made-up ones, and the dumps'
+SHA-256 values left out, on 2026-11-21 (the owner's decision); the counts and results are
+unchanged.
+
 ## Environment
 
 | Item | Value |
@@ -46,12 +50,12 @@ game's. Profile B was empty before the import.
 
 | Game | Output of A | Preview in B | Code | Dumps (`a.json` = `b.json`) |
 | --- | --- | --- | --- | --- |
-| Stellaris | playset with 17 entries (17 enabled), then disable and move saved | 17 entries, 16 enabled, 17 installed, 0 missing | 1,524 characters | identical, 2,150 bytes, SHA-256 `c421c6d2…8c3cd2`; 17 entries, Workshop and local mods |
-| EU4 | playset with 9 entries (9 enabled), then disable and move saved | 9 entries, 8 enabled, 9 installed, 0 missing | 689 characters | identical, 1,120 bytes, SHA-256 `d7b95da0…68ea89`; 9 entries, Workshop and local mods |
+| Stellaris | playset with 17 entries (17 enabled), then disable and move saved | 17 entries, 16 enabled, 17 installed, 0 missing | 1,524 characters | identical, 2,150 bytes, same SHA-256; 17 entries, Workshop and local mods |
+| EU4 | playset with 9 entries (9 enabled), then disable and move saved | 9 entries, 8 enabled, 9 installed, 0 missing | 689 characters | identical, 1,120 bytes, same SHA-256; 9 entries, Workshop and local mods |
 
 The independent decoder read schema 1, the game key and the same counts (Stellaris 17/16,
-EU4 9/8). In the EU4 code the disabled entry (`3390117335`, Colored Mapmodes) comes first and
-`2506263674` (MRBM Font) fourth, as the edits require. All four runs exited with code 0.
+EU4 9/8). In the EU4 code the disabled entry (`1200000006`, Example Mod G) comes first and
+`1200000007` (Example Mod F) fourth, as the edits require. All four runs exited with code 0.
 
 In the same session, with the same build:
 
@@ -59,7 +63,8 @@ In the same session, with the same build:
   counts as in [`real-scan-2026-10-29.md`](real-scan-2026-10-29.md).
 - `--screenshot` for each game against profile A, and the refreshed
   `docs/screenshots/app-*.png` (see [`../app.md`](../app.md)); no personal paths are visible in
-  them.
+  them. Those captures were replaced on 2026-11-21 by captures of a made-up installation (see
+  [`../app.md`](../app.md)).
 
 ## Not covered
 

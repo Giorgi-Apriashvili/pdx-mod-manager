@@ -4,7 +4,7 @@
 services ([`architecture-services.md`](architecture-services.md)) with the QML
 user interface in `ui/` ([`ui-contract.md`](ui-contract.md)).
 
-![Main window with a real Stellaris installation](screenshots/app-main-light.png)
+![Main window with a made-up Stellaris installation, read-only verification mode](screenshots/app-main-light.png)
 
 ## Targets
 
@@ -310,43 +310,74 @@ and local mods, non-default order. On 2026-10-30 the same round trip
 entries) and EU4 (9 entries)
 ([evidence](evidence/app-round-trip-2026-10-30.md)).
 
-The screenshots in `docs/screenshots/app-*.png` were taken with
-`--screenshot` against Stellaris and EU4 on Windows 11, with new temporary
-profiles; first on 2026-10-30 (Stellaris 4.5.2), last refreshed on 2026-11-21
-for 0.3.0 (Stellaris 4.5.4, EU4 1.37.5). Crusader Kings III, Hearts of Iron IV
-and Victoria 3, installed on the same machine, appear only as entries in the
-games column, where all five games are listed as supported. The Play area
-shows the read-only blocker. Every run passes `--game stellaris` or `--game
-eu4`, since a new profile otherwise opens the first installed game in
-alphabetical order. The Stellaris profile was prepared with `--self-test
-"config,disable:2,move:0:5,move:13:1,export:code.txt"` (its configuration had
-14 entries; `move:13:1` moves the last one to the second place); the main and
-dark captures use `--select-row 2` (a Workshop mod, so the details show no
-personal path), the export and add-mods ones too, with `--open export` and
-`--open add-mods`, the filtered one `--filter disabled --select-row 0`, the
-import preview a new profile with `--open import:code.txt`, and the EU4 one a
-new profile prepared with `--self-test config`, then captured with
-`--select-row 0`. Prepare a profile in a run of its own: a capture in the
-same run shows the "Playset created" notification.
-`app-settings-updates.png` is the Updates part of `--open settings`, cut to
-436x352 pixels from the dialog's top left corner, above the About section with
-the profile's folders. The list only shows its
+The screenshots in `docs/screenshots/app-*.png` and `a11y-scale-*.png`
+([accessibility](accessibility.md#high-dpi)) show the real application with
+made-up games and mods: every name, Workshop ID, share code and Workshop ID
+list in them is invented. Until 0.3.0 they were taken against the
+development machine's Stellaris and EU4 installations; since 2026-11-21
+`scripts/app-screenshots.py` makes them. It writes a made-up Steam library
+and user data folders for all five games under `build/app-screenshots`
+(launcher settings and an executable placeholder for each game; for
+Stellaris and EU4 also descriptors, `.mod` files and a `dlc_load.json`, but
+no game or mod files), and stores them in new profiles as manual locations
+with their user data folders, which is what **Locate installation...**
+stores; the games column therefore says "manual location" for every game.
+The first run of a profile creates its database and, like any start,
+discovers the installed games (read-only), so the script deletes that
+capture without looking at it, removes everything that run stored except the
+settings before it stores the made-up locations, and deletes that profile at
+the end, also after a failure. It stops unless its list of games matches the
+catalog and unless every location and mod stored in the profiles is a
+made-up one under `--root`; if a capture profile fails that check, the run's
+captures are deleted too. The details of a selected Workshop mod show its
+folder under **Location**, which starts with `--root` (by default
+`build/app-screenshots` in the checkout), so the script refuses a `--root` or
+`--out` in the user profile folder or one that names the Windows user.
+`PMM_WORKSHOP_METADATA_URL` points at an unreachable local address, so no
+Workshop lookup leaves the machine. `QT_QPA_PLATFORM` is ignored (the
+`offscreen` platform has no fonts on Windows). With Qt's `bin` folder on
+`PATH`:
+
+```sh
+python scripts/app-screenshots.py   # build/debug/bin/pmm-app.exe, writes docs/screenshots
+```
+
+The Play area shows the read-only blocker. Every run passes `--game
+stellaris` or `--game eu4`, since a new profile otherwise opens the first
+installed game in alphabetical order, and every capture run `--theme`. The
+Stellaris profile is prepared with `--self-test "config,disable:2,move:0:5,move:13:1,export:code.txt"`
+(its configuration has 14 entries; `move:13:1` moves the last one to the
+second place); the main and dark captures use `--select-row 2` (a Workshop
+mod that names another one under "Loads after"), the export and add-mods
+ones too, with `--open export` and `--open add-mods`, the filtered one
+`--filter disabled --select-row 0`, the import preview a new profile with
+`--open import:code.txt`, and the EU4 one a new profile prepared with
+`--self-test config`, then captured with `--select-row 0`; the two
+`a11y-scale` captures use a new profile prepared with `--self-test config`
+and `QT_SCALE_FACTOR` 1.5 and 2. Prepare a profile in a run of its own: a
+capture in the same run shows the "Playset created" notification.
+`app-settings-updates.png` is not made by the script and shows no games or
+mods: it is the Updates part of `--open settings`, cut to 436x352 pixels from
+the dialog's top left corner, above the About section with the profile's
+folders. The list only shows its
 focus ring when the window is the active window during the capture; repeat a
 capture that shows the grey inactive selection. Play's tool tip opens when
 the mouse pointer happens to rest where the window opens (while Play is
 available, or blocked by more than the four reasons it lists); move the
-pointer away and repeat such a capture. For a high-DPI capture of the
+pointer away and repeat such a capture. Look at every capture before
+committing it. For a high-DPI capture of the
 smallest window, set `QT_SCALE_FACTOR=2` and add `--window-size 1x1`
 (1800x880 pixels).
 
 | File | State |
 | --- | --- |
-| `app-main-light.png`, `app-main-dark.png` | Stellaris playset from the game's configuration, one entry disabled and reordered, a Workshop mod selected |
+| `app-main-light.png`, `app-main-dark.png` | made-up Stellaris playset from the game's configuration, one entry disabled and two moved, a Workshop mod selected |
 | `app-filtered.png` | status filter "Disabled": reordering is off, with the explanation |
 | `app-export.png` | export dialog with the share code and the Workshop ID list |
-| `app-add-mods.png` | installed Stellaris mods, playset members marked |
-| `app-import-preview.png` | the exported code previewed in a clean profile |
-| `app-eu4.png` | EU4 playset from the game's `dlc_load.json`, with the load order note |
+| `app-add-mods.png` | the made-up installed Stellaris mods, playset members marked |
+| `app-import-preview.png` | the exported code previewed in a clean profile with the same made-up games |
+| `app-eu4.png` | made-up EU4 playset from the game's `dlc_load.json`, with the load order note |
+| `a11y-scale-150.png`, `a11y-scale-200.png` | the made-up Stellaris configuration's playset at `QT_SCALE_FACTOR` 1.5 and 2 (at 2 limited to a 2560x1440 screen) |
 | `app-settings-updates.png` | the Updates section of Settings in a verification run, where it is off |
 
 ## Files and folders

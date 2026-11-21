@@ -276,7 +276,7 @@ TEST_CASE("Stellaris scan applies the identity rules", "[games][stellaris]") {
     CHECK(samePath(registered.contentPath, f.content("1000000001")));
     CHECK(registered.descriptor.name == "Example Overhaul");
     CHECK(registered.descriptor.tags == std::vector<std::string>{"Fixes", "Graphics", "Overhaul"});
-    CHECK(registered.contentUpdatedAt == 1782489192);
+    CHECK(registered.contentUpdatedAt == 1708000000);
 
     // Registered with a stale library path: usable, rewritten at launch.
     const InstalledMod& stale = f.mod(mods, "1000000002");
@@ -292,10 +292,10 @@ TEST_CASE("Stellaris scan applies the identity rules", "[games][stellaris]") {
     CHECK(unregistered.state == InstallState::Ready);
     CHECK(unregistered.descriptorPath.empty());
     CHECK(unregistered.descriptorRef == "mod/ugc_1000000003.mod");
-    CHECK(unregistered.descriptor.name == "Example Battles");
+    CHECK(unregistered.descriptor.name == "Example Mod W");
     CHECK(unregistered.descriptor.extra ==
           std::vector<std::pair<std::string, std::string>>{
-              {"replace_path", "common/example_battles"}, {"user_list{}", "\"alpha\" \"beta\""}});
+              {"replace_path", "common/example_scripts"}, {"user_list{}", "\"alpha\" \"beta\""}});
 
     const InstalledMod& secondLibrary = f.mod(mods, "1000000006");
     CHECK(secondLibrary.state == InstallState::Ready);
@@ -732,11 +732,11 @@ TEST_CASE("Stellaris launch plan writes the minimum configuration", "[games][ste
 
     // The author's stale path is replaced by the actual content folder.
     CHECK(plan.configWrites[1].contents == "version=\"2.6\"\n"
-                                           "name=\"Example Battles\"\n"
+                                           "name=\"Example Mod W\"\n"
                                            "tags={\n\t\"Gameplay\"\n\t\"Graphics\"\n}\n"
                                            "picture=\"thumbnail.png\"\n"
                                            "supported_version=\"v4.*.*\"\n"
-                                           "replace_path=\"common/example_battles\"\n"
+                                           "replace_path=\"common/example_scripts\"\n"
                                            "user_list={\n\t\"alpha\"\n\t\"beta\"\n}\n"
                                            "path=\"" +
                                                f.generic(std::string(kContent) + "1000000003") +
@@ -861,7 +861,7 @@ TEST_CASE("Stellaris launch plan never writes over another mod's registration",
 
     // A stale or unreadable registration of the same item is replaced.
     test::writeText(modDir / "ugc_1000000003.mod",
-                    "name=\"Example Battles\"\npath=\"" +
+                    "name=\"Example Mod W\"\npath=\"" +
                         f.generic("Old Library/steamapps/workshop/content/281990/1000000003") +
                         "\"\nremote_file_id=\"1000000003\"");
     CHECK(f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{workshop}).ok());
@@ -886,7 +886,7 @@ TEST_CASE("Stellaris descriptors must lie directly in the mod folder", "[games][
     // A nested Workshop registration is not reused; ugc_<id>.mod is written.
     InstalledMod workshop = f.mod(mods, "1000000003");
     workshop.descriptorPath = f.userData() / "mod" / "sub" / "ugc_1000000003.mod";
-    test::writeText(workshop.descriptorPath, "name=\"Example Battles\"\npath=\"" +
+    test::writeText(workshop.descriptorPath, "name=\"Example Mod W\"\npath=\"" +
                                                  f.generic(std::string(kContent) + "1000000003") +
                                                  "\"");
     const LaunchPlan plan = f.plan(inst, {workshop}, {"1000000003"});

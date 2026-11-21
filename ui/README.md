@@ -150,7 +150,7 @@ Nothing is read from or written to disk.
 ```sh
 export QT_ROOT_DIR=C:/Qt/6.10.3/msvc2022_64   # or put qml/qmllint on PATH
 ui/dev/preview.sh                # interactive window
-ui/dev/preview.sh --screenshot   # regenerate docs/screenshots/*.png (1400x860)
+ui/dev/preview.sh --screenshot   # regenerate the preview's captures in docs/screenshots (1400x860)
 ui/dev/preview.sh --test         # QML tests (qmltestrunner, dev/tests; also in ctest, label ui-preview)
 ui/dev/preview.sh --lint         # qmllint on every module file
 python3 ui/dev/check_contrast.py # WCAG contrast of the Theme.qml colour pairs
@@ -189,3 +189,10 @@ disabled banner), `import-preview` / `import-preview-dark`, `export-code`
 `settings`, `playset-deleted` (Restore affordance), `history`,
 `game-not-found`, `a11y-focus-light` (keyboard focus ring and tool tip),
 `a11y-shortcuts-dark` (F1 list).
+
+The `app-*` and `a11y-scale-*` captures in the same folder come from the real
+application, not from the preview: `scripts/app-screenshots.py` runs it
+read-only against a made-up installation of every game
+([`docs/app.md`](../docs/app.md#hidden-verification-switches)). Both the
+preview's fakes and that installation use invented mod names and Workshop
+IDs only; never capture the mods of a real installation for the docs.

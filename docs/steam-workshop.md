@@ -108,7 +108,7 @@ Encoding and decoding live in `providers/helper_protocol.hpp`, shared by both si
 | Command | Reply |
 | --- | --- |
 | `{"protocol":1,"cmd":"ping"}` | `{"event":"pong"}` |
-| `{"protocol":1,"cmd":"state","ids":["703156866",...]}` (1 to 1000 ids) | one `state` event per id, in order |
+| `{"protocol":1,"cmd":"state","ids":["1200000019",...]}` (1 to 1000 ids) | one `state` event per id, in order |
 | `{"protocol":1,"cmd":"subscribe","id":"..."}` | later: `subscribe_result` |
 | `{"protocol":1,"cmd":"download","id":"...","highPriority":true}` | `download_requested` |
 | `{"protocol":1,"cmd":"quit"}` | none; the helper shuts Steam down and exits 0 |
@@ -123,11 +123,11 @@ spaces, more than `2^64-1`) and oversized lines get an `error` event, and the he
 {"event":"ready","protocol":1,"ok":true,"loggedOn":true,"ownsApp":true,"appId":"281990",
  "ugcInterface":"STEAMUGC_INTERFACE_VERSION016","init":"SteamAPI_InitSafe","subscribedCount":27}
 {"event":"ready","protocol":1,"ok":false,"error":"steam_not_running","message":"..."}
-{"event":"state","id":"703156866","flags":5,"subscribed":true,"installed":true,"downloading":false,
+{"event":"state","id":"1200000019","flags":5,"subscribed":true,"installed":true,"downloading":false,
  "downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,
- "installPath":"...","sizeOnDisk":429416,"timestamp":1782489192}
-{"event":"subscribe_result","id":"1121692237","ok":true,"result":1}
-{"event":"download_requested","id":"1121692237","accepted":true}
+ "installPath":"...","sizeOnDisk":300000,"timestamp":1708000000}
+{"event":"subscribe_result","id":"1200000023","ok":true,"result":1}
+{"event":"download_requested","id":"1200000023","accepted":true}
 {"event":"pong"}
 {"event":"error","code":"invalid_id","message":"...","cmd":"subscribe"}
 ```

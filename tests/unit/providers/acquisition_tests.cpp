@@ -14,11 +14,11 @@ using K = ActionKind;
 
 namespace {
 
-const std::string kId = "1121692237";
+const std::string kId = "1200000023";
 const std::string kPath = "D:/Steam Library/\xC3\x9C"
                           "n\xC3\xAF"
                           "c\xC3\xB8"
-                          "d\xC3\xA9/steamapps/workshop/content/281990/1121692237";
+                          "d\xC3\xA9/steamapps/workshop/content/281990/1200000023";
 constexpr std::int64_t kT0 = 1'000'000;
 
 constexpr std::uint32_t kSub = item_flag::Subscribed;

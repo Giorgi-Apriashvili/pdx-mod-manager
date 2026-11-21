@@ -269,33 +269,33 @@ TEST_CASE("readAppWorkshopManifest reads installed items and pending state", "[p
         readAppWorkshopManifest(test::fixturePath("platform/steam/appworkshop_281990.acf"));
     REQUIRE(manifest.ok());
     CHECK(manifest->appId == "281990");
-    CHECK(manifest->sizeOnDisk == 233409630u);
+    CHECK(manifest->sizeOnDisk == 800000u);
     CHECK(manifest->needsUpdate);
     CHECK_FALSE(manifest->needsDownload);
     CHECK(manifest->timeLastUpdated == 1793271176);
     CHECK(manifest->lastBuildId == "25664273");
     REQUIRE(manifest->items.size() == 4);
-    CHECK(manifest->items[0].id == "703156866");
-    CHECK(manifest->items[1].id == "1623423360");
-    CHECK(manifest->items[2].id == "1628912584");
-    CHECK(manifest->items[3].id == "3090328185");
+    CHECK(manifest->items[0].id == "1200000019");
+    CHECK(manifest->items[1].id == "1200000020");
+    CHECK(manifest->items[2].id == "1200000025");
+    CHECK(manifest->items[3].id == "1200000022");
 
-    const WorkshopItemState* current = manifest->findItem("1623423360");
+    const WorkshopItemState* current = manifest->findItem("1200000020");
     REQUIRE(current != nullptr);
     CHECK(current->installed);
-    CHECK(current->size == 231762225u);
-    CHECK(current->timeUpdated == 1791477347);
-    CHECK(current->manifest == "1070831328046085548");
+    CHECK(current->size == 400000u);
+    CHECK(current->timeUpdated == 1709000000);
+    CHECK(current->manifest == "1100000000000000101");
     CHECK(current->subscribedBy == "100000001");
     CHECK_FALSE(current->hasPendingUpdate());
 
-    const WorkshopItemState* outdated = manifest->findItem("1628912584");
+    const WorkshopItemState* outdated = manifest->findItem("1200000025");
     REQUIRE(outdated != nullptr);
     CHECK(outdated->hasPendingUpdate());
-    CHECK(outdated->latestTimeUpdated == 1792511498);
+    CHECK(outdated->latestTimeUpdated == 1709500000);
     CHECK(outdated->subscribedBy.empty()); // no longer subscribed
 
-    const WorkshopItemState* requested = manifest->findItem("3090328185");
+    const WorkshopItemState* requested = manifest->findItem("1200000022");
     REQUIRE(requested != nullptr);
     CHECK_FALSE(requested->installed);
     CHECK(requested->hasPendingUpdate());

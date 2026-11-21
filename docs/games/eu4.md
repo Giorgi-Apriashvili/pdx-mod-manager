@@ -132,7 +132,7 @@ Identity rules, states and descriptor generation are those of
 [`stellaris.md`](stellaris.md#mods). Observed on v1.37.5.0: every
 `mod/ugc_<id>.mod` the launcher wrote is `{eu4, steam-workshop, <id>}`, and
 the one local mod (absolute `path` into `mod/`, with a `remote_file_id` of
-its published copy) stays `{eu4, local, MGBR}`.
+its published copy) stays `{eu4, local, ExampleLocal}`.
 
 **Registered Workshop items without content.** EU4 was reinstalled on the
 development machine. Right afterwards the user mod folder still held the 13

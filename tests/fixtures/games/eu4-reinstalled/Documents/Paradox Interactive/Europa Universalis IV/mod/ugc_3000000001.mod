@@ -4,7 +4,7 @@ tags={
 	"Graphics"
 	"Utilities"
 }
-name="Example Font"
+name="Example Mod F"
 supported_version="v1.37.*.*"
 path="@ROOT@/Steam/steamapps/workshop/content/236850/3000000001"
 remote_file_id="3000000001"

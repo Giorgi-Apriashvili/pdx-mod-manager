@@ -40,8 +40,8 @@ PlaysetEntry entry(const char* sourceKey, const char* id, bool enabled = true) {
 } // namespace
 
 TEST_CASE("Workshop ID lists in the export form parse in order", "[sharing][idlist]") {
-    CHECK(parsed("3818297502|3149445431|3366734814") ==
-          Ids{"3818297502", "3149445431", "3366734814"});
+    CHECK(parsed("1200000001|1200000002|1200000003") ==
+          Ids{"1200000001", "1200000002", "1200000003"});
     CHECK(parsed("42") == Ids{"42"});
     CHECK(parsed("18446744073709551615|1") == Ids{"18446744073709551615", "1"});
 }
@@ -63,21 +63,21 @@ TEST_CASE("Workshop ID lists accept every separator, and runs of them", "[sharin
 
 TEST_CASE("Workshop ID lists accept links to Steam Workshop item pages", "[sharing][idlist]") {
     for (const char* link :
-         {"https://steamcommunity.com/sharedfiles/filedetails/?id=3149445431",
-          "http://steamcommunity.com/sharedfiles/filedetails/?id=3149445431",
-          "steamcommunity.com/sharedfiles/filedetails/?id=3149445431",
-          "www.steamcommunity.com/sharedfiles/filedetails/?id=3149445431",
-          "https://www.steamcommunity.com/sharedfiles/filedetails/?id=3149445431",
-          "https://steamcommunity.com/workshop/filedetails/?id=3149445431",
-          "https://steamcommunity.com/sharedfiles/filedetails?id=3149445431",
-          "HTTPS://SteamCommunity.COM/SharedFiles/FileDetails/?id=3149445431",
-          "https://steamcommunity.com/sharedfiles/filedetails/?searchtext=x&id=3149445431",
-          "https://steamcommunity.com/sharedfiles/filedetails/?id=3149445431&l=german",
-          "https://steamcommunity.com/sharedfiles/filedetails/?id=3149445431#comments",
-          "https://steamcommunity.com/sharedfiles/filedetails/?l=en&id=3149445431&tscn=1#x"}) {
+         {"https://steamcommunity.com/sharedfiles/filedetails/?id=1200000002",
+          "http://steamcommunity.com/sharedfiles/filedetails/?id=1200000002",
+          "steamcommunity.com/sharedfiles/filedetails/?id=1200000002",
+          "www.steamcommunity.com/sharedfiles/filedetails/?id=1200000002",
+          "https://www.steamcommunity.com/sharedfiles/filedetails/?id=1200000002",
+          "https://steamcommunity.com/workshop/filedetails/?id=1200000002",
+          "https://steamcommunity.com/sharedfiles/filedetails?id=1200000002",
+          "HTTPS://SteamCommunity.COM/SharedFiles/FileDetails/?id=1200000002",
+          "https://steamcommunity.com/sharedfiles/filedetails/?searchtext=x&id=1200000002",
+          "https://steamcommunity.com/sharedfiles/filedetails/?id=1200000002&l=german",
+          "https://steamcommunity.com/sharedfiles/filedetails/?id=1200000002#comments",
+          "https://steamcommunity.com/sharedfiles/filedetails/?l=en&id=1200000002&tscn=1#x"}) {
         INFO(link);
-        CHECK(parsed(std::string("3818297502 ") + link + "|3366734814") ==
-              Ids{"3818297502", "3149445431", "3366734814"});
+        CHECK(parsed(std::string("1200000001 ") + link + "|1200000003") ==
+              Ids{"1200000001", "1200000002", "1200000003"});
     }
 }
 
@@ -129,21 +129,21 @@ TEST_CASE("Workshop ID list entries that are not ids are refused by number", "[s
         CHECK_THAT(e.message, StartsWith("Entry 2 of the Workshop ID list, \"?4321?x????y\","));
     }
     SECTION("a position suffix is explained") {
-        const Error e = parseError("3818297502|3149445431;2|3366734814");
+        const Error e = parseError("1200000001|1200000002;2|1200000003");
         CHECK(e.code == ErrorCode::ParseError);
         CHECK(e.message ==
-              "Entry 2, \"3149445431;2\", has a \";2\" suffix. Other mod managers use it to pin a "
+              "Entry 2, \"1200000002;2\", has a \";2\" suffix. Other mod managers use it to pin a "
               "load position; Paradox Mod Manager writes the mods in list order, the order most "
               "Paradox games load them in, so remove the suffixes and put the IDs in the order "
               "the mods should load.");
         CHECK(e.detail == "entry 2 at byte offset 11");
         // Also on the first entry, and after a link.
-        CHECK_THAT(parseError("3818297502;1").message,
-                   StartsWith("Entry 1, \"3818297502;1\", has a"));
+        CHECK_THAT(parseError("1200000001;1").message,
+                   StartsWith("Entry 1, \"1200000001;1\", has a"));
         // A link is quoted far enough to show its id.
         CHECK_THAT(
-            parseError("steamcommunity.com/sharedfiles/filedetails/?id=3818297502;7").message,
-            StartsWith("Entry 1, \"steamcommunity.com/sharedfiles/filedetails/?id=3818297502;7\", "
+            parseError("steamcommunity.com/sharedfiles/filedetails/?id=1200000001;7").message,
+            StartsWith("Entry 1, \"steamcommunity.com/sharedfiles/filedetails/?id=1200000001;7\", "
                        "has a \";7\" suffix"));
         // Not a suffix: the generic message.
         CHECK_THAT(parseError("101|202;x").message, StartsWith("Entry 2 of the Workshop ID list"));
@@ -198,7 +198,7 @@ TEST_CASE("Workshop ID lists need at least one id", "[sharing][idlist]") {
         const Error e = parseError(empty);
         CHECK(e.code == ErrorCode::ParseError);
         CHECK(e.message == "The text contains no Workshop IDs. Paste a share code (PMM1.…) or IDs "
-                           "such as 3818297502|3149445431.");
+                           "such as 1200000001|1200000002.");
     }
 }
 
@@ -231,19 +231,19 @@ TEST_CASE("Workshop ID lists are limited to 10000 entries and 2 MiB", "[sharing]
 }
 
 TEST_CASE("Workshop ID lists format with '|' and round-trip", "[sharing][idlist]") {
-    const Ids ids{"3818297502", "3149445431", "3366734814"};
-    CHECK(formatWorkshopIdList(ids) == "3818297502|3149445431|3366734814");
+    const Ids ids{"1200000001", "1200000002", "1200000003"};
+    CHECK(formatWorkshopIdList(ids) == "1200000001|1200000002|1200000003");
     CHECK(formatWorkshopIdList(Ids{}).empty());
     CHECK(formatWorkshopIdList(Ids{"7"}) == "7");
     CHECK(parsed(formatWorkshopIdList(ids)) == ids);
     // Any accepted form formats to the export form.
     CHECK(formatWorkshopIdList(parsed(
-              " 3818297502,\r\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=3149445431 "
-              "3366734814\n")) == "3818297502|3149445431|3366734814");
+              " 1200000001,\r\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=1200000002 "
+              "1200000003\n")) == "1200000001|1200000002|1200000003");
 }
 
 TEST_CASE("A Workshop ID list maps to a manifest for the selected game", "[sharing][idlist]") {
-    const Ids ids{"3818297502", "3149445431"};
+    const Ids ids{"1200000001", "1200000002"};
     for (const char* game : {"ck3", "eu4", "hoi4", "stellaris", "vic3"}) {
         INFO(game);
         auto manifest = manifestFromWorkshopIds(game, ids);
@@ -334,7 +334,7 @@ TEST_CASE("Text starting with PMM is a share code, anything else a list", "[shar
     CHECK(detectImportTextFormat("PMMx") == ShareCode);
     CHECK(detectImportTextFormat("pmm1.abc") == WorkshopIdList);
     CHECK(detectImportTextFormat("PM") == WorkshopIdList);
-    CHECK(detectImportTextFormat("3818297502|PMM1.x") == WorkshopIdList);
+    CHECK(detectImportTextFormat("1200000001|PMM1.x") == WorkshopIdList);
     CHECK(detectImportTextFormat("\xEF\xBB\xBFPMM1.x") == WorkshopIdList);
     CHECK(detectImportTextFormat("") == WorkshopIdList);
     CHECK(detectImportTextFormat("   ") == WorkshopIdList);

@@ -334,10 +334,10 @@ TEST_CASE("EU4 after a reinstall: registered Workshop items without content are 
     REQUIRE(entries->size() == 6);
     const auto& e = *entries;
     CHECK(e[0].identity == ModIdentity{"eu4", "steam-workshop", "3000000001"});
-    CHECK(e[0].nameHint == "Example Font");
+    CHECK(e[0].nameHint == "Example Mod F");
     CHECK(e[0].versionHint == "1.37");
     CHECK(e[1].identity == ModIdentity{"eu4", "steam-workshop", "3000000002"});
-    CHECK(e[1].nameHint == "Example Water");
+    CHECK(e[1].nameHint == "Example Mod X");
     CHECK(e[2].identity == ModIdentity{"eu4", "local", "local_balance"});
     CHECK(e[2].nameHint == "Local Balance");
     // No descriptor at all: the launcher's ugc_<id>.mod naming convention.
@@ -378,7 +378,7 @@ TEST_CASE("EU4 Workshop items become installed once Steam has downloaded them", 
     const std::string folder = std::string(kContent) + "3000000001";
     test::writeText(f.path(folder + "/descriptor.mod"),
                     "version=\"1.37\"\ntags={\n\t\"Fixes\"\n\t\"Graphics\"\n\t\"Utilities\"\n}\n"
-                    "name=\"Example Font\"\nsupported_version=\"v1.37.*.*\"\n"
+                    "name=\"Example Mod F\"\nsupported_version=\"v1.37.*.*\"\n"
                     "remote_file_id=\"3000000001\"");
 
     // Content arriving while Steam still lists the item as not installed.
@@ -388,23 +388,23 @@ TEST_CASE("EU4 Workshop items become installed once Steam has downloaded them", 
     const fs::path acf = f.path("Steam/steamapps/workshop/appworkshop_236850.acf");
     test::writeText(acf, test::replaceAll(test::readText(acf), "\t\"WorkshopItemDetails\"",
                                           "\t\"WorkshopItemsInstalled\"\n\t{\n\t\t\"3000000001\"\n"
-                                          "\t\t{\n\t\t\t\"size\"\t\t\"2821267\"\n"
-                                          "\t\t\t\"timeupdated\"\t\t\"1715404933\"\n"
-                                          "\t\t\t\"manifest\"\t\t\"8055649841122585510\"\n"
+                                          "\t\t{\n\t\t\t\"size\"\t\t\"600000\"\n"
+                                          "\t\t\t\"timeupdated\"\t\t\"1705000000\"\n"
+                                          "\t\t\t\"manifest\"\t\t\"2100000000000000101\"\n"
                                           "\t\t}\n\t}\n\t\"WorkshopItemDetails\""));
     const std::vector<InstalledMod> mods = f.scan(inst);
-    const InstalledMod& font = f.mod(mods, "3000000001");
-    CHECK(font.state == InstallState::Ready);
-    CHECK(font.problems.empty());
-    CHECK(samePath(font.descriptorPath, f.userData() / "mod" / "ugc_3000000001.mod"));
-    CHECK(samePath(font.contentPath, f.path(folder)));
-    CHECK(font.contentUpdatedAt == 1715404933);
-    CHECK(f.adapter.compatibilityWarnings(inst, font).empty()); // v1.37.*.*
+    const InstalledMod& arrived = f.mod(mods, "3000000001");
+    CHECK(arrived.state == InstallState::Ready);
+    CHECK(arrived.problems.empty());
+    CHECK(samePath(arrived.descriptorPath, f.userData() / "mod" / "ugc_3000000001.mod"));
+    CHECK(samePath(arrived.contentPath, f.path(folder)));
+    CHECK(arrived.contentUpdatedAt == 1705000000);
+    CHECK(f.adapter.compatibilityWarnings(inst, arrived).empty()); // v1.37.*.*
     CHECK(findMod(mods, "3000000002") == nullptr);
 
     // The launcher's registration is reused byte for byte: only the order is
     // written.
-    auto plan = f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{font});
+    auto plan = f.adapter.buildLaunchPlan(inst, std::vector<InstalledMod>{arrived});
     REQUIRE(plan.ok());
     REQUIRE(plan->configWrites.size() == 1);
     CHECK(plan->configWrites[0].contents ==

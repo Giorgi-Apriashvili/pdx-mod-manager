@@ -133,7 +133,7 @@ game was not started.
    was a one-off investigation.
 2. **The game parses every descriptor in `mod/` and enables the listed ones.**
    `logs/error.log` of the last game start contains `[dlc.cpp:346]: Invalid
-   supported_version in file: mod/ugc_703156866.mod line: 8` and eight similar
+   supported_version in file: mod/ugc_<id>.mod line: <n>` and eight similar
    lines, including descriptors that are not in `enabled_mods`.
 3. **This application reproduces the launcher's files byte for byte.** The
    hidden test `pmm_games_tests "[.real]"` (see
