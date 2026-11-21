@@ -1092,15 +1092,15 @@ Packaging ([`packaging.md`](packaging.md)):
     longer says that every Paradox game loads mods in list order. In 0.3.0
     (item 13). Next: a Workshop download for app 394360 needs the owner's
     approval.
-13. 0.3.0 (owner's approval of 2026-11-21) is being released from this
-    commit, on branch `release-0.3.0` (version, notes, docs and screenshots)
-    until it reaches `main`: Victoria 3 (item 11), Hearts of Iron IV (item
-    12) and the Workshop ID list's `;N` message, with the notes of
-    [`../CHANGELOG.md`](../CHANGELOG.md). The screenshots were refreshed on
-    2026-11-21: every game in the games column is supported, and there is
-    no "Other games" section any more. Nothing in the updater, the
-    installer, the packaging or the workflows changed since 0.2.0, so no
-    dry run is needed ([`releasing.md`](releasing.md), step 4).
+13. 0.3.0 (owner's approval of 2026-11-21), prepared on `release-0.3.0`
+    (version, notes, docs and screenshots), to be merged into `main` and
+    released there by pushing the tag `v0.3.0`: Victoria 3 (item 11), Hearts
+    of Iron IV (item 12) and the Workshop ID list's `;N` message, with the
+    notes of [`../CHANGELOG.md`](../CHANGELOG.md). The screenshots were
+    refreshed on 2026-11-21: every game in the games column is supported,
+    and there is no "Other games" section any more. Nothing in the
+    updater, the installer, the packaging or the workflows changed since
+    0.2.0, so no dry run is needed ([`releasing.md`](releasing.md), step 4).
 
 ## Working rules
 
