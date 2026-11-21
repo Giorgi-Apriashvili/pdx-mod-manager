@@ -37,7 +37,7 @@ InstalledMod localMod() {
     mod.identity = ModIdentity{"stellaris", source::Local, "my_local_mod"};
     mod.descriptor.name = "Ünïcødé local mod 日本語";
     mod.descriptor.version = "1.0";
-    mod.descriptor.dependencies = {"UI Overhaul Dynamic", "Another \"quoted\" mod"};
+    mod.descriptor.dependencies = {"Example Interface Overhaul", "Another \"quoted\" mod"};
     mod.descriptor.path = "C:/Users/Other Machine/Documents/mod/my_local_mod";
     mod.descriptor.archive = "legacy.zip";
     mod.descriptor.extra = {{"replace_path", "common/ethics"}, {"user_dir", "x y"}};
@@ -86,7 +86,7 @@ std::vector<std::string> ids(const std::vector<InstalledMod>& mods) {
 TEST_CASE("Inventory round-trips every installed-mod field", "[persistence][inventory]") {
     auto db = openMemory();
     InventoryRepository repo(*db);
-    const auto workshop = workshopMod("18446744073709551615", "UI Overhaul Dynamic");
+    const auto workshop = workshopMod("18446744073709551615", "Example Interface Overhaul");
     const auto local = localMod();
     requireOk(repo.replaceForGame("stellaris", {workshop, local}));
 

@@ -29,12 +29,12 @@ struct Fixture {
     InstalledModMap inventory;
 
     Fixture() {
-        add(inventory, installed(core.identity, "UI Overhaul Dynamic"));
-        add(inventory, installed(addon.identity, "UI Overhaul Dynamic - Extended Topbar",
-                                 {"UI Overhaul Dynamic"}));
+        add(inventory, installed(core.identity, "Example Interface Overhaul"));
         add(inventory,
-            installed(patch.identity, "Compatibility Patch",
-                      {"UI Overhaul Dynamic", " Not Installed Mod ", "Installed Elsewhere"}));
+            installed(addon.identity, "Example Interface Addon", {"Example Interface Overhaul"}));
+        add(inventory, installed(patch.identity, "Compatibility Patch",
+                                 {"Example Interface Overhaul", " Not Installed Mod ",
+                                  "Installed Elsewhere"}));
         // Installed but not part of the test playsets.
         add(inventory, installed({kRequiredGame, "steam-workshop", "40"}, "Installed Elsewhere"));
         // Same name, other game: must not satisfy anything for Victoria 3.
@@ -58,7 +58,7 @@ TEST_CASE("A dependency ordered after its dependent is reported", "[core][depend
     CHECK(issues[0].entryIndex == 0);
     CHECK(issues[0].kind == DependencyIssueKind::OrderedAfter);
     CHECK(issues[0].dependencyIndex == 1);
-    CHECK(issues[0].dependencyName == "UI Overhaul Dynamic");
+    CHECK(issues[0].dependencyName == "Example Interface Overhaul");
     CHECK_THAT(issues[0].message, ContainsSubstring("must load before this mod"));
     CHECK_THAT(issues[0].message, ContainsSubstring("#2"));
 }
@@ -92,21 +92,21 @@ TEST_CASE("Disabled or uninstalled dependents are not checked", "[core][dependen
 TEST_CASE("Name matching prefers exact names and falls back to ASCII case folding",
           "[core][dependencies]") {
     Fixture f;
-    f.inventory[f.addon.identity].descriptor.dependencies = {"ui overhaul DYNAMIC"};
+    f.inventory[f.addon.identity].descriptor.dependencies = {"example interface OVERHAUL"};
     const std::vector<PlaysetEntry> ok{f.core, f.addon};
     CHECK(checkDependencies(ok, f.inventory).empty());
 
     // An uninstalled playset entry is matched by its name hint.
-    PlaysetEntry hinted = workshop("77", "UI Overhaul Dynamic", true, kRequiredGame);
+    PlaysetEntry hinted = workshop("77", "Example Interface Overhaul", true, kRequiredGame);
     InstalledModMap inventory;
-    add(inventory, installed(f.addon.identity, "Addon", {"UI Overhaul Dynamic"}));
+    add(inventory, installed(f.addon.identity, "Addon", {"Example Interface Overhaul"}));
     const std::vector<PlaysetEntry> entries{hinted, f.addon};
     CHECK(checkDependencies(entries, inventory).empty());
 }
 
 TEST_CASE("A mod listing its own name is not a missing dependency", "[core][dependencies]") {
     Fixture f;
-    f.inventory[f.core.identity].descriptor.dependencies = {"UI Overhaul Dynamic"};
+    f.inventory[f.core.identity].descriptor.dependencies = {"Example Interface Overhaul"};
     const std::vector<PlaysetEntry> entries{f.core};
     CHECK(checkDependencies(entries, f.inventory).empty());
 }
