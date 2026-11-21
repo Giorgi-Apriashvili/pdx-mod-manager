@@ -312,12 +312,10 @@ entries) and EU4 (9 entries)
 
 The screenshots in `docs/screenshots/app-*.png` were taken with
 `--screenshot` against Stellaris and EU4 on Windows 11, with new temporary
-profiles; first on 2026-10-30 (Stellaris 4.5.2), last refreshed on 2026-11-13
-for 0.2.0 (Stellaris 4.5.4, EU4 1.37.5). Crusader Kings III, installed on the
-same machine, appears only as an entry in the games column. They predate the
-Victoria 3 and Hearts of Iron IV support and still show both under "Other
-games", a section the application no longer shows (every catalog game is
-supported); refresh them for the next release. The Play area
+profiles; first on 2026-10-30 (Stellaris 4.5.2), last refreshed on 2026-11-21
+for 0.3.0 (Stellaris 4.5.4, EU4 1.37.5). Crusader Kings III, Hearts of Iron IV
+and Victoria 3, installed on the same machine, appear only as entries in the
+games column, where all five games are listed as supported. The Play area
 shows the read-only blocker. Every run passes `--game stellaris` or `--game
 eu4`, since a new profile otherwise opens the first installed game in
 alphabetical order. The Stellaris profile was prepared with `--self-test
@@ -327,7 +325,9 @@ dark captures use `--select-row 2` (a Workshop mod, so the details show no
 personal path), the export and add-mods ones too, with `--open export` and
 `--open add-mods`, the filtered one `--filter disabled --select-row 0`, the
 import preview a new profile with `--open import:code.txt`, and the EU4 one a
-new profile with `--self-test config --select-row 0`.
+new profile prepared with `--self-test config`, then captured with
+`--select-row 0`. Prepare a profile in a run of its own: a capture in the
+same run shows the "Playset created" notification.
 `app-settings-updates.png` is the Updates part of `--open settings`, cut to
 436x352 pixels from the dialog's top left corner, above the About section with
 the profile's folders. The list only shows its

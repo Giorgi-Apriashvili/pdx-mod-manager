@@ -376,9 +376,9 @@ the order most Paradox games load them in, so remove the suffixes and put the
 IDs in the order the mods should load.` Most, not all: Stellaris, Crusader
 Kings III and Victoria 3 let the later mod in the list win a shared file,
 while Europa Universalis IV and Hearts of Iron IV decide by name
-([load order](load-order.md#summary)). The message changed wording after
-0.2.0, which said "Paradox games load mods in list order"; what is refused did
-not change.
+([load order](load-order.md#summary)). The message changed wording in 0.3.0;
+0.2.0 said "Paradox games load mods in list order". What is refused did not
+change.
 
 ### Mapping to a manifest
 
