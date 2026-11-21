@@ -6,6 +6,8 @@
 #include "core/dependencies.hpp"
 #include "core/model.hpp"
 #include "core/result.hpp"
+#include "platform/process.hpp"
+#include "services/service_context.hpp"
 #include "sharing/manifest.hpp"
 
 #include <cstddef>
@@ -45,5 +47,14 @@ std::vector<AcquisitionJob> latestPerIdentity(std::span<const AcquisitionJob> jo
 // (live jobs carry fresher progress than the coalesced database rows).
 std::vector<AcquisitionJob> overlayJobs(std::vector<AcquisitionJob> persisted,
                                         std::span<const AcquisitionJob> live);
+
+// A running process of `game` (one of the adapter's ProcessNames::game for the
+// stored installation), as the launch check finds it, for refusing work that
+// would change the files of mods the running game has loaded. nullopt when
+// none runs, when the game is not located or not supported, or when processes
+// cannot be listed at all (ServiceContext::listProcesses unset); an error when
+// listing them failed.
+Result<std::optional<platform::RunningProcess>> runningGameProcess(const ServiceContext& context,
+                                                                   const GameKey& game);
 
 } // namespace pmm::services::detail

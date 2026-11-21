@@ -7,4 +7,5 @@ pmm_add_test(pmm_services_tests
     launch_service_tests.cpp
     playset_service_tests.cpp
     share_service_tests.cpp
+    workshop_update_tests.cpp
   LIBS pmm_services nlohmann_json::nlohmann_json)

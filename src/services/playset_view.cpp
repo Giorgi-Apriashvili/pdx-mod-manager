@@ -33,7 +33,7 @@ bool isMissingStatus(EntryStatus status) {
 PlaysetView buildPlaysetView(const Playset& playset, std::span<const InstalledMod> inventory,
                              std::span<const AcquisitionJob> jobs,
                              const GameInstallation* installation,
-                             const games::GameAdapter* adapter) {
+                             const games::GameAdapter* adapter, const WorkshopFindings* findings) {
     PlaysetView view;
     view.playsetId = playset.id;
     view.game = playset.game;
@@ -45,7 +45,8 @@ PlaysetView buildPlaysetView(const Playset& playset, std::span<const InstalledMo
             entry.identity.game = playset.game;
     }
     const InstalledModMap installed = detail::toMap(inventory);
-    std::vector<EntryReadiness> readiness = computePlaysetReadiness(entries, installed, jobs);
+    std::vector<EntryReadiness> readiness =
+        computePlaysetReadiness(entries, installed, jobs, findings);
     view.dependencyIssues = checkDependencies(entries, installed);
     std::vector<std::vector<ResolvedDependency>> dependencies =
         resolveDependencies(entries, installed);
@@ -90,6 +91,11 @@ PlaysetView buildPlaysetView(const Playset& playset, std::span<const InstalledMo
             ++view.counts.warning;
         if (row.blocking)
             ++view.counts.blocking;
+        if (readiness[i].updateAvailable) {
+            ++view.counts.updates;
+            if (entries[i].enabled)
+                ++view.counts.updatesEnabled;
+        }
         view.rows.push_back(std::move(row));
     }
     view.launch = evaluateLaunch(entries, readiness);
@@ -97,7 +103,8 @@ PlaysetView buildPlaysetView(const Playset& playset, std::span<const InstalledMo
 }
 
 Result<PlaysetView> loadPlaysetView(const ServiceContext& context, std::int64_t playsetId,
-                                    std::span<const AcquisitionJob> liveJobs) {
+                                    std::span<const AcquisitionJob> liveJobs,
+                                    const WorkshopFindings* findings) {
     persistence::PlaysetRepository playsets(context.database);
     auto playset = playsets.get(playsetId);
     if (!playset)
@@ -125,7 +132,7 @@ Result<PlaysetView> loadPlaysetView(const ServiceContext& context, std::int64_t 
     allJobs = detail::overlayJobs(std::move(jobs).value(), allJobs);
     const GameInstallation* install = installation.value() ? &*installation.value() : nullptr;
     return buildPlaysetView(playset.value(), mods.value(), allJobs, install,
-                            context.adapterFor(game));
+                            context.adapterFor(game), findings);
 }
 
 } // namespace pmm::services

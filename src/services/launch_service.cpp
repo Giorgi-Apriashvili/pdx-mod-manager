@@ -267,12 +267,15 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                                      (!mods ? mods.error().message : jobs.error().message));
         } else {
             std::vector<AcquisitionJob> allJobs = std::move(jobs).value();
-            if (coordinator)
+            WorkshopFindings findings;
+            if (coordinator) {
                 allJobs = detail::overlayJobs(std::move(allJobs), coordinator->liveJobs(game));
+                findings = coordinator->workshopFindings(game);
+            }
             const InstalledModMap byIdentity = detail::toMap(mods.value());
             const std::vector<PlaysetEntry>& entries = prepared.playset->entries;
             const std::vector<EntryReadiness> readiness =
-                computePlaysetReadiness(entries, byIdentity, allJobs);
+                computePlaysetReadiness(entries, byIdentity, allJobs, &findings);
             check.readiness = evaluateLaunch(entries, readiness);
             for (const LaunchBlocker& blocker : check.readiness.blockers)
                 check.blockers.push_back(blocker.reason);
@@ -297,6 +300,44 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                     (dependencyMeaningOf(game) != DependencyMeaning::LoadAfter
                          ? " warnings (versions or dependencies); see the mod list."
                          : " warnings; see the mod list."));
+            // An update on the Workshop never blocks: the installed version is used.
+            std::size_t withUpdates = 0;
+            for (std::size_t i = 0; i < entries.size(); ++i) {
+                if (entries[i].enabled && readiness[i].updateAvailable)
+                    ++withUpdates;
+            }
+            if (withUpdates > 0)
+                check.warnings.push_back(std::to_string(withUpdates) + " enabled " +
+                                         (withUpdates == 1 ? "mod has" : "mods have") +
+                                         " an update on the Workshop.");
+            // Steam changes the files of every mod an update or re-download
+            // of this game runs for: the game must not start meanwhile. Those
+            // of enabled entries are blockers above already.
+            std::set<ModIdentity> blockingEntries;
+            for (const LaunchBlocker& blocker : check.readiness.blockers)
+                blockingEntries.insert(entries[blocker.index].identity);
+            std::vector<ModIdentity> updating;
+            if (coordinator) {
+                updating = coordinator->updatesInProgress(game);
+            } else {
+                for (const AcquisitionJob& job : allJobs) {
+                    if (job.kind != AcquisitionKind::Acquire && !isTerminal(job.state))
+                        updating.push_back(job.identity);
+                }
+            }
+            std::size_t otherUpdates = 0;
+            for (const ModIdentity& identity :
+                 std::set<ModIdentity>(updating.begin(), updating.end())) {
+                if (!blockingEntries.count(identity))
+                    ++otherUpdates;
+            }
+            if (otherUpdates > 0)
+                check.blockers.push_back(
+                    std::to_string(otherUpdates) + " other Workshop " +
+                    (otherUpdates == 1 ? "mod of " : "mods of ") + gameName +
+                    (otherUpdates == 1 ? " is" : " are") +
+                    " being updated or downloaded again. Wait until that finishes, or cancel it "
+                    "in Downloads, then play.");
             if (check.readiness.canLaunch) {
                 for (const PlaysetEntry& entry : entries) {
                     if (entry.enabled)
