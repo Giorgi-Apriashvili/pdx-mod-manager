@@ -307,10 +307,10 @@ in-game in every game; read-only research of 2026-11-21
 So the application (the catalog's `DependencyMeaning`, owner's decision of
 2026-11-21) treats them as required in Victoria 3 only. In Stellaris and
 Crusader Kings III, where the list order decides, it keeps an order hint: a
-named mod that is enabled but comes later in the list than the mod naming
-it is a warning ("Lists "<name>" (#n) to load before this mod (#m), but that
-mod comes later in this playset."); a missing, disabled or absent one is
-not. In Europa Universalis IV and Hearts of Iron IV, which ignore the list
+named mod that is enabled but comes later in the list than the enabled mod
+naming it is a warning on the row of the mod naming it ("Lists "<name>"
+(#n) to load before this mod (#m), but that mod comes later in this
+playset."); a missing, disabled or absent one is not. In Europa Universalis IV and Hearts of Iron IV, which ignore the list
 order, nothing is a warning. Nothing is ever enabled, added or reordered for
 them, and the order written is the playset's.
 

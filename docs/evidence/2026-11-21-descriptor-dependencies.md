@@ -13,7 +13,7 @@ probe mod lists dependencies.
 | OS | Windows 11 Enterprise 23H2 (10.0.22631), x64 |
 | Games installed | Stellaris 4.5.4, Europa Universalis IV 1.37.5.0, Crusader Kings III 1.21.0.3, Hearts of Iron IV 1.20.0.0, Victoria 3 1.15.2 (Steam) |
 | Paradox launcher | 2026.14, installed |
-| Application | debug builds of `main` (`57a6b5e`) and of `agent/dependencies-optional` |
+| Application | debug builds of `main` (`57a6b5e`) and of `agent/dependencies-optional` (for `main`'s rules with every installed mod enabled, see below) |
 
 The owner's own mods appear as counts only.
 
@@ -72,7 +72,10 @@ enables a mod of Stellaris, EU4, CK3 or Victoria 3 that lists dependencies:
 
 Dependency warnings (`checkDependencies()`), with the rules of `main`
 (`57a6b5e`: Required everywhere but Hearts of Iron IV) and of
-`agent/dependencies-optional`:
+`agent/dependencies-optional`. The line for every installed mod enabled is
+new on the branch, so its `main` column comes from the branch's test with
+the catalog's `ck3`, `eu4` and `stellaris` set back to `Required` (`main`'s
+rules), not from a build of `main`:
 
 | | Current configuration, `main` | Current configuration, branch | Every installed mod enabled, `main` | Every installed mod enabled, branch |
 | --- | --- | --- | --- | --- |

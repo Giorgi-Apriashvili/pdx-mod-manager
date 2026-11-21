@@ -199,18 +199,18 @@ after the named mods "if they're installed" (unverified)
 later mod in the list wins a shared file (measured), the application keeps
 an order hint (the catalog's `dependencyMeaning` is `LoadAfterInList`, as
 for Crusader Kings III): a named mod that is enabled but comes later in the
-list than the mod naming it is a warning, "Lists "<name>" (#n) to load
-before this mod (#m), but that mod comes later in this playset.", on the row,
-in the launch check's line about mods with warnings and when mods are
-enabled. A named mod that is not installed, not in the playset or disabled
-is not a warning. The selected mod's details list the names under "Loads
-after", each mod once, with what each is in the playset and the note
-"Stellaris does not need these mods. This mod names them to load before it
-when they are enabled."; nothing is enabled, added or reordered for them.
-Until 2026-11-21 they were checked as requirements ("Requires …"). On the
-development machine 3 of the 39 installed mods list dependencies, none of
-them enabled (counts only). Whether Stellaris itself loads a mod after the
-mods it names is untested in-game.
+list than the enabled mod naming it is a warning, "Lists "<name>" (#n) to
+load before this mod (#m), but that mod comes later in this playset.", on the
+row of the mod naming it, in the launch check's line about mods with
+warnings and when mods are enabled. A named mod that is not installed, not
+in the playset or disabled is not a warning. The selected mod's details list
+the names under "Loads after", each mod once, with what each is in the
+playset and the note "Stellaris does not need these mods. This mod names
+them to load before it when they are enabled."; nothing is enabled, added or
+reordered for them. Until 2026-11-21 they were checked as requirements
+("Requires …"). On the development machine 3 of the 39 installed mods list
+dependencies, none of them enabled (counts only). Whether Stellaris itself
+loads a mod after the mods it names is untested in-game.
 
 ## Launch
 

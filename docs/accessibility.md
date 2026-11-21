@@ -233,10 +233,9 @@ Changes that happen without a focus change are spoken with
 
 - moves: "*name* moved to position 4", "3 mods moved up";
 - Space in the mod list: "Enabled *name*", "Disabled 5 mods";
-- dependency issues introduced by enabling mods (in Stellaris and Crusader
-  Kings III only a named mod that comes later in the list; none in Europa
-  Universalis IV and Hearts of Iron IV, which do not use the list order for
-  them);
+- dependency issues introduced by enabling mods (every kind in Victoria 3;
+  in Stellaris and Crusader Kings III only a named mod that comes later in
+  the list; none in Europa Universalis IV and Hearts of Iron IV);
 - every notification (toast): errors and warnings interrupt, the rest are
   polite;
 - error banners when they appear or change (invalid share code in the import
