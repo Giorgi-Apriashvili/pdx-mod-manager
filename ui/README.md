@@ -189,3 +189,10 @@ disabled banner), `import-preview` / `import-preview-dark`, `export-code`
 `settings`, `playset-deleted` (Restore affordance), `history`,
 `game-not-found`, `a11y-focus-light` (keyboard focus ring and tool tip),
 `a11y-shortcuts-dark` (F1 list).
+
+The `app-*` and `a11y-scale-*` captures in the same folder come from the real
+application, not from the preview: `scripts/app-screenshots.py` runs it
+read-only against a made-up installation of every game
+([`docs/app.md`](../docs/app.md#hidden-verification-switches)). Both the
+preview's fakes and that installation use invented mod names and Workshop
+IDs only; never capture the mods of a real installation for the docs.
