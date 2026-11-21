@@ -26,6 +26,9 @@ env:
   QT_VERSION: '6.10.3'
   AQT_VERSION: '==3.3.*'
   CLANG_FORMAT_VERSION: '22.1.8'
+  # clang-cl for the Warnings job: the LLVM that scripts/check.sh --full is run
+  # with locally, so both report the same warnings.
+  LLVM_VERSION: '22.1.8'
   # The pmm_app_tests test properties set this as well; it also covers test
   # discovery, which runs the test executable.
   QT_QPA_PLATFORM: offscreen
@@ -169,13 +172,26 @@ jobs:
           if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) { choco install ninja --no-progress -y }
           ninja --version
 
-      # LLVM is on the windows-2025 image; choco is the fallback for an image without it.
-      - name: Put LLVM on PATH
+      # The image's own LLVM is not used: its version moves with the image, and
+      # the image's MSVC standard library refuses an older clang-cl (MSVC 14.52
+      # wants Clang 22; the image of 2026-11-11 had LLVM 20.1.8). The image
+      # installs LLVM with Chocolatey, so choco upgrade moves it to the pinned
+      # version (or installs it), up or down.
+      - name: Install LLVM ${{ env.LLVM_VERSION }}
         shell: pwsh
         run: |
           $dir = 'C:\Program Files\LLVM\bin'
-          if (-not (Test-Path (Join-Path $dir 'clang-cl.exe'))) { choco install llvm --no-progress -y }
-          & (Join-Path $dir 'clang-cl.exe') --version
+          $clang = Join-Path $dir 'clang-cl.exe'
+          # "clang version 22.1.8", possibly followed by the source it was built from.
+          $want = '^clang version ' + [regex]::Escape($env:LLVM_VERSION) + '(\s|$)'
+          $have = if (Test-Path $clang) { (& $clang --version | Select-Object -First 1) } else { '' }
+          if ($have -notmatch $want) {
+            choco upgrade llvm --version $env:LLVM_VERSION --allow-downgrade --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "choco upgrade llvm $env:LLVM_VERSION failed with exit code $LASTEXITCODE." }
+          }
+          $version = & $clang --version
+          $version
+          if (($version | Select-Object -First 1) -notmatch $want) { throw "clang-cl $env:LLVM_VERSION expected." }
           $dir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Configure

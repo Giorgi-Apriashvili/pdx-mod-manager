@@ -98,6 +98,9 @@ blocks the common ones).
   developer environment puts on `PATH`.
 - clang-cl: `cmake --preset core-clang-cl` (LLVM's `bin` folder on `PATH`), with
   UBSan; a finding stops the test. clangd and clang-tidy parse the code the same way.
+  CI pins LLVM **22.1.8** for it (`LLVM_VERSION` in `ci.yml`). Visual Studio's
+  standard library refuses a clang-cl older than the one it was made for (MSVC
+  14.52 wants Clang 22), so update LLVM when Visual Studio asks for it.
 
 ## Tests
 
