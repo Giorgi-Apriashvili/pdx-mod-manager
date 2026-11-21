@@ -103,9 +103,10 @@ entry it could not read:
   other sites are not item links.
 - **A ";2" suffix.** Lists made for Total War mod managers pin load positions
   as `id;position`. Paradox Mod Manager writes the mods in list order, the
-  order most Paradox games load them in (Europa Universalis IV and Hearts of
-  Iron IV decide by name; see [load order](load-order.md)), so remove the
-  suffixes and put the ids in the order the mods should load.
+  order most Paradox games load them in (Europa Universalis IV decides by the
+  mods' names and Hearts of Iron IV by the names of their `.mod` files; see
+  [load order](load-order.md)), so remove the suffixes and put the ids in the
+  order the mods should load.
 - **Listed twice.** A playset holds each mod once; remove one of the two
   entries the message names.
 - **Select a game first.** A list does not say which game it is for: select

@@ -7,8 +7,7 @@ depends on the game's own executable and a validated integration (spec section 1
 Last reviewed: 2026-11-21 (Hearts of Iron IV added: read-only checks, then
 its probe run with direct launches), after Victoria 3 (read-only checks on
 2026-11-20, then its probe run with direct launches on 2026-11-21), the Crusader Kings III probe run of
-2026-11-13 and the live validation of 2026-10-30; application 0.2.0 and the
-unreleased Victoria 3 and Hearts of Iron IV support.
+2026-11-13 and the live validation of 2026-10-30; application 0.3.0.
 
 ## Status legend
 
