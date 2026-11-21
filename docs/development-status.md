@@ -1298,7 +1298,17 @@ Packaging ([`packaging.md`](packaging.md)):
     old tags still show the earlier ones (the next release ships the new
     placeholder); the later CK3, Hearts of Iron IV and Victoria 3 evidence
     notes keep truncated SHA-256 values of the real configuration files.
-    Not merged.
+    Status: `debug` 656/656; scans of every tracked text file against the
+    owner's ids, names, local names, SteamIDs and item details (exact,
+    case-insensitive, across line breaks, truncated or extended ids, grouped
+    digits, slug, joined and acronym forms of the names) find nothing; the
+    capture script ran once into a scratch folder with its new checks passing
+    (the committed captures kept: the new ones differ only by scattered
+    pixels and a hover state); `scripts/check.sh --full` on `3d2fe55`: passed
+    in 8 min 15 s (ASan and clang-cl with UBSan 530/530 each, the update
+    contract's 112 checks, clang-tidy on the 12 C++ files changed since
+    `origin/main` without findings, the `ci` preset from a fresh checkout
+    656/656). The commit after it changes this file only. Not merged.
 
 ## Working rules
 
