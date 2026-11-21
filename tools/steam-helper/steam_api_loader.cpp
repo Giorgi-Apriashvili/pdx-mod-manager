@@ -32,6 +32,7 @@ using FnUgcGetItemInstallInfo = bool(PMM_STEAM_CALL*)(void*, PublishedFileId, st
 using FnUgcGetItemDownloadInfo = bool(PMM_STEAM_CALL*)(void*, PublishedFileId, std::uint64_t*,
                                                        std::uint64_t*);
 using FnUgcSubscribeItem = SteamApiCall(PMM_STEAM_CALL*)(void*, PublishedFileId);
+using FnUgcUnsubscribeItem = SteamApiCall(PMM_STEAM_CALL*)(void*, PublishedFileId);
 using FnUgcDownloadItem = bool(PMM_STEAM_CALL*)(void*, PublishedFileId, bool);
 // Newer SDKs added `bool bIncludeLocallyDisabled`; older ones take only the
 // interface. Passing the extra `false` is harmless for both: the caller owns
@@ -192,6 +193,8 @@ std::optional<Failure> SteamApi::resolveSymbols() {
     m_ugcGetItemInstallInfo = symbol("SteamAPI_ISteamUGC_GetItemInstallInfo");
     m_ugcGetItemDownloadInfo = symbol("SteamAPI_ISteamUGC_GetItemDownloadInfo");
     m_ugcSubscribeItem = symbol("SteamAPI_ISteamUGC_SubscribeItem");
+    // Optional: only the re-download from scratch needs it.
+    m_ugcUnsubscribeItem = symbol("SteamAPI_ISteamUGC_UnsubscribeItem");
     m_ugcDownloadItem = symbol("SteamAPI_ISteamUGC_DownloadItem");
     m_ugcGetNumSubscribedItems = symbol("SteamAPI_ISteamUGC_GetNumSubscribedItems");
     m_utilsIsApiCallCompleted = symbol("SteamAPI_ISteamUtils_IsAPICallCompleted");
@@ -366,19 +369,24 @@ SteamApiCall SteamApi::subscribe(PublishedFileId id) {
     return as<FnUgcSubscribeItem>(m_ugcSubscribeItem)(m_ugc, id);
 }
 
+SteamApiCall SteamApi::unsubscribe(PublishedFileId id) {
+    if (!m_ugcUnsubscribeItem)
+        return kInvalidApiCall;
+    return as<FnUgcUnsubscribeItem>(m_ugcUnsubscribeItem)(m_ugc, id);
+}
+
 bool SteamApi::download(PublishedFileId id, bool highPriority) {
     return as<FnUgcDownloadItem>(m_ugcDownloadItem)(m_ugc, id, highPriority);
 }
 
-CallStatus SteamApi::pollSubscribeResult(SteamApiCall call, int& eresult) const {
+CallStatus SteamApi::pollCallResult(SteamApiCall call, int callbackId, int& eresult) const {
     bool failed = false;
     if (!as<FnUtilsIsApiCallCompleted>(m_utilsIsApiCallCompleted)(m_utils, call, &failed))
         return failed ? CallStatus::Failed : CallStatus::Pending;
     SubscribeResultPayload payload{};
     failed = false;
     if (!as<FnUtilsGetApiCallResult>(m_utilsGetApiCallResult)(
-            m_utils, call, &payload, static_cast<int>(sizeof payload), kSubscribeResultCallbackId,
-            &failed) ||
+            m_utils, call, &payload, static_cast<int>(sizeof payload), callbackId, &failed) ||
         failed)
         return CallStatus::Failed;
     eresult = payload.result;

@@ -36,6 +36,7 @@ TEST_CASE("Commands round-trip through the wire format", "[providers][protocol]"
         SubscribeCommand{"1200000023"},
         DownloadCommand{"1200000023", true},
         DownloadCommand{"1200000023", false},
+        UnsubscribeCommand{"1200000019"},
         QuitCommand{},
     };
     for (const auto& command : commands) {
@@ -48,6 +49,8 @@ TEST_CASE("Commands round-trip through the wire format", "[providers][protocol]"
         CHECK(*decoded == command);
     }
     CHECK(encodeCommand(StateCommand{{"5"}}) == R"({"protocol":1,"cmd":"state","ids":["5"]})");
+    CHECK(encodeCommand(UnsubscribeCommand{"5"}) ==
+          R"({"protocol":1,"cmd":"unsubscribe","id":"5"})");
 }
 
 TEST_CASE("Command decoding accepts the documented minimal forms", "[providers][protocol]") {
@@ -62,6 +65,10 @@ TEST_CASE("Command decoding accepts the documented minimal forms", "[providers][
     auto state = decodeCommand(R"({"cmd":"state","ids":["1","2"],"future":"ignored"})");
     REQUIRE(state.ok());
     CHECK(std::get<StateCommand>(*state).ids.size() == 2);
+
+    auto unsubscribe = decodeCommand(R"({"cmd":"unsubscribe","id":"42"})");
+    REQUIRE(unsubscribe.ok());
+    CHECK(std::get<UnsubscribeCommand>(*unsubscribe).id == "42");
 }
 
 TEST_CASE("Command decoding rejects malformed or unsafe input", "[providers][protocol]") {
@@ -84,7 +91,11 @@ TEST_CASE("Command decoding rejects malformed or unsafe input", "[providers][pro
         {R"({"cmd":"subscribe","id":"C:\\evil"})", ErrorCode::InvalidArgument},
         {R"({"cmd":"subscribe","id":123})", ErrorCode::ParseError},
         {R"({"cmd":"download","id":"1","highPriority":"yes"})", ErrorCode::ParseError},
-        {R"({"cmd":"unsubscribe","id":"1"})", ErrorCode::ValidationFailed},
+        {R"({"cmd":"unsubscribe"})", ErrorCode::ParseError},
+        {R"({"cmd":"unsubscribe","id":"0"})", ErrorCode::InvalidArgument},
+        {R"({"cmd":"unsubscribe","id":"1;rm"})", ErrorCode::InvalidArgument},
+        {R"({"cmd":"unsubscribe","ids":["1"]})", ErrorCode::ParseError},
+        {R"({"cmd":"unsubscribe_all"})", ErrorCode::ValidationFailed},
         {R"({"cmd":"delete","id":"1"})", ErrorCode::ValidationFailed},
         {R"({"cmd":"open","url":"https://example.invalid"})", ErrorCode::ValidationFailed},
         {R"({"protocol":2,"cmd":"ping"})", ErrorCode::UnsupportedVersion},
@@ -125,7 +136,8 @@ TEST_CASE("Rejected commands map to protocol error events", "[providers][protoco
     };
     check("garbage", "bad_request", "");
     check(R"({"cmd":"subscribe","id":"x"})", "invalid_id", "subscribe");
-    check(R"({"cmd":"unsubscribe","id":"1"})", "unknown_command", "unsubscribe");
+    check(R"({"cmd":"unsubscribe","id":"x"})", "invalid_id", "unsubscribe");
+    check(R"({"cmd":"delete","id":"1"})", "unknown_command", "delete");
     check(R"({"protocol":9,"cmd":"ping"})", "unsupported_protocol", "ping");
 }
 
@@ -163,6 +175,8 @@ TEST_CASE("Events round-trip through the wire format", "[providers][protocol]") 
         SubscribeResultEvent{"1200000023", true, 1},
         SubscribeResultEvent{"1200000023", false, 9},
         DownloadRequestedEvent{"1200000023", true},
+        UnsubscribeResultEvent{"1200000019", true, 1},
+        UnsubscribeResultEvent{"1200000019", false, 9},
         PongEvent{},
         ErrorEvent{"invalid_id", "bad id", "state"},
     };
@@ -195,6 +209,9 @@ TEST_CASE("Event decoding validates fields and protocol version", "[providers][p
         R"({"event":"state","id":"abc","flags":1})",
         R"({"event":"subscribe_result","id":"1","ok":true})",
         R"({"event":"download_requested","id":"1"})",
+        R"({"event":"unsubscribe_result","id":"1","ok":true})",
+        R"({"event":"unsubscribe_result","id":"1","ok":true,"result":-1})",
+        R"({"event":"unsubscribe_result","id":"x","ok":true,"result":1})",
         R"({"event":"ready","protocol":1})",
         R"({"event":"ready","protocol":1,"ok":true,"loggedOn":true})",
     };
@@ -254,6 +271,44 @@ TEST_CASE("Recorded Stellaris helper transcript decodes", "[providers][protocol]
     CHECK(missing.installPath.empty());
 
     // Re-encoding reproduces the recorded bytes exactly.
+    std::string reencoded;
+    for (const auto& e : events)
+        reencoded += encodeEvent(e) + "\n";
+    CHECK(reencoded == transcript);
+}
+
+TEST_CASE("Helper transcript of an update and a re-download decodes",
+          "[providers][protocol][fixture]") {
+    // Written by hand from the protocol (no live update or re-download has
+    // been recorded yet): an outdated item updated in place, then another one
+    // unsubscribed, subscribed again and downloaded again.
+    const std::string transcript = readFixture("providers/helper_transcript_update.jsonl");
+    REQUIRE_FALSE(transcript.empty());
+    LineSplitter splitter;
+    const auto lines = splitter.push(transcript);
+    REQUIRE(lines.size() == 15);
+    std::vector<HelperEvent> events;
+    for (const auto& line : lines) {
+        auto e = decodeEvent(line);
+        REQUIRE(e.ok());
+        events.push_back(std::move(*e));
+    }
+    const ItemStatus& outdated = as<ItemStateEvent>(events[1]).status;
+    CHECK(outdated.id == "1200000024");
+    CHECK(decodeItemFlags(outdated.flags).needsUpdate);
+    CHECK_FALSE(decodeItemFlags(outdated.flags).installedAndCurrent());
+    CHECK(outdated.timestamp == 1705000000);
+    const ItemStatus& updated = as<ItemStateEvent>(events[5]).status;
+    CHECK(decodeItemFlags(updated.flags).installedAndCurrent());
+    CHECK(updated.timestamp == 1710000000); // the installed version moved
+
+    const auto& unsubscribed = as<UnsubscribeResultEvent>(events[7]);
+    CHECK(unsubscribed.id == "1200000021");
+    CHECK(unsubscribed.ok);
+    CHECK(unsubscribed.result == 1);
+    CHECK_FALSE(decodeItemFlags(as<ItemStateEvent>(events[8]).status.flags).subscribed);
+    CHECK(as<SubscribeResultEvent>(events[9]).ok);
+
     std::string reencoded;
     for (const auto& e : events)
         reencoded += encodeEvent(e) + "\n";

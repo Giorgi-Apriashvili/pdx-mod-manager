@@ -252,7 +252,7 @@ TEST_CASE("Helper serves state, subscribe and download against a Steam API libra
     CHECK(ready.appId == "281990");
     CHECK(ready.ugcInterface == "STEAMUGC_INTERFACE_VERSION017"); // highest exported accessor
     CHECK(ready.initFunction == "SteamAPI_InitFlat");
-    CHECK(ready.subscribedCount == 1);
+    CHECK(ready.subscribedCount == 2);
 
     helper.send(encodeCommand(PingCommand{}));
     helper.next<PongEvent>();
@@ -316,7 +316,9 @@ TEST_CASE("Helper serves state, subscribe and download against a Steam API libra
     const auto badId = helper.next<ErrorEvent>();
     CHECK(badId.code == "invalid_id");
     CHECK(badId.cmd == "subscribe");
-    helper.send(R"({"cmd":"unsubscribe","id":"111111111"})");
+    helper.send(R"({"cmd":"unsubscribe","id":"-1"})");
+    CHECK(helper.next<ErrorEvent>().code == "invalid_id");
+    helper.send(R"({"cmd":"unsubscribe_all"})");
     CHECK(helper.next<ErrorEvent>().code == "unknown_command");
     helper.send(R"({"protocol":2,"cmd":"ping"})");
     CHECK(helper.next<ErrorEvent>().code == "unsupported_protocol");
@@ -335,6 +337,58 @@ TEST_CASE("Helper serves state, subscribe and download against a Steam API libra
     for (const auto& line : helper.stderrLines())
         libraryNoiseOnStderr = libraryNoiseOnStderr || line.find("Setting breakpad") == 0;
     CHECK(libraryNoiseOnStderr);
+}
+
+TEST_CASE("Helper updates an installed item and unsubscribes on request", "[providers][helper]") {
+    FakeSteamInstall steam;
+    HelperProcess helper("281990", steam.library);
+    REQUIRE(helper.next<ReadyEvent>().ok);
+
+    // An installed item with an update pending: the download moves the
+    // installed version (GetItemInstallInfo's timestamp).
+    helper.send(encodeCommand(StateCommand{{"555555555"}}));
+    const ItemStatus outdated = helper.next<ItemStateEvent>().status;
+    CHECK(decodeItemFlags(outdated.flags).needsUpdate);
+    CHECK(decodeItemFlags(outdated.flags).installed);
+    CHECK(outdated.timestamp == 1700000000);
+    helper.send(encodeCommand(DownloadCommand{"555555555", true}));
+    CHECK(helper.next<DownloadRequestedEvent>().accepted);
+    ItemStatus updated;
+    for (int i = 0; i < 6 && !decodeItemFlags(updated.flags).installedAndCurrent(); ++i) {
+        helper.send(encodeCommand(StateCommand{{"555555555"}}));
+        updated = helper.next<ItemStateEvent>().status;
+    }
+    CHECK(updated.flags == 5);
+    CHECK(updated.timestamp == 1700000500);
+
+    // Unsubscribe results come from polled call results, like subscribe's.
+    helper.send(encodeCommand(UnsubscribeCommand{"111111111"}));
+    const auto unsubscribed = helper.next<UnsubscribeResultEvent>();
+    CHECK(unsubscribed.id == "111111111");
+    CHECK(unsubscribed.ok);
+    CHECK(unsubscribed.result == 1);
+    helper.send(encodeCommand(StateCommand{{"111111111"}}));
+    const ItemStatus dropped = helper.next<ItemStateEvent>().status;
+    CHECK_FALSE(decodeItemFlags(dropped.flags).subscribed);
+    CHECK(decodeItemFlags(dropped.flags).installed); // Steam removes the files later
+
+    helper.send(encodeCommand(UnsubscribeCommand{"333333333"}));
+    const auto notFound = helper.next<UnsubscribeResultEvent>();
+    CHECK_FALSE(notFound.ok);
+    CHECK(notFound.result == 9);
+    helper.send(encodeCommand(UnsubscribeCommand{"444444444"}));
+    const auto invalidCall = helper.next<UnsubscribeResultEvent>();
+    CHECK_FALSE(invalidCall.ok);
+    CHECK(invalidCall.result == 2);
+
+    // Subscribing again restores the subscription.
+    helper.send(encodeCommand(SubscribeCommand{"111111111"}));
+    CHECK(helper.next<SubscribeResultEvent>().ok);
+    helper.send(encodeCommand(StateCommand{{"111111111"}}));
+    CHECK(helper.next<ItemStateEvent>().status.flags == 5);
+
+    helper.send(encodeCommand(QuitCommand{}));
+    CHECK(helper.waitExit(10s) == exitCode(HelperExitCode::Ok));
 }
 
 TEST_CASE("Helper exits cleanly at end of input", "[providers][helper]") {

@@ -8,8 +8,12 @@
 // no_user, offline, not_owned.
 //
 // Items: 111111111 installed; 222222222 subscribable then downloadable
-// (progresses on each state query); 333333333 subscribe fails with
-// FileNotFound (9); 444444444 SubscribeItem returns an invalid call handle.
+// (progresses on each state query); 333333333 subscribe and unsubscribe fail
+// with FileNotFound (9); 444444444 SubscribeItem and UnsubscribeItem return
+// an invalid call handle; 555555555 installed with an update pending
+// (NeedsUpdate): DownloadItem downloads it, and the install timestamp moves
+// from 1700000000 to 1700000500. UnsubscribeItem drops the subscription and,
+// like Steam while the game runs, keeps the installed files.
 
 #include <cstdint>
 #include <cstdio>
@@ -27,13 +31,16 @@ struct Item {
     std::uint32_t flags = 0;
     std::uint64_t downloaded = 0;
     std::uint64_t total = 0;
-    int progressStep = -1; // >= 0 while a requested download advances
+    int progressStep = -1;                // >= 0 while a requested download advances
+    std::uint32_t timestamp = 1700000000; // GetItemInstallInfo: the installed version
+    std::uint32_t latest = 1700000000;    // the version a download installs
 };
 
 struct PendingCall {
     std::uint64_t item = 0;
     int result = 1;
     int pollsLeft = 2;
+    int callback = 1313; // 1313 subscribe, 1315 unsubscribe
 };
 
 struct State {
@@ -97,6 +104,9 @@ FAKE_EXPORT int FAKE_CALL SteamAPI_InitFlat(char* errMsg) {
     s.items.clear();
     s.items[111111111] = Item{5, 0, 0, -1};
     s.items[222222222] = Item{0, 0, 0, -1};
+    Item outdated{1 | 4 | 8, 0, 0, -1};
+    outdated.latest = 1700000500;
+    s.items[555555555] = outdated;
     s.initialized = true;
     // The real library logs to stdout like this; the helper must keep it out
     // of the protocol stream.
@@ -152,6 +162,7 @@ FAKE_EXPORT std::uint32_t FAKE_CALL SteamAPI_ISteamUGC_GetItemState(void*, std::
             item.flags = 1 | 4;
             item.downloaded = 1000;
             item.progressStep = -1;
+            item.timestamp = item.latest;
         }
     }
     return reported;
@@ -171,7 +182,7 @@ FAKE_EXPORT bool FAKE_CALL SteamAPI_ISteamUGC_GetItemInstallInfo(void*, std::uin
         return false;
     std::memcpy(folder, path.c_str(), path.size() + 1);
     *sizeOnDisk = 4096;
-    *timestamp = 1700000000;
+    *timestamp = it->second.timestamp;
     return true;
 }
 
@@ -216,10 +227,17 @@ FAKE_EXPORT std::uint32_t FAKE_CALL SteamAPI_ISteamUGC_GetNumSubscribedItems(voi
     return n;
 }
 
-// The helper must never call this; crashing makes any regression visible.
-FAKE_EXPORT std::uint64_t FAKE_CALL SteamAPI_ISteamUGC_UnsubscribeItem(void*, std::uint64_t) {
-    std::fprintf(stderr, "fake steam api: UnsubscribeItem called\n");
-    std::abort();
+FAKE_EXPORT std::uint64_t FAKE_CALL SteamAPI_ISteamUGC_UnsubscribeItem(void*, std::uint64_t id) {
+    State& s = state();
+    if (id == 444444444)
+        return 0;
+    const std::uint64_t call = s.nextCall++;
+    PendingCall pending;
+    pending.item = id;
+    pending.result = id == 333333333 ? 9 : 1;
+    pending.callback = 1315;
+    s.calls[call] = pending;
+    return call;
 }
 
 FAKE_EXPORT bool FAKE_CALL SteamAPI_ISteamUtils_IsAPICallCompleted(void*, std::uint64_t call,
@@ -244,7 +262,7 @@ FAKE_EXPORT bool FAKE_CALL SteamAPI_ISteamUtils_GetAPICallResult(void*, std::uin
     State& s = state();
     const auto it = s.calls.find(call);
     constexpr int kExpectedSize = 16;
-    if (it == s.calls.end() || expected != 1313 || size != kExpectedSize) {
+    if (it == s.calls.end() || expected != it->second.callback || size != kExpectedSize) {
         *failed = true;
         return false;
     }
@@ -256,7 +274,10 @@ FAKE_EXPORT bool FAKE_CALL SteamAPI_ISteamUtils_GetAPICallResult(void*, std::uin
     std::memcpy(out, buffer, static_cast<std::size_t>(size));
     if (result == 1) {
         Item& item = s.items[id];
-        item.flags |= 1;
+        if (it->second.callback == 1315)
+            item.flags &= ~std::uint32_t{1};
+        else
+            item.flags |= 1;
     }
     s.calls.erase(it);
     *failed = false;

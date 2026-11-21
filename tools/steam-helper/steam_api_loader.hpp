@@ -34,10 +34,13 @@ inline constexpr SteamApiCall kInvalidApiCall = 0;
 
 // RemoteStorageSubscribePublishedFileResult_t = k_iClientRemoteStorageCallbacks (1300) + 13.
 inline constexpr int kSubscribeResultCallbackId = 1313;
+// RemoteStorageUnsubscribePublishedFileResult_t = k_iClientRemoteStorageCallbacks (1300) + 15.
+inline constexpr int kUnsubscribeResultCallbackId = 1315;
 
 // Steam callback structs use 8-byte packing (VALVE_CALLBACK_PACK_LARGE).
 // GetAPICallResult rejects a buffer whose size differs from the struct the
-// client expects.
+// client expects. The subscribe and unsubscribe call results share this
+// layout (EResult, then the item id).
 #pragma pack(push, 8)
 struct SubscribeResultPayload {
     std::int32_t result; // EResult
@@ -85,8 +88,14 @@ public:
     std::optional<InstallInfo> installInfo(PublishedFileId id) const;
     bool downloadInfo(PublishedFileId id, std::uint64_t& downloaded, std::uint64_t& total) const;
     SteamApiCall subscribe(PublishedFileId id);
+    // kInvalidApiCall when the library does not export UnsubscribeItem (it is
+    // not required: everything else works without it).
+    SteamApiCall unsubscribe(PublishedFileId id);
+    bool canUnsubscribe() const noexcept { return m_ugcUnsubscribeItem != nullptr; }
     bool download(PublishedFileId id, bool highPriority);
-    CallStatus pollSubscribeResult(SteamApiCall call, int& eresult) const;
+    // A subscribe (kSubscribeResultCallbackId) or unsubscribe
+    // (kUnsubscribeResultCallbackId) call result.
+    CallStatus pollCallResult(SteamApiCall call, int callbackId, int& eresult) const;
 
 private:
     void* symbol(const char* name) const;
@@ -119,6 +128,7 @@ private:
     void* m_ugcGetItemInstallInfo = nullptr;
     void* m_ugcGetItemDownloadInfo = nullptr;
     void* m_ugcSubscribeItem = nullptr;
+    void* m_ugcUnsubscribeItem = nullptr;
     void* m_ugcDownloadItem = nullptr;
     void* m_ugcGetNumSubscribedItems = nullptr;
     void* m_utilsIsApiCallCompleted = nullptr;
