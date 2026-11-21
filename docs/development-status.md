@@ -48,6 +48,37 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13. `--game vic3` (2026-11-20: probe folders with `metadata.json`, `--no-shared`, `--no-game-custom-data`, `analyze` of the rotating debug logs) checked in scratch folders, then used for the Victoria 3 probe run of 2026-11-21. `--game hoi4` (2026-11-21: `add_namespace`, no BOM, LF; `rename` for the runs 3 and 4 of its procedure; `analyze --game hoi4` reads `system.log`) checked in scratch folders, then used for the Hearts of Iron IV probe run of 2026-11-21 (all four runs; its `precedence` label names the winner's place in the list, which is not Hearts of Iron IV's rule) | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md), [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md), [Hearts of Iron IV probe run](evidence/2026-11-21-hoi4-load-order.md) |
 
+## Test status (2026-11-21, Hearts of Iron IV dependencies, `agent/hoi4-dependencies`)
+
+Local runs only, with fakes, fixtures and new scratch profiles; no game, no
+launcher and no Steam client was started, nothing under Steam, the game
+folders or `Documents/Paradox Interactive` was written, and the launcher's
+databases and `playsets_backup` were not opened.
+
+- Before any change, the `debug` build of `main` (`810843d`) passed 642/642
+  tests.
+- `debug` preset: **650/650 tests pass**, by label: pmm_core_tests 57,
+  pmm_sharing_tests 70, pmm_persistence_tests 72, pmm_platform_tests 59,
+  pmm_providers_tests 61, pmm_games_tests 110, pmm_services_tests 100,
+  pmm_app_tests 125, ui-preview 1 (with the new `test_9f_loadAfterDependencies`).
+- Without the change: with `hoi4` set back to `Required` in the catalog, the
+  new catalog, core, readiness, services and app tests fail (5), and
+  `test_9f_loadAfterDependencies` fails against `main`'s `DetailsSection.qml`.
+  The resolver tests and the test of the CK3, EU4, Stellaris and Victoria 3
+  messages pass either way (the latter also on `main`'s code).
+- The first commit alone (`5cf2ab7`, the shared resolver without a change in
+  behaviour), exported and built with `core-debug`: 520/520.
+- `scripts/check.sh --full` on `229ce20`: passed in 8 min 46 s (ASan and
+  clang-cl with UBSan 524/524 each, the update contract's 112 test cases,
+  clang-tidy on the 11 C++ files changed since `origin/main` without
+  findings, the `ci` preset with warnings as errors from a fresh checkout
+  650/650). The commit after it changes this file only.
+- Read-only against the real installations (`pmm_games_tests "[.real]"`,
+  counts only): Hearts of Iron IV 20 dependency warnings in 4 of 21 enabled
+  mods with `main`'s rules, none after; Stellaris, EU4, CK3 and Victoria 3
+  unchanged (no enabled mod lists dependencies). The application's captures
+  of the owner's Hearts of Iron IV mods stayed in the scratch folder.
+
 ## Test status (2026-11-21, Hearts of Iron IV probe run, `agent/hoi4-probe`)
 
 The live run itself is recorded in the
