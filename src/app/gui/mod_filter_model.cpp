@@ -16,10 +16,15 @@ bool isMissingStatus(const QString& status) {
            status == QLatin1String("unavailable") || status == QLatin1String("needs_user_action");
 }
 
-// Browse order of the status column: problems first.
-int statusRank(const QString& status) {
+// Browse order of the status column: problems first, and a Ready row with an
+// update on the Workshop ("update") before the plain Ready ones.
+int statusRank(const ModRowData& row) {
     static const char* const order[] = {"broken",  "failed",  "unavailable", "needs_user_action",
-                                        "missing", "pending", "downloading", "ready"};
+                                        "missing", "pending", "downloading", "update",
+                                        "ready"};
+    const QString status = row.updateAvailable && row.status == QLatin1String("ready")
+                               ? QStringLiteral("update")
+                               : row.status;
     for (int i = 0; i < static_cast<int>(std::size(order)); ++i) {
         if (status == QLatin1String(order[i]))
             return i;
@@ -51,9 +56,9 @@ void ModFilterModel::setSearch(const QString& search) {
 }
 
 void ModFilterModel::setStatusFilter(const QString& filter) {
-    static const QStringList known{QStringLiteral("all"), QStringLiteral("enabled"),
+    static const QStringList known{QStringLiteral("all"),      QStringLiteral("enabled"),
                                    QStringLiteral("disabled"), QStringLiteral("missing"),
-                                   QStringLiteral("warning")};
+                                   QStringLiteral("warning"),  QStringLiteral("updates")};
     const QString normalized = known.contains(filter) ? filter : QStringLiteral("all");
     if (normalized == m_status)
         return;
@@ -109,6 +114,8 @@ bool ModFilterModel::filterAcceptsRow(int sourceRowIndex, const QModelIndex& sou
         return isMissingStatus(row->status);
     if (m_status == QLatin1String("warning"))
         return row->status == QLatin1String("broken") || !row->warnings.isEmpty();
+    if (m_status == QLatin1String("updates"))
+        return row->updateAvailable;
     return true;
 }
 
@@ -125,7 +132,7 @@ bool ModFilterModel::lessThan(const QModelIndex& left, const QModelIndex& right)
         if (order == 0)
             order = a->name.compare(b->name, Qt::CaseInsensitive);
     } else if (m_sort == QLatin1String("status")) {
-        order = statusRank(a->status) - statusRank(b->status);
+        order = statusRank(*a) - statusRank(*b);
         if (order == 0)
             order = a->name.compare(b->name, Qt::CaseInsensitive);
     }

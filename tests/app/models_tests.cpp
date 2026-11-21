@@ -1,11 +1,14 @@
 // Model invariants (QAbstractItemModelTester) and incremental updates of the
 // list models: inserts, removals, reorders and data changes must not reset
 // the models, and the proxy must filter and sort without touching load order.
+// Updates of installed Workshop mods: the row role, the counts, the "updates"
+// filter, the details' actions and the job roles.
 
 #include "app/core/qt_util.hpp"
 #include "app/gui/games_model.hpp"
 #include "app/gui/inventory_model.hpp"
 #include "app/gui/jobs_model.hpp"
+#include "app/gui/mod_details.hpp"
 #include "app/gui/mod_filter_model.hpp"
 #include "app/gui/mod_list_model.hpp"
 #include "app/gui/playsets_model.hpp"
@@ -314,6 +317,128 @@ TEST_CASE("GamesModel, PlaysetsModel and JobsModel update in place", "[app][mode
     CHECK(inventory.data(inventory.index(1), InventoryModel::InPlaysetRole).toBool());
     inventory.setFilter("gam");
     CHECK(inventory.count() == 1);
+
+    if (!ModelTestLog::failures().isEmpty())
+        FAIL(ModelTestLog::failures().join('\n').toStdString());
+}
+
+TEST_CASE("ModListModel and ModFilterModel show updates of installed Workshop mods",
+          "[app][models][updates]") {
+    ModelTestLog log;
+    ModListModel model(nullptr);
+    ModFilterModel view(&model);
+    QAbstractItemModelTester tester(&view, QAbstractItemModelTester::FailureReportingMode::Warning);
+    // Installed (a content folder) unless missing.
+    const auto installed = [](ModRowData row) {
+        if (row.status != QLatin1String("missing")) {
+            row.contentPath =
+                QStringLiteral("C:/Steam/steamapps/workshop/content/281990/") + row.providerId;
+            row.canOpenFolder = true;
+        }
+        return row;
+    };
+    std::vector<ModRowData> list{installed(modRow("1", true, "ready", "Alpha")),
+                                 installed(modRow("2", false, "ready", "Beta")),
+                                 installed(modRow("3", true, "missing", "Gamma")),
+                                 installed(modRow("4", true, "ready", "Delta"))};
+    list[1].updateAvailable = true;
+    list[1].statusText = QStringLiteral("Update available");
+    list[3].updateAvailable = true;
+    list[3].statusText = QStringLiteral("Update available");
+    ModRowData local = modRow("x", true, "ready", "Local");
+    local.entry.identity.source = source::Local;
+    local.source = qs(source::Local);
+    local.canOpenFolder = true;
+    list.push_back(local);
+    model.resetTo(playset(1, list));
+
+    CHECK(model.updateCount() == 2);
+    CHECK(model.installedWorkshopCount() == 3); // not the missing one, not the local one
+    CHECK(model.data(model.index(1), ModListModel::UpdateAvailableRole).toBool());
+    CHECK_FALSE(model.data(model.index(0), ModListModel::UpdateAvailableRole).toBool());
+    CHECK(model.roleNames().value(ModListModel::UpdateAvailableRole) == "updateAvailable");
+    CHECK(model.get(3).value("updateAvailable").toBool());
+
+    // An update found later is a data change and a count change.
+    QSignalSpy changed(&model, &QAbstractItemModel::dataChanged);
+    QSignalSpy counts(&model, &ModListModel::countsChanged);
+    auto found = list;
+    found[0].updateAvailable = true;
+    model.applyState(playset(1, found));
+    CHECK(changed.count() == 1);
+    CHECK(counts.count() == 1);
+    CHECK(model.updateCount() == 3);
+
+    // The "updates" filter, and the status sort puts updates before plain Ready.
+    view.setStatusFilter(QStringLiteral("updates"));
+    CHECK(view.statusFilter() == "updates");
+    CHECK(view.rowCount() == 3);
+    CHECK_FALSE(view.reorderAllowed());
+    view.setStatusFilter(QStringLiteral("all"));
+    model.applyState(playset(1, list));
+    view.setSortMode(QStringLiteral("status"));
+    QStringList names;
+    for (int r = 0; r < view.rowCount(); ++r)
+        names.push_back(view.index(r, 0).data(ModListModel::NameRole).toString());
+    CHECK(names == QStringList{"Gamma", "Beta", "Delta", "Alpha", "Local"});
+
+    // The details of the selected row.
+    ModDetails details(&model, nullptr);
+    details.setRow(1);
+    CHECK(details.updateAvailable());
+    CHECK(details.canReinstall());
+    details.setRow(0);
+    CHECK_FALSE(details.updateAvailable());
+    CHECK(details.canReinstall()); // installed Workshop mod
+    details.setRow(2);
+    CHECK_FALSE(details.canReinstall()); // missing
+    details.setRow(4);
+    CHECK_FALSE(details.canReinstall()); // local
+    auto updating = list;
+    updating[1].status = QStringLiteral("pending");
+    updating[1].statusText = QStringLiteral("Updating");
+    updating[1].updateAvailable = false;
+    model.applyState(playset(1, updating));
+    details.setRow(1);
+    CHECK_FALSE(details.canReinstall()); // a job is changing it
+    CHECK(model.updateCount() == 1);
+
+    if (!ModelTestLog::failures().isEmpty())
+        FAIL(ModelTestLog::failures().join('\n').toStdString());
+}
+
+TEST_CASE("JobsModel names the kind of a job and what a failed update offers",
+          "[app][models][updates]") {
+    ModelTestLog log;
+    JobsModel jobs;
+    QAbstractItemModelTester tester(&jobs, QAbstractItemModelTester::FailureReportingMode::Warning);
+    JobRowData update;
+    update.jobId = 1;
+    update.kind = QStringLiteral("update");
+    update.state = QStringLiteral("download_requested");
+    jobs.setRows({update});
+    const QHash<int, QByteArray> roles = jobs.roleNames();
+    CHECK(roles.value(JobsModel::KindRole) == "kind");
+    CHECK(roles.value(JobsModel::ErrorCodeRole) == "errorCode");
+    CHECK(roles.value(JobsModel::CanReinstallRole) == "canReinstall");
+    CHECK(jobs.data(jobs.index(0), JobsModel::KindRole).toString() == "update");
+    CHECK_FALSE(jobs.data(jobs.index(0), JobsModel::CanReinstallRole).toBool());
+
+    // Failing with update_not_seen offers the re-download: a data change.
+    QSignalSpy changed(&jobs, &QAbstractItemModel::dataChanged);
+    update.state = QStringLiteral("failed");
+    update.errorCode = QStringLiteral("update_not_seen");
+    update.canRetry = true;
+    update.canReinstall = true;
+    jobs.setRows({update});
+    CHECK(changed.count() == 1);
+    CHECK(jobs.data(jobs.index(0), JobsModel::ErrorCodeRole).toString() == "update_not_seen");
+    CHECK(jobs.data(jobs.index(0), JobsModel::CanReinstallRole).toBool());
+    // Only the re-download changes (the kind of the job that carries on).
+    update.kind = QStringLiteral("reinstall");
+    jobs.setRows({update});
+    CHECK(changed.count() == 2);
+    CHECK(jobs.data(jobs.index(0), JobsModel::KindRole).toString() == "reinstall");
 
     if (!ModelTestLog::failures().isEmpty())
         FAIL(ModelTestLog::failures().join('\n').toStdString());

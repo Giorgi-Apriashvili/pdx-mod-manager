@@ -29,8 +29,8 @@ bool sameDependencies(const std::vector<DependencyData>& a, const std::vector<De
 bool sameData(const ModRowData& a, const ModRowData& b) {
     return a.entry == b.entry && a.key == b.key && a.name == b.name && a.status == b.status &&
            a.statusText == b.statusText && a.warnings == b.warnings && a.progress == b.progress &&
-           a.blocking == b.blocking && a.version == b.version &&
-           a.supportedVersion == b.supportedVersion && a.tags == b.tags &&
+           a.blocking == b.blocking && a.updateAvailable == b.updateAvailable &&
+           a.version == b.version && a.supportedVersion == b.supportedVersion && a.tags == b.tags &&
            a.problems == b.problems && a.workshopUrl == b.workshopUrl &&
            a.contentPath == b.contentPath && a.canOpenFolder == b.canOpenFolder &&
            sameDependencies(a.dependencies, b.dependencies);
@@ -171,6 +171,8 @@ QVariant ModListModel::data(const QModelIndex& index, int role) const {
         return row.key;
     case VersionRole:
         return row.version;
+    case UpdateAvailableRole:
+        return row.updateAvailable;
     default:
         return {};
     }
@@ -190,7 +192,8 @@ QHash<int, QByteArray> ModListModel::roleNames() const {
             {ProgressRole, "progress"},
             {BlockingRole, "blocking"},
             {IdentityKeyRole, "identityKey"},
-            {VersionRole, "version"}};
+            {VersionRole, "version"},
+            {UpdateAvailableRole, "updateAvailable"}};
 }
 
 QVariantMap ModListModel::get(int row) const {
@@ -738,6 +741,7 @@ QSet<QString> ModListModel::keys() const {
 
 void ModListModel::recount() {
     CountsData counts;
+    int installedWorkshop = 0;
     counts.total = count();
     for (const ModRowData& row : m_rows) {
         counts.enabled += row.entry.enabled ? 1 : 0;
@@ -745,16 +749,24 @@ void ModListModel::recount() {
         counts.missing += isMissingStatus(row.status) ? 1 : 0;
         counts.warning += row.status == QLatin1String("broken") || !row.warnings.isEmpty() ? 1 : 0;
         counts.blocking += row.blocking ? 1 : 0;
+        counts.updates += row.updateAvailable ? 1 : 0;
+        counts.updatesEnabled += row.updateAvailable && row.entry.enabled ? 1 : 0;
+        // Installed: the row has a content folder.
+        installedWorkshop +=
+            row.source == QLatin1String(source::SteamWorkshop) && row.canOpenFolder ? 1 : 0;
     }
-    setCounts(counts);
+    setCounts(counts, installedWorkshop);
 }
 
-void ModListModel::setCounts(const CountsData& counts) {
+void ModListModel::setCounts(const CountsData& counts, int installedWorkshop) {
     if (counts.total == m_counts.total && counts.enabled == m_counts.enabled &&
         counts.ready == m_counts.ready && counts.missing == m_counts.missing &&
-        counts.warning == m_counts.warning && counts.blocking == m_counts.blocking)
+        counts.warning == m_counts.warning && counts.blocking == m_counts.blocking &&
+        counts.updates == m_counts.updates && counts.updatesEnabled == m_counts.updatesEnabled &&
+        installedWorkshop == m_installedWorkshop)
         return;
     m_counts = counts;
+    m_installedWorkshop = installedWorkshop;
     emit countsChanged();
 }
 

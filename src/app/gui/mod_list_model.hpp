@@ -43,6 +43,11 @@ class ModListModel : public QAbstractListModel {
     Q_PROPERTY(int missingCount READ missingCount NOTIFY countsChanged)
     Q_PROPERTY(int warningCount READ warningCount NOTIFY countsChanged)
     Q_PROPERTY(int blockingCount READ blockingCount NOTIFY countsChanged)
+    // Rows with an update on the Workshop (updateAvailable), enabled or not:
+    // "Update mods" is offered while it is above 0.
+    Q_PROPERTY(int updateCount READ updateCount NOTIFY countsChanged)
+    // Installed Workshop mods, enabled or not: what "Check for mod updates" asks about.
+    Q_PROPERTY(int installedWorkshopCount READ installedWorkshopCount NOTIFY countsChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoChanged)
     Q_PROPERTY(QString undoText READ undoText NOTIFY undoChanged)
@@ -65,6 +70,7 @@ public:
         BlockingRole,
         IdentityKeyRole,
         VersionRole,
+        UpdateAvailableRole,
     };
 
     explicit ModListModel(Backend* backend, QObject* parent = nullptr);
@@ -79,6 +85,8 @@ public:
     int missingCount() const { return m_counts.missing; }
     int warningCount() const { return m_counts.warning; }
     int blockingCount() const { return m_counts.blocking; }
+    int updateCount() const { return m_counts.updates; }
+    int installedWorkshopCount() const { return m_installedWorkshop; }
     bool canUndo() const { return m_undo.canUndo; }
     bool canRedo() const { return m_undo.canRedo; }
     QString undoText() const { return m_undo.undoText; }
@@ -158,7 +166,7 @@ private:
     void emitChangedRuns(const std::vector<char>& changed);
     void recount();
     void setUndo(const UndoData& undo);
-    void setCounts(const CountsData& counts);
+    void setCounts(const CountsData& counts, int installedWorkshop);
 
     Backend* m_backend;
     ModFilterModel* m_filter = nullptr;
@@ -167,6 +175,7 @@ private:
     QString m_name;
     std::vector<ModRowData> m_rows;
     CountsData m_counts;
+    int m_installedWorkshop = 0;
     UndoData m_undo;
     int m_pendingEdits = 0;
     std::optional<LaunchData> m_latestLaunch; // from results skipped while edits were pending

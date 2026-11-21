@@ -9,7 +9,8 @@ bool sameRow(const JobRowData& a, const JobRowData& b) {
     return a.jobId == b.jobId && a.name == b.name && a.providerId == b.providerId &&
            a.state == b.state && a.stateText == b.stateText && a.progress == b.progress &&
            a.errorMessage == b.errorMessage && a.canRetry == b.canRetry &&
-           a.canOpenFallback == b.canOpenFallback;
+           a.canOpenFallback == b.canOpenFallback && a.kind == b.kind &&
+           a.errorCode == b.errorCode && a.canReinstall == b.canReinstall;
 }
 
 } // namespace
@@ -44,6 +45,12 @@ QVariant JobsModel::data(const QModelIndex& index, int role) const {
         return row.canRetry;
     case CanOpenFallbackRole:
         return row.canOpenFallback;
+    case KindRole:
+        return row.kind;
+    case ErrorCodeRole:
+        return row.errorCode;
+    case CanReinstallRole:
+        return row.canReinstall;
     default:
         return {};
     }
@@ -58,7 +65,10 @@ QHash<int, QByteArray> JobsModel::roleNames() const {
             {ProgressRole, "progress"},
             {ErrorMessageRole, "errorMessage"},
             {CanRetryRole, "canRetry"},
-            {CanOpenFallbackRole, "canOpenFallback"}};
+            {CanOpenFallbackRole, "canOpenFallback"},
+            {KindRole, "kind"},
+            {ErrorCodeRole, "errorCode"},
+            {CanReinstallRole, "canReinstall"}};
 }
 
 void JobsModel::setRows(std::vector<JobRowData> rows) {

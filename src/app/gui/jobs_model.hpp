@@ -26,6 +26,9 @@ public:
         ErrorMessageRole,
         CanRetryRole,
         CanOpenFallbackRole,
+        KindRole,
+        ErrorCodeRole,
+        CanReinstallRole,
     };
 
     explicit JobsModel(QObject* parent = nullptr);
