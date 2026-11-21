@@ -15,9 +15,11 @@ constexpr DependencyMeaning kRequired = DependencyMeaning::Required;
 // Hearts of Iron IV: the Paradox-hosted HOI4 wiki (Modding, its 2023 and 2026
 // captures) says `dependencies = { "Exact Name" }` makes a mod load after the
 // named ones without making them required; a 2018 developer diary has a mod
-// that needs a certain load order name the others there; hoi4.exe only logs
-// "%s: Couldn't find dependency %s" (docs/load-order.md, Hearts of Iron IV).
-// Popular mods list total conversions they do not need.
+// that needs a certain load order name the others there (docs/load-order.md,
+// Hearts of Iron IV). Neither the game's mod loader nor the Paradox launcher
+// reports a missing name (no such message in hoi4.exe; the launcher checks
+// only Paradox Mods dependencies and metadata.json relationships). Popular
+// mods list total conversions they do not need.
 constexpr DependencyMeaning kLoadAfter = DependencyMeaning::LoadAfter;
 
 // Supported games in alphabetical order of their keys, then the others. With no
