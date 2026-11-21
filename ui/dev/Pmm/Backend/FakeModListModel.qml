@@ -77,6 +77,8 @@ ListModel {
                 o.blocking = o.enabled && o.status !== "ready"
                 list.push(o)
             }
+            for (const o of list)
+                FakeData.placeOrderHint(o, list.length)
         }
         clear()
         append(list)
@@ -262,6 +264,8 @@ ListModel {
         }
         if (add.length === 0)
             return
+        for (const o of add)
+            FakeData.placeOrderHint(o, count + add.length)
         pushUndo("add " + add.length + (add.length === 1 ? " mod" : " mods"))
         append(add)
         afterChange(true)

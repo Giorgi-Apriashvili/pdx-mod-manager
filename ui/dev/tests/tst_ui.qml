@@ -510,6 +510,35 @@ Item {
             Backend.details.game = "stellaris"
         }
 
+        // The fake order hints name the mod's own place and a later one inside
+        // its playset, as the application's would.
+        function test_9h_fakeOrderHintsFitThePlayset() {
+            const check = (size, inPlace) => {
+                let hints = 0
+                for (let r = 0; r < Backend.mods.count; ++r) {
+                    const hint = Backend.mods.get(r).warnings.split("\n")
+                                        .find(w => w.includes(orderHintText))
+                    if (!hint)
+                        continue
+                    ++hints
+                    const m = /\(#(\d+)\) to load before this mod \(#(\d+)\)/.exec(hint)
+                    verify(m, hint)
+                    const named = Number(m[1])
+                    const own = Number(m[2])
+                    verify(own < named && named <= size, hint)
+                    if (inPlace)
+                        compare(own, r + 1, hint)
+                }
+                verify(hints > 0)
+            }
+            // The first playset, whose rows earlier tests may have moved.
+            check(Backend.mods.count, false)
+            // One loaded now, in its stored order.
+            Backend.playsets.activate(3)
+            tryCompare(Backend.mods, "count", 120)
+            check(120, true)
+        }
+
         // --- keyboard and accessibility (docs/accessibility.md) ---------------
 
         // The column (games, mods, side) that holds the keyboard focus, or "".

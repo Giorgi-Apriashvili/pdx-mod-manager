@@ -59,17 +59,33 @@ const forced = {
     24: { status: "broken", enabled: true, warning: "version" }
 };
 
-// The dependency warning of a fake mod at `position` (its place in the first
-// playset), in Stellaris's words (core/dependencies.cpp): Stellaris does not
-// need the mods a mod names, but warns when an enabled one comes later.
-// FakeModDetails rewords or drops it for the other games.
-function orderHint(position) {
-    return "Lists \"Compact Interface - Core Library\" (#" + (position + 394)
+// The dependency warning of a fake mod at `position` in a playset of `size`
+// mods, in Stellaris's words (core/dependencies.cpp): Stellaris does not need
+// the mods a mod names, but warns when an enabled one comes later. The named
+// mod is up to 394 places later, never past the end; a mod in the last place
+// has none after it, so no warning (""). FakeModDetails rewords or drops it
+// for the other games.
+function orderHint(position, size) {
+    if (position >= size)
+        return "";
+    return "Lists \"Compact Interface - Core Library\" (#" + Math.min(position + 394, size)
             + ") to load before this mod (#" + position + "), but that mod comes later in this playset.";
 }
 
 function isOrderHint(warning) {
     return /^Lists ".*" \(#\d+\) to load before this mod/.test(warning);
+}
+
+// Places the order hint of fake mod `m` (a copy of a catalog entry, which has
+// one for its place in the catalog) for its `position` in a playset of `size`
+// mods, and updates `hasWarnings`.
+function placeOrderHint(m, size) {
+    const lines = m.warnings.length > 0 ? m.warnings.split("\n") : [];
+    if (!lines.some(isOrderHint))
+        return;
+    m.warnings = lines.map(w => isOrderHint(w) ? orderHint(m.position, size) : w)
+                      .filter(w => w.length > 0).join("\n");
+    m.hasWarnings = m.warnings.length > 0;
 }
 
 // The same issue where the named mods are required (Victoria 3).
@@ -112,8 +128,11 @@ function makeCatalog(seed, count) {
         const w = f.warning || (r() < 0.05 ? "version" : r() < 0.02 ? "dependency" : "");
         if (w === "version")
             warnings.push("Declares supported version 3.14.* but the game is 4.5.2.");
-        if (w === "dependency")
-            warnings.push(orderHint(i + 1));
+        // For its place in the catalog; placeOrderHint() moves it to its
+        // place in a playset.
+        const hint = w === "dependency" ? orderHint(i + 1, count) : "";
+        if (hint)
+            warnings.push(hint);
         const tags = [];
         const tagCount = 1 + Math.floor(r() * 3);
         for (let t = 0; t < tagCount; ++t) {
