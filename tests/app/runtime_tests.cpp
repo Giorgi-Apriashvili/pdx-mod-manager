@@ -23,6 +23,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -310,8 +311,7 @@ TEST_CASE("Launch data says when Play waits for the Steam client", "[app][runtim
     CHECK(open.blockers.isEmpty());
 }
 
-TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellaris requires",
-          "[app][runtime]") {
+TEST_CASE("Mod details list the mods a mod names as each game treats them", "[app][runtime]") {
     TempDir temp;
     FakeWorld world(temp.path() / "world");
     FakeAdapter adapter(world);
@@ -319,7 +319,7 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
     // In each game the overhaul (#1) names a mod that comes after it (#2), a
     // disabled one (#3), one installed elsewhere, one that is not installed
     // and #2 again in other letter case; #2 names #1, and the disabled #3
-    // names #2.
+    // names #2 and #4, which comes after it.
     const auto playsetOf = [&runtime](const GameKey& game) {
         const auto mod = [&game](const std::string& id, const std::string& name,
                                  std::vector<std::string> dependencies) {
@@ -331,16 +331,17 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
         };
         persistence::InventoryRepository inventory(runtime->database());
         requireOk(inventory.replaceForGame(
-            game, {mod("6000000001", "Example Overhaul",
-                       {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing",
-                        "example MAP"}),
-                   mod("6000000002", "Example Map", {"Example Overhaul"}),
-                   mod("6000000003", "Example Conversion", {"Example Map"}),
-                   mod("6000000004", "Example Elsewhere", {})}));
+            game,
+            {mod("6000000001", "Example Overhaul",
+                 {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing",
+                  "example MAP"}),
+             mod("6000000002", "Example Map", {"Example Overhaul"}),
+             mod("6000000003", "Example Conversion", {"Example Map", "Example Late"}),
+             mod("6000000004", "Example Elsewhere", {}), mod("6000000005", "Example Late", {})}));
         Playset playset;
         playset.game = game;
         playset.name = "Main";
-        for (const char* id : {"6000000001", "6000000002", "6000000003"}) {
+        for (const char* id : {"6000000001", "6000000002", "6000000003", "6000000005"}) {
             PlaysetEntry entry;
             entry.identity = ModIdentity{game, source::SteamWorkshop, id};
             entry.enabled = std::string_view(id) != "6000000003";
@@ -362,34 +363,78 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
     ModListModel model(nullptr);
     NotificationCenter notifications;
     ModDetails details(&model, &notifications);
+    const QStringList notNeeded{
+        "Example Conversion | load_after | Disabled in this playset; not needed",
+        "Example Elsewhere | load_after | Installed, not in this playset; not needed",
+        "Example Missing | load_after | Not installed; not needed"};
 
-    const PlaysetStateData hoi4 = playsetOf("hoi4");
-    REQUIRE(hoi4.rows.size() == 3);
-    for (const ModRowData& row : hoi4.rows)
-        CHECK(row.warnings.isEmpty());
-    CHECK(hoi4.counts.warning == 0);
-    model.resetTo(hoi4);
-    details.setRow(0);
-    CHECK(details.dependenciesLoadAfter());
-    CHECK(details.dependenciesNote() == "Hearts of Iron IV loads this mod after these mods when "
-                                        "they are enabled. It does not need them.");
-    // Each mod once, whatever the spelling.
-    CHECK(shown(details) ==
-          QStringList{"Example Map | load_after | Enabled in this playset",
-                      "Example Conversion | load_after | Disabled in this playset; not needed",
-                      "Example Elsewhere | load_after | Installed, not in this playset; not needed",
-                      "Example Missing | load_after | Not installed; not needed"});
-    details.setRow(1);
-    CHECK(shown(details) == QStringList{"Example Overhaul | load_after | Enabled in this playset"});
-    details.setRow(2);
-    CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset"});
+    // Neither EU4 nor Hearts of Iron IV needs them or uses their place in the
+    // list: no warnings, neutral states, each mod once, whatever the spelling.
+    // Hearts of Iron IV's wiki documents what they do; for EU4 the note says
+    // only what is established.
+    const std::map<std::string, QString> notes{
+        {"eu4", "Europa Universalis IV does not need these mods. This mod names them to load "
+                "before it when they are enabled."},
+        {"hoi4", "Hearts of Iron IV loads this mod after these mods when they are enabled. It "
+                 "does not need them."}};
+    for (const auto& [game, note] : notes) {
+        INFO(game);
+        const PlaysetStateData loadAfter = playsetOf(game);
+        REQUIRE(loadAfter.rows.size() == 4);
+        for (const ModRowData& row : loadAfter.rows)
+            CHECK(row.warnings.isEmpty());
+        CHECK(loadAfter.counts.warning == 0);
+        model.resetTo(loadAfter);
+        details.setRow(0);
+        CHECK(details.dependenciesLoadAfter());
+        CHECK(details.dependenciesNote() == note);
+        CHECK(shown(details) ==
+              QStringList{"Example Map | load_after | Enabled in this playset"} + notNeeded);
+        details.setRow(1);
+        CHECK(shown(details) ==
+              QStringList{"Example Overhaul | load_after | Enabled in this playset"});
+        details.setRow(2);
+        CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset",
+                                            "Example Late | load_after | Enabled in this playset"});
+    }
 
-    // Stellaris requires them: the same states and texts as before.
-    const PlaysetStateData stellaris = playsetOf("stellaris");
-    REQUIRE(stellaris.rows.size() == 3);
-    CHECK(stellaris.rows[0].warnings.size() == 5);
-    CHECK(stellaris.counts.warning == 1);
-    model.resetTo(stellaris);
+    // Stellaris and CK3 do not need them either, but an enabled one that comes
+    // later in the list is an order warning, never "Requires".
+    for (const char* game : {"ck3", "stellaris"}) {
+        INFO(game);
+        const PlaysetStateData orderHint = playsetOf(game);
+        REQUIRE(orderHint.rows.size() == 4);
+        const QString hint = "Lists \"Example Map\" (#2) to load before this mod (#1), but that "
+                             "mod comes later in this playset.";
+        CHECK(orderHint.rows[0].warnings == QStringList{hint});
+        CHECK(orderHint.rows[1].warnings.isEmpty());
+        CHECK(orderHint.rows[2].warnings.isEmpty());
+        CHECK(orderHint.rows[3].warnings.isEmpty());
+        CHECK(orderHint.counts.warning == 1);
+        model.resetTo(orderHint);
+        details.setRow(0);
+        CHECK(details.dependenciesLoadAfter());
+        CHECK(details.dependenciesNote() ==
+              QString(game == std::string_view("ck3") ? "Crusader Kings III" : "Stellaris") +
+                  " does not need these mods. This mod names them to load before it when they "
+                  "are enabled.");
+        CHECK(shown(details) == QStringList{"Example Map | order | " + hint} + notNeeded);
+        details.setRow(1);
+        CHECK(shown(details) ==
+              QStringList{"Example Overhaul | load_after | Enabled in this playset"});
+        // A disabled mod is not checked: the enabled mod it names after it
+        // (#4) is no warning.
+        details.setRow(2);
+        CHECK(shown(details) == QStringList{"Example Map | load_after | Enabled in this playset",
+                                            "Example Late | load_after | Enabled in this playset"});
+    }
+
+    // Victoria 3 requires them: the same states and texts as Stellaris had.
+    const PlaysetStateData vic3 = playsetOf("vic3");
+    REQUIRE(vic3.rows.size() == 4);
+    CHECK(vic3.rows[0].warnings.size() == 5);
+    CHECK(vic3.counts.warning == 1);
+    model.resetTo(vic3);
     details.setRow(0);
     CHECK_FALSE(details.dependenciesLoadAfter());
     CHECK(details.dependenciesNote().isEmpty());
@@ -412,7 +457,8 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
           QStringList{"Example Overhaul | ok | Enabled in this playset and loads earlier"});
     details.setRow(2);
     CHECK(shown(details) ==
-          QStringList{"Example Map | unchecked | Checked when this mod is enabled"});
+          QStringList{"Example Map | unchecked | Checked when this mod is enabled",
+                      "Example Late | unchecked | Checked when this mod is enabled"});
 }
 
 TEST_CASE("An active playset that cannot be read blocks Play instead of a launch without mods",

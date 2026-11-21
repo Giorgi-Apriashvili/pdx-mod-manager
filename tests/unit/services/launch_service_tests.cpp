@@ -235,13 +235,13 @@ TEST_CASE("Only enabled entries block a launch", "[services][launch]") {
     }
 }
 
-TEST_CASE("The launch check names dependencies only where the game requires them",
+TEST_CASE("The launch check names dependencies wherever they can cause a warning",
           "[services][launch]") {
     World w;
-    // #1 names a mod that is not installed; #2's version is not the one the
-    // shared setup used.
+    // #1 names a mod that is not installed and #2, which comes after it; #2's
+    // version is not the one the shared setup used.
     writeText(w.workshop / "6000000001" / "descriptor.mod",
-              "name=\"Example Overhaul\"\ndependencies={\"Example Missing\"}\n");
+              "name=\"Example Overhaul\"\ndependencies={\"Example Missing\" \"Example Map\"}\n");
     writeText(w.workshop / "6000000002" / "descriptor.mod",
               "name=\"Example Map\"\nversion=\"2.0\"\n");
     w.refresh();
@@ -249,24 +249,34 @@ TEST_CASE("The launch check names dependencies only where the game requires them
     map.versionHint = "1.0";
     const std::int64_t id = makePlayset(w, {workshopEntry("6000000001", "Overhaul"), map});
     LaunchService launcher(w.ctx, nullptr);
+    const std::string both =
+        "2 enabled mods have warnings (versions or dependencies); see the mod list.";
 
-    const LaunchCheck required = launcher.check(kGame, id);
-    CHECK(required.canLaunch);
-    CHECK(contains(required.warnings,
-                   "2 enabled mods have warnings (versions or dependencies); see the mod list."));
-
-    // A game whose dependencies only order the load, as Hearts of Iron IV's
-    // do: the fake adapter is Stellaris's, so Stellaris's entry is changed.
-    std::vector<GameCatalogEntry> loadAfter(gameCatalog().begin(), gameCatalog().end());
-    for (GameCatalogEntry& entry : loadAfter) {
-        if (entry.key == kGame)
-            entry.dependencyMeaning = DependencyMeaning::LoadAfter;
+    SECTION("Stellaris and CK3: a named mod that comes later is a warning") {
+        REQUIRE(dependencyMeaningOf(kGame) == DependencyMeaning::LoadAfterInList);
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK(contains(check.warnings, both));
     }
-    const pmm::testing::ScopedGameCatalog scoped(loadAfter);
-    const LaunchCheck orderOnly = launcher.check(kGame, id);
-    CHECK(orderOnly.canLaunch);
-    CHECK(contains(orderOnly.warnings, "1 enabled mod has warnings; see the mod list."));
-    CHECK_FALSE(contains(orderOnly.warnings, "dependencies"));
+    // The fake adapter is Stellaris's, so Stellaris's entry stands for the
+    // other games.
+    SECTION("Victoria 3: the named mods are required") {
+        const std::vector<GameCatalogEntry> required =
+            catalogWhereDependenciesMean(DependencyMeaning::Required);
+        const pmm::testing::ScopedGameCatalog scoped(required);
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK(contains(check.warnings, both));
+    }
+    SECTION("EU4 and Hearts of Iron IV: never a dependency warning") {
+        const std::vector<GameCatalogEntry> loadAfter =
+            catalogWhereDependenciesMean(DependencyMeaning::LoadAfter);
+        const pmm::testing::ScopedGameCatalog scoped(loadAfter);
+        const LaunchCheck check = launcher.check(kGame, id);
+        CHECK(check.canLaunch);
+        CHECK(contains(check.warnings, "1 enabled mod has warnings; see the mod list."));
+        CHECK_FALSE(contains(check.warnings, "dependencies"));
+    }
 }
 
 TEST_CASE("Without a playset the game starts without mods, journaled like any launch",

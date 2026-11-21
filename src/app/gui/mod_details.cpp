@@ -81,15 +81,23 @@ QVariantList ModDetails::dependencies() const {
 
 bool ModDetails::dependenciesLoadAfter() const {
     const ModRowData* r = current();
-    return r && dependencyMeaningOf(r->entry.identity.game) == DependencyMeaning::LoadAfter;
+    return r && dependencyMeaningOf(r->entry.identity.game) != DependencyMeaning::Required;
 }
 
 QString ModDetails::dependenciesNote() const {
     const ModRowData* r = current();
     const GameCatalogEntry* game = r ? findGame(r->entry.identity.game) : nullptr;
-    if (!game || game->dependencyMeaning != DependencyMeaning::LoadAfter)
+    if (!game || game->dependencyMeaning == DependencyMeaning::Required)
         return {};
-    return tr("%1 loads this mod after these mods when they are enabled. It does not need them.")
+    // Only what is established: Hearts of Iron IV's wiki documents the order;
+    // in the other games neither the game nor its launcher reports a named mod
+    // missing or out of order, and what the game does with them is untested.
+    if (game->dependencyLoadAfterDocumented)
+        return tr("%1 loads this mod after these mods when they are enabled. It does not need "
+                  "them.")
+            .arg(qs(game->displayName));
+    return tr("%1 does not need these mods. This mod names them to load before it when they are "
+              "enabled.")
         .arg(qs(game->displayName));
 }
 

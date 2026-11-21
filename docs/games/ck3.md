@@ -171,9 +171,26 @@ Identity rules, states and descriptor generation are those of
   time it starts. The real-machine test reports these 4 as "regenerated
   descriptor differs".
 - **Paradox Mods items** (`mod/pdx_<id>.mod` by Irony's convention), zipped
-  (`archive=`) mods, local mods and `dependencies`: none exist for CK3 on the
-  development machine; they are covered by the shared code and its Stellaris
-  and EU4 tests only.
+  (`archive=`) mods and local mods: none exist for CK3 on the development
+  machine; they are covered by the shared code and its Stellaris and EU4
+  tests only. No CK3 mod there lists `dependencies` either; their rules (next
+  item) are tested with `ck3` directly.
+- **`dependencies`** (`dependencies = { "Exact Name" }`). Nothing found makes
+  them requirements in CK3: the game reads the key, but none of its messages
+  about loading mods is about a missing or misplaced dependency, the Paradox
+  launcher does not check them, and no documentation of the key was found
+  ([evidence](../evidence/2026-11-21-descriptor-dependencies.md)). As in
+  Stellaris, the later mod in the list wins a shared file (measured), so the
+  application keeps an order hint (the catalog's `dependencyMeaning` is
+  `LoadAfterInList`): a named mod that is enabled but comes later in the list
+  than the enabled mod naming it is a warning on the row of the mod naming it
+  ("Lists "<name>" (#n) to load before this mod (#m), but that mod comes later
+  in this playset."); one that is not installed, not in the playset or
+  disabled is not. The details list the names under "Loads after" with the
+  note "Crusader Kings III does not need these mods. This mod names them to
+  load before it when they are enabled." (see
+  [`stellaris.md`](stellaris.md#mods)). Until 2026-11-21 they were checked as
+  requirements. What CK3 does with them is untested in-game.
 
 **Compatibility warnings.** `supported_version` patterns (`1.20.*`,
 `1.19.0.6`) are compared with `rawVersion`. The game's `logs/error.log` of

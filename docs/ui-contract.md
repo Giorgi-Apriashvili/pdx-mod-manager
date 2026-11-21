@@ -165,8 +165,11 @@ flight:
 - `setEnabled(row, on)`
 - `setEnabledRows(rows, on) -> string`: returns "". Dependency issues that
   enabling introduces arrive through the `dependencyFeedback(text)` signal
-  (one issue per line; empty when none) and show as row warnings. Hearts of
-  Iron IV has none (see `ModDetails.dependenciesLoadAfter`).
+  (one issue per line; empty when none) and show as row warnings. Where the
+  game does not need the mods a mod names (`ModDetails.dependenciesLoadAfter`)
+  the only issue is an enabled named mod that comes later in the list, in
+  Stellaris and Crusader Kings III; Europa Universalis IV and Hearts of Iron
+  IV have none.
 - `moveRow(from, to)`, `moveUp(row)`, `moveDown(row)`.
 - `moveRows(rows, delta)`: one atomic, single-undo move of a multi-row
   selection. With `delta` -1/+1, every selected entry moves one step unless
@@ -233,18 +236,32 @@ Read-only properties:
 - `version`, `supportedVersion`, `statusText`, `tags` (string list);
 - `dependencies`: list of `{name, state, text}`, where state is "ok" |
   "missing" | "not_in_playset" | "disabled" | "order" | "unchecked"
-  ("unchecked": the mod is disabled, so its dependencies are not checked),
-  or "load_after" for every name when `dependenciesLoadAfter` is true;
-- `dependenciesLoadAfter` (bool): the game loads a mod after the mods it
-  names when they are enabled and does not need them (Hearts of Iron IV).
-  The names are then not checked: no row warnings and no dependency
-  feedback. Each mod is listed once, under its first spelling, and its
-  `text` says what it is in this playset ("Enabled in this playset",
-  "Disabled in this playset; not needed", "Installed, not in this playset;
-  not needed", "Not installed; not needed"), and the pane heads them "Loads
-  after" instead of "Dependencies";
-- `dependenciesNote`: for such a game, "<Game> loads this mod after these
-  mods when they are enabled. It does not need them."; otherwise empty;
+  ("unchecked": the mod is disabled, so its dependencies are not checked)
+  where the game requires them (Victoria 3), or "load_after" for every name
+  when `dependenciesLoadAfter` is true, except "order" for an enabled one
+  that comes later in the list in Stellaris and Crusader Kings III;
+- `dependenciesLoadAfter` (bool): the game does not need the mods a mod
+  names (every game but Victoria 3; core `DependencyMeaning` other than
+  `Required`). A named mod that is missing, disabled or not in the playset is
+  then no warning and no dependency feedback. Stellaris and Crusader Kings
+  III (`LoadAfterInList`), where the later mod in the list wins a shared
+  file, keep one warning: a named mod that is enabled but comes later in the
+  list than the enabled mod naming it (state "order", `text` "Lists
+  "<name>" (#n) to load before this mod (#m), but that mod comes later in
+  this playset.", also a row warning and feedback; the names a disabled mod
+  lists are never a warning). Europa Universalis IV and Hearts of Iron IV
+  (`LoadAfter`) have none. Each mod is listed once, under its first
+  spelling, and its `text` otherwise says what it is in this playset
+  ("Enabled in this playset", "Disabled in this playset; not needed",
+  "Installed, not in this playset; not needed", "Not installed; not
+  needed"). The pane heads a mod's list "Loads after" instead of
+  "Dependencies" when the list is not empty; a mod that names none shows
+  "Dependencies" and "None declared." in every game;
+- `dependenciesNote`: for such a game, Hearts of Iron IV's documented "<Game>
+  loads this mod after these mods when they are enabled. It does not need
+  them.", for the others "<Game> does not need these mods. This mod names
+  them to load before it when they are enabled." (the catalog's
+  `dependencyLoadAfterDocumented`); otherwise empty;
 - `warnings`, `problems` (scan problems, and for entries that are not
   usable, what to do);
 - `workshopUrl` (an `https://steamcommunity.com/` page or empty);

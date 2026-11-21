@@ -74,7 +74,8 @@ Things the QML relies on beyond the tables in the contract:
   `confirmScroller` (its scrolling text), `confirmButton`, `cancelButton`,
   `settingsDialog`, `shortcutsDialog`, `shortcutList`, and in the selected
   mod's details `dependenciesHeading` ("Dependencies", or "Loads after" for
-  Hearts of Iron IV), `dependenciesNote` and `dependencyRow` (each listed
+  a mod that names mods in a game that does not need them: every game but
+  Victoria 3), `dependenciesNote` and `dependencyRow` (each listed
   dependency).
 - The window's minimum size is 900x440 (it fits a 1920x1080 screen at
   200 %); `docs/accessibility.md` ("Smallest window") describes how the
@@ -135,11 +136,15 @@ unsupported game to check it. A pasted Workshop ID list (any text not
 starting with `PMM`) is previewed with its missing mods shown by ID; about a
 second later (`autoLookup`, or at once with `Backend.sharing.finishLookup()`)
 their Workshop names arrive in the same preview.
-`Backend.details.game = "hoi4"` shows the selected mod's dependencies as
-Hearts of Iron IV treats them ("Loads after"; the installed ones of rows 3,
-10, 17, … name four example mods, and the details leave out the fake
-"Requires …" warnings), over Stellaris's list, since the preview has no
-Hearts of Iron IV mods.
+The fake details list the selected mod's dependencies as Stellaris treats
+them ("Loads after" with its note; the fake dependency warning of row 18
+and a few others is Stellaris's order warning, "Lists "…" (#n) to load
+before this mod (#m), but that mod comes later in this playset.", also in
+the bulk-enable feedback). `Backend.details.game` shows them as another game
+would, over Stellaris's list, since the preview has no mods of the other
+games: `"ck3"` the same as Stellaris, `"eu4"` without the warning, `"vic3"`
+as requirements ("Dependencies", "Requires …"), and `"hoi4"` four example
+mods of its own on the installed ones of rows 3, 10, 17, ….
 Nothing is read from or written to disk.
 
 ```sh

@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "persistence/inventory_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "persistence/settings_repository.hpp"
@@ -235,6 +236,10 @@ TEST_CASE("Bulk enabling and disabling surfaces the dependency issues it introdu
     World w;
     w.installFixtureMods();
     w.refresh();
+    // A game that requires the mods a mod names (Victoria 3's rules).
+    const std::vector<GameCatalogEntry> required =
+        catalogWhereDependenciesMean(DependencyMeaning::Required);
+    const pmm::testing::ScopedGameCatalog catalog(required);
     PlaysetService service(w.ctx);
     // Index 0: the patch depends on "UI Overhaul Example" (index 1).
     const std::int64_t id = makePlayset(w, {workshopEntry("2000000002", "Patch", false),
@@ -262,61 +267,103 @@ TEST_CASE("Bulk enabling and disabling surfaces the dependency issues it introdu
     CHECK(enabledFlags(stored(w, id)) == std::vector<bool>{false, true});
 }
 
-TEST_CASE("Hearts of Iron IV playsets report no dependency issues when enabling or viewing",
+TEST_CASE("Enabling Stellaris mods surfaces only a named mod that comes later",
           "[services][playsets]") {
     World w;
+    w.installFixtureMods();
+    w.refresh();
     PlaysetService service(w.ctx);
-    // The overhaul (#1) names a mod that loads after it (#2), a disabled one
-    // (#3), one installed elsewhere and one that is not installed. Hearts of
-    // Iron IV loads it after them when they are enabled and does not need them.
-    const auto mod = [](const std::string& id, const std::string& name,
-                        std::vector<std::string> dependencies = {}) {
-        InstalledMod m;
-        m.identity = ModIdentity{"hoi4", source::SteamWorkshop, id};
-        m.descriptor.name = name;
-        m.descriptor.dependencies = std::move(dependencies);
-        return m;
-    };
-    persistence::InventoryRepository inventory(*w.db);
-    requireOk(inventory.replaceForGame(
-        "hoi4", {mod("6000000001", "Example Overhaul",
-                     {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing"}),
-                 mod("6000000002", "Example Map"), mod("6000000003", "Example Conversion"),
-                 mod("6000000004", "Example Elsewhere")}));
-    persistence::PlaysetRepository repo(*w.db);
-    Playset playset;
-    playset.game = "hoi4";
-    playset.name = "Main";
-    playset.entries = {workshopEntry("6000000001", "Overhaul", false),
-                       workshopEntry("6000000002", "Map", true),
-                       workshopEntry("6000000003", "Conversion", false)};
-    for (PlaysetEntry& entry : playset.entries)
-        entry.identity.game = "hoi4";
-    const std::int64_t id = require(repo.create(playset));
+    // Index 0: the patch names "UI Overhaul Example" (index 1), which
+    // Stellaris does not need.
+    const std::int64_t id = makePlayset(w, {workshopEntry("2000000002", "Patch", false),
+                                            workshopEntry("2000000001", "UI Overhaul", false)});
 
-    const std::size_t overhaul[] = {0};
-    CHECK(require(service.setEnabled(id, overhaul, true)).empty());
-    const std::size_t conversion[] = {2};
-    CHECK(require(service.setEnabled(id, conversion, true)).empty());
-    const std::size_t map[] = {1};
-    CHECK(require(service.setEnabled(id, map, false)).empty());
-    // Nothing else is ever enabled or reordered.
-    CHECK(enabledFlags(stored(w, id)) == std::vector<bool>{true, false, true});
-    CHECK(ids(stored(w, id)) == std::vector<std::string>{"6000000001", "6000000002", "6000000003"});
+    const std::size_t patch[] = {0};
+    CHECK(require(service.setEnabled(id, patch, true)).empty()); // a disabled name is no issue
 
-    const PlaysetView view = require(loadPlaysetView(w.ctx, id));
-    CHECK(view.dependencyIssues.empty());
-    REQUIRE(view.rows.size() == 3);
-    CHECK(view.rows[0].readiness.status == EntryStatus::Ready);
-    CHECK(view.rows[0].readiness.warnings.empty());
-    CHECK(view.counts.warning == 0);
-    CHECK(view.launch.canLaunch);
-    using R = DependencyResolution;
-    CHECK(view.rows[0].dependencies ==
-          std::vector<ResolvedDependency>{{"Example Map", R::Disabled, 1},
-                                          {"Example Conversion", R::EnabledLater, 2},
-                                          {"Example Elsewhere", R::NotInPlayset, std::nullopt},
-                                          {"Example Missing", R::NotInstalled, std::nullopt}});
+    const std::size_t overhaul[] = {1};
+    const auto enablingDependency = require(service.setEnabled(id, overhaul, true));
+    REQUIRE(enablingDependency.size() == 1);
+    CHECK(enablingDependency[0].kind == DependencyIssueKind::OrderedAfter);
+    CHECK(enablingDependency[0].message ==
+          "Lists \"UI Overhaul Example\" (#2) to load before this mod (#1), but that mod comes "
+          "later in this playset.");
+    const PlaysetView later = require(loadPlaysetView(w.ctx, id));
+    CHECK(later.dependencyIssues.size() == 1);
+    CHECK(later.rows[0].readiness.warnings ==
+          std::vector<std::string>{enablingDependency[0].message});
+
+    // Disabling the named mod never reports anything, and moving it above the
+    // patch leaves no issue.
+    CHECK(require(service.setEnabled(id, overhaul, false)).empty());
+    CHECK(require(service.setEnabled(id, overhaul, true)).size() == 1);
+    requireOk(service.move(id, 1, 0, ViewFilter{}));
+    const PlaysetView earlier = require(loadPlaysetView(w.ctx, id));
+    CHECK(earlier.dependencyIssues.empty());
+    CHECK(earlier.rows[1].readiness.warnings.empty());
+    CHECK(enabledFlags(stored(w, id)) == std::vector<bool>{true, true});
+}
+
+TEST_CASE("EU4 and Hearts of Iron IV playsets report no dependency issues when enabling or viewing",
+          "[services][playsets]") {
+    for (const char* game : {"eu4", "hoi4"}) {
+        INFO(game);
+        World w;
+        PlaysetService service(w.ctx);
+        // The overhaul (#1) names a mod that loads after it (#2), a disabled
+        // one (#3), one installed elsewhere and one that is not installed.
+        // Neither game needs them, and neither uses the list order for them.
+        const auto mod = [game](const std::string& id, const std::string& name,
+                                std::vector<std::string> dependencies = {}) {
+            InstalledMod m;
+            m.identity = ModIdentity{game, source::SteamWorkshop, id};
+            m.descriptor.name = name;
+            m.descriptor.dependencies = std::move(dependencies);
+            return m;
+        };
+        persistence::InventoryRepository inventory(*w.db);
+        requireOk(inventory.replaceForGame(
+            game,
+            {mod("6000000001", "Example Overhaul",
+                 {"Example Map", "Example Conversion", "Example Elsewhere", "Example Missing"}),
+             mod("6000000002", "Example Map"), mod("6000000003", "Example Conversion"),
+             mod("6000000004", "Example Elsewhere")}));
+        persistence::PlaysetRepository repo(*w.db);
+        Playset playset;
+        playset.game = game;
+        playset.name = "Main";
+        playset.entries = {workshopEntry("6000000001", "Overhaul", false),
+                           workshopEntry("6000000002", "Map", true),
+                           workshopEntry("6000000003", "Conversion", false)};
+        for (PlaysetEntry& entry : playset.entries)
+            entry.identity.game = game;
+        const std::int64_t id = require(repo.create(playset));
+
+        const std::size_t overhaul[] = {0};
+        CHECK(require(service.setEnabled(id, overhaul, true)).empty());
+        const std::size_t conversion[] = {2};
+        CHECK(require(service.setEnabled(id, conversion, true)).empty());
+        const std::size_t map[] = {1};
+        CHECK(require(service.setEnabled(id, map, false)).empty());
+        // Nothing else is ever enabled or reordered.
+        CHECK(enabledFlags(stored(w, id)) == std::vector<bool>{true, false, true});
+        CHECK(ids(stored(w, id)) ==
+              std::vector<std::string>{"6000000001", "6000000002", "6000000003"});
+
+        const PlaysetView view = require(loadPlaysetView(w.ctx, id));
+        CHECK(view.dependencyIssues.empty());
+        REQUIRE(view.rows.size() == 3);
+        CHECK(view.rows[0].readiness.status == EntryStatus::Ready);
+        CHECK(view.rows[0].readiness.warnings.empty());
+        CHECK(view.counts.warning == 0);
+        CHECK(view.launch.canLaunch);
+        using R = DependencyResolution;
+        CHECK(view.rows[0].dependencies ==
+              std::vector<ResolvedDependency>{{"Example Map", R::Disabled, 1},
+                                              {"Example Conversion", R::EnabledLater, 2},
+                                              {"Example Elsewhere", R::NotInPlayset, std::nullopt},
+                                              {"Example Missing", R::NotInstalled, std::nullopt}});
+    }
 }
 
 TEST_CASE("Removing entries snapshots the playset first; foreign changes invalidate undo",
@@ -387,8 +434,9 @@ TEST_CASE("Playset views resolve names, readiness, warnings and counts", "[servi
     // Adapter compatibility warning (made for v3.14).
     REQUIRE_FALSE(view.rows[0].readiness.warnings.empty());
     CHECK_THAT(view.rows[0].readiness.warnings.back(), ContainsSubstring("v3.14"));
-    // The patch's dependency is not in the playset.
-    CHECK_FALSE(view.rows[1].readiness.warnings.empty());
+    // The mod the patch names is not in the playset, which Stellaris does
+    // not need.
+    CHECK(view.rows[1].readiness.warnings.empty());
     CHECK(view.rows[2].readiness.status == EntryStatus::Missing);
     CHECK_FALSE(view.rows[2].blocking);
     CHECK(view.rows[3].blocking);
@@ -399,7 +447,7 @@ TEST_CASE("Playset views resolve names, readiness, warnings and counts", "[servi
     CHECK(view.counts.ready == 2);
     CHECK(view.counts.missing == 3);
     CHECK(view.counts.blocking == 1);
-    CHECK(view.counts.warning == 2);
+    CHECK(view.counts.warning == 1);
     CHECK_FALSE(view.launch.canLaunch);
     REQUIRE(view.launch.blockers.size() == 1);
     CHECK(view.launch.blockers[0].index == 3);

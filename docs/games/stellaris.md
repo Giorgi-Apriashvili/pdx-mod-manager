@@ -189,6 +189,29 @@ On the development machine that happened for exactly the `*`, `v4.*` and
 `v4.*.*` descriptors, and not for `v4.5.*`, `4.0.*`, `3.10.*` or `v4.1.7`.
 The adapter reports that as a separate, non-blocking warning.
 
+**Dependencies** (`dependencies = { "Exact Name" }`): names, kept in the
+descriptor and written back as they are. Nothing found makes them
+requirements in Stellaris: the game reads the key, but none of its messages
+about loading mods is about a missing or misplaced dependency, and the
+Paradox launcher does not check them; a summary of the wiki says a mod loads
+after the named mods "if they're installed" (unverified)
+([evidence](../evidence/2026-11-21-descriptor-dependencies.md)). Since the
+later mod in the list wins a shared file (measured), the application keeps
+an order hint (the catalog's `dependencyMeaning` is `LoadAfterInList`, as
+for Crusader Kings III): a named mod that is enabled but comes later in the
+list than the enabled mod naming it is a warning, "Lists "<name>" (#n) to
+load before this mod (#m), but that mod comes later in this playset.", on the
+row of the mod naming it, in the launch check's line about mods with
+warnings and when mods are enabled. A named mod that is not installed, not
+in the playset or disabled is not a warning. The selected mod's details list
+the names under "Loads after", each mod once, with what each is in the
+playset and the note "Stellaris does not need these mods. This mod names
+them to load before it when they are enabled."; nothing is enabled, added or
+reordered for them. Until 2026-11-21 they were checked as requirements
+("Requires …"). On the development machine 3 of the 39 installed mods list
+dependencies, none of them enabled (counts only). Whether Stellaris itself
+loads a mod after the mods it names is untested in-game.
+
 ## Launch
 
 `buildLaunchPlan` validates that the executable exists, that every enabled

@@ -38,9 +38,11 @@ EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* i
 
 // Readiness for a whole playset: per-entry readiness (using the most recent job
 // per identity, by updatedAt then id) plus the dependency warnings of
-// checkDependencies(): enabled entries of games whose dependencies are
-// required, none for Hearts of Iron IV (see core/dependencies.hpp). Result[i]
-// belongs to entries[i].
+// checkDependencies() for enabled entries, as the game's dependencyMeaning
+// says: every kind where they are required (Victoria 3), only a named mod
+// ordered after its dependent in Stellaris and Crusader Kings III, none in
+// Europa Universalis IV and Hearts of Iron IV (see core/dependencies.hpp).
+// Result[i] belongs to entries[i].
 std::vector<EntryReadiness> computePlaysetReadiness(std::span<const PlaysetEntry> entries,
                                                     const InstalledModMap& inventory,
                                                     std::span<const AcquisitionJob> jobs);

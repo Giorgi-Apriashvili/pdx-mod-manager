@@ -178,6 +178,17 @@ std::string position(std::size_t index) {
     return "#" + std::to_string(index + 1);
 }
 
+// A named mod that is enabled but ordered after its dependent, in a game
+// where the named mods are not needed (LoadAfterInList): never "Requires".
+DependencyIssue makeOrderHint(std::size_t entryIndex, const std::string& name,
+                              std::size_t dependencyIndex) {
+    DependencyIssue issue{entryIndex, name, DependencyIssueKind::OrderedAfter, dependencyIndex, {}};
+    issue.message = "Lists \"" + name + "\" (" + position(dependencyIndex) +
+                    ") to load before this mod (" + position(entryIndex) +
+                    "), but that mod comes later in this playset.";
+    return issue;
+}
+
 DependencyIssue makeIssue(std::size_t entryIndex, const std::string& name, DependencyIssueKind kind,
                           std::optional<std::size_t> dependencyIndex) {
     DependencyIssue issue{entryIndex, name, kind, dependencyIndex, {}};
@@ -232,15 +243,24 @@ std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> ent
                                                const InstalledModMap& inventory) {
     const auto checked = [](const PlaysetEntry& entry) {
         return entry.enabled &&
-               dependencyMeaningOf(entry.identity.game) == DependencyMeaning::Required;
+               dependencyMeaningOf(entry.identity.game) != DependencyMeaning::LoadAfter;
     };
     std::vector<DependencyIssue> issues;
     if (std::none_of(entries.begin(), entries.end(), checked))
-        return issues; // e.g. any Hearts of Iron IV playset: no names to resolve
+        return issues; // e.g. any EU4 or Hearts of Iron IV playset: no names to resolve
     const Resolver resolver(entries, inventory);
     for (std::size_t i = 0; i < entries.size(); ++i) {
         if (!checked(entries[i]))
             continue;
+        if (dependencyMeaningOf(entries[i].identity.game) == DependencyMeaning::LoadAfterInList) {
+            // Not needed: only an enabled named mod that comes later, each
+            // mod once.
+            for (const ResolvedDependency& dependency : onePerMod(resolver.resolve(i))) {
+                if (dependency.resolution == DependencyResolution::EnabledLater)
+                    issues.push_back(makeOrderHint(i, dependency.name, *dependency.index));
+            }
+            continue;
+        }
         for (const ResolvedDependency& dependency : resolver.resolve(i)) {
             switch (dependency.resolution) {
             case DependencyResolution::EnabledEarlier:

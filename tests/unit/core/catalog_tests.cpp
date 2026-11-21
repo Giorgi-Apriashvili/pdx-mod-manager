@@ -90,18 +90,27 @@ TEST_CASE("Catalog lists a known game without claiming support", "[core][catalog
     CHECK(pmm::findGame("not-a-game") == nullptr);
 }
 
-TEST_CASE("Only Hearts of Iron IV's dependencies merely order the load", "[core][catalog]") {
+TEST_CASE("Only Victoria 3 requires the mods a mod names; Stellaris and CK3 keep their order",
+          "[core][catalog]") {
     using pmm::DependencyMeaning;
-    CHECK(pmm::dependencyMeaningOf("hoi4") == DependencyMeaning::LoadAfter);
-    for (const char* key : {"ck3", "eu4", "stellaris", "vic3"})
-        CHECK(pmm::dependencyMeaningOf(key) == DependencyMeaning::Required);
+    CHECK(pmm::dependencyMeaningOf("vic3") == DependencyMeaning::Required);
+    // The list order decides which mod wins a shared file.
+    for (const char* key : {"ck3", "stellaris"})
+        CHECK(pmm::dependencyMeaningOf(key) == DependencyMeaning::LoadAfterInList);
+    // EU4 ignores the list order; Hearts of Iron IV orders the mods itself.
+    for (const char* key : {"eu4", "hoi4"})
+        CHECK(pmm::dependencyMeaningOf(key) == DependencyMeaning::LoadAfter);
     CHECK(pmm::dependencyMeaningOf("not-a-game") == DependencyMeaning::Required);
-    for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog())
+    for (const pmm::GameCatalogEntry& entry : pmm::gameCatalog()) {
         CHECK(entry.dependencyMeaning == pmm::dependencyMeaningOf(entry.key));
-    // A known game without an adapter checks them as required too.
+        // Only Hearts of Iron IV's documentation says what the names do.
+        CHECK(entry.dependencyLoadAfterDocumented == (entry.key == "hoi4"));
+    }
+    // A known game without an adapter checks them as required.
     const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
     CHECK(pmm::dependencyMeaningOf(pmm::testing::kUnsupportedGameKey) ==
           DependencyMeaning::Required);
+    CHECK_FALSE(pmm::findGame(pmm::testing::kUnsupportedGameKey)->dependencyLoadAfterDocumented);
     CHECK(pmm::dependencyMeaningOf("hoi4") == DependencyMeaning::LoadAfter);
 }
 

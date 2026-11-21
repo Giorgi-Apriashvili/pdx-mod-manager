@@ -43,14 +43,14 @@ QString dependencyState(DependencyIssueKind kind) {
     return QStringLiteral("missing");
 }
 
-// A game that loads a mod after the mods it names, when they are enabled, and
-// does not need them (Hearts of Iron IV): what each name is in this playset,
-// without a warning.
+// A game that does not need the mods a mod names (every DependencyMeaning but
+// Required): what each name is in this playset, without a warning.
 QString loadAfterText(DependencyResolution resolution) {
     switch (resolution) {
     case DependencyResolution::EnabledEarlier:
     case DependencyResolution::EnabledLater:
-        // The game orders them itself, whatever their place in the list.
+        // Whether its place in the list matters is the game's (an order hint
+        // of LoadAfterInList is an issue, shown instead of this text).
         return QStringLiteral("Enabled in this playset");
     case DependencyResolution::Disabled:
         return QStringLiteral("Disabled in this playset; not needed");
@@ -67,10 +67,23 @@ std::vector<DependencyData> dependenciesOf(const services::PlaysetRow& row,
     std::vector<DependencyData> out;
     if (!row.installed)
         return out;
-    if (dependencyMeaningOf(row.entry.identity.game) == DependencyMeaning::LoadAfter) {
-        for (const ResolvedDependency& dependency : row.dependencies)
-            out.push_back(DependencyData{qs(dependency.name), QStringLiteral("load_after"),
-                                         loadAfterText(dependency.resolution)});
+    if (dependencyMeaningOf(row.entry.identity.game) != DependencyMeaning::Required) {
+        for (const ResolvedDependency& dependency : row.dependencies) {
+            // The only issue such a game has: an enabled named mod that comes
+            // later in the list (LoadAfterInList), each mod once, by the same
+            // name as here.
+            const auto issue =
+                std::find_if(issues.begin(), issues.end(), [&](const DependencyIssue* i) {
+                    return i->kind == DependencyIssueKind::OrderedAfter &&
+                           i->dependencyName == dependency.name;
+                });
+            if (issue != issues.end())
+                out.push_back(DependencyData{qs(dependency.name), QStringLiteral("order"),
+                                             qs((*issue)->message)});
+            else
+                out.push_back(DependencyData{qs(dependency.name), QStringLiteral("load_after"),
+                                             loadAfterText(dependency.resolution)});
+        }
         return out;
     }
     for (const std::string& raw : row.installed->descriptor.dependencies) {

@@ -48,6 +48,72 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13. `--game vic3` (2026-11-20: probe folders with `metadata.json`, `--no-shared`, `--no-game-custom-data`, `analyze` of the rotating debug logs) checked in scratch folders, then used for the Victoria 3 probe run of 2026-11-21. `--game hoi4` (2026-11-21: `add_namespace`, no BOM, LF; `rename` for the runs 3 and 4 of its procedure; `analyze --game hoi4` reads `system.log`) checked in scratch folders, then used for the Hearts of Iron IV probe run of 2026-11-21 (all four runs; its `precedence` label names the winner's place in the list, which is not Hearts of Iron IV's rule) | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md), [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md), [Hearts of Iron IV probe run](evidence/2026-11-21-hoi4-load-order.md) |
 
+## Test status (2026-11-21, dependencies not required, `agent/dependencies-optional`)
+
+Local runs only, with fakes, fixtures and new scratch folders; no game, no
+launcher and no Steam client was started, nothing under Steam, the game
+folders or `Documents/Paradox Interactive` was written, and the launcher's
+databases and `playsets_backup` were not opened. Item 15 below.
+
+- `debug` preset: **655/655 tests pass** (652 on `main`, as recorded below), by
+  label: pmm_core_tests 60, pmm_services_tests 102, the others as before
+  (pmm_sharing_tests 70, pmm_persistence_tests 72, pmm_platform_tests 59,
+  pmm_providers_tests 61, pmm_games_tests 110, pmm_app_tests 125,
+  ui-preview 1 with the new `test_9g_dependenciesPerGame`).
+- Without the change: with the catalog's `ck3`, `eu4` and `stellaris` set
+  back to `Required`, 12 tests fail (the catalog test, 6 core dependency and
+  readiness tests, 4 services tests including the launch check, the app
+  details test); with the launch check's and the details' conditions of
+  `main` (`== Required`, `== LoadAfter`) the launch-check and app details
+  tests fail; against `main`'s `DetailsSection.qml`
+  `test_9g_dependenciesPerGame` fails (the heading of a mod that names
+  none), and against `main`'s preview fakes `test_4b`, `test_9f` and
+  `test_9g` fail. The tests of every kind of issue (now Victoria 3 and the
+  test-only game without an adapter) and of the resolver pass either way.
+- The first code commit alone (`98c4898`, with `main`'s `ui/`): 655/655.
+- Preview screenshots: a capture of `main`'s `ui/` matches the committed
+  PNGs except for scattered single pixels (and, in some runs, the grey
+  selection of an inactive window); seven captures that show the selected
+  mod's details were replaced, differing from the committed ones only there
+  and by such pixels, and the six others kept. The real application's captures were
+  not retaken: their selected Stellaris and EU4 mods list no dependencies,
+  so they show "Dependencies" and "None declared." as before.
+- `scripts/check.sh --full` on `18197c4`: passed in 8 min 51 s (ASan and
+  clang-cl with UBSan 529/529 each, the update contract's 112 checks,
+  clang-tidy on the 12 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 655/655). The commit after
+  it changes this file only.
+- Read-only against the real installations (`pmm_games_tests "[.real]"`,
+  counts only, [evidence](evidence/2026-11-21-descriptor-dependencies.md)):
+  the current configurations give 0 dependency warnings in every game with
+  `main`'s rules and with the new ones (no enabled mod of Stellaris, EU4,
+  CK3 or Victoria 3 lists dependencies). A playset of every installed mod,
+  enabled, in identity order (new line of the test, so `main`'s rules there
+  are the branch's test with the catalog's `ck3`, `eu4` and `stellaris` set
+  back to `Required`): Stellaris 3 warnings in 2 mods with `main`'s rules (2
+  not installed, 1 ordered after), 1 in 1 mod after (ordered after);
+  Victoria 3 1 (not installed) either way; EU4, CK3 and Hearts of Iron IV 0.
+- Review fixes (`b48a6f7` to `53f8213`: the app details test now has a
+  disabled mod naming an enabled mod after it, which stays a neutral
+  "load_after" row; a core test pins that an enabled mod of the name earlier
+  in the list satisfies it in Stellaris and CK3; the preview's fake order
+  hints are placed for each mod's place in its playset, never past its end;
+  made-up names in two older test files; the changelog, CK3, Stellaris,
+  accessibility and evidence wording): `debug` **656/656** (pmm_core_tests
+  61, the others as above; ui-preview with the new
+  `test_9h_fakeOrderHintsFitThePlayset`). The app details test fails with a
+  details rule that marks a disabled mod's later names as "order" (the
+  reviewer's mutation), and `test_9h` fails against the earlier fakes (a
+  hint naming #2016 in the 2,000-mod playset). A capture of the preview
+  matches the committed PNGs except for scattered pixels and the run-to-run
+  difference of `a11y-shortcuts-dark.png`, so none was replaced.
+  `scripts/check.sh --full` on `53f8213`: passed in 8 min 39 s (ASan and
+  clang-cl with UBSan 530/530 each, the update contract's 112 checks,
+  clang-tidy on the 13 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 656/656). The commit after
+  it changes this file only. Read-only again (counts only): the same counts
+  as above, with the branch's rules and with `main`'s.
+
 ## Test status (2026-11-21, Hearts of Iron IV dependencies, `agent/hoi4-dependencies`)
 
 Local runs only, with fakes, fixtures and new scratch profiles; no game, no
@@ -876,6 +942,7 @@ Still open, each needing the user's approval:
 | Play with Steam closed (0.1.1; step 6, item 7) | new on 2026-11-06; tested with fakes only |
 | Steam's own offline mode | the Web API was made unreachable instead |
 | EU4 mods with `dependencies` and override precedence | not covered by the probes |
+| `dependencies` in Stellaris, EU4, CK3 and Hearts of Iron IV | untested in-game: whether a game loads a mod after the mods it names, needs them or skips a mod whose named mods are missing; the application treats them as not required since 2026-11-21 ([evidence](evidence/2026-11-21-descriptor-dependencies.md)). A probe that names one missing and one present probe would settle it |
 | CK3 step 4 (Workshop subscribe and download for app 1158310) | not run; ideally with an item that ships `<Name>.mod` |
 | CK3 `supported_version="1.20"` and `"1.*"` on 1.20.1.2 | started directly, 1.20.1.2 did not read descriptors outside `enabled_mods`, so the disabled probe told nothing ([CK3 adapter](games/ck3.md#outstanding-validation)) |
 | CK3 steps 7-9, and step 6 items 6-7 | same code paths as Stellaris and EU4; not run for CK3 |
@@ -1178,7 +1245,33 @@ Packaging ([`packaging.md`](packaging.md)):
     other games keep `Required`: on this machine none of their enabled mods
     lists dependencies (Stellaris 3 of 39 installed mods do, Victoria 3 1
     of 10, EU4 and CK3 none); whether they are requirements there is not
-    established either. Not merged.
+    established either. Merged into `main` (`57a6b5e`); item 15 changed the
+    other games.
+15. Done 2026-11-21 on `agent/dependencies-optional` (the owner's decision
+    of 2026-11-21, "not required; keep the order hint", after read-only
+    research: none of the four games' mod-loader messages is about a
+    missing or misplaced dependency, the Paradox launcher checks only Paradox
+    Mods and `metadata.json` dependencies, and only Hearts of Iron IV
+    documents what the names do;
+    [evidence](evidence/2026-11-21-descriptor-dependencies.md)): a third
+    `DependencyMeaning`, `LoadAfterInList`, for `stellaris` and `ck3`, where
+    the later mod in the list wins a shared file: only a named mod that is
+    enabled but comes later in the list than the mod naming it is a warning,
+    once per mod, "Lists "<name>" (#n) to load before this mod (#m), but
+    that mod comes later in this playset." (never "Requires"); a missing,
+    disabled or absent one is not. `eu4` joins `hoi4` as `LoadAfter` (EU4
+    ignores the list order, so no warning at all); `vic3` stays `Required`.
+    The launch check keeps "(versions or dependencies)" except in EU4 and
+    Hearts of Iron IV. The details list the names of every game but
+    Victoria 3 under "Loads after", with the order warning where it applies
+    and a note that claims only what is established (Hearts of Iron IV keeps
+    its documented one, the catalog's `dependencyLoadAfterDocumented`); a
+    mod that names none shows "Dependencies" and "None declared." in every
+    game, Hearts of Iron IV included (before, "Loads after" without its
+    note). Seven preview screenshots regenerated; the real application's
+    captures are unchanged (their selected mods list no dependencies).
+    Whether any game loads a mod after the mods it names is untested
+    in-game. Not merged.
 
 ## Working rules
 

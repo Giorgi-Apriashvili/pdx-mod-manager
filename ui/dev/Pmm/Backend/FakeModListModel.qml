@@ -77,6 +77,8 @@ ListModel {
                 o.blocking = o.enabled && o.status !== "ready"
                 list.push(o)
             }
+            for (const o of list)
+                FakeData.placeOrderHint(o, list.length)
         }
         clear()
         append(list)
@@ -159,8 +161,10 @@ ListModel {
                 continue
             setProperty(row, "enabled", on)
             const m = get(row)
-            if (on && m.warnings.indexOf("Requires") >= 0)
-                feedback.push("“" + m.name + "” requires “Compact Interface - Core Library”, which is not in this playset.")
+            // Stellaris's order hints, as the C++ model reports them.
+            const hint = m.warnings.split("\n").find(w => FakeData.isOrderHint(w))
+            if (on && hint)
+                feedback.push(hint)
             else if (on && m.status !== "ready")
                 feedback.push("“" + m.name + "” is enabled but not installed (" + m.statusText.toLowerCase() + ").")
         }
@@ -260,6 +264,8 @@ ListModel {
         }
         if (add.length === 0)
             return
+        for (const o of add)
+            FakeData.placeOrderHint(o, count + add.length)
         pushUndo("add " + add.length + (add.length === 1 ? " mod" : " mods"))
         append(add)
         afterChange(true)

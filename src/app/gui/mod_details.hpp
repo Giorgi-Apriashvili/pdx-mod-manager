@@ -29,9 +29,11 @@ class ModDetails : public QObject {
     Q_PROPERTY(QString statusText READ statusText NOTIFY changed)
     Q_PROPERTY(QStringList tags READ tags NOTIFY changed)
     Q_PROPERTY(QVariantList dependencies READ dependencies NOTIFY changed)
-    // True when the game loads a mod after the mods it names and does not
-    // need them (Hearts of Iron IV): the pane lists them under "Loads after"
-    // with dependenciesNote, and every one has the state "load_after".
+    // True when the game does not need the mods a mod names (every game but
+    // Victoria 3; core DependencyMeaning other than Required): the pane lists
+    // a mod's names under "Loads after" with dependenciesNote, each with the
+    // state "load_after", or "order" for one that comes later in the list
+    // where that is an issue (Stellaris, Crusader Kings III).
     Q_PROPERTY(bool dependenciesLoadAfter READ dependenciesLoadAfter NOTIFY changed)
     Q_PROPERTY(QString dependenciesNote READ dependenciesNote NOTIFY changed)
     Q_PROPERTY(QStringList warnings READ warnings NOTIFY changed)

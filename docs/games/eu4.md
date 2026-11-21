@@ -150,6 +150,27 @@ missing stays `Broken`, because it cannot be acquired. Fixture:
 `tests/fixtures/games/eu4-reinstalled`; the hidden test replays the state
 with the real descriptors.
 
+**Dependencies** (`dependencies = { "Exact Name" }`): names, kept in the
+descriptor and written back as they are. Nothing found makes them
+requirements in EU4: the game reads the key, but none of its messages about
+loading mods is about a missing or misplaced dependency, and the Paradox
+launcher does not check them; a summary of the wiki says a submod naming
+mods there overrides them (unverified)
+([evidence](../evidence/2026-11-21-descriptor-dependencies.md)). EU4 ignores
+the list order when two mods change the same file (measured), so a warning
+about a named mod's place in the list would be wrong too. The application
+therefore checks nothing (the catalog's `dependencyMeaning` is `LoadAfter`,
+as for Hearts of Iron IV): no warning on the row, in the launch check (whose
+line about mods with warnings reads "N enabled mods have warnings; see the
+mod list.", without "(versions or dependencies)") or when mods are enabled.
+The selected mod's details list the names under "Loads after", each mod
+once, with what each is in the playset and the note "Europa Universalis IV
+does not need these mods. This mod names them to load before it when they
+are enabled."; nothing is enabled, added or reordered for them. Until
+2026-11-21 they were checked as requirements ("Requires …"). No mod on the
+development machine lists dependencies (0 of 13). What EU4 does with them is
+untested in-game.
+
 ## Launch
 
 Executable from `launcher-settings.json` `exePath` (`./eu4.exe`, validated as

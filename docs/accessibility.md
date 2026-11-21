@@ -207,7 +207,7 @@ through the `Accessible` attached properties.
 | Toolbar | buttons | "Add mods…", "Enable selected mods", "Disable selected mods", "Remove selected mods from playset", "Move up in load order", "Move down in load order", "Undo", "Redo" (tool tips with shortcuts) |
 | Icon-only buttons | buttons | "Undo", "Redo", "Playset history", "More playset actions", "Refresh", "Dismiss notification", "Close (Esc)" |
 | Playset actions | buttons | "New playset…", "Duplicate playset…", "Rename playset…", "Delete playset", "Restore deleted playset" |
-| Selected mod details | static text | "Status: Ready", "Workshop ID: 1234", "Tags: Overhaul, Graphics", "*dependency*: *state*"; for Hearts of Iron IV the heading "Loads after", its note ("Hearts of Iron IV loads this mod after these mods when they are enabled. It does not need them.") and "*mod*: Not installed; not needed" |
+| Selected mod details | static text | "Status: Ready", "Workshop ID: 1234", "Tags: Overhaul, Graphics", "*dependency*: *state*"; in every game but Victoria 3, for a mod that names mods, the heading "Loads after", its note ("Hearts of Iron IV loads this mod after these mods when they are enabled. It does not need them.", or "Stellaris does not need these mods. This mod names them to load before it when they are enabled.") and "*mod*: Not installed; not needed" |
 | Download job | list item, progress bar, button | "*name*, Downloading 45 %"; "*name*: Downloading 45 %" (value); "Retry download of *name*" |
 | History entry | list item, button | "*playset*, *reason*, *time*"; "Restore *playset* (*reason*, *time*)" |
 | Banner | group | "Warning. *title*. *text*" (actions inside the group) |
@@ -233,8 +233,9 @@ Changes that happen without a focus change are spoken with
 
 - moves: "*name* moved to position 4", "3 mods moved up";
 - Space in the mod list: "Enabled *name*", "Disabled 5 mods";
-- dependency issues introduced by enabling mods (none in Hearts of Iron IV,
-  which does not need the mods a mod names under dependencies);
+- dependency issues introduced by enabling mods (every kind in Victoria 3;
+  in Stellaris and Crusader Kings III only a named mod that comes later in
+  the list; none in Europa Universalis IV and Hearts of Iron IV);
 - every notification (toast): errors and warnings interrupt, the rest are
   polite;
 - error banners when they appear or change (invalid share code in the import
