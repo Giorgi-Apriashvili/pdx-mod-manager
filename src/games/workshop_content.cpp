@@ -139,9 +139,22 @@ void applyWorkshopState(InstalledMod& mod, const WorkshopContent& content) {
     else if (item != nullptr && item->installed && item->hasPendingUpdate() &&
              mod.state == InstallState::Ready)
         mod.state = InstallState::NeedsUpdate;
+    // Only Steam's record of the installed version can be compared with the
+    // Workshop: a folder's modification time is the local download time.
     mod.contentUpdatedAt = item != nullptr && item->timeUpdated > 0
                                ? item->timeUpdated
                                : platform::lastWriteUnixSeconds(mod.contentPath);
+    mod.contentTimeFromSteam = item != nullptr && item->installed && item->timeUpdated > 0;
+    mod.workshopManifest.clear();
+    mod.latestManifest.clear();
+    mod.latestUpdatedAt = 0;
+    if (item != nullptr && item->installed) {
+        if (steam::WorkshopItemState::isKnownManifest(item->manifest))
+            mod.workshopManifest = item->manifest;
+        if (steam::WorkshopItemState::isKnownManifest(item->latestManifest))
+            mod.latestManifest = item->latestManifest;
+        mod.latestUpdatedAt = std::max<std::int64_t>(0, item->latestTimeUpdated);
+    }
 }
 
 void dropUnstorablePaths(InstalledMod& mod) {

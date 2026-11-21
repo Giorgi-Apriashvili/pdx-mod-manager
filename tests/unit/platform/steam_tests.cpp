@@ -302,6 +302,32 @@ TEST_CASE("readAppWorkshopManifest reads installed items and pending state", "[p
     CHECK(manifest->findItem("1") == nullptr);
 
     TempDir temp;
+    // A latest_manifest of "0" or none names no newer version.
+    test::writeText(temp / "zero.acf", R"("AppWorkshop"
+{
+	"appid"		"281990"
+	"WorkshopItemsInstalled"
+	{
+		"1200000030" { "size" "1" "timeupdated" "1708000000" "manifest" "1100000000000000110" }
+		"1200000031" { "size" "1" "timeupdated" "1708000000" "manifest" "1100000000000000111" }
+	}
+	"WorkshopItemDetails"
+	{
+		"1200000030" { "subscribedby" "100000001" "latest_timeupdated" "0" "latest_manifest" "0" }
+		"1200000031" { "subscribedby" "100000001" "latest_manifest" "" }
+	}
+}
+)");
+    const auto zero = readAppWorkshopManifest(temp / "zero.acf");
+    REQUIRE(zero.ok());
+    REQUIRE(zero->findItem("1200000030") != nullptr);
+    CHECK(zero->findItem("1200000030")->latestManifest == "0");
+    CHECK_FALSE(zero->findItem("1200000030")->hasPendingUpdate());
+    CHECK_FALSE(zero->findItem("1200000031")->hasPendingUpdate());
+    CHECK(WorkshopItemState::isKnownManifest("1100000000000000110"));
+    CHECK_FALSE(WorkshopItemState::isKnownManifest("0"));
+    CHECK_FALSE(WorkshopItemState::isKnownManifest(""));
+
     test::writeText(temp / "not workshop.acf", "\"AppState\" { }");
     const auto wrong = readAppWorkshopManifest(temp / "not workshop.acf");
     REQUIRE_FALSE(wrong.ok());

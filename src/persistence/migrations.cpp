@@ -134,12 +134,34 @@ constexpr const char* kSchemaV2 = R"sql(
 ALTER TABLE game_installations DROP COLUMN platform;
 )sql";
 
+// Updates and re-downloads of installed Workshop items: the job kind, the
+// version an update must reach, how far a re-download got (which adds the
+// unfinished state 'unsubscribing' to the one-unfinished-job index), and the
+// Steam Workshop manifest state of installed items.
+constexpr const char* kSchemaV3 = R"sql(
+ALTER TABLE acquisition_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'acquire';
+ALTER TABLE acquisition_jobs ADD COLUMN target_time_updated INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE acquisition_jobs ADD COLUMN target_manifest TEXT NOT NULL DEFAULT '';
+ALTER TABLE acquisition_jobs ADD COLUMN reinstall_step TEXT NOT NULL DEFAULT 'start';
+DROP INDEX acquisition_jobs_one_unfinished;
+CREATE UNIQUE INDEX acquisition_jobs_one_unfinished
+    ON acquisition_jobs (game_key, source, provider_id)
+    WHERE state IN ('pending', 'unsubscribing', 'subscribing', 'subscribed', 'download_requested', 'downloading');
+
+ALTER TABLE installed_mods ADD COLUMN content_time_from_steam INTEGER NOT NULL DEFAULT 0
+    CHECK (content_time_from_steam IN (0, 1));
+ALTER TABLE installed_mods ADD COLUMN workshop_manifest TEXT NOT NULL DEFAULT '';
+ALTER TABLE installed_mods ADD COLUMN latest_manifest TEXT NOT NULL DEFAULT '';
+ALTER TABLE installed_mods ADD COLUMN latest_updated_at INTEGER NOT NULL DEFAULT 0;
+)sql";
+
 } // namespace
 
 const std::vector<Migration>& builtinMigrations() {
     static const std::vector<Migration> migrations{
         {1, "initial schema", kSchemaV1, false},
         {2, "drop game_installations.platform", kSchemaV2, false},
+        {3, "workshop updates: job kind and target, installed manifests", kSchemaV3, false},
     };
     return migrations;
 }

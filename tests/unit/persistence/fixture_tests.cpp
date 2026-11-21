@@ -208,3 +208,62 @@ TEST_CASE("A v2 database from the sample fixture opens with the current schema",
     REQUIRE(playset.entries.size() == 1);
     CHECK(playset.entries[0].identity.id == "1234567890");
 }
+
+TEST_CASE("Upgrading to v3 keeps jobs as acquire jobs and adds the update fields",
+          "[persistence][fixtures]") {
+    TempDir temp;
+    const fs::path file = temp.dbFile();
+    {
+        auto db = require(testing::openWithMigrations(file, migrationsUpTo(2)));
+        execRaw(*db, readFixture("v2_sample.sql"));
+        // A job and an installed Workshop item as version 2 stored them.
+        execRaw(*db, "INSERT INTO acquisition_jobs (id, game_key, source, provider_id, playset_id, "
+                     "state, attempts, created_at, updated_at) VALUES (1, 'stellaris', "
+                     "'steam-workshop', '1234567890', 1, 'downloading', 1, 1761600000000, "
+                     "1761600000000)");
+        execRaw(*db, "INSERT INTO installed_mods (game_key, source, provider_id, name, state, "
+                     "content_updated_at, scanned_at) VALUES ('stellaris', 'steam-workshop', "
+                     "'1234567890', 'Example UI Mod', 'needs_update', 1761000000000, "
+                     "1761700000000)");
+    }
+
+    {
+        auto db = require(testing::openWithMigrations(file, migrationsUpTo(3)));
+        CHECK(db->schemaVersion() == 3);
+        CHECK(queryText(*db, "SELECT kind FROM acquisition_jobs") == "acquire");
+        CHECK(queryText(*db, "SELECT reinstall_step FROM acquisition_jobs") == "start");
+        CHECK(queryInt(*db, "SELECT target_time_updated FROM acquisition_jobs") == 0);
+        AcquisitionJobRepository jobs(*db);
+        AcquisitionJob job = require(jobs.get(1));
+        CHECK(job.kind == AcquisitionKind::Acquire);
+        CHECK(job.state == AcquisitionState::Downloading);
+        CHECK(job.targetTimeUpdated == 0);
+        CHECK(job.targetManifest.empty());
+        CHECK(job.reinstallStep == ReinstallStep::Start);
+
+        auto mods = require(InventoryRepository(*db).list("stellaris"));
+        REQUIRE(mods.size() == 1);
+        CHECK(mods[0].state == InstallState::NeedsUpdate);
+        CHECK(mods[0].contentUpdatedAt == 1761000000);
+        CHECK_FALSE(mods[0].contentTimeFromSteam); // not compared until the next scan
+        CHECK(mods[0].workshopManifest.empty());
+        CHECK(mods[0].latestUpdatedAt == 0);
+
+        // The upgraded table takes the new kinds, and the index the new state.
+        job.state = AcquisitionState::Installed;
+        requireOk(jobs.update(job));
+        AcquisitionJobRepository::NewJob update{AcquisitionKind::Update, 1762000000,
+                                                "1100000000000000401"};
+        const ModIdentity identity{"stellaris", source::SteamWorkshop, "1234567890"};
+        AcquisitionJob next = require(jobs.createOrReuse(identity, 1, update));
+        next.state = AcquisitionState::Unsubscribing;
+        requireOk(jobs.update(next));
+        const AcquisitionJob read = require(jobs.get(next.id));
+        CHECK(read.kind == AcquisitionKind::Update);
+        CHECK(read.targetTimeUpdated == 1762000000);
+        CHECK(read.targetManifest == "1100000000000000401");
+        CHECK(read.state == AcquisitionState::Unsubscribing);
+        CHECK(require(jobs.listUnfinished()).size() == 1);
+        CHECK(require(jobs.createOrReuse(identity, 1)).id == next.id);
+    }
+}

@@ -124,13 +124,29 @@ TEST_CASE("Provider/game combinations are validated", "[core][catalog]") {
 TEST_CASE("Acquisition states round-trip through their names", "[core][model]") {
     using pmm::AcquisitionState;
     for (auto s :
-         {AcquisitionState::Pending, AcquisitionState::Subscribing, AcquisitionState::Subscribed,
-          AcquisitionState::DownloadRequested, AcquisitionState::Downloading,
-          AcquisitionState::Installed, AcquisitionState::Failed, AcquisitionState::Unavailable,
-          AcquisitionState::NeedsUserAction, AcquisitionState::Cancelled}) {
+         {AcquisitionState::Pending, AcquisitionState::Unsubscribing, AcquisitionState::Subscribing,
+          AcquisitionState::Subscribed, AcquisitionState::DownloadRequested,
+          AcquisitionState::Downloading, AcquisitionState::Installed, AcquisitionState::Failed,
+          AcquisitionState::Unavailable, AcquisitionState::NeedsUserAction,
+          AcquisitionState::Cancelled}) {
         const auto parsed = pmm::acquisitionStateFromString(pmm::toString(s));
         REQUIRE(parsed.has_value());
         CHECK(*parsed == s);
     }
     CHECK_FALSE(pmm::acquisitionStateFromString("bogus").has_value());
+    CHECK(std::string(pmm::toString(AcquisitionState::Unsubscribing)) == "unsubscribing");
+    CHECK_FALSE(pmm::isTerminal(AcquisitionState::Unsubscribing));
+
+    using pmm::AcquisitionKind;
+    for (auto kind :
+         {AcquisitionKind::Acquire, AcquisitionKind::Update, AcquisitionKind::Reinstall})
+        CHECK(pmm::acquisitionKindFromString(pmm::toString(kind)) == kind);
+    CHECK(std::string(pmm::toString(AcquisitionKind::Update)) == "update");
+    CHECK_FALSE(pmm::acquisitionKindFromString("").has_value());
+    using pmm::ReinstallStep;
+    for (auto step :
+         {ReinstallStep::Start, ReinstallStep::Unsubscribed, ReinstallStep::Resubscribed})
+        CHECK(pmm::reinstallStepFromString(pmm::toString(step)) == step);
+    CHECK(std::string(pmm::toString(ReinstallStep::Unsubscribed)) == "unsubscribed");
+    CHECK_FALSE(pmm::reinstallStepFromString("done").has_value());
 }

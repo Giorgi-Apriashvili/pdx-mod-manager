@@ -135,10 +135,14 @@ struct WorkshopItemState {
     std::int64_t latestTimeUpdated = 0;
     std::string latestManifest;
 
-    // A newer version is known to Steam but not installed yet.
+    // A newer version is known to Steam but not installed yet. A
+    // latest_manifest of "0" (or none) says nothing about a newer version.
     bool hasPendingUpdate() const noexcept {
-        return !latestManifest.empty() && latestManifest != manifest;
+        return isKnownManifest(latestManifest) && latestManifest != manifest;
     }
+
+    // A manifest id that names content: not empty and not "0".
+    static bool isKnownManifest(std::string_view id) noexcept { return !id.empty() && id != "0"; }
 };
 
 // steamapps/workshop/appworkshop_<appid>.acf

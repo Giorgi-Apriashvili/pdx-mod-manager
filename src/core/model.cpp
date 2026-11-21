@@ -44,8 +44,9 @@ const char* toString(InstallState state) noexcept {
 }
 
 namespace {
-constexpr std::array<std::pair<AcquisitionState, std::string_view>, 10> kAcquisitionNames{{
+constexpr std::array<std::pair<AcquisitionState, std::string_view>, 11> kAcquisitionNames{{
     {AcquisitionState::Pending, "pending"},
+    {AcquisitionState::Unsubscribing, "unsubscribing"},
     {AcquisitionState::Subscribing, "subscribing"},
     {AcquisitionState::Subscribed, "subscribed"},
     {AcquisitionState::DownloadRequested, "download_requested"},
@@ -56,7 +57,55 @@ constexpr std::array<std::pair<AcquisitionState, std::string_view>, 10> kAcquisi
     {AcquisitionState::NeedsUserAction, "needs_user_action"},
     {AcquisitionState::Cancelled, "cancelled"},
 }};
+
+constexpr std::array<std::pair<AcquisitionKind, std::string_view>, 3> kKindNames{{
+    {AcquisitionKind::Acquire, "acquire"},
+    {AcquisitionKind::Update, "update"},
+    {AcquisitionKind::Reinstall, "reinstall"},
+}};
+
+constexpr std::array<std::pair<ReinstallStep, std::string_view>, 3> kReinstallStepNames{{
+    {ReinstallStep::Start, "start"},
+    {ReinstallStep::Unsubscribed, "unsubscribed"},
+    {ReinstallStep::Resubscribed, "resubscribed"},
+}};
+
+template <class Enum, std::size_t N>
+std::optional<Enum> fromName(const std::array<std::pair<Enum, std::string_view>, N>& names,
+                             const std::string& text) noexcept {
+    for (const auto& [value, name] : names) {
+        if (name == text)
+            return value;
+    }
+    return std::nullopt;
+}
+
+template <class Enum, std::size_t N>
+const char* nameOf(const std::array<std::pair<Enum, std::string_view>, N>& names,
+                   Enum value) noexcept {
+    for (const auto& [v, name] : names) {
+        if (v == value)
+            return name.data();
+    }
+    return names.front().second.data();
+}
 } // namespace
+
+const char* toString(AcquisitionKind kind) noexcept {
+    return nameOf(kKindNames, kind);
+}
+
+std::optional<AcquisitionKind> acquisitionKindFromString(const std::string& text) noexcept {
+    return fromName(kKindNames, text);
+}
+
+const char* toString(ReinstallStep step) noexcept {
+    return nameOf(kReinstallStepNames, step);
+}
+
+std::optional<ReinstallStep> reinstallStepFromString(const std::string& text) noexcept {
+    return fromName(kReinstallStepNames, text);
+}
 
 const char* toString(AcquisitionState state) noexcept {
     for (const auto& [s, name] : kAcquisitionNames) {

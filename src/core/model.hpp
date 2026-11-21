@@ -102,7 +102,18 @@ struct InstalledMod {
     InstallState state = InstallState::Ready;
     std::vector<std::string> problems; // human-readable issues found while scanning
     std::int64_t contentUpdatedAt = 0; // unix seconds, best effort
-    std::string fingerprint;           // "sha256:<hex>" for local mods when computed
+    // True when contentUpdatedAt is Steam's record of the installed version
+    // (appworkshop_<app>.acf timeupdated), false when it is only the content
+    // folder's modification time. Only Steam's record can be compared with the
+    // Workshop's time_updated.
+    bool contentTimeFromSteam = false;
+    // Workshop items, from Steam's appworkshop_<app>.acf ("0" is stored as
+    // empty): the installed content manifest, and the newest version Steam
+    // knows of (latest_manifest, latest_timeupdated in unix seconds).
+    std::string workshopManifest;
+    std::string latestManifest;
+    std::int64_t latestUpdatedAt = 0;
+    std::string fingerprint; // "sha256:<hex>" for local mods when computed
 };
 
 struct PlaysetEntry {
@@ -133,10 +144,11 @@ struct PlaysetSummary {
     std::int64_t updatedAt = 0;
 };
 
-// Lifecycle of acquiring one missing mod. Distinguishes "subscribed" and
-// "download requested" from "installed and ready".
+// Lifecycle of acquiring one mod. Distinguishes "subscribed" and "download
+// requested" from "installed and ready".
 enum class AcquisitionState {
     Pending,           // queued, nothing sent to the provider yet
+    Unsubscribing,     // re-download: unsubscribe in flight, or waiting for Steam to drop it
     Subscribing,       // subscribe request in flight
     Subscribed,        // provider confirmed subscription; no download confirmed
     DownloadRequested, // download requested; waiting for the provider to start
@@ -151,17 +163,51 @@ const char* toString(AcquisitionState state) noexcept;
 std::optional<AcquisitionState> acquisitionStateFromString(const std::string& text) noexcept;
 bool isTerminal(AcquisitionState state) noexcept;
 
+// What a job does. Names are stored in the database.
+enum class AcquisitionKind {
+    // "acquire": a missing mod. Subscribes when needed, downloads, verifies.
+    // Content Steam already installed is verified, not downloaded again.
+    Acquire,
+    // "update": an installed, subscribed mod with a newer Workshop version.
+    // Never subscribes; asks Steam for the download even when Steam calls the
+    // installed version current; done when the installed version reaches the
+    // job's target.
+    Update,
+    // "reinstall": re-download from scratch. Unsubscribes, waits until Steam
+    // dropped the subscription, subscribes again, downloads and verifies.
+    Reinstall,
+};
+const char* toString(AcquisitionKind kind) noexcept;
+std::optional<AcquisitionKind> acquisitionKindFromString(const std::string& text) noexcept;
+
+// How far a reinstall job got. Stored, so that a retry or a restart carries
+// on instead of unsubscribing again (or leaving the mod unsubscribed).
+enum class ReinstallStep {
+    Start,        // "start": nothing done yet
+    Unsubscribed, // "unsubscribed": this job unsubscribed the item; not subscribed again yet
+    Resubscribed, // "resubscribed": subscribed again; the download is what remains
+};
+const char* toString(ReinstallStep step) noexcept;
+std::optional<ReinstallStep> reinstallStepFromString(const std::string& text) noexcept;
+
 struct AcquisitionJob {
     std::int64_t id = 0;
     ModIdentity identity;
     std::optional<std::int64_t> playsetId; // playset that requested it, if any
+    AcquisitionKind kind = AcquisitionKind::Acquire;
     AcquisitionState state = AcquisitionState::Pending;
     std::string errorCode;    // errorCodeName() of the last failure
     std::string errorMessage; // user-facing explanation of the last failure
     int attempts = 0;
     std::uint64_t bytesDownloaded = 0;
     std::uint64_t bytesTotal = 0;
-    std::int64_t createdAt = 0; // unix milliseconds
+    // Update jobs: the version the installed content must reach (the
+    // Workshop's time_updated in unix seconds, and its content manifest).
+    // 0 / empty: not known.
+    std::int64_t targetTimeUpdated = 0;
+    std::string targetManifest;
+    ReinstallStep reinstallStep = ReinstallStep::Start; // reinstall jobs only
+    std::int64_t createdAt = 0;                         // unix milliseconds
     std::int64_t updatedAt = 0;
 };
 
@@ -183,6 +229,9 @@ struct EntryReadiness {
     std::string detail;                // short explanation for the UI
     std::vector<std::string> warnings; // non-blocking issues (version, dependency)
     double progress = -1.0;            // 0..1 while downloading, otherwise -1
+    // Ready, and a newer version is on the Workshop (Steam's own record, or
+    // this session's update check). Never blocks launching.
+    bool updateAvailable = false;
 };
 
 // A file the launch must write before starting the game.

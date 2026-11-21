@@ -38,6 +38,9 @@ enum class ErrorCode {
     ProcessStartFailed,
     ConflictingProcess,
     Interrupted,
+    // A Workshop update or re-download ended with the old version installed:
+    // Steam has not picked up the new version yet.
+    UpdateNotSeen,
     NotImplemented,
     Internal,
 };

@@ -26,7 +26,8 @@ namespace pmm::persistence::internal {
 // SQL list of the non-terminal AcquisitionState values. Must match the partial
 // unique index acquisition_jobs_one_unfinished (checked by a unit test).
 inline constexpr const char* kUnfinishedJobStatesSql =
-    "('pending', 'subscribing', 'subscribed', 'download_requested', 'downloading')";
+    "('pending', 'unsubscribing', 'subscribing', 'subscribed', 'download_requested', "
+    "'downloading')";
 
 std::optional<DistributionSource> distributionFromText(std::string_view text) noexcept;
 std::optional<InstallState> installStateFromText(std::string_view text) noexcept;

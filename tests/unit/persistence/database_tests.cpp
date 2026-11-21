@@ -354,8 +354,8 @@ TEST_CASE("The unfinished-job index matches the model's non-terminal states",
           "[persistence][database]") {
     std::set<std::string> nonTerminal;
     for (const char* name :
-         {"pending", "subscribing", "subscribed", "download_requested", "downloading", "installed",
-          "failed", "unavailable", "needs_user_action", "cancelled"}) {
+         {"pending", "unsubscribing", "subscribing", "subscribed", "download_requested",
+          "downloading", "installed", "failed", "unavailable", "needs_user_action", "cancelled"}) {
         const auto state = acquisitionStateFromString(name);
         REQUIRE(state.has_value());
         REQUIRE(std::string(toString(*state)) == name);

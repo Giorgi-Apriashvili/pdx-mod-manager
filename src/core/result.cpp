@@ -52,6 +52,8 @@ std::string_view errorCodeName(ErrorCode code) noexcept {
         return "conflicting_process";
     case ErrorCode::Interrupted:
         return "interrupted";
+    case ErrorCode::UpdateNotSeen:
+        return "update_not_seen";
     case ErrorCode::NotImplemented:
         return "not_implemented";
     case ErrorCode::Internal:
