@@ -7,6 +7,9 @@ state and install information?
 **Result:** **Yes, for read-only operations.** Subscribe/download were deliberately not exercised
 on the live account (see "Not verified").
 
+The Workshop item ids and names below, and the items' sizes and update times, were replaced with
+made-up ones on 2026-11-21 (the owner's decision); the counts and results are unchanged.
+
 ## Environment
 
 | Item | Value |
@@ -42,26 +45,27 @@ pmm-steam-helper.exe --app-id 281990 --steam-api "<SteamLibrary>\steamapps\commo
 
 ```json
 {"protocol":1,"cmd":"ping"}
-{"protocol":1,"cmd":"state","ids":["703156866","1623423360","2830996883","3090328185","1121692237"]}
+{"protocol":1,"cmd":"state","ids":["700000901","1000000902","2000000904","3000000901","1000000901"]}
 {"protocol":1,"cmd":"ping"}
 {"protocol":1,"cmd":"quit"}
 ```
 
-Ids 703156866, 1623423360, 2830996883 and 3090328185 are folders under
-`workshop/content/281990` (installed). 1121692237 is "Gigastructural Engineering & More (4.5)",
+Ids 700000901, 1000000902, 2000000904 and 3000000901 are folders under
+`workshop/content/281990` (installed). 1000000901 is "Example Public Mod",
 a public Stellaris item (confirmed through the anonymous Web API) that is **not** subscribed or
 installed on this machine.
 
-stdout, exactly as printed except that install paths are redacted to `<SteamLibrary>`:
+stdout, exactly as printed except that install paths are redacted to `<SteamLibrary>` and the
+item values replaced (see above):
 
 ```json
 {"event":"ready","protocol":1,"ok":true,"loggedOn":true,"ownsApp":true,"appId":"281990","ugcInterface":"STEAMUGC_INTERFACE_VERSION016","init":"SteamAPI_InitSafe","subscribedCount":27}
 {"event":"pong"}
-{"event":"state","id":"703156866","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\703156866","sizeOnDisk":429416,"timestamp":1782489192}
-{"event":"state","id":"1623423360","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\1623423360","sizeOnDisk":231762225,"timestamp":1791477347}
-{"event":"state","id":"2830996883","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\2830996883","sizeOnDisk":76147217,"timestamp":1781543136}
-{"event":"state","id":"3090328185","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\3090328185","sizeOnDisk":1093428,"timestamp":1782072748}
-{"event":"state","id":"1121692237","flags":0,"subscribed":false,"installed":false,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"","sizeOnDisk":0,"timestamp":0}
+{"event":"state","id":"700000901","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\700000901","sizeOnDisk":420000,"timestamp":1782400000}
+{"event":"state","id":"1000000902","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\1000000902","sizeOnDisk":230000000,"timestamp":1791400000}
+{"event":"state","id":"2000000904","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\2000000904","sizeOnDisk":76000000,"timestamp":1781500000}
+{"event":"state","id":"3000000901","flags":5,"subscribed":true,"installed":true,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\3000000901","sizeOnDisk":1090000,"timestamp":1782000700}
+{"event":"state","id":"1000000901","flags":0,"subscribed":false,"installed":false,"downloading":false,"downloadPending":false,"needsUpdate":false,"legacy":false,"bytesDownloaded":0,"bytesTotal":0,"installPath":"","sizeOnDisk":0,"timestamp":0}
 {"event":"pong"}
 ```
 
@@ -87,12 +91,12 @@ Steam client maintains:
 
 | Item | flags | sizeOnDisk (API) | size (acf) | timestamp (API) | timeupdated (acf) |
 | --- | --- | --- | --- | --- | --- |
-| 703156866 | 5 = subscribed\|installed | 429416 | 429416 | 1782489192 | 1782489192 |
-| 1623423360 | 5 | 231762225 | 231762225 | 1791477347 | 1791477347 |
-| 2830996883 | 5 | 76147217 | 76147217 | 1781543136 | 1781543136 |
-| 3090328185 | 5 | 1093428 | 1093428 | 1782072748 | 1782072748 |
-| 3243319558 (run 2) | 5 | 573715 | 573715 | 1781658607 | 1781658607 |
-| 1121692237 | 0 = none | 0 | not listed | 0 | not listed |
+| 700000901 | 5 = subscribed\|installed | 420000 | 420000 | 1782400000 | 1782400000 |
+| 1000000902 | 5 | 230000000 | 230000000 | 1791400000 | 1791400000 |
+| 2000000904 | 5 | 76000000 | 76000000 | 1781500000 | 1781500000 |
+| 3000000901 | 5 | 1090000 | 1090000 | 1782000700 | 1782000700 |
+| 3000000903 (run 2) | 5 | 570000 | 570000 | 1781600000 | 1781600000 |
+| 1000000901 | 0 = none | 0 | not listed | 0 | not listed |
 
 `subscribedCount` (27) equals the number of item folders under `workshop/content/281990` (27).
 
@@ -104,8 +108,8 @@ across several seconds between commands. Times are milliseconds since process st
 ```text
    106 ms  <- {"event":"ready","protocol":1,"ok":true,"loggedOn":true,"ownsApp":true,"appId":"281990","ugcInterface":"STEAMUGC_INTERFACE_VERSION016","init":"SteamAPI_InitSafe","subscribedCount":27}
    111 ms  <- {"event":"pong"}
-  2120 ms  <- {"event":"state","id":"3243319558","flags":5,...,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\3243319558","sizeOnDisk":573715,"timestamp":1781658607}
-  2120 ms  <- {"event":"state","id":"1121692237","flags":0,...,"installPath":"","sizeOnDisk":0,"timestamp":0}
+  2120 ms  <- {"event":"state","id":"3000000903","flags":5,...,"installPath":"<SteamLibrary>\\steamapps\\workshop\\content\\281990\\3000000903","sizeOnDisk":570000,"timestamp":1781600000}
+  2120 ms  <- {"event":"state","id":"1000000901","flags":0,...,"installPath":"","sizeOnDisk":0,"timestamp":0}
   4129 ms  <- {"event":"error","code":"invalid_id","message":"Workshop item id must be a canonical decimal number.","cmd":"state"}
   4143 ms  exit code 0
 ```

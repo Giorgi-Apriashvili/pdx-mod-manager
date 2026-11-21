@@ -16,6 +16,9 @@ nothing was sent to Steam, and nothing was written under Steam, the game folders
 `Documents/Paradox Interactive`. Afterwards `dlc_load.json` was still dated 2026-10-27 15:05
 (Stellaris) and 2026-08-23 19:52 (EU4). `<scratch>` stands for the private scratch folder.
 
+The Workshop item ids and mod names below were replaced with made-up ones on 2026-11-21 (the
+owner's decision); the counts and results are unchanged.
+
 ## Environment
 
 | Item | Value |
@@ -50,8 +53,8 @@ game's. Profile B was empty before the import.
 | EU4 | playset with 9 entries (9 enabled), then disable and move saved | 9 entries, 8 enabled, 9 installed, 0 missing | 689 characters | identical, 1,120 bytes, SHA-256 `d7b95da0…68ea89`; 9 entries, Workshop and local mods |
 
 The independent decoder read schema 1, the game key and the same counts (Stellaris 17/16,
-EU4 9/8). In the EU4 code the disabled entry (`3390117335`, Colored Mapmodes) comes first and
-`2506263674` (MRBM Font) fourth, as the edits require. All four runs exited with code 0.
+EU4 9/8). In the EU4 code the disabled entry (`3000000909`, Example Map Modes) comes first and
+`2000000902` (Example Font) fourth, as the edits require. All four runs exited with code 0.
 
 In the same session, with the same build:
 
