@@ -1,6 +1,7 @@
 #pragma once
 
-// Pure, deterministic state machine for acquiring one Steam Workshop item.
+// Pure, deterministic state machine for acquiring, updating or re-downloading
+// one Steam Workshop item (AcquisitionJob::kind).
 //
 // The reducer takes the current job context plus one observation (something
 // the provider reported, the clock advanced, or the user acted) and returns
@@ -14,17 +15,40 @@
 //     path Steam reported; "subscribed" and "download requested" are separate
 //     states and never imply readiness.
 //   - Every run (fresh start, restart after an interrupted session, retry)
-//     queries the item state before deciding anything, so items that are
-//     already installed are verified rather than re-downloaded, and a job
-//     restored from the database is reconciled instead of re-subscribed.
-//   - The machine never asks to unsubscribe or delete anything. Cancel only
-//     stops application-managed work and says what remains in Steam.
+//     queries the item state before deciding anything, so a job restored from
+//     the database is reconciled instead of re-subscribed. For an acquire job,
+//     items that are already installed are verified rather than downloaded
+//     again; only an explicit update or re-download downloads installed content.
+//   - Nothing is ever deleted. Only a reinstall job unsubscribes, once per job
+//     (ReinstallStep, persisted), and every failure after that says that the
+//     item is now unsubscribed; Retry subscribes again. An update job never
+//     subscribes. Cancel only stops application-managed work and says what
+//     remains in Steam.
 //
 //   start/resume --QuerySession--> ProviderReady --QueryState--> ItemState
+//   acquire:
 //     not subscribed ............ Subscribe -> SubscribeResult(OK) -> QueryState
 //     subscribed, not installed . RequestDownload -> DownloadAccepted -> poll QueryState
 //     downloading / pending ..... poll QueryState on Tick (stall timeout -> Failed)
 //     installed and current ..... VerifyContent(installPath) -> Installed | Failed
+//   update (installed content, newer version wanted):
+//     not subscribed ............ NeedsUserAction ("not subscribed in Steam")
+//     downloading / pending ..... poll QueryState
+//     installed, target reached . VerifyContent -> Installed
+//     otherwise ................. RequestDownload, even when Steam calls it current;
+//                                 done when installed and current AND the install
+//                                 timestamp reaches the target; still the old
+//                                 version updateRecheckMs after the request:
+//                                 RequestDownload once more, then Failed
+//                                 (update_not_seen, no automatic retry)
+//   reinstall (re-download from scratch):
+//     step start, subscribed .... Unsubscribe -> UnsubscribeResult(OK): step
+//                                 unsubscribed -> poll QueryState until Steam
+//                                 dropped the subscription (and, within
+//                                 removalGraceMs, the installed files)
+//     step unsubscribed ......... Subscribe -> SubscribeResult(OK): step resubscribed
+//     step resubscribed ......... RequestDownload, then as an update (target
+//                                 when known)
 //
 // The persisted part is the core AcquisitionJob; the rest of the context is
 // transient and rebuilt on restart by calling startAcquisition() again.
@@ -52,17 +76,33 @@ struct AcquisitionPolicy {
     std::int64_t stallTimeoutMs = 300'000;    // download without any progress
     std::int64_t pollIntervalMs = 1'000;      // QueryState cadence while downloading
     bool highPriorityDownloads = true;
+    // Update/reinstall: Steam still reports the old version this long after
+    // the download request: request once more, then give up (update_not_seen).
+    std::int64_t updateRecheckMs = 30'000;
+    // Reinstall: the unsubscribe call result, and Steam dropping the
+    // subscription afterwards, each within this time.
+    std::int64_t unsubscribeTimeoutMs = 60'000;
+    // Reinstall: how long to wait, once Steam dropped the subscription, for it
+    // to remove the installed files before subscribing again anyway.
+    std::int64_t removalGraceMs = 10'000;
 };
+
+// The failure text of an update Steam did not deliver (ErrorCode::UpdateNotSeen).
+inline constexpr std::string_view kUpdateNotSeenMessage =
+    "Steam has not picked up this update yet. Steam checks for updates about every 45 "
+    "minutes; restarting Steam makes it check right away.";
 
 // What the job is currently waiting for. Transient (not persisted).
 enum class AwaitStep {
-    Nothing,          // idle: terminal, or waiting for the user
-    Session,          // QuerySession sent
-    State,            // QueryState sent, deciding the next step
-    SubscribeResult,  // Subscribe sent
-    DownloadAccepted, // RequestDownload sent
-    Progress,         // download requested/running; polling state
-    Verification,     // VerifyContent sent
+    Nothing,           // idle: terminal, or waiting for the user
+    Session,           // QuerySession sent
+    State,             // QueryState sent, deciding the next step
+    SubscribeResult,   // Subscribe sent
+    DownloadAccepted,  // RequestDownload sent
+    Progress,          // download requested/running; polling state
+    Verification,      // VerifyContent sent
+    UnsubscribeResult, // Unsubscribe sent (reinstall)
+    Removal,           // unsubscribed; polling until Steam dropped the item (reinstall)
 };
 const char* toString(AwaitStep step) noexcept;
 
@@ -82,6 +122,14 @@ struct AcquisitionContext {
     bool subscribeSent = false;      // this run sent Subscribe
     bool subscribeConfirmed = false; // this run saw SubscribeResult(OK) or the Subscribed flag
     bool downloadRequested = false;  // this run's RequestDownload was accepted
+    bool unsubscribeSent = false;    // this run sent Unsubscribe (reinstall)
+    // Update/reinstall: when the accepted request was made, whether it was
+    // made a second time, and whether Steam's latest report was "installed
+    // and current" with an installed version short of the target.
+    std::int64_t downloadRequestedAtMs = 0;
+    bool reRequested = false;
+    bool currentButOld = false;
+    std::int64_t droppedAtMs = 0; // reinstall: first report without the subscription
     std::uint32_t lastFlags = 0;
     std::string installPath; // path handed to VerifyContent
 };
@@ -94,6 +142,7 @@ enum class ActionKind {
     RequestDownload,  // helper "download" for itemId
     VerifyContent,    // check installPath (the game adapter's rule), report ContentVerified
     OpenFallbackPage, // open manualFallbackLinks(itemId) for the user
+    Unsubscribe,      // helper "unsubscribe" for itemId (reinstall jobs only)
 };
 const char* toString(ActionKind kind) noexcept;
 
@@ -135,6 +184,10 @@ struct SubscribeResult {
     int result = 0; // EResult
 };
 
+struct UnsubscribeResult {
+    int result = 0; // EResult
+};
+
 struct DownloadAccepted {
     bool accepted = false;
 };
@@ -164,7 +217,7 @@ struct ManualFallback {}; // user chose "Open in Steam (manual)"
 using Observation =
     std::variant<obs::ProviderReady, obs::ProviderUnavailable, obs::ItemState, obs::SubscribeResult,
                  obs::DownloadAccepted, obs::ContentVerified, obs::ItemRejected, obs::Tick,
-                 obs::Cancel, obs::Retry, obs::ManualFallback>;
+                 obs::Cancel, obs::Retry, obs::ManualFallback, obs::UnsubscribeResult>;
 
 struct Transition {
     AcquisitionContext context;
@@ -192,9 +245,9 @@ std::int64_t retryDelayMs(int attempts, const AcquisitionPolicy& policy) noexcep
 std::optional<Observation> observationFromHelperEvent(const HelperEvent& event,
                                                       std::string_view itemId);
 
-// Helper command for QueryState/Subscribe/RequestDownload; nullopt for the
-// actions the driver performs itself (QuerySession, VerifyContent,
-// OpenFallbackPage).
+// Helper command for QueryState/Subscribe/RequestDownload/Unsubscribe;
+// nullopt for the actions the driver performs itself (QuerySession,
+// VerifyContent, OpenFallbackPage).
 std::optional<HelperCommand> helperCommandFor(const Action& action);
 
 } // namespace pmm::providers
