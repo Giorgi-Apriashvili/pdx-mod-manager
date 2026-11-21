@@ -93,6 +93,8 @@ bool matchesStatus(const PlaysetEntry& entry, const EntryReadiness* readiness,
     case StatusFilter::Warning:
         return readiness &&
                (readiness->status == EntryStatus::Broken || !readiness->warnings.empty());
+    case StatusFilter::Updates:
+        return readiness && readiness->updateAvailable;
     }
     return false;
 }

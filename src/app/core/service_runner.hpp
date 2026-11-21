@@ -13,14 +13,18 @@
 // is dropped if the receiver was destroyed meanwhile. Coordinator activity
 // that nobody asked for (helper events, metadata, ticks) is announced through
 // acquisitionChanged(). lookupWorkshopItems() asks the Web API host for the
-// import preview and answers only its caller, never the coordinator.
+// import preview and answers only its caller, never the coordinator;
+// checkWorkshopUpdates() asks it about a playset's installed Workshop mods and
+// hands the answers to the coordinator (the session's update state).
 //
 // shutdown() (also run by the destructor) stops the tick, persists progress
 // and closes every helper session (coordinator.shutdown(), then the hosts),
 // destroys the runtime on the worker and joins the thread.
 
 #include "app/core/app_runtime.hpp"
+#include "core/result.hpp"
 #include "providers/web_metadata.hpp"
+#include "services/acquisition_coordinator.hpp"
 
 #include <QObject>
 #include <QPointer>
@@ -34,6 +38,7 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -49,6 +54,15 @@ struct WorkshopLookup {
     bool available = false;                             // the session has a Web API host
     std::vector<providers::WorkshopItemMetadata> items; // of the answered batches
     std::size_t unanswered = 0;                         // ids of batches without an answer
+};
+
+// The answer to ServiceRunner::checkWorkshopUpdates().
+struct WorkshopUpdateCheck {
+    // The session can check: Steam on (not --no-steam, which read-only
+    // implies) and a Web API host. When false nothing was sent or rescanned.
+    bool available = false;
+    std::optional<Error> error; // the playset or the inventory could not be read
+    services::UpdateCheckReport report;
 };
 
 struct RunnerOptions {
@@ -103,6 +117,20 @@ public:
     // destroyed meanwhile. Without a host the answer has `available` false.
     void lookupWorkshopItems(QObject* receiver, GameKey game, std::vector<std::string> ids,
                              std::function<void(WorkshopLookup)> done);
+
+    // "Check for mod updates" for playset `playsetId`, on the worker: one
+    // inventory rescan of its game (re-reads Steam's Workshop manifest), then
+    // the Web API host is asked about the playset's installed Workshop mods,
+    // enabled and disabled - item ids only, in batches of
+    // providers::kMaxPublishedFileDetailsItems, leaving out items answered
+    // within CoordinatorOptions::updateCheckMaxAgeMs - and the coordinator
+    // keeps the answers for the session (recordUpdateCheck()), which the
+    // playset view and the launch check then use. `done` runs once on the
+    // receiver's thread, like lookupWorkshopItems()'s: also when the Web API
+    // cannot be reached (report.reachable false) and at shutdown().
+    // acquisitionChanged() announces the rescan and the new update state.
+    void checkWorkshopUpdates(QObject* receiver, std::int64_t playsetId,
+                              std::function<void(WorkshopUpdateCheck)> done);
 
     template <class Fn, class Done> void call(QObject* receiver, Fn fn, Done done) {
         using R = std::invoke_result_t<Fn&, AppRuntime&>;

@@ -142,6 +142,7 @@ ModRowData modRow(const services::PlaysetRow& row,
     data.progress =
         row.readiness.status == EntryStatus::Downloading ? row.readiness.progress : -1.0;
     data.blocking = row.blocking;
+    data.updateAvailable = row.readiness.updateAvailable;
     if (row.installed) {
         const InstalledMod& mod = *row.installed;
         data.version = trimmedQ(mod.descriptor.version);
@@ -240,12 +241,31 @@ QString historyReasonText(const std::string& reason) {
 }
 
 QString statusTextFor(const EntryReadiness& readiness, const std::optional<AcquisitionJob>& job) {
+    // Jobs that change installed content: "Updating" / "Re-downloading".
+    const bool update = job && job->kind == AcquisitionKind::Update;
+    const bool reinstall = job && job->kind == AcquisitionKind::Reinstall;
     switch (readiness.status) {
     case EntryStatus::Ready:
-        return QStringLiteral("Ready");
+        return readiness.updateAvailable ? QStringLiteral("Update available")
+                                         : QStringLiteral("Ready");
     case EntryStatus::Missing:
         return QStringLiteral("Missing");
     case EntryStatus::Pending:
+        if (update)
+            return job->state == AcquisitionState::Installed ? QStringLiteral("Verifying")
+                                                             : QStringLiteral("Updating");
+        if (reinstall) {
+            switch (job->state) {
+            case AcquisitionState::Unsubscribing:
+                return QStringLiteral("Unsubscribing");
+            case AcquisitionState::Subscribing:
+                return QStringLiteral("Subscribing again");
+            case AcquisitionState::Installed:
+                return QStringLiteral("Verifying");
+            default:
+                return QStringLiteral("Re-downloading");
+            }
+        }
         if (job) {
             switch (job->state) {
             case AcquisitionState::Subscribing:
@@ -261,11 +281,15 @@ QString statusTextFor(const EntryReadiness& readiness, const std::optional<Acqui
             }
         }
         return QStringLiteral("Queued");
-    case EntryStatus::Downloading:
+    case EntryStatus::Downloading: {
+        const QString verb = update      ? QStringLiteral("Updating")
+                             : reinstall ? QStringLiteral("Re-downloading")
+                                         : QStringLiteral("Downloading");
         if (readiness.progress >= 0.0)
-            return QStringLiteral("Downloading %1 %")
-                .arg(static_cast<int>(std::clamp(readiness.progress, 0.0, 1.0) * 100.0));
-        return QStringLiteral("Downloading");
+            return QStringLiteral("%1 %2 %").arg(verb).arg(
+                static_cast<int>(std::clamp(readiness.progress, 0.0, 1.0) * 100.0));
+        return verb;
+    }
     case EntryStatus::Failed:
         return QStringLiteral("Failed");
     case EntryStatus::Unavailable:
@@ -290,6 +314,8 @@ ViewFilter toViewFilter(const QString& search, const QString& statusFilter,
         filter.status = StatusFilter::Missing;
     else if (statusFilter == QLatin1String("warning"))
         filter.status = StatusFilter::Warning;
+    else if (statusFilter == QLatin1String("updates"))
+        filter.status = StatusFilter::Updates;
     filter.browseSorted = !sortMode.isEmpty() && sortMode != QLatin1String("order");
     return filter;
 }
@@ -340,7 +366,11 @@ PlaysetStateData playsetState(AppRuntime& runtime, std::int64_t playsetId, QStri
     const services::AcquisitionCoordinator* coordinator = runtime.acquisition();
     const std::vector<AcquisitionJob> live =
         coordinator ? coordinator->liveJobs(game) : std::vector<AcquisitionJob>{};
-    auto view = services::loadPlaysetView(runtime.context(), playsetId, live);
+    // Without a coordinator (--no-steam, read-only) only Steam's own record
+    // of updates counts: nothing was asked.
+    const WorkshopFindings findings =
+        coordinator ? coordinator->workshopFindings(game) : WorkshopFindings{};
+    auto view = services::loadPlaysetView(runtime.context(), playsetId, live, &findings);
     if (!view) {
         if (error)
             *error = qs(view.error().message);
@@ -365,6 +395,8 @@ PlaysetStateData playsetState(AppRuntime& runtime, std::int64_t playsetId, QStri
     data.counts.missing = static_cast<int>(v.counts.missing);
     data.counts.warning = static_cast<int>(v.counts.warning);
     data.counts.blocking = static_cast<int>(v.counts.blocking);
+    data.counts.updates = static_cast<int>(v.counts.updates);
+    data.counts.updatesEnabled = static_cast<int>(v.counts.updatesEnabled);
     const services::UndoInfo undo = runtime.playsets().undoInfo(playsetId);
     data.undo.canUndo = undo.canUndo;
     data.undo.canRedo = undo.canRedo;
@@ -476,18 +508,46 @@ AcquisitionData acquisitionData(AppRuntime& runtime, const QString& game,
         row.jobId = job.job.id;
         row.name = qs(job.name);
         row.providerId = qs(job.job.identity.id);
+        row.kind = QString::fromLatin1(toString(job.job.kind));
         row.state = QString::fromLatin1(toString(job.job.state));
         row.stateText = qs(job.stateText);
         row.progress = job.progress;
         row.errorMessage = qs(job.job.errorMessage);
+        row.errorCode = qs(job.job.errorCode);
         row.canRetry = job.canRetry;
         row.canOpenFallback = job.canOpenFallback;
+        row.canReinstall = job.canReinstall;
         data.jobs.push_back(std::move(row));
     }
     data.providerStatus = QString::fromLatin1(services::toString(snapshot.providerStatus));
     data.providerMessage = qs(snapshot.providerMessage);
     data.summary = qs(snapshot.summary);
     data.active = snapshot.active;
+    return data;
+}
+
+UpdateCheckData updateCheckData(const services::UpdateCheckReport& report) {
+    UpdateCheckData data;
+    data.reachable = report.reachable;
+    data.summary = qs(report.summary);
+    data.checked = static_cast<int>(report.checked);
+    data.updates = static_cast<int>(report.updates);
+    data.notCompared = static_cast<int>(report.notCompared);
+    data.refused = static_cast<int>(report.refused);
+    data.unanswered = static_cast<int>(report.unanswered);
+    data.items.reserve(report.items.size());
+    for (const services::UpdateCheckItem& item : report.items) {
+        UpdateCheckItemData row;
+        row.key = identityKey(item.identity.source, item.identity.id);
+        row.name = qs(item.name);
+        row.providerId = qs(item.identity.id);
+        row.verdict = item.answered ? QString::fromLatin1(providers::toString(item.verdict))
+                                    : QStringLiteral("unanswered");
+        row.updateAvailable = item.updateAvailable;
+        row.enabled = item.enabled;
+        row.message = qs(item.message);
+        data.items.push_back(std::move(row));
+    }
     return data;
 }
 

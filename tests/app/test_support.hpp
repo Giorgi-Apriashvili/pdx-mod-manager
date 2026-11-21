@@ -23,6 +23,7 @@
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -135,12 +136,24 @@ struct FakeWorld {
     fs::path userData;
 };
 
+// Steam's record of an installed Workshop item (appworkshop_<app>.acf).
+struct SteamVersion {
+    std::int64_t timeUpdated = 0; // the installed version
+    std::string manifest;
+    std::int64_t latestTimeUpdated = 0; // the newest version Steam knows
+    std::string latestManifest;
+};
+
 // Game adapter double for "stellaris" scanning a FakeWorld.
 class FakeAdapter : public games::GameAdapter {
 public:
     explicit FakeAdapter(const FakeWorld& world) : m_world(world) {}
 
     std::vector<PlaysetEntry> currentConfiguration; // returned by readCurrentConfiguration
+    // Workshop items listed here get Steam's version record (NeedsUpdate when
+    // Steam knows a newer manifest); the others only their folder's time.
+    // Set before the runner starts: scans read it on the worker.
+    std::map<std::string, SteamVersion> steamVersions;
 
     const GameCatalogEntry& catalog() const override { return *findGame(kGame); }
 
@@ -194,6 +207,18 @@ public:
                 mod.descriptor.supportedVersion = "v4.5.*";
                 mod.descriptorRef = "mod/" + id + ".mod";
                 mod.contentUpdatedAt = platform::lastWriteUnixSeconds(it->path());
+                if (const auto version = steamVersions.find(id);
+                    sourceKey == std::string_view(source::SteamWorkshop) &&
+                    version != steamVersions.end()) {
+                    const SteamVersion& v = version->second;
+                    mod.contentUpdatedAt = v.timeUpdated;
+                    mod.contentTimeFromSteam = v.timeUpdated > 0;
+                    mod.workshopManifest = v.manifest;
+                    mod.latestManifest = v.latestManifest;
+                    mod.latestUpdatedAt = v.latestTimeUpdated;
+                    if (!v.latestManifest.empty() && v.latestManifest != v.manifest)
+                        mod.state = InstallState::NeedsUpdate;
+                }
                 mods.push_back(std::move(mod));
             }
         };
