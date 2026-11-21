@@ -760,7 +760,7 @@ CoordinatorUpdate AcquisitionCoordinator::start(const GameKey& game) {
                 // Steam would change the files of mods the running game has
                 // loaded: the job stays parked until a start() after it closed.
                 if (!gameRunning)
-                    gameRunning = !refuseWhileRunning(game, "").ok();
+                    gameRunning = !refuseWhileRunning(game, "updating mods").ok();
                 if (*gameRunning) {
                     logInfo(kComponent, "update job kept waiting while the game runs",
                             {{"job", std::to_string(job.id)}, {"mod", toString(job.identity)}});
@@ -1337,7 +1337,7 @@ UpdateFacts updateFacts(const InstalledMod& mod, const providers::WorkshopItemMe
 }
 
 std::string modName(const InstalledMod& mod, const PlaysetEntry* entry) {
-    const std::string name = detail::trimmed(mod.descriptor.name);
+    std::string name = detail::trimmed(mod.descriptor.name);
     if (!name.empty())
         return name;
     return entry ? detail::entryLabel(*entry) : mod.identity.id;

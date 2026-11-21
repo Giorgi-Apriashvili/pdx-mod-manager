@@ -95,7 +95,7 @@ struct UpdateRig {
         return item;
     }
 
-    UpdateCheckReport check(std::vector<providers::WorkshopItemMetadata> answers) {
+    UpdateCheckReport check(const std::vector<providers::WorkshopItemMetadata>& answers) {
         const UpdateCheckPlan plan = require(c().prepareUpdateCheck(playsetId));
         return require(c().recordUpdateCheck(playsetId, answers, plan.ids.size()));
     }

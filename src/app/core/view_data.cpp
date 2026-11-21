@@ -282,9 +282,9 @@ QString statusTextFor(const EntryReadiness& readiness, const std::optional<Acqui
         }
         return QStringLiteral("Queued");
     case EntryStatus::Downloading: {
-        const QString verb = update      ? QStringLiteral("Updating")
-                             : reinstall ? QStringLiteral("Re-downloading")
-                                         : QStringLiteral("Downloading");
+        QString verb = update      ? QStringLiteral("Updating")
+                       : reinstall ? QStringLiteral("Re-downloading")
+                                   : QStringLiteral("Downloading");
         if (readiness.progress >= 0.0)
             return QStringLiteral("%1 %2 %").arg(verb).arg(
                 static_cast<int>(std::clamp(readiness.progress, 0.0, 1.0) * 100.0));

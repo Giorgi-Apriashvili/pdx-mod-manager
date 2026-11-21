@@ -275,27 +275,27 @@ void ServiceRunner::checkWorkshopUpdates(QObject* receiver, std::int64_t playset
             return;
         }
         const std::size_t asked = plan.value().ids.size();
-        lookUpInBatches(*host, game, plan.value().ids,
-                        [this, answer, playsetId, asked, check](WorkshopLookup lookup) mutable {
-                            // Shutting down: the runtime goes before the Web API host.
-                            AppRuntime* current = this->runtime();
-                            services::AcquisitionCoordinator* recorder =
-                                current ? current->acquisition() : nullptr;
-                            if (!recorder) {
-                                check.report.reachable = false;
-                                answer(std::move(check));
-                                return;
-                            }
-                            auto recorded =
-                                recorder->recordUpdateCheck(playsetId, lookup.items, asked);
-                            if (recorded) {
-                                report(recorded.value().update);
-                                check.report = std::move(recorded).value();
-                            } else {
-                                check.error = std::move(recorded).error();
-                            }
-                            answer(std::move(check));
-                        });
+        lookUpInBatches(
+            *host, game, plan.value().ids,
+            [this, answer, playsetId, asked, check](const WorkshopLookup& lookup) mutable {
+                // Shutting down: the runtime goes before the Web API host.
+                AppRuntime* current = this->runtime();
+                services::AcquisitionCoordinator* recorder =
+                    current ? current->acquisition() : nullptr;
+                if (!recorder) {
+                    check.report.reachable = false;
+                    answer(std::move(check));
+                    return;
+                }
+                auto recorded = recorder->recordUpdateCheck(playsetId, lookup.items, asked);
+                if (recorded) {
+                    report(recorded.value().update);
+                    check.report = std::move(recorded).value();
+                } else {
+                    check.error = std::move(recorded).error();
+                }
+                answer(std::move(check));
+            });
     });
 }
 

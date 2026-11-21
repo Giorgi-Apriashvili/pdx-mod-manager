@@ -163,6 +163,13 @@ void addJobWarning(const AcquisitionJob& job, EntryReadiness& readiness) {
         readiness.warnings.push_back(std::move(text));
         return;
     }
+    case AcquisitionState::Cancelled:
+        // Cancelled between its unsubscribe and the new subscription: the
+        // mod is unsubscribed, and Steam removes its files.
+        if (job.kind == AcquisitionKind::Reinstall &&
+            job.reinstallStep == ReinstallStep::Unsubscribed)
+            readiness.warnings.push_back("Re-download cancelled: " + job.errorMessage);
+        return;
     default:
         return;
     }

@@ -182,6 +182,17 @@ TEST_CASE("A finished update leaves the installed mod ready, a failed one with a
             CHECK(r.warnings.empty());
         }
     }
+
+    // A re-download cancelled after its unsubscribe left the mod unsubscribed.
+    AcquisitionJob cancelled = job(entry, AcquisitionState::Cancelled);
+    cancelled.kind = AcquisitionKind::Reinstall;
+    cancelled.reinstallStep = ReinstallStep::Unsubscribed;
+    cancelled.errorMessage = "Cancelled. Workshop item 1 was unsubscribed for the re-download.";
+    const EntryReadiness r = computeReadiness(entry, &mod, &cancelled);
+    CHECK(r.status == EntryStatus::Ready);
+    CHECK(r.warnings == std::vector<std::string>{
+                            "Re-download cancelled: Cancelled. Workshop item 1 was unsubscribed "
+                            "for the re-download."});
 }
 
 TEST_CASE("The Workshop findings of the session mark updates and refused items",
