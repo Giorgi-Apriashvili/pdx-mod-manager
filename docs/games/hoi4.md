@@ -175,10 +175,12 @@ by count only):
   they do not need. So the application does not check them as requirements
   (the catalog's `dependencyMeaning` is `LoadAfter` for `hoi4` only): no
   warning on the row, nothing counted under "with warnings" or in the launch
-  check, no feedback when mods are enabled or disabled. The selected mod's
-  details list them under "Loads after", with what each is in the playset
-  (enabled, disabled, installed but not in the playset, not installed) and
-  the note that the game does not need them. Nothing is enabled, added or
+  check (whose line about them reads "N enabled mods have warnings; see the
+  mod list.", without "(versions or dependencies)"), no feedback when mods
+  are enabled or disabled. The selected mod's details list them under "Loads
+  after", each mod once, with what each is in the playset (enabled,
+  disabled, installed but not in the playset, not installed) and the note
+  that the game does not need them. Nothing is enabled, added or
   reordered for them, and the written order stays the playset's (the game
   applies dependencies itself, according to the wiki). Whether the game
   really orders mods by them is untested in-game. Before this change, 4 of

@@ -1152,9 +1152,10 @@ Packaging ([`packaging.md`](packaging.md)):
     requirement with a warning): the catalog says per game what dependencies
     mean (`DependencyMeaning`: `Required`, or `LoadAfter` for `hoi4` only,
     after the HOI4 wiki); for Hearts of Iron IV there are no dependency
-    warnings or feedback, and the details list the names under "Loads after"
-    with a neutral state each (core `resolveDependencies()`, shared with the
-    checks). Read-only on 1.20.0.0: 20 warnings in 4 of the 21 enabled mods
+    warnings or feedback, the launch check's line about mods with warnings
+    does not mention dependencies, and the details list the names under
+    "Loads after", each mod once, with a neutral state each (core
+    `resolveDependencies()`, shared with the checks). Read-only on 1.20.0.0: 20 warnings in 4 of the 21 enabled mods
     before, none after ([Hearts of Iron IV](games/hoi4.md#real-machine-evidence)).
     Whether the game orders mods by `dependencies` is untested in-game. The
     other games keep `Required`: on this machine none of their enabled mods
