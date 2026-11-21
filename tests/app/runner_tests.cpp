@@ -955,7 +955,16 @@ TEST_CASE("A change Recover cannot undo can be discarded, and Play is available 
     CHECK_FALSE(launcher.canDiscardInterrupted());
     CHECK_FALSE(launcher.discardInterrupted());
 
-    QSignalSpy changed(&launcher, &LaunchController::changed);
+    // Recover's answer updates the controller before it posts its notification,
+    // so every update after that notification comes from the refresh Recover
+    // asks for. Counted as they happen: a refresh applied in the same pass of
+    // the event loop as the answer is not missed.
+    int refreshes = 0;
+    QObject counting; // destroyed first, so the slot never outlives what it reads
+    QObject::connect(&launcher, &LaunchController::changed, &counting, [&] {
+        if (backend.notifications()->latest().value("title").toString() == "Recovery incomplete")
+            ++refreshes;
+    });
     REQUIRE(launcher.recoverInterrupted());
     REQUIRE(waitUntil([&] { return launcher.canDiscardInterrupted(); }));
     CHECK(launcher.discardableFiles() == QStringList{qpath(target)});
@@ -965,8 +974,7 @@ TEST_CASE("A change Recover cannot undo can be discarded, and Play is available 
     CHECK(failed.value("text").toString().contains("load_order.txt"));
     CHECK(failed.value("text").toString().contains("discard the record next to Play"));
     // The refresh after Recover still shows the change, and keeps the offer.
-    const int recovered = static_cast<int>(changed.count());
-    REQUIRE(waitUntil([&] { return changed.count() > recovered; }));
+    REQUIRE(waitUntil([&] { return refreshes > 0; }));
     CHECK(launcher.hasInterruptedTransaction());
     CHECK(launcher.canDiscardInterrupted());
     CHECK_FALSE(launcher.canPlay());
@@ -1015,14 +1023,20 @@ TEST_CASE("A Recover that fails for another reason offers only Recover again", "
     LaunchController& launcher = *backend.launcher();
     REQUIRE(launcher.hasInterruptedTransaction());
 
-    QSignalSpy changed(&launcher, &LaunchController::changed);
+    // Updates after Recover's notification come from the refresh it asks for
+    // (see the test above); counted as they happen.
+    int refreshes = 0;
+    QObject counting; // destroyed first, so the slot never outlives what it reads
+    QObject::connect(&launcher, &LaunchController::changed, &counting, [&] {
+        if (backend.notifications()->latest().value("title").toString() == "Recovery incomplete")
+            ++refreshes;
+    });
     REQUIRE(launcher.recoverInterrupted());
     REQUIRE(waitUntil([&] {
         return backend.notifications()->latest().value("title").toString() == "Recovery incomplete";
     }));
     // ... and the refresh after it.
-    const int recovered = static_cast<int>(changed.count());
-    REQUIRE(waitUntil([&] { return changed.count() > recovered; }));
+    REQUIRE(waitUntil([&] { return refreshes > 0; }));
     CHECK_FALSE(backend.notifications()->latest().value("text").toString().contains("discard"));
     CHECK(launcher.hasInterruptedTransaction());
     CHECK_FALSE(launcher.canDiscardInterrupted());
