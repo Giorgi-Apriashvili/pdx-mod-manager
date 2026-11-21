@@ -96,8 +96,8 @@ else as a Workshop ID list
 entry it could not read:
 
 - **Not a Workshop ID or a Steam Workshop link.** Entries are item ids such as
-  `3818297502` or links such as
-  `https://steamcommunity.com/sharedfiles/filedetails/?id=3818297502`,
+  `3000000914` or links such as
+  `https://steamcommunity.com/sharedfiles/filedetails/?id=3000000914`,
   separated by `|`, commas, spaces or line breaks. Other text between them
   (names, numbering, a heading) has to go. Links to profiles, search pages or
   other sites are not item links.

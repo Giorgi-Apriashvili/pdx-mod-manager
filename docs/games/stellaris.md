@@ -281,8 +281,8 @@ the game logged its start at 15:06:38, and none of them changed afterwards.
 ## Real-machine evidence
 
 Hidden test `tests/unit/games/real_machine_tests.cpp`, run read-only on
-2026-10-29 with `pmm_games_tests "[.real]" -s` (excerpt, paths redacted; the
-full output of both games and the conclusions are in
+2026-10-29 with `pmm_games_tests "[.real]" -s` (excerpt, paths redacted,
+Workshop ids and mod names replaced with made-up ones; the full output of both games and the conclusions are in
 [`../evidence/real-scan-2026-10-29.md`](../evidence/real-scan-2026-10-29.md)):
 
 ```text
@@ -307,9 +307,9 @@ mods:           36
   with scan problems: 0
   with compatibility warnings: 23
 dlc_load.json enabled mods: 17
-  #1 stellaris:steam-workshop:1880071041 "ASB Ironman"
-  #2 stellaris:local:behemoth_transference_delay "Behemoth Transference - Quiet Delay"
-  #3 stellaris:steam-workshop:3711052920 "Better Worlds (Gaia and Hydrocentric Jobs)"
+  #1 stellaris:steam-workshop:1000000905 "Example Mod A"
+  #2 stellaris:local:example_mod_b "Example Mod B"
+  #3 stellaris:steam-workshop:3000000912 "Example Mod C"
   ...
   unresolved: 0
 launch plan for the current configuration: 0 write(s)

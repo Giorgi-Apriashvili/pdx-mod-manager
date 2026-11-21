@@ -442,7 +442,7 @@ not opened. `git diff tests/fixtures` against `main` is empty, and
   case and the 36 QML preview tests).
 - The application read-only with new scratch profiles against the real
   Stellaris installation: `--self-test "config,ids:…,export:…,dump:…"` wrote
-  `1880071041|3711052920|…` (7 enabled Workshop mods, 7 local left out),
+  `1000000905|3000000912|…` (7 enabled Workshop mods, 7 local left out),
   identical to `scripts/share-code.py ids` on the exported code; importing the
   list into a new profile gave exactly those 7 entries, enabled, in order.
   Captures of the import dialog with the list (header "Workshop ID list", the
