@@ -393,7 +393,9 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
     details.setRow(0);
     CHECK_FALSE(details.dependenciesLoadAfter());
     CHECK(details.dependenciesNote().isEmpty());
-    CHECK(shown(details) ==
+    const QStringList required = shown(details);
+    REQUIRE(required.size() == 5);
+    CHECK(required.mid(0, 4) ==
           QStringList{"Example Map | order | Requires \"Example Map\" (#2), which must load before "
                       "this mod (#1). Move it above this mod.",
                       "Example Conversion | disabled | Requires \"Example Conversion\" (#3), which "
@@ -401,9 +403,10 @@ TEST_CASE("Mod details list what Hearts of Iron IV loads first and what Stellari
                       "Example Elsewhere | not_in_playset | Requires \"Example Elsewhere\", which "
                       "is installed but not in this playset.",
                       "Example Missing | missing | Requires \"Example Missing\", which is not "
-                      "installed.",
-                      "example MAP | order | Requires \"example MAP\" (#2), which must load before "
-                      "this mod (#1). Move it above this mod."});
+                      "installed."});
+    // Every spelling, as before.
+    CHECK(required[4] == "example MAP | order | Requires \"example MAP\" (#2), which must load "
+                         "before this mod (#1). Move it above this mod.");
     details.setRow(1);
     CHECK(shown(details) ==
           QStringList{"Example Overhaul | ok | Enabled in this playset and loads earlier"});
