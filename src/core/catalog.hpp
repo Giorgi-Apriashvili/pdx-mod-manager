@@ -12,13 +12,21 @@
 namespace pmm {
 
 // What a mod's dependencies (the descriptor's `dependencies`; Victoria 3: the
-// metadata's relationships of rel_type "dependency") mean in a game.
+// metadata's relationships of rel_type "dependency") mean in a game, and so
+// what core/dependencies.hpp reports about them.
 enum class DependencyMeaning {
-    // The named mods must be enabled and load earlier: core/dependencies.hpp
-    // reports each one that is not, and the application warns about it.
+    // The named mods are needed: each one that is not installed, not in the
+    // playset, disabled, or enabled but later in the list than the mod that
+    // names it is reported, and the application warns about it.
     Required,
-    // The game loads the mod after the named mods when they are enabled and
-    // does not need them: nothing is reported, and the details only list them.
+    // The named mods are not needed, but the list order decides which mod
+    // wins a shared file, and the mod names them to load before it: only a
+    // named mod that is enabled and comes later in the list than the mod that
+    // names it is reported (an order hint). A missing, disabled or absent one
+    // is not.
+    LoadAfterInList,
+    // The named mods are not needed, and their place in the list is not
+    // checked either: nothing is reported, and the details only list them.
     LoadAfter,
 };
 
@@ -30,6 +38,10 @@ struct GameCatalogEntry {
     std::span<const std::string_view> sources; // provider keys valid for this game
     bool adapterAvailable;                     // implemented in this release
     DependencyMeaning dependencyMeaning = DependencyMeaning::Required;
+    // The game's own documentation says that it loads a mod after the mods
+    // its dependencies name (Hearts of Iron IV's wiki). Only how the
+    // application words the list depends on it.
+    bool dependencyLoadAfterDocumented = false;
 };
 
 // All known games, supported ones first.

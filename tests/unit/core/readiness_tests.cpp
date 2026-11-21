@@ -159,15 +159,17 @@ TEST_CASE("Playset readiness uses the latest job and adds dependency warnings",
     REQUIRE(readiness.size() == entries.size()); // extra installed mods are not added
     CHECK(readiness[0].status == EntryStatus::Ready);
     REQUIRE(readiness[0].warnings.size() == 1);
-    CHECK_THAT(readiness[0].warnings[0], ContainsSubstring("must load before"));
+    CHECK_THAT(readiness[0].warnings[0], ContainsSubstring("comes later in this playset"));
     CHECK(readiness[1].status == EntryStatus::Ready);
     CHECK(readiness[2].status == EntryStatus::Downloading);
 }
 
-TEST_CASE("Hearts of Iron IV readiness carries no dependency warnings", "[core][readiness]") {
+TEST_CASE("Readiness carries the dependency warnings of each game's rules", "[core][readiness]") {
     // The patch names a mod that loads later, a disabled one and one that is
-    // not installed: warnings in Stellaris, nothing in Hearts of Iron IV.
-    for (const char* game : {"hoi4", "stellaris"}) {
+    // not installed: three warnings where they are required (Victoria 3),
+    // only the one that loads later in Stellaris and CK3, none in EU4 and
+    // Hearts of Iron IV.
+    for (const char* game : {"ck3", "eu4", "hoi4", "stellaris", "vic3"}) {
         INFO(game);
         const std::vector<PlaysetEntry> entries{workshop("6000000001", "Patch", true, game),
                                                 workshop("6000000002", "Base", true, game),
@@ -181,10 +183,17 @@ TEST_CASE("Hearts of Iron IV readiness carries no dependency warnings", "[core][
         REQUIRE(readiness.size() == 3);
         for (const EntryReadiness& entry : readiness)
             CHECK(entry.status == EntryStatus::Ready);
-        if (std::string_view(game) == "hoi4") {
+        const std::string_view key(game);
+        if (key == "eu4" || key == "hoi4") {
             CHECK(readiness[0].warnings.empty());
+        } else if (key == "ck3" || key == "stellaris") {
+            REQUIRE(readiness[0].warnings.size() == 1);
+            CHECK(readiness[0].warnings[0] == "Lists \"Example Base\" (#2) to load before this "
+                                              "mod (#1), but that mod comes later in this "
+                                              "playset.");
         } else {
             REQUIRE(readiness[0].warnings.size() == 3);
+            CHECK_THAT(readiness[0].warnings[0], ContainsSubstring("Requires"));
             CHECK_THAT(readiness[0].warnings[2], ContainsSubstring("not installed"));
         }
         CHECK(readiness[1].warnings.empty());

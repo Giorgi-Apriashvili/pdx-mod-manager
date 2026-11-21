@@ -7,13 +7,17 @@
 // an ASCII case-insensitive match is accepted when no exact match exists.
 //
 // What a dependency means depends on the game (GameCatalogEntry's
-// dependencyMeaning). Where it is Required, only ENABLED entries that are
-// installed (and therefore have a descriptor) are checked. Dependencies load
-// first: index 0 is handed to the game first (see core/model.hpp), so a
-// dependency must have a lower index than its dependent. Where it is LoadAfter
-// (Hearts of Iron IV), the game loads a mod after the named mods when they
-// are enabled and does not need them, so nothing is reported;
-// resolveDependencies() still says where each name leads.
+// dependencyMeaning). Only ENABLED entries that are installed (and therefore
+// have a descriptor) are checked. Dependencies load first: index 0 is handed
+// to the game first (see core/model.hpp), so a dependency must have a lower
+// index than its dependent. Where it is Required (Victoria 3), every named mod
+// that is not installed, not in the playset, disabled or ordered after its
+// dependent is reported. Where it is LoadAfterInList (Stellaris, Crusader
+// Kings III), the named mods are not needed, and only one that is enabled but
+// ordered after its dependent is reported, with a message that does not call
+// it required. Where it is LoadAfter (Europa Universalis IV, Hearts of Iron
+// IV), nothing is reported. resolveDependencies() says where each name leads
+// in every game.
 //
 // These functions only report. They never enable, add or reorder anything;
 // fixing an issue is an explicit user action.
@@ -33,10 +37,10 @@ namespace pmm {
 using InstalledModMap = std::map<ModIdentity, InstalledMod>;
 
 enum class DependencyIssueKind {
-    NotInstalled, // no installed mod of the game has that name
-    NotInPlayset, // installed, but not part of this playset
-    Disabled,     // in the playset, but disabled
-    OrderedAfter, // enabled, but loads after the dependent
+    NotInstalled, // no installed mod of the game has that name (Required only)
+    NotInPlayset, // installed, but not part of this playset (Required only)
+    Disabled,     // in the playset, but disabled (Required only)
+    OrderedAfter, // enabled, but loads after the dependent (Required, LoadAfterInList)
 };
 const char* toString(DependencyIssueKind kind) noexcept;
 
@@ -75,14 +79,16 @@ struct ResolvedDependency {
 // with where each leads, each mod once: a later name is left out when it
 // leads to the same playset entry as an earlier one or, leading to none,
 // matches an earlier name up to ASCII case (checkDependencies() still reports
-// every exact spelling). A name that matches only the entry itself is left
-// out. Empty for an entry that is not installed.
+// every exact spelling where they are Required). A name that matches only the
+// entry itself is left out. Empty for an entry that is not installed.
 std::vector<std::vector<ResolvedDependency>>
 resolveDependencies(std::span<const PlaysetEntry> entries, const InstalledModMap& inventory);
 
-// Issues for every enabled, installed entry of a game whose dependencies are
-// Required (none for a LoadAfter game), ordered by entryIndex and then by the
-// order of the descriptor's dependency list.
+// Issues for every enabled, installed entry, as its game's dependencyMeaning
+// says (the header comment), ordered by entryIndex and then by the order of
+// the descriptor's dependency list. Required reports every exact spelling of a
+// name; LoadAfterInList reports each mod once, as resolveDependencies() lists
+// them.
 std::vector<DependencyIssue> checkDependencies(std::span<const PlaysetEntry> entries,
                                                const InstalledModMap& inventory);
 

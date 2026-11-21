@@ -1,3 +1,4 @@
+#include "core/catalog_testing.hpp"
 #include "core/dependencies.hpp"
 #include "playset_test_support.hpp"
 
@@ -5,6 +6,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace pmm;
@@ -15,12 +17,15 @@ using test::workshop;
 
 namespace {
 
+// The checks of every kind of issue use a game that requires the named mods.
+const GameKey kRequiredGame = "vic3";
+
 // Descriptor names deliberately differ from the playset name hints: matching
 // uses the installed descriptor name.
 struct Fixture {
-    PlaysetEntry core = workshop("10", "core (hint)");
-    PlaysetEntry addon = workshop("20", "addon (hint)");
-    PlaysetEntry patch = workshop("30", "patch (hint)");
+    PlaysetEntry core = workshop("10", "core (hint)", true, kRequiredGame);
+    PlaysetEntry addon = workshop("20", "addon (hint)", true, kRequiredGame);
+    PlaysetEntry patch = workshop("30", "patch (hint)", true, kRequiredGame);
     InstalledModMap inventory;
 
     Fixture() {
@@ -31,8 +36,8 @@ struct Fixture {
             installed(patch.identity, "Compatibility Patch",
                       {"UI Overhaul Dynamic", " Not Installed Mod ", "Installed Elsewhere"}));
         // Installed but not part of the test playsets.
-        add(inventory, installed({"stellaris", "steam-workshop", "40"}, "Installed Elsewhere"));
-        // Same name, other game: must not satisfy anything for Stellaris.
+        add(inventory, installed({kRequiredGame, "steam-workshop", "40"}, "Installed Elsewhere"));
+        // Same name, other game: must not satisfy anything for Victoria 3.
         add(inventory, installed({"eu4", "steam-workshop", "50"}, "Not Installed Mod"));
     }
 };
@@ -92,7 +97,7 @@ TEST_CASE("Name matching prefers exact names and falls back to ASCII case foldin
     CHECK(checkDependencies(ok, f.inventory).empty());
 
     // An uninstalled playset entry is matched by its name hint.
-    PlaysetEntry hinted = workshop("77", "UI Overhaul Dynamic");
+    PlaysetEntry hinted = workshop("77", "UI Overhaul Dynamic", true, kRequiredGame);
     InstalledModMap inventory;
     add(inventory, installed(f.addon.identity, "Addon", {"UI Overhaul Dynamic"}));
     const std::vector<PlaysetEntry> entries{hinted, f.addon};
@@ -172,11 +177,13 @@ struct EveryKind {
 
 } // namespace
 
-TEST_CASE("CK3, EU4, Stellaris and Victoria 3 report each kind of dependency issue as before",
+TEST_CASE("Victoria 3 and a game without an adapter report each kind of dependency issue as before",
           "[core][dependencies]") {
-    for (const char* game : {"ck3", "eu4", "stellaris", "vic3"}) {
+    const pmm::testing::ScopedGameCatalog catalog(pmm::testing::catalogWithUnsupportedGame());
+    using pmm::testing::kUnsupportedGameKey;
+    for (const std::string_view game : {std::string_view("vic3"), kUnsupportedGameKey}) {
         INFO(game);
-        const EveryKind playset(game);
+        const EveryKind playset{GameKey(game)};
         const auto issues = checkDependencies(playset.entries, playset.inventory);
         REQUIRE(issues.size() == 4);
         CHECK(issues[0].kind == DependencyIssueKind::OrderedAfter);
@@ -195,21 +202,71 @@ TEST_CASE("CK3, EU4, Stellaris and Victoria 3 report each kind of dependency iss
     }
 }
 
-TEST_CASE("Hearts of Iron IV dependencies only order the load and raise no issues",
+TEST_CASE("Stellaris and CK3 report only a named mod that comes later, never as required",
           "[core][dependencies]") {
-    EveryKind playset("hoi4");
-    CHECK(checkDependencies(playset.entries, playset.inventory).empty());
-    // Enabling or disabling anything reports nothing either.
-    playset.entries[1].enabled = false;
-    CHECK(dependencyIssuesIntroducedByEnabling(playset.entries, playset.inventory,
-                                               std::vector<std::size_t>{1, 2})
-              .empty());
-    CHECK_FALSE(playset.entries[2].enabled); // nothing is enabled automatically
+    for (const char* game : {"ck3", "stellaris"}) {
+        INFO(game);
+        const EveryKind playset(game);
+        const auto issues = checkDependencies(playset.entries, playset.inventory);
+        // Not the disabled one, the one installed elsewhere or the missing one.
+        REQUIRE(issues.size() == 1);
+        CHECK(issues[0].entryIndex == 1);
+        CHECK(issues[0].kind == DependencyIssueKind::OrderedAfter);
+        CHECK(issues[0].dependencyName == "Example Late");
+        CHECK(issues[0].dependencyIndex == 3);
+        CHECK(issues[0].message == "Lists \"Example Late\" (#4) to load before this mod (#2), "
+                                   "but that mod comes later in this playset.");
+
+        // Moved above the mod that names it, it is no issue.
+        std::vector<PlaysetEntry> moved = playset.entries;
+        std::swap(moved[1], moved[3]);
+        CHECK(checkDependencies(moved, playset.inventory).empty());
+    }
+}
+
+TEST_CASE("EU4 and Hearts of Iron IV dependencies raise no issues", "[core][dependencies]") {
+    for (const char* game : {"eu4", "hoi4"}) {
+        INFO(game);
+        EveryKind playset(game);
+        CHECK(checkDependencies(playset.entries, playset.inventory).empty());
+        // Enabling or disabling anything reports nothing either.
+        playset.entries[1].enabled = false;
+        CHECK(dependencyIssuesIntroducedByEnabling(playset.entries, playset.inventory,
+                                                   std::vector<std::size_t>{1, 2})
+                  .empty());
+        CHECK_FALSE(playset.entries[2].enabled); // nothing is enabled automatically
+    }
+}
+
+TEST_CASE("Enabling mods in Stellaris and CK3 reports only named mods that come later",
+          "[core][dependencies]") {
+    for (const char* game : {"ck3", "stellaris"}) {
+        INFO(game);
+        EveryKind playset(game);
+        playset.entries[1].enabled = false;
+        // Enabling the patch: its disabled, absent and missing names are no
+        // issue, the enabled one after it is.
+        const auto patch = dependencyIssuesIntroducedByEnabling(playset.entries, playset.inventory,
+                                                                std::vector<std::size_t>{1});
+        REQUIRE(patch.size() == 1);
+        CHECK(patch[0].kind == DependencyIssueKind::OrderedAfter);
+        CHECK(patch[0].dependencyName == "Example Late");
+        CHECK_THAT(patch[0].message, !ContainsSubstring("Requires"));
+        // Enabling the patch and the disabled mod after it: both come later.
+        const auto both = dependencyIssuesIntroducedByEnabling(playset.entries, playset.inventory,
+                                                               std::vector<std::size_t>{1, 2});
+        REQUIRE(both.size() == 2);
+        CHECK(both[0].dependencyName == "Example Late");
+        CHECK(both[1].dependencyName == "Example Off");
+        CHECK(both[1].message == "Lists \"Example Off\" (#3) to load before this mod (#2), but "
+                                 "that mod comes later in this playset.");
+        CHECK_FALSE(playset.entries[1].enabled); // nothing is enabled automatically
+    }
 }
 
 TEST_CASE("Resolved dependencies say where each name leads, whatever the game",
           "[core][dependencies]") {
-    for (const char* game : {"hoi4", "stellaris"}) {
+    for (const char* game : {"ck3", "eu4", "hoi4", "stellaris", "vic3"}) {
         INFO(game);
         EveryKind playset(game);
         // Resolved for a disabled entry too.
@@ -255,7 +312,7 @@ TEST_CASE("Resolved names follow the matching rules of the checks", "[core][depe
 
 TEST_CASE("Spellings of one mod are resolved once, and an enabled copy wins over a disabled one",
           "[core][dependencies]") {
-    for (const char* game : {"hoi4", "stellaris"}) {
+    for (const char* game : {"hoi4", "stellaris", "vic3"}) {
         INFO(game);
         // #1 and #3 are copies of one name (#1 disabled); #4 is another,
         // disabled mod whose name differs from theirs only in case.
@@ -277,12 +334,20 @@ TEST_CASE("Spellings of one mod are resolved once, and an enabled copy wins over
                                               {"EXAMPLE CORE", R::Disabled, 3},
                                               {"Example Missing", R::NotInstalled, std::nullopt}});
 
-        // The checks report every exact spelling, as before.
         const auto issues = checkDependencies(entries, inventory);
         if (std::string_view(game) == "hoi4") {
             CHECK(issues.empty());
             continue;
         }
+        if (std::string_view(game) == "stellaris") {
+            // An order hint names each mod once, as the details list it.
+            REQUIRE(issues.size() == 1);
+            CHECK(issues[0].message == "Lists \"example core\" (#3) to load before this mod "
+                                       "(#2), but that mod comes later in this playset.");
+            continue;
+        }
+        // Where they are required, the checks report every exact spelling, as
+        // before.
         REQUIRE(issues.size() == 5);
         CHECK(issues[0].message == "Requires \"example core\" (#3), which must load before this "
                                    "mod (#2). Move it above this mod.");

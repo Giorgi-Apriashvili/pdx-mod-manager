@@ -11,27 +11,53 @@ namespace {
 
 constexpr std::array<std::string_view, 2> kWorkshopAndLocal{source::SteamWorkshop, source::Local};
 
+// What dependencies mean per game (docs/load-order.md, "Dependencies";
+// read-only research of 2026-11-21, none of it tested in a game):
+//
+// Victoria 3 (Required): its metadata.json relationships of rel_type
+// "dependency" are requirements in the Paradox launcher too.
 constexpr DependencyMeaning kRequired = DependencyMeaning::Required;
-// Hearts of Iron IV: the Paradox-hosted HOI4 wiki (Modding, its 2023 and 2026
-// captures) says `dependencies = { "Exact Name" }` makes a mod load after the
-// named ones without making them required; a 2018 developer diary has a mod
-// that needs a certain load order name the others there (docs/load-order.md,
-// Hearts of Iron IV). Neither the game's mod loader nor the Paradox launcher
-// reports a missing name (no such message in hoi4.exe; the launcher checks
-// only Paradox Mods dependencies and metadata.json relationships). Popular
-// mods list total conversions they do not need.
+// The descriptor's `dependencies = { "Exact Name" }` in the other four games:
+// the executables of Stellaris, EU4, CK3 and Hearts of Iron IV read the key
+// from the descriptor-key table they share, and none of their mod-loader
+// messages is about a missing or reordered dependency. The Paradox launcher
+// (2026.14) checks only Paradox Mods platform dependencies and Victoria
+// 3-style metadata.json relationships, never these names, and does not
+// reorder a playset by them; Irony Mod Manager puts named mods first in its
+// merges and ignores missing ones. Nothing found makes the named mods
+// required, so they are not treated as needed (the owner's decision of
+// 2026-11-21).
+//
+// Stellaris and Crusader Kings III (LoadAfterInList): the later mod in the
+// list wins a shared file (measured in both), so a named mod that comes
+// later than the mod naming it is reported as an order hint. For Stellaris a
+// wiki summary says a mod loads after the named mods "if they're installed"
+// (unverified); for CK3 no documentation was found.
+constexpr DependencyMeaning kLoadAfterInList = DependencyMeaning::LoadAfterInList;
+// Europa Universalis IV (LoadAfter): it ignores the list order for file
+// overrides (measured: the mod whose name sorts first wins), so a warning
+// about a named mod's place in the list would be wrong. A wiki summary says
+// a submod naming mods there overrides them (unverified).
+//
+// Hearts of Iron IV (LoadAfter, documented): the Paradox-hosted HOI4 wiki
+// (Modding, its 2023 and 2026 captures) says `dependencies = { "Exact Name" }`
+// makes a mod load after the named ones without making them required; a 2018
+// developer diary has a mod that needs a certain load order name the others
+// there (docs/load-order.md, Hearts of Iron IV). Popular mods list total
+// conversions they do not need.
 constexpr DependencyMeaning kLoadAfter = DependencyMeaning::LoadAfter;
+constexpr bool kLoadAfterDocumented = true;
 
 // Supported games in alphabetical order of their keys, then the others. With no
 // game remembered, the application opens the first installed supported game.
 constexpr std::array<GameCatalogEntry, 5> kCatalog{{
     {"ck3", "Crusader Kings III", "1158310", "Crusader Kings III", kWorkshopAndLocal, true,
-     kRequired},
+     kLoadAfterInList},
     {"eu4", "Europa Universalis IV", "236850", "Europa Universalis IV", kWorkshopAndLocal, true,
-     kRequired},
-    {"hoi4", "Hearts of Iron IV", "394360", "Hearts of Iron IV", kWorkshopAndLocal, true,
      kLoadAfter},
-    {"stellaris", "Stellaris", "281990", "Stellaris", kWorkshopAndLocal, true, kRequired},
+    {"hoi4", "Hearts of Iron IV", "394360", "Hearts of Iron IV", kWorkshopAndLocal, true,
+     kLoadAfter, kLoadAfterDocumented},
+    {"stellaris", "Stellaris", "281990", "Stellaris", kWorkshopAndLocal, true, kLoadAfterInList},
     {"vic3", "Victoria 3", "529340", "Victoria 3", kWorkshopAndLocal, true, kRequired},
 }};
 
@@ -54,6 +80,7 @@ constexpr auto kCatalogWithUnsupportedGame = [] {
     unsupported.sources = kWorkshopAndLocal;
     unsupported.adapterAvailable = false;
     unsupported.dependencyMeaning = kRequired;
+    unsupported.dependencyLoadAfterDocumented = false;
     return entries;
 }();
 

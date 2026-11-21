@@ -7,6 +7,7 @@
 // subscribe/download, a fake Web API, and fake process starter/lister.
 // Nothing here touches a real game, Steam folder, process or the network.
 
+#include "core/catalog.hpp"
 #include "core/model.hpp"
 #include "games/dlc_load_adapter.hpp"
 #include "games/game_adapter.hpp"
@@ -56,6 +57,19 @@ inline constexpr std::int64_t kSteamPid = 3100;
 // The Steam client as a process list shows it.
 inline platform::RunningProcess steamClient() {
     return {kSteamPid, "steam.exe", {}};
+}
+
+// The real catalog with kGame's dependencyMeaning replaced, for a
+// pmm::testing::ScopedGameCatalog (which must not outlive it): the fake
+// adapter is Stellaris's, so a test of another game's rules changes
+// Stellaris's entry.
+inline std::vector<GameCatalogEntry> catalogWhereDependenciesMean(DependencyMeaning meaning) {
+    std::vector<GameCatalogEntry> entries(gameCatalog().begin(), gameCatalog().end());
+    for (GameCatalogEntry& entry : entries) {
+        if (entry.key == kGame)
+            entry.dependencyMeaning = meaning;
+    }
+    return entries;
 }
 
 inline fs::path u8(std::string_view utf8) {

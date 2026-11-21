@@ -288,13 +288,13 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                 if (entries[i].enabled && !readiness[i].warnings.empty())
                     ++withWarnings;
             }
-            // Where dependencies only order the load (Hearts of Iron IV), they
-            // never cause a warning, so the line does not name them.
+            // Where dependencies are not checked (EU4, Hearts of Iron IV),
+            // they never cause a warning, so the line does not name them.
             if (withWarnings > 0)
                 check.warnings.push_back(
                     std::to_string(withWarnings) + " enabled " +
                     (withWarnings == 1 ? "mod has" : "mods have") +
-                    (dependencyMeaningOf(game) == DependencyMeaning::Required
+                    (dependencyMeaningOf(game) != DependencyMeaning::LoadAfter
                          ? " warnings (versions or dependencies); see the mod list."
                          : " warnings; see the mod list."));
             if (check.readiness.canLaunch) {

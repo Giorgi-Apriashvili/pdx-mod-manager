@@ -56,8 +56,9 @@ struct PlaysetView {
     std::vector<PlaysetRow> rows;
     PlaysetCounts counts;
     LaunchReadiness launch; // entry readiness only; LaunchService adds installation checks
-    std::vector<DependencyIssue> dependencyIssues; // none for a game whose dependencies only
-                                                   // order the load (Hearts of Iron IV)
+    // core checkDependencies(): none in a game whose dependencies are not
+    // checked (DependencyMeaning::LoadAfter: EU4, Hearts of Iron IV)
+    std::vector<DependencyIssue> dependencyIssues;
 };
 
 // `installation` and `adapter` may be null (game not installed / unsupported):
