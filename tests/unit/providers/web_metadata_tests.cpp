@@ -23,11 +23,11 @@ std::string readFixture(const char* relative) {
 } // namespace
 
 TEST_CASE("Details request body encodes item ids in order", "[providers][web]") {
-    const std::vector<std::string> ids{"703156866", "1121692237"};
+    const std::vector<std::string> ids{"700000901", "1000000901"};
     auto body = buildPublishedFileDetailsRequest(ids);
     REQUIRE(body.ok());
     CHECK(*body ==
-          "itemcount=2&publishedfileids%5B0%5D=703156866&publishedfileids%5B1%5D=1121692237");
+          "itemcount=2&publishedfileids%5B0%5D=700000901&publishedfileids%5B1%5D=1000000901");
     CHECK(kPublishedFileDetailsUrl ==
           "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/");
     CHECK(kPublishedFileDetailsContentType == "application/x-www-form-urlencoded");
@@ -63,15 +63,15 @@ TEST_CASE("Details response fixture parses found, missing, wrong-game and banned
     REQUIRE(items.size() == 5);
 
     const WorkshopItemMetadata& camera = items[0];
-    CHECK(camera.id == "703156866");
+    CHECK(camera.id == "700000901");
     CHECK(camera.found);
     CHECK(camera.resultCode == 1);
-    CHECK(camera.title == "Cinematic Camera");
+    CHECK(camera.title == "Example Camera");
     CHECK(camera.consumerAppId == "281990");
     CHECK(camera.creatorAppId == "281990");
-    CHECK(camera.fileSize == 429416); // a string in the reply
-    CHECK(camera.timeCreated == 1465842499);
-    CHECK(camera.timeUpdated == 1782489192);
+    CHECK(camera.fileSize == 420000); // a string in the reply
+    CHECK(camera.timeCreated == 1465800000);
+    CHECK(camera.timeUpdated == 1782400000);
     CHECK_FALSE(camera.banned);
     CHECK(camera.visibility == static_cast<int>(WorkshopVisibility::Public));
     CHECK(camera.tags == std::vector<std::string>{"Gameplay", "Camera"});

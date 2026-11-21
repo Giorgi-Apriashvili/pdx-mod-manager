@@ -275,27 +275,27 @@ TEST_CASE("readAppWorkshopManifest reads installed items and pending state", "[p
     CHECK(manifest->timeLastUpdated == 1793271176);
     CHECK(manifest->lastBuildId == "25664273");
     REQUIRE(manifest->items.size() == 4);
-    CHECK(manifest->items[0].id == "703156866");
-    CHECK(manifest->items[1].id == "1623423360");
-    CHECK(manifest->items[2].id == "1628912584");
-    CHECK(manifest->items[3].id == "3090328185");
+    CHECK(manifest->items[0].id == "700000901");
+    CHECK(manifest->items[1].id == "1000000902");
+    CHECK(manifest->items[2].id == "1000000903");
+    CHECK(manifest->items[3].id == "3000000901");
 
-    const WorkshopItemState* current = manifest->findItem("1623423360");
+    const WorkshopItemState* current = manifest->findItem("1000000902");
     REQUIRE(current != nullptr);
     CHECK(current->installed);
-    CHECK(current->size == 231762225u);
-    CHECK(current->timeUpdated == 1791477347);
-    CHECK(current->manifest == "1070831328046085548");
+    CHECK(current->size == 230000000u);
+    CHECK(current->timeUpdated == 1791400000);
+    CHECK(current->manifest == "1100000000000000101");
     CHECK(current->subscribedBy == "100000001");
     CHECK_FALSE(current->hasPendingUpdate());
 
-    const WorkshopItemState* outdated = manifest->findItem("1628912584");
+    const WorkshopItemState* outdated = manifest->findItem("1000000903");
     REQUIRE(outdated != nullptr);
     CHECK(outdated->hasPendingUpdate());
-    CHECK(outdated->latestTimeUpdated == 1792511498);
+    CHECK(outdated->latestTimeUpdated == 1792500000);
     CHECK(outdated->subscribedBy.empty()); // no longer subscribed
 
-    const WorkshopItemState* requested = manifest->findItem("3090328185");
+    const WorkshopItemState* requested = manifest->findItem("3000000901");
     REQUIRE(requested != nullptr);
     CHECK_FALSE(requested->installed);
     CHECK(requested->hasPendingUpdate());

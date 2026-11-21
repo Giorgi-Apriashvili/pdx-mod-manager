@@ -388,9 +388,9 @@ TEST_CASE("EU4 Workshop items become installed once Steam has downloaded them", 
     const fs::path acf = f.path("Steam/steamapps/workshop/appworkshop_236850.acf");
     test::writeText(acf, test::replaceAll(test::readText(acf), "\t\"WorkshopItemDetails\"",
                                           "\t\"WorkshopItemsInstalled\"\n\t{\n\t\t\"3000000001\"\n"
-                                          "\t\t{\n\t\t\t\"size\"\t\t\"2821267\"\n"
-                                          "\t\t\t\"timeupdated\"\t\t\"1715404933\"\n"
-                                          "\t\t\t\"manifest\"\t\t\"8055649841122585510\"\n"
+                                          "\t\t{\n\t\t\t\"size\"\t\t\"2800000\"\n"
+                                          "\t\t\t\"timeupdated\"\t\t\"1715400000\"\n"
+                                          "\t\t\t\"manifest\"\t\t\"2100000000000000101\"\n"
                                           "\t\t}\n\t}\n\t\"WorkshopItemDetails\""));
     const std::vector<InstalledMod> mods = f.scan(inst);
     const InstalledMod& font = f.mod(mods, "3000000001");
@@ -398,7 +398,7 @@ TEST_CASE("EU4 Workshop items become installed once Steam has downloaded them", 
     CHECK(font.problems.empty());
     CHECK(samePath(font.descriptorPath, f.userData() / "mod" / "ugc_3000000001.mod"));
     CHECK(samePath(font.contentPath, f.path(folder)));
-    CHECK(font.contentUpdatedAt == 1715404933);
+    CHECK(font.contentUpdatedAt == 1715400000);
     CHECK(f.adapter.compatibilityWarnings(inst, font).empty()); // v1.37.*.*
     CHECK(findMod(mods, "3000000002") == nullptr);
 

@@ -48,9 +48,9 @@ TEST_CASE("Item flags have readable descriptions", "[providers][workshop]") {
 
 TEST_CASE("Published file ids must be canonical decimal uint64", "[providers][workshop]") {
     CHECK(isValidPublishedFileId("1"));
-    CHECK(isValidPublishedFileId("703156866"));
+    CHECK(isValidPublishedFileId("700000901"));
     CHECK(isValidPublishedFileId("18446744073709551615")); // 2^64-1
-    CHECK(parsePublishedFileId("3090328185") == std::uint64_t{3090328185});
+    CHECK(parsePublishedFileId("3000000901") == std::uint64_t{3000000901});
 
     const char* bad = GENERATE("", "0", "0123", "-1", "+1", " 1", "1 ", "12a", "1.0", "0x10",
                                "18446744073709551616", "999999999999999999999", "\xD9\xA1");
@@ -124,18 +124,18 @@ TEST_CASE("Steam result errors carry context and the numeric EResult", "[provide
 }
 
 TEST_CASE("Manual fallback links are built only from valid ids", "[providers][fallback]") {
-    auto client = steamClientItemUrl("703156866");
+    auto client = steamClientItemUrl("700000901");
     REQUIRE(client.ok());
-    CHECK(*client == "steam://url/CommunityFilePage/703156866");
+    CHECK(*client == "steam://url/CommunityFilePage/700000901");
 
-    auto web = workshopWebItemUrl("703156866");
+    auto web = workshopWebItemUrl("700000901");
     REQUIRE(web.ok());
-    CHECK(*web == "https://steamcommunity.com/sharedfiles/filedetails/?id=703156866");
+    CHECK(*web == "https://steamcommunity.com/sharedfiles/filedetails/?id=700000901");
 
-    auto links = manualFallbackLinks("1121692237");
+    auto links = manualFallbackLinks("1000000901");
     REQUIRE(links.ok());
-    CHECK(links->steamClientUrl == "steam://url/CommunityFilePage/1121692237");
-    CHECK(links->webUrl == "https://steamcommunity.com/sharedfiles/filedetails/?id=1121692237");
+    CHECK(links->steamClientUrl == "steam://url/CommunityFilePage/1000000901");
+    CHECK(links->webUrl == "https://steamcommunity.com/sharedfiles/filedetails/?id=1000000901");
 
     for (const char* bad :
          {"", "0", "12&evil=1", "../../x", "javascript:alert(1)", "123456789012345678901", "1 2"}) {

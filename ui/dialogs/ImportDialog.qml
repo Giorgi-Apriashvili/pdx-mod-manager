@@ -182,7 +182,7 @@ AppDialog {
                 id: codeArea
                 Layout.fillWidth: true
                 Layout.preferredHeight: dialog.sharing.hasPreview ? 64 : 160
-                placeholderText: qsTr("Paste a share code (PMM1.…) or Workshop IDs, e.g. 3818297502|3149445431")
+                placeholderText: qsTr("Paste a share code (PMM1.…) or Workshop IDs, e.g. 3000000914|3000000902")
                 Accessible.name: qsTr("Share code or Workshop ID list text")
                 onTextChanged: {
                     if (!dialog.settingText)

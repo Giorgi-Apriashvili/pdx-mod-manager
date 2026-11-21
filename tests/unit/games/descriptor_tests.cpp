@@ -22,7 +22,7 @@ using Pairs = std::vector<std::pair<std::string, std::string>>;
 constexpr std::string_view kLauncherDescriptor = "name=\"Example Outliner\"\n"
                                                  "dependencies={\n"
                                                  "\t\"Example Overhaul\"\n"
-                                                 "\t\"Tiny Outliner v2\"\n"
+                                                 "\t\"Example Outliner Addon\"\n"
                                                  "}\n"
                                                  "tags={\n"
                                                  "\t\"Fixes\"\n"
@@ -32,8 +32,8 @@ constexpr std::string_view kLauncherDescriptor = "name=\"Example Outliner\"\n"
                                                  "version=\"4.4.*\"\n"
                                                  "supported_version=\"v4.4.*\"\n"
                                                  "path=\"C:/Program Files (x86)/Steam/steamapps/"
-                                                 "workshop/content/281990/1628912584\"\n"
-                                                 "remote_file_id=\"1628912584\"";
+                                                 "workshop/content/281990/1000000903\"\n"
+                                                 "remote_file_id=\"1000000903\"";
 
 ModDescriptor parsed(std::string_view text) {
     auto result = parseDescriptor(text);
@@ -46,13 +46,13 @@ ModDescriptor parsed(std::string_view text) {
 TEST_CASE("Descriptor parser reads the launcher format", "[games][descriptor]") {
     const ModDescriptor d = parsed(kLauncherDescriptor);
     CHECK(d.name == "Example Outliner");
-    CHECK(d.dependencies == std::vector<std::string>{"Example Overhaul", "Tiny Outliner v2"});
+    CHECK(d.dependencies == std::vector<std::string>{"Example Overhaul", "Example Outliner Addon"});
     CHECK(d.tags == std::vector<std::string>{"Fixes", "Graphics"});
     CHECK(d.picture == "thumbnail.png");
     CHECK(d.version == "4.4.*");
     CHECK(d.supportedVersion == "v4.4.*");
-    CHECK(d.path == "C:/Program Files (x86)/Steam/steamapps/workshop/content/281990/1628912584");
-    CHECK(d.remoteFileId == "1628912584");
+    CHECK(d.path == "C:/Program Files (x86)/Steam/steamapps/workshop/content/281990/1000000903");
+    CHECK(d.remoteFileId == "1000000903");
     CHECK(d.archive.empty());
     CHECK(d.extra.empty());
 }
@@ -211,7 +211,7 @@ TEST_CASE("Descriptor files are read with a size limit and named in errors",
 
     auto good = readDescriptor(dir / "good.mod");
     REQUIRE(good.ok());
-    CHECK(good->remoteFileId == "1628912584");
+    CHECK(good->remoteFileId == "1000000903");
 
     auto bad = readDescriptor(dir / "bad.mod");
     REQUIRE_FALSE(bad.ok());

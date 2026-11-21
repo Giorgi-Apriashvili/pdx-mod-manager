@@ -276,7 +276,7 @@ TEST_CASE("Stellaris scan applies the identity rules", "[games][stellaris]") {
     CHECK(samePath(registered.contentPath, f.content("1000000001")));
     CHECK(registered.descriptor.name == "Example Overhaul");
     CHECK(registered.descriptor.tags == std::vector<std::string>{"Fixes", "Graphics", "Overhaul"});
-    CHECK(registered.contentUpdatedAt == 1782489192);
+    CHECK(registered.contentUpdatedAt == 1782400000);
 
     // Registered with a stale library path: usable, rewritten at launch.
     const InstalledMod& stale = f.mod(mods, "1000000002");

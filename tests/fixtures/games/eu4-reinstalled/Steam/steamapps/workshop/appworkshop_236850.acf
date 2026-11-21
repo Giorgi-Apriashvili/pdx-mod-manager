@@ -16,8 +16,8 @@
 			"timeupdated"		"0"
 			"timetouched"		"0"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1715404933"
-			"latest_manifest"		"8055649841122585510"
+			"latest_timeupdated"		"1715400000"
+			"latest_manifest"		"2100000000000000101"
 		}
 		"3000000002"
 		{
@@ -25,8 +25,8 @@
 			"timeupdated"		"0"
 			"timetouched"		"0"
 			"subscribedby"		"100000001"
-			"latest_timeupdated"		"1729304845"
-			"latest_manifest"		"8192276461725588261"
+			"latest_timeupdated"		"1729300000"
+			"latest_manifest"		"2100000000000000102"
 		}
 	}
 }
