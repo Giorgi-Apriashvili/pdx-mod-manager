@@ -131,6 +131,12 @@ blocks the common ones).
 - **Sanitize** anything modelled on real files: placeholder user names and
   paths (`C:/Users/<user>`), no SteamID64 values, no account
   data, no copyrighted game or mod content beyond the minimal structure needed.
+  Fixtures, evidence, examples and screenshots use only invented Workshop
+  ids, mod names, local mod folder names and item details (sizes, times,
+  Web API fields), never values from a contributor's machine, not even
+  rounded or with a word of the real name kept; the real application's
+  screenshots come from `scripts/app-screenshots.py`, which runs it against
+  a made-up installation.
 - **Share-code regression fixtures never change.** `tests/fixtures/sharing/v1/`
   is the frozen compatibility contract of protocol version 1: existing `.code`
   and `.json` files must never be edited, regenerated or deleted, even if an

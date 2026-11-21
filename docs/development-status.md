@@ -77,7 +77,8 @@ databases and `playsets_backup` were not opened. Item 15 below.
   mod's details were replaced, differing from the committed ones only there
   and by such pixels, and the six others kept. The real application's captures were
   not retaken: their selected Stellaris and EU4 mods list no dependencies,
-  so they show "Dependencies" and "None declared." as before.
+  so they show "Dependencies" and "None declared." as before (captures
+  replaced on 2026-11-21, item 16).
 - `scripts/check.sh --full` on `18197c4`: passed in 8 min 51 s (ASan and
   clang-cl with UBSan 529/529 each, the update contract's 112 checks,
   clang-tidy on the 12 C++ files changed since `origin/main` without
@@ -1269,9 +1270,35 @@ Packaging ([`packaging.md`](packaging.md)):
     mod that names none shows "Dependencies" and "None declared." in every
     game, Hearts of Iron IV included (before, "Loads after" without its
     note). Seven preview screenshots regenerated; the real application's
-    captures are unchanged (their selected mods list no dependencies).
+    captures are unchanged (their selected mods list no dependencies;
+    captures replaced on 2026-11-21, item 16).
     Whether any game loads a mod after the mods it names is untested
     in-game. Not merged.
+16. Done 2026-11-21 on `agent/privacy-scrub` (the owner's decision of
+    2026-11-21: the current files of the public repository must not contain
+    the owner's Workshop item ids, mod names or local mod folder names; the
+    git history stays as it is, with no rewrite and no force push). Every
+    tracked file uses one mapping of made-up values: Workshop ids from one
+    made-up range (`12000000NN`) in no particular order, invented item sizes
+    and update times (only "API value = acf value" and their order kept), a
+    synthetic first item in the Web API fixture, and topic-free names
+    (`Example Mod D` to `X`) for the names that had kept a word of a real
+    title, also in the 2026-10-29 fixtures. The evidence notes say what
+    was replaced or left out (two item sizes and the SHA-256 values of real
+    files in the 2026-10-30 notes). The real application's captures
+    (`app-*`, `a11y-scale-*`) come from `scripts/app-screenshots.py`: a
+    made-up installation of all five games, whose selected Stellaris mod
+    has a "Loads after" row; the script checks the profiles against the
+    catalog and the made-up data, refuses a `--root` that would show the
+    Windows user and cleans up after a failed run. The working rules and
+    `CONTRIBUTING.md` now forbid real Workshop data in fixtures, evidence,
+    examples and screenshots. Left for the owner: the changelog's 0.2.0
+    section now has the new example ids, but the published v0.2.0 release
+    notes on GitHub, the import box of the shipped 0.2.0 and 0.3.0 and the
+    old tags still show the earlier ones (the next release ships the new
+    placeholder); the later CK3, Hearts of Iron IV and Victoria 3 evidence
+    notes keep truncated SHA-256 values of the real configuration files.
+    Not merged.
 
 ## Working rules
 
@@ -1288,6 +1315,11 @@ Packaging ([`packaging.md`](packaging.md)):
   verification switch, which imply read-only and no Steam helper;
   `--live-test` only for an approved live run.
 - Fixtures and evidence are sanitized (placeholder user names and paths).
+  Fixtures, evidence, examples and screenshots use only invented Workshop
+  ids, mod names, local mod folder names and item details (sizes, times, Web
+  API fields), never values from the development machine, not even rounded
+  or with a word of the real name kept; the real application's screenshots
+  come from `scripts/app-screenshots.py` (a made-up installation).
 
 ## Facts established on the development machine
 
