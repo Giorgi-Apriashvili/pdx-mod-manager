@@ -109,6 +109,38 @@ Tests use `Database::openInMemory()` or a unique temporary directory.
   `std::optional`; lookups by local id (playset, job, history entry) return
   `ErrorCode::NotFound` for unknown or deleted rows.
 
+## Schema version 3
+
+Version 3 (0.3.1) is for updating and re-downloading installed Workshop mods
+([Steam Workshop section 3](steam-workshop.md#3-acquisition-state-machine)).
+It adds columns with defaults (`ALTER TABLE ... ADD COLUMN`) and rebuilds the
+one-unfinished-job index, so a version 2 database upgrades in place after the
+usual `state.sqlite.bak-v2` backup; every stored job becomes an acquire job:
+
+```text
+acquisition_jobs(..., kind TEXT 'acquire' | 'update' | 'reinstall' DEFAULT 'acquire',
+    target_time_updated INTEGER DEFAULT 0,   -- update target, unix ms (0: none)
+    target_manifest TEXT DEFAULT '',
+    reinstall_step TEXT 'start' | 'unsubscribed' | 'resubscribed' DEFAULT 'start')
+  UNIQUE INDEX acquisition_jobs_one_unfinished (game_key, source, provider_id)
+    WHERE state IN ('pending', 'unsubscribing', 'subscribing', 'subscribed',
+                    'download_requested', 'downloading')
+
+installed_mods(..., content_time_from_steam 0/1 DEFAULT 0,
+    workshop_manifest TEXT DEFAULT '', latest_manifest TEXT DEFAULT '',
+    latest_updated_at INTEGER DEFAULT 0)     -- unix ms
+```
+
+* `unsubscribing` is a new non-terminal `AcquisitionState` (a re-download
+  waiting for its unsubscribe), hence the rebuilt index.
+* `kind` cannot change after the job is created (`update()` leaves it); the
+  target and the reinstall step can.
+* `content_time_from_steam` says whether `content_updated_at` is Steam's
+  record of the installed version (`appworkshop_<app>.acf` `timeupdated`) or
+  only the folder's modification time; only the former is compared with the
+  Workshop. `installed_mods` is a cache, so rows from version 2 read as
+  "folder time" until the next scan rewrites them.
+
 ## Schema version 2
 
 Version 2 drops `game_installations.platform` (`ALTER TABLE ... DROP COLUMN`).

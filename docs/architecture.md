@@ -140,8 +140,9 @@ share-code value space).
    `observationFromHelperEvent()`; `reduceAcquisition()` returns the next state,
    further actions and whether to persist the job.
 3. Before deciding anything, every run queries the item state, so installed
-   items are verified instead of downloaded again and restored jobs are
-   reconciled instead of re-subscribed.
+   items are verified instead of downloaded again (except by an update or a
+   re-download, below) and restored jobs are reconciled instead of
+   re-subscribed.
 4. The game adapter's `verifyWorkshopContent(installPath)` checks the content
    by the rule of its own scan; only then does a job become `Installed`. A
    rescan updates the inventory and readiness.
@@ -153,6 +154,30 @@ share-code value space).
 6. After a restart, `AcquisitionJobRepository::listUnfinished()` feeds
    `startAcquisition()` again. The helper is stopped when idle and before the
    game is launched.
+
+### Update and re-download installed Workshop mods
+
+1. Steam's `appworkshop_<app>.acf`, read at every inventory scan, flags an
+   installed item whose `latest_manifest` (not empty, not `"0"`) differs from
+   its `manifest`: `InstallState::NeedsUpdate`, no network.
+2. "Check for mod updates" (`ServiceRunner::checkWorkshopUpdates()`, on the
+   user's request only) rescans the game, asks the Web API about the active
+   playset's installed Workshop mods (ids only) and hands the answers to the
+   coordinator, which keeps them for the session and compares them with the
+   installed versions (`providers::compareWithWorkshop()`; only versions
+   whose time is Steam's record are compared).
+3. Readiness marks entries with an update available (`updateAvailable`, never
+   blocking); the launch check names how many enabled mods have one.
+4. "Update mods" / "Update from Workshop" (`acquireUpdates()`) create update
+   jobs; "Re-download from scratch" (`reinstall()`) a reinstall job, which
+   unsubscribes, subscribes again and downloads. Both are refused while the
+   game runs. An unfinished one makes its entry Pending or Downloading and
+   blocks Play; the reducer (`providers/acquisition.hpp`) asks Steam for the
+   download even when Steam calls the installed version current and finishes
+   only at the target version, else with `update_not_seen`.
+5. Schema version 3 stores the job kind, the update target and the reinstall
+   step, and Steam's version records of installed items
+   ([persistence](persistence.md#schema-version-3)).
 
 ### Launch (Play)
 

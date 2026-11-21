@@ -55,9 +55,11 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
 - **No SDK redistribution.** The helper loads the `steam_api` library that the user's game
   installation already contains, at run time. No Steamworks SDK headers, import libraries or
   binaries are needed to build, and none are in the repository or the packages.
-- **Small, safe surface.** The protocol can query state, subscribe, and request a download.
-  There is no command to unsubscribe, delete, or pass paths or URLs, and every id is validated as
-  a canonical decimal `uint64`.
+- **Small, safe surface.** The protocol can query state, subscribe, request a download, and
+  unsubscribe one item. There is no command to delete anything or to pass paths or URLs, and
+  every id is validated as a canonical decimal `uint64`. Unsubscribe exists only for the
+  re-download from scratch that the user asks for per mod (section 3); Steam then removes the
+  item's files itself.
 
 ### How the helper binds to the game's library
 
@@ -87,10 +89,13 @@ Evidence: [`docs/evidence/steam-helper-probe.md`](evidence/steam-helper-probe.md
    `steam_appid.txt`.
 6. Main loop: pump `SteamAPI_RunCallbacks` every 50 ms (sooner when a command arrives). A reader
    thread performs raw OS reads from stdin into a queue, so the pump never blocks on input.
-   Pending subscribe calls are polled with `IsAPICallCompleted` and read with `GetAPICallResult`
-   (callback 1313, `RemoteStorageSubscribePublishedFileResult_t {EResult; uint64}`: 16 bytes with
-   8-byte callback packing). If a result
-   doesn't arrive within 120 s, it is reported as EResult 16 (Timeout).
+   Pending subscribe and unsubscribe calls are polled with `IsAPICallCompleted` and read with
+   `GetAPICallResult`: callback 1313, `RemoteStorageSubscribePublishedFileResult_t`, and
+   callback 1315, `RemoteStorageUnsubscribePublishedFileResult_t`, both `{EResult; uint64}`:
+   16 bytes with 8-byte callback packing. If a result doesn't arrive within 120 s, it is
+   reported as EResult 16 (Timeout). `SteamAPI_ISteamUGC_UnsubscribeItem` is resolved but not
+   required: with a library that lacks it, `unsubscribe` answers `ok:false, result:2` and
+   everything else works.
 7. On `quit` or end of input, the helper calls `SteamAPI_Shutdown` and exits 0.
 
 Stellaris 4.5.2 ships an SDK build earlier than 1.58: it has no `SteamAPI_InitFlat`, and it
@@ -100,8 +105,9 @@ exports `SteamAPI_SteamUGC_v016`. The helper therefore used `SteamAPI_InitSafe` 
 ## 2. Helper protocol (version 1)
 
 UTF-8 JSON, one object per line, `\n` terminated, at most 256 KiB per line. The helper prints a
-`ready` event first and then answers commands in order. Subscribe results arrive asynchronously.
-Encoding and decoding live in `providers/helper_protocol.hpp`, shared by both sides.
+`ready` event first and then answers commands in order. Subscribe and unsubscribe results arrive
+asynchronously. Encoding and decoding live in `providers/helper_protocol.hpp`, shared by both
+sides.
 
 ### Commands (application to helper)
 
@@ -111,7 +117,13 @@ Encoding and decoding live in `providers/helper_protocol.hpp`, shared by both si
 | `{"protocol":1,"cmd":"state","ids":["1200000019",...]}` (1 to 1000 ids) | one `state` event per id, in order |
 | `{"protocol":1,"cmd":"subscribe","id":"..."}` | later: `subscribe_result` |
 | `{"protocol":1,"cmd":"download","id":"...","highPriority":true}` | `download_requested` |
+| `{"protocol":1,"cmd":"unsubscribe","id":"..."}` | later: `unsubscribe_result` |
 | `{"protocol":1,"cmd":"quit"}` | none; the helper shuts Steam down and exits 0 |
+
+`download` passes the id straight to `DownloadItem`, also for an installed item: an update job
+uses it to ask for a newer version. `unsubscribe` calls `UnsubscribeItem` (Steamworks: "This
+will result in the item being removed after the game quits"; the helper session counts as the
+game). Only a reinstall job sends it (section 3).
 
 `protocol` may be omitted, which is convenient for manual testing. Any other value is rejected.
 Unknown fields are ignored. Unknown commands, non-canonical ids (`""`, `"0"`, `"012"`, signs,
@@ -128,6 +140,7 @@ spaces, more than `2^64-1`) and oversized lines get an `error` event, and the he
  "installPath":"...","sizeOnDisk":300000,"timestamp":1708000000}
 {"event":"subscribe_result","id":"1200000023","ok":true,"result":1}
 {"event":"download_requested","id":"1200000023","accepted":true}
+{"event":"unsubscribe_result","id":"1200000019","ok":true,"result":1}
 {"event":"pong"}
 {"event":"error","code":"invalid_id","message":"...","cmd":"subscribe"}
 ```
@@ -160,7 +173,11 @@ redact it before exporting diagnostics.
 
 Protocol versioning: the helper and the application ship together. A `ready` event with another
 `protocol` value fails to decode with `UnsupportedVersion`, and the app should then treat the
-provider as unavailable.
+provider as unavailable. `unsubscribe` and `unsubscribe_result` were added to version 1 without
+a version change (0.3.1): they are additive, and a helper without them answers `unsubscribe`
+with an `unknown_command` error, which ends the job with a response timeout instead of
+unsubscribing. `tests/fixtures/providers/helper_transcript_update.jsonl` is a hand-written
+transcript of an update and a re-download (none has been recorded live yet).
 
 ## 3. Acquisition state machine
 
@@ -170,6 +187,17 @@ It performs no I/O and never reads the clock. Time arrives as `Tick{nowMs}` (and
 argument of `startAcquisition`). The persisted part of the context is the core
 `AcquisitionJob`. The rest (what the job is waiting for, timers, session facts) is transient and
 rebuilt by calling `startAcquisition` again after a restart.
+
+A job has a kind (`AcquisitionKind`, stored since schema version 3):
+
+- **acquire**: a missing mod. The diagram below.
+- **update**: an installed, subscribed mod with a newer version on the Workshop (found by the
+  update check or flagged in Steam's `appworkshop_<app>.acf`). It carries a target: the
+  Workshop's `time_updated` (and `hcontent_file`, recorded only), or the acf's
+  `latest_timeupdated` / `latest_manifest`.
+- **reinstall**: "Re-download from scratch", which the user asks for per mod after a
+  confirmation. Its `ReinstallStep` (start, unsubscribed, resubscribed) is stored, so that a
+  retry or a restart carries on instead of unsubscribing twice or leaving the item unsubscribed.
 
 ```text
  startAcquisition (new job, or any non-terminal job loaded after a restart)
@@ -208,30 +236,89 @@ rebuilt by calling `startAcquisition` again after a restart.
  ItemRejected (Web API: not found / banned / wrong game) -> Unavailable
 ```
 
+Update and reinstall jobs:
+
+```text
+ update: [await State] --ItemState--> decide:
+        |  not subscribed ------------------------------> NeedsUserAction ("not subscribed in
+        |                                                  Steam"; an update never subscribes)
+        |  downloading / pending -----------------------> [Progress]
+        |  installed & current & target reached --------> VerifyContent(path)
+        |  otherwise (needs online) --------------------> RequestDownload (*), also when Steam
+        |                                                  calls the installed version current
+  [Progress] ItemState installed & current:
+        |     install timestamp >= target (no target: after this run's request) -> VerifyContent
+        |     still older -> keep polling; updateRecheckMs (30 s) after the accepted request:
+        |                    RequestDownload once more, then Failed (update_not_seen, no
+        |                    automatic retry): "Steam has not picked up this update yet. ..."
+        |  ItemState not subscribed -> NeedsUserAction
+
+ reinstall: [await State] --ItemState--> decide by ReinstallStep:
+        |  start, subscribed (needs online) ---> Unsubscribing --> [await UnsubscribeResult] (*)
+        |  start, not subscribed --------------> step unsubscribed, as below
+        |  unsubscribed -----------------------> Subscribing --> [await SubscribeResult] (*)
+        |  resubscribed -----------------------> as an update (download even when current);
+        |                                         its target, when it has one, as an update's
+  [await UnsubscribeResult] --OK--> step unsubscribed (stored), [await Removal]: QueryState
+        |                             every pollInterval until Steam no longer reports the
+        |                             subscription, then up to removalGraceMs (10 s) for the
+        |                             files to go, then Subscribe; unsubscribeTimeoutMs (60 s)
+        |                             without that -> Failed
+        |                   --error--> as a subscribe error; nothing changed in Steam
+  [await SubscribeResult] --OK--> step resubscribed (stored), QueryState
+  Every failure in step unsubscribed adds: "Workshop item <id> is now unsubscribed in Steam:
+  Retry subscribes to it again and downloads it." Retry (and the automatic retries) subscribe
+  again; they never unsubscribe a second time.
+
+  (*) through the identity gate (below)
+```
+
 Invariants, all enforced by tests:
 
 - `Installed` is reached only through `ContentVerified(ok)` for the path Steam reported.
   `Subscribed` and `DownloadRequested` never imply readiness.
-- Subscribe, RequestDownload and VerifyContent are decided only from a fresh `ItemState`. So
-  items that are already installed are verified instead of downloaded again, and a restored job
-  is reconciled instead of being subscribed again blindly.
+- Subscribe, RequestDownload, Unsubscribe and VerifyContent are decided only from a fresh
+  `ItemState`; the one exception is an update's second download request, which the clock
+  decides. So for an acquire job, items that are already installed are verified instead of
+  downloaded again (installed content is downloaded again only on an explicit update or
+  re-download), and a restored job is reconciled instead of being subscribed again blindly.
 - A job is terminal (core `isTerminal`) exactly when it is waiting for nothing. Each transition
   emits at most one action.
-- The machine never asks to unsubscribe or delete anything.
+- The machine never deletes anything. Only a reinstall job unsubscribes, only in step start, and
+  an update job never subscribes.
 
 Default policy (`AcquisitionPolicy`): 3 automatic runs per retry cycle; backoff 5 s, doubling, capped
-at 120 s; 30 s response timeout (60 s for subscribe); 5 min stall timeout; state polling every 1 s
-while downloading; high-priority downloads. A user `Retry` always starts a fresh cycle.
+at 120 s; 30 s response timeout (60 s for subscribe and unsubscribe); 5 min stall timeout; state
+polling every 1 s while downloading; high-priority downloads; an update asks once more after
+30 s; a re-download waits up to 10 s for Steam to remove the files. A user `Retry` always starts
+a fresh cycle.
+
+What the services and the readiness rules make of the kinds:
+
+- An unfinished update or reinstall job of an installed mod makes its playset entry Pending or
+  Downloading, so Play waits; the launch check also waits while an update or re-download of a
+  disabled mod (or of a mod of another playset) of the same game runs. A failed one leaves the
+  entry Ready with a warning ("Update failed: ...").
+- `AcquisitionCoordinator::acquireUpdates()`, `reinstall()` and `reinstallJob()`, and a Retry of
+  an update or reinstall job, are refused (`ConflictingProcess`) while the game's process runs
+  (the launch check's process list); `start()` leaves stored update and reinstall jobs parked
+  meanwhile. A download Steam already accepted before an outside launch cannot be stopped.
+- The Downloads list keeps failed and running update and reinstall jobs, also when the mod is
+  installed and usable; a failed update offers "Re-download from scratch" (`canReinstall`).
 
 ### Identity gate (services)
 
-Share codes are untrusted input, and Subscribe and RequestDownload act on the user's Steam
-account. So when a Web API metadata host is configured (the app sets one up whenever Workshop
-acquisition is enabled),
-`services::AcquisitionCoordinator` sends these two actions only for items the Web API has
+Share codes are untrusted input, and Subscribe, RequestDownload and Unsubscribe act on the
+user's Steam account. So when a Web API metadata host is configured (the app sets one up
+whenever Workshop acquisition is enabled),
+`services::AcquisitionCoordinator` sends these actions only for items the Web API has
 confirmed: the item exists, is not banned, and its `consumer_app_id` is the game's app id
 (`validateWorkshopItemForGame()`, section 7). The reducer above stays pure; the gate sits between
-its transitions and the helper.
+its transitions and the helper. One exception: the download of an update that Steam's own
+`appworkshop_<app>.acf` flagged for an installed item passes without a verdict (an update never
+subscribes, so nothing new reaches the account), and works while the Web API is unreachable. A
+re-download needs a metadata host at all (`reinstall()` refuses without one): the Web API must
+confirm the item still exists before it is unsubscribed.
 
 ```text
  job starts or resumes --> Web API request for its item (batched per game, before any session opens)
@@ -246,7 +333,12 @@ its transitions and the helper.
                  |-- verdict: rejected -----------> ItemRejected -> Unavailable
                  '-- no verdict within identityTimeoutMs (15 s) -->
                                                     NeedsUserAction (timeout): "could not confirm
-                                                    ... so it did not subscribe to it"
+                                                    ... so it did not subscribe to it" (update:
+                                                    "did not ask Steam to download the update";
+                                                    reinstall: "did not unsubscribe or download
+                                                    it again", or, after the unsubscribe, "did
+                                                    not subscribe to it again" with the note
+                                                    that the item is now unsubscribed)
 ```
 
 - QuerySession, QueryState and the verification of content Steam already installed are never
@@ -264,7 +356,7 @@ its transitions and the helper.
   helper exits unexpectedly, feed `ProviderUnavailable{HelperFailed}` to its jobs.
 - Map helper events with `observationFromHelperEvent()` and actions with `helperCommandFor()`.
   Batch `QueryState` actions from several jobs into one `state` command.
-- Hold Subscribe and RequestDownload behind the identity gate (above).
+- Hold Subscribe, RequestDownload and Unsubscribe behind the identity gate (above).
 - Run the game adapter's `verifyWorkshopContent()` on a worker thread, then feed
   `ContentVerified`. Each adapter family applies the rule of its own scan (since 2026-11-20;
   [ADR 0010](adr/0010-content-load-adapter-family.md)): for Stellaris, EU4 and CK3 a non-empty
@@ -380,6 +472,29 @@ headers (`Accept-Language: en`, not the system's language), at most 1,000
 per preview, never in sessions without Steam (`--no-steam`, `--read-only`). These answers go to
 the preview only, never to the coordinator: a job's identity gate always rests on its own request.
 
+**The update check** ("Check for mod updates", `ServiceRunner::checkWorkshopUpdates()`) asks,
+only when the user presses it, about the installed Workshop mods of the active playset, enabled
+and disabled: item ids only, in batches of 100, leaving out items answered within the last five
+minutes (`CoordinatorOptions::updateCheckMaxAgeMs`). It first rescans the game's inventory,
+which re-reads `appworkshop_<app>.acf`. The coordinator keeps the answers for the session
+(`recordUpdateCheck()`; they also serve as verdicts for the identity gate) and compares them on
+demand with the installed versions (`workshopFindings()`, `providers::compareWithWorkshop()`):
+
+- an update is available when `time_updated` is later than the acf's `timeupdated` of the
+  installed version (`InstalledMod::contentUpdatedAt` when `contentTimeFromSteam`);
+- an item whose installed time is only the folder's modification time (no acf record) is not
+  compared: folder times are local download times;
+- `hcontent_file` is parsed (`WorkshopItemMetadata::contentManifest`, empty for `"0"`) and
+  recorded with the acf `manifest` (`InstalledMod::workshopManifest`), but not compared until a
+  live test confirms they name the same thing;
+- not found, banned and other-game items are refused: the entry gets a warning that the
+  installed copy stays, and no update.
+
+Independently of the check, Steam's own record always counts, without any network use: an acf
+`latest_manifest` that is not empty, not `"0"` and differs from `manifest` makes the mod
+`InstallState::NeedsUpdate` and the entry "Update available". Nothing is checked automatically:
+not at start, not on a playset change, not before Play.
+
 ## 8. Local mod fingerprints
 
 `fingerprintDirectory()` (`providers/local_fingerprint.hpp`) produces `sha256:<hex>` over the
@@ -403,7 +518,8 @@ Not legal advice. These points need review before release.
   binary is patched (spec section 7).
 - **The user's own session.** The helper uses the Steam client the user is already signed in to.
   It never sees or stores credentials, and it only performs actions the user could take in the
-  Steam client for a game they own (view state, subscribe, download).
+  Steam client for a game they own (view state, subscribe, download, and unsubscribe for a
+  re-download the user confirmed).
 - **Acting in the game's app context.** Steam's agreements do not explicitly address a
   third-party tool initialising the API with a game's app id. The tool is disclosed and
   user-initiated, but this remains a policy risk. Valve could restrict it, and a game could

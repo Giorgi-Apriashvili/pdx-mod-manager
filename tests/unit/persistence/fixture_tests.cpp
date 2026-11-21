@@ -209,6 +209,46 @@ TEST_CASE("A v2 database from the sample fixture opens with the current schema",
     CHECK(playset.entries[0].identity.id == "1234567890");
 }
 
+TEST_CASE("A v3 database from the sample fixture opens with the current schema",
+          "[persistence][fixtures]") {
+    TempDir temp;
+    const fs::path file = temp.dbFile();
+    {
+        auto db = require(testing::openWithMigrations(file, migrationsUpTo(3)));
+        REQUIRE(db->schemaVersion() == 3);
+        execRaw(*db, readFixture("v3_sample.sql"));
+    }
+
+    auto db = require(Database::open(file));
+    CHECK(db->schemaVersion() == Database::latestSchemaVersion());
+    CHECK(require(SettingsRepository(*db).get("ui.theme")) == std::optional<std::string>("light"));
+
+    auto mods = require(InventoryRepository(*db).list("stellaris"));
+    REQUIRE(mods.size() == 2);
+    CHECK(mods[0].state == InstallState::NeedsUpdate);
+    CHECK(mods[0].contentTimeFromSteam);
+    CHECK(mods[0].contentUpdatedAt == 1761000000);
+    CHECK(mods[0].workshopManifest == "1100000000000000901");
+    CHECK(mods[0].latestManifest == "1100000000000000902");
+    CHECK(mods[0].latestUpdatedAt == 1761500000);
+    CHECK_FALSE(mods[1].contentTimeFromSteam);
+
+    AcquisitionJobRepository jobs(*db);
+    const AcquisitionJob update = require(jobs.get(1));
+    CHECK(update.kind == AcquisitionKind::Update);
+    CHECK(update.state == AcquisitionState::Failed);
+    CHECK(update.errorCode == "update_not_seen");
+    CHECK(update.targetTimeUpdated == 1761500000);
+    CHECK(update.targetManifest == "1100000000000000902");
+    const AcquisitionJob redo = require(jobs.get(2));
+    CHECK(redo.kind == AcquisitionKind::Reinstall);
+    CHECK(redo.state == AcquisitionState::Unsubscribing);
+    CHECK(redo.reinstallStep == ReinstallStep::Unsubscribed);
+    auto unfinished = require(jobs.listUnfinished());
+    REQUIRE(unfinished.size() == 1);
+    CHECK(unfinished[0].id == 2);
+}
+
 TEST_CASE("Upgrading to v3 keeps jobs as acquire jobs and adds the update fields",
           "[persistence][fixtures]") {
     TempDir temp;
