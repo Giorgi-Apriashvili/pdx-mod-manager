@@ -42,28 +42,49 @@ double downloadProgress(const AcquisitionJob& job) {
                     static_cast<double>(job.bytesDownloaded) / static_cast<double>(job.bytesTotal));
 }
 
+// "Updating: " / "Re-downloading: " before the detail of a job that changes
+// installed content.
+std::string kindPrefix(const AcquisitionJob& job) {
+    switch (job.kind) {
+    case AcquisitionKind::Update:
+        return "Updating: ";
+    case AcquisitionKind::Reinstall:
+        return "Re-downloading: ";
+    case AcquisitionKind::Acquire:
+        break;
+    }
+    return {};
+}
+
 EntryReadiness fromJob(const PlaysetEntry& entry, const AcquisitionJob& job) {
     EntryReadiness r;
+    const bool acquire = job.kind == AcquisitionKind::Acquire;
     switch (job.state) {
     case AcquisitionState::Pending:
         r.status = EntryStatus::Pending;
-        r.detail = "Queued for download.";
+        r.detail = acquire ? "Queued for download." : kindPrefix(job) + "queued.";
+        break;
+    case AcquisitionState::Unsubscribing:
+        r.status = EntryStatus::Pending;
+        r.detail = kindPrefix(job) + "unsubscribing in Steam.";
         break;
     case AcquisitionState::Subscribing:
         r.status = EntryStatus::Pending;
-        r.detail = "Subscribing.";
+        r.detail = acquire ? "Subscribing." : kindPrefix(job) + "subscribing again.";
         break;
     case AcquisitionState::Subscribed:
         r.status = EntryStatus::Pending;
-        r.detail = "Subscribed; waiting for the download to start.";
+        r.detail = acquire ? "Subscribed; waiting for the download to start."
+                           : kindPrefix(job) + "waiting for the download to start.";
         break;
     case AcquisitionState::DownloadRequested:
         r.status = EntryStatus::Pending;
-        r.detail = "Download requested; waiting for the provider.";
+        r.detail = acquire ? "Download requested; waiting for the provider."
+                           : kindPrefix(job) + "download requested; waiting for Steam.";
         break;
     case AcquisitionState::Downloading:
         r.status = EntryStatus::Downloading;
-        r.detail = "Downloading.";
+        r.detail = acquire ? "Downloading." : kindPrefix(job) + "downloading.";
         r.progress = downloadProgress(job);
         break;
     case AcquisitionState::Installed:
@@ -124,6 +145,29 @@ std::string countText(std::size_t count, const char* singular, const char* plura
     return std::to_string(count) + " " + (count == 1 ? singular : plural);
 }
 
+// The note a finished update or re-download of installed content leaves on
+// the entry when it did not succeed.
+void addJobWarning(const AcquisitionJob& job, EntryReadiness& readiness) {
+    if (job.kind == AcquisitionKind::Acquire)
+        return;
+    switch (job.state) {
+    case AcquisitionState::Failed:
+    case AcquisitionState::Unavailable:
+    case AcquisitionState::NeedsUserAction: {
+        std::string text =
+            job.kind == AcquisitionKind::Update ? "Update failed" : "Re-download failed";
+        if (!job.errorMessage.empty())
+            text += ": " + job.errorMessage;
+        else
+            text += "; the installed version is used. Retry it from Downloads.";
+        readiness.warnings.push_back(std::move(text));
+        return;
+    }
+    default:
+        return;
+    }
+}
+
 } // namespace
 
 EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* installed,
@@ -132,6 +176,11 @@ EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* i
         job = nullptr;
 
     EntryReadiness r;
+    if (installed && job && job->kind != AcquisitionKind::Acquire && !isTerminal(job->state)) {
+        // Steam is about to change (or remove) the installed files: never
+        // Ready, so that the game is not started meanwhile.
+        return fromJob(entry, *job);
+    }
     if (installed) {
         switch (installed->state) {
         case InstallState::Broken:
@@ -148,13 +197,13 @@ EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* i
                 r.progress = downloadProgress(*job);
             return r;
         case InstallState::NeedsUpdate:
-            r.warnings.push_back("An update is pending; the currently installed version will be "
-                                 "used.");
-            [[fallthrough]];
         case InstallState::Ready:
             r.status = EntryStatus::Ready;
             r.detail = "Installed.";
+            r.updateAvailable = installed->state == InstallState::NeedsUpdate;
             addInstalledWarnings(entry, *installed, r);
+            if (job)
+                addJobWarning(*job, r);
             return r;
         }
     }
@@ -175,7 +224,8 @@ EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* i
 
 std::vector<EntryReadiness> computePlaysetReadiness(std::span<const PlaysetEntry> entries,
                                                     const InstalledModMap& inventory,
-                                                    std::span<const AcquisitionJob> jobs) {
+                                                    std::span<const AcquisitionJob> jobs,
+                                                    const WorkshopFindings* findings) {
     std::map<ModIdentity, const AcquisitionJob*> latest;
     for (const AcquisitionJob& job : jobs) {
         auto& slot = latest[job.identity];
@@ -191,6 +241,16 @@ std::vector<EntryReadiness> computePlaysetReadiness(std::span<const PlaysetEntry
         result.push_back(
             computeReadiness(entry, installed != inventory.end() ? &installed->second : nullptr,
                              job != latest.end() ? job->second : nullptr));
+        EntryReadiness& r = result.back();
+        if (findings && installed != inventory.end() && r.status == EntryStatus::Ready) {
+            if (const auto refused = findings->refused.find(entry.identity);
+                refused != findings->refused.end()) {
+                r.updateAvailable = false;
+                r.warnings.push_back(refused->second);
+            } else if (findings->updates.count(entry.identity)) {
+                r.updateAvailable = true;
+            }
+        }
     }
     for (const DependencyIssue& issue : checkDependencies(entries, inventory))
         result[issue.entryIndex].warnings.push_back(issue.message);
