@@ -4,16 +4,22 @@ import Pmm.Ui
 import Pmm.Backend
 
 // One acquisition job: state glyph and text, progress, error and recovery.
+// `kind` says what it does: "acquire" (a missing mod), "update" or
+// "reinstall" (a re-download from scratch of an installed mod).
 Rectangle {
     id: job
 
     required property var model
 
+    // "Re-download from scratch…" on a failed update: Main.qml asks first.
+    signal reinstallRequested(int jobId, string name)
+
     readonly property string jobState: model.state
+    readonly property string kind: model.kind ?? "acquire"
     readonly property real progress: model.progress
     readonly property bool active: jobState === "downloading" || jobState === "subscribing"
                                    || jobState === "subscribed" || jobState === "download_requested"
-                                   || jobState === "pending"
+                                   || jobState === "pending" || jobState === "unsubscribing"
     readonly property string glyph: {
         switch (jobState) {
         case "installed": return "check-circle"
@@ -95,8 +101,12 @@ Rectangle {
             visible: job.model.canRetry
             text: qsTr("Retry")
             implicitHeight: 22
-            toolTipText: qsTr("Try this download again")
-            Accessible.name: qsTr("Retry download of %1").arg(job.model.name)
+            toolTipText: job.kind === "update" ? qsTr("Ask Steam for this update again")
+                       : job.kind === "reinstall" ? qsTr("Try this re-download again")
+                       : qsTr("Try this download again")
+            Accessible.name: job.kind === "update" ? qsTr("Retry update of %1").arg(job.model.name)
+                           : job.kind === "reinstall" ? qsTr("Retry re-download of %1").arg(job.model.name)
+                           : qsTr("Retry download of %1").arg(job.model.name)
             onClicked: Backend.acquisition.retry(job.model.jobId)
         }
 
@@ -136,6 +146,20 @@ Rectangle {
             toolTipText: qsTr("Manual step: opens the Workshop page in the Steam client so you can subscribe yourself. "
                               + "The manager detects the download when Steam finishes it.")
             onClicked: Backend.acquisition.openFallback(job.model.jobId)
+        }
+
+        LinkButton {
+            objectName: "jobReinstallLink"
+            Layout.row: 4
+            Layout.column: 1
+            Layout.columnSpan: 2
+            visible: job.model.canReinstall ?? false
+            enabled: Backend.acquisition.downloadsEnabled
+            text: qsTr("Re-download from scratch…")
+            Accessible.name: qsTr("Re-download %1 from scratch…").arg(job.model.name)
+            font.pixelSize: Theme.fontSizeSmall
+            toolTipText: qsTr("Steam unsubscribes the mod, deletes its files and downloads it again. Asks first.")
+            onClicked: job.reinstallRequested(job.model.jobId, job.model.name)
         }
     }
 }

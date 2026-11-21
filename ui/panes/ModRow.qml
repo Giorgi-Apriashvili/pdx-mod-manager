@@ -27,6 +27,8 @@ Item {
     readonly property bool modEnabled: model.enabled
     readonly property string status: model.status
     readonly property bool ready: status === "ready"
+    // A Ready row with a newer version on the Workshop has its own glyph.
+    readonly property string statusKey: ready && model.updateAvailable ? "update_available" : status
 
     signal rowPressed(int index, int modifiers, int button)
     signal toggleRequested(int index)
@@ -223,9 +225,9 @@ Item {
                 anchors.left: parent.left
                 anchors.leftMargin: 6
                 anchors.verticalCenter: parent.verticalCenter
-                name: Theme.statusIcon(row.status)
+                name: Theme.statusIcon(row.statusKey)
                 size: 13
-                color: Theme.statusColor(row.status)
+                color: Theme.statusColor(row.statusKey)
             }
             Text {
                 anchors.left: statusIcon.right
@@ -237,7 +239,7 @@ Item {
                 textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSize
                 font.weight: row.model.blocking ? Font.DemiBold : Font.Normal
-                color: row.ready ? Theme.textMuted : Theme.statusColor(row.status)
+                color: row.statusKey === "ready" ? Theme.textMuted : Theme.statusColor(row.statusKey)
                 elide: Text.ElideRight
             }
             Rectangle {

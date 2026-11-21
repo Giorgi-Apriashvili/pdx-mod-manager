@@ -85,7 +85,9 @@ QtObject {
         "failed": "circle-x",
         "unavailable": "ban",
         "needs_user_action": "circle-help",
-        "broken": "triangle-alert"
+        "broken": "triangle-alert",
+        // Not a status of its own: a Ready row with a newer version on the Workshop.
+        "update_available": "circle-arrow-up"
     })
 
     function statusIcon(status: string): string {
@@ -95,7 +97,8 @@ QtObject {
     function statusColor(status: string): color {
         switch (status) {
         case "ready": return success
-        case "downloading": return info
+        case "downloading":
+        case "update_available": return info
         case "pending": return textMuted
         case "needs_user_action": return warning
         default: return danger

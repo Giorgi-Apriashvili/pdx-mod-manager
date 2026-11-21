@@ -19,6 +19,8 @@ Rectangle {
     signal deleteRequested()
     signal historyRequested()
     signal discardInterruptedRequested()
+    // "Re-download from scratch…" on a failed update job (Main.qml asks first).
+    signal reinstallJobRequested(int jobId, string name)
     // A focused action of the Play section went away (Main.qml moves the focus on).
     signal focusReleased()
     // From the divider: a new width, or the default one (Main.qml applies it).
@@ -146,6 +148,7 @@ Rectangle {
                     }
                     DownloadsSection {
                         Layout.fillWidth: true
+                        onReinstallJobRequested: (jobId, name) => root.reinstallJobRequested(jobId, name)
                     }
                 }
             }
