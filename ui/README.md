@@ -150,7 +150,7 @@ Nothing is read from or written to disk.
 ```sh
 export QT_ROOT_DIR=C:/Qt/6.10.3/msvc2022_64   # or put qml/qmllint on PATH
 ui/dev/preview.sh                # interactive window
-ui/dev/preview.sh --screenshot   # regenerate docs/screenshots/*.png (1400x860)
+ui/dev/preview.sh --screenshot   # regenerate the preview's captures in docs/screenshots (1400x860)
 ui/dev/preview.sh --test         # QML tests (qmltestrunner, dev/tests; also in ctest, label ui-preview)
 ui/dev/preview.sh --lint         # qmllint on every module file
 python3 ui/dev/check_contrast.py # WCAG contrast of the Theme.qml colour pairs

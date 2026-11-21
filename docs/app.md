@@ -324,10 +324,19 @@ with their user data folders, which is what **Locate installation...**
 stores; the games column therefore says "manual location" for every game.
 The first run of a profile creates its database and, like any start,
 discovers the installed games (read-only), so the script deletes that
-capture without looking at it and removes the discovered installations and
-mod lists before it stores the made-up locations. `PMM_WORKSHOP_METADATA_URL`
-points at an unreachable local address, so no Workshop lookup leaves the
-machine. With Qt's `bin` folder on `PATH`:
+capture without looking at it, removes everything that run stored except the
+settings before it stores the made-up locations, and deletes that profile at
+the end, also after a failure. It stops unless its list of games matches the
+catalog and unless every location and mod stored in the profiles is a
+made-up one under `--root`; if a capture profile fails that check, the run's
+captures are deleted too. The details of a selected Workshop mod show its
+folder under **Location**, which starts with `--root` (by default
+`build/app-screenshots` in the checkout), so the script refuses a `--root` or
+`--out` in the user profile folder or one that names the Windows user.
+`PMM_WORKSHOP_METADATA_URL` points at an unreachable local address, so no
+Workshop lookup leaves the machine. `QT_QPA_PLATFORM` is ignored (the
+`offscreen` platform has no fonts on Windows). With Qt's `bin` folder on
+`PATH`:
 
 ```sh
 python scripts/app-screenshots.py   # build/debug/bin/pmm-app.exe, writes docs/screenshots
@@ -335,8 +344,8 @@ python scripts/app-screenshots.py   # build/debug/bin/pmm-app.exe, writes docs/s
 
 The Play area shows the read-only blocker. Every run passes `--game
 stellaris` or `--game eu4`, since a new profile otherwise opens the first
-installed game in alphabetical order, and `--theme`. The Stellaris profile is
-prepared with `--self-test "config,disable:2,move:0:5,move:13:1,export:code.txt"`
+installed game in alphabetical order, and every capture run `--theme`. The
+Stellaris profile is prepared with `--self-test "config,disable:2,move:0:5,move:13:1,export:code.txt"`
 (its configuration has 14 entries; `move:13:1` moves the last one to the
 second place); the main and dark captures use `--select-row 2` (a Workshop
 mod that names another one under "Loads after"), the export and add-mods
