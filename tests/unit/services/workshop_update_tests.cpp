@@ -477,7 +477,8 @@ TEST_CASE("A re-download that fails after the unsubscribe says the mod is unsubs
     const PlaysetView view = r.view();
     CHECK(view.rows[0].readiness.status == EntryStatus::Failed);
     CHECK_THAT(view.rows[0].readiness.detail, ContainsSubstring("now unsubscribed"));
-    const JobSnapshot* item = snapshotJob(r.c().snapshot(kGame), kItem);
+    const AcquisitionSnapshot snapshot = r.c().snapshot(kGame); // outlives `item`
+    const JobSnapshot* item = snapshotJob(snapshot, kItem);
     REQUIRE(item != nullptr);
     CHECK(item->canRetry);
 
