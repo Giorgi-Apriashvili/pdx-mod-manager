@@ -183,7 +183,10 @@ std::optional<AcquisitionKind> acquisitionKindFromString(const std::string& text
 // How far a reinstall job got. Stored, so that a retry or a restart carries
 // on instead of unsubscribing again (or leaving the mod unsubscribed).
 enum class ReinstallStep {
-    Start,        // "start": nothing done yet
+    Start, // "start": nothing done yet
+    // "unsubscribing": this job asked Steam to unsubscribe the item; whether
+    // Steam carried it out is not known yet (stored before the request is sent)
+    Unsubscribing,
     Unsubscribed, // "unsubscribed": this job unsubscribed the item; not subscribed again yet
     Resubscribed, // "resubscribed": subscribed again; the download is what remains
 };

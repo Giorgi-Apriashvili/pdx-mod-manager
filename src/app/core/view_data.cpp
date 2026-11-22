@@ -542,7 +542,8 @@ UpdateCheckData updateCheckData(const services::UpdateCheckReport& report) {
         row.name = qs(item.name);
         row.providerId = qs(item.identity.id);
         row.verdict = item.answered ? QString::fromLatin1(providers::toString(item.verdict))
-                                    : QStringLiteral("unanswered");
+                      : item.asked  ? QStringLiteral("unanswered")
+                                    : QStringLiteral("not_checked");
         row.updateAvailable = item.updateAvailable;
         row.enabled = item.enabled;
         row.message = qs(item.message);

@@ -144,6 +144,9 @@ TEST_CASE("Update and reinstall jobs keep their kind, target and step", "[persis
     CHECK(reloaded.state == AcquisitionState::Unsubscribing);
     CHECK(reloaded.reinstallStep == ReinstallStep::Unsubscribed);
     CHECK(reloaded.targetTimeUpdated == 1763000000);
+    redo.reinstallStep = ReinstallStep::Unsubscribing;
+    requireOk(jobs.update(redo));
+    CHECK(require(jobs.get(redo.id)).reinstallStep == ReinstallStep::Unsubscribing);
     CHECK(require(jobs.listUnfinished()).size() == 2);
 
     // 'unsubscribing' is unfinished: a second unfinished job for the mod conflicts.

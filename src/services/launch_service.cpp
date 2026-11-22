@@ -325,19 +325,30 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                         updating.push_back(job.identity);
                 }
             }
+            const std::set<ModIdentity> updatingMods(updating.begin(), updating.end());
+            std::size_t listedUpdates = 0; // entry blockers above
             std::size_t otherUpdates = 0;
-            for (const ModIdentity& identity :
-                 std::set<ModIdentity>(updating.begin(), updating.end())) {
-                if (!blockingEntries.count(identity))
-                    ++otherUpdates;
-            }
-            if (otherUpdates > 0)
+            for (const ModIdentity& identity : updatingMods)
+                ++(blockingEntries.count(identity) ? listedUpdates : otherUpdates);
+            if (!coordinator && !updatingMods.empty()) {
+                // Without Workshop downloads (--no-steam, read-only) nothing
+                // here can finish or cancel the stored jobs.
+                const std::size_t n = updatingMods.size();
                 check.blockers.push_back(
-                    std::to_string(otherUpdates) + " other Workshop " +
-                    (otherUpdates == 1 ? "mod of " : "mods of ") + gameName +
+                    std::to_string(n) + " Workshop " + (n == 1 ? "mod of " : "mods of ") +
+                    gameName + (n == 1 ? " has" : " have") +
+                    " an update or re-download that an earlier session started and did not "
+                    "finish. Workshop downloads are off in this session (--no-steam or "
+                    "read-only), so it can neither finish nor be cancelled here: start Paradox "
+                    "Mod Manager normally to finish or cancel it, then play.");
+            } else if (otherUpdates > 0) {
+                check.blockers.push_back(
+                    std::to_string(otherUpdates) + (listedUpdates > 0 ? " other" : "") +
+                    " Workshop " + (otherUpdates == 1 ? "mod of " : "mods of ") + gameName +
                     (otherUpdates == 1 ? " is" : " are") +
                     " being updated or downloaded again. Wait until that finishes, or cancel it "
                     "in Downloads, then play.");
+            }
             if (check.readiness.canLaunch) {
                 for (const PlaysetEntry& entry : entries) {
                     if (entry.enabled)

@@ -11,7 +11,8 @@
 //   installed, unfinished update/reinstall job -> Pending, or Downloading (progress)
 //   installed, Ready or NeedsUpdate      -> Ready (+ warnings: version/fingerprint
 //                                           mismatch, scan problems, a failed
-//                                           update or re-download); NeedsUpdate
+//                                           update or re-download unless
+//                                           updateJobResolved()); NeedsUpdate
 //                                           sets updateAvailable
 //   installed, Downloading               -> Downloading (provider is updating it)
 //   installed, Broken                    -> Broken
@@ -50,6 +51,14 @@ struct WorkshopFindings {
     // why, for the entry's warnings. Such an item gets no update.
     std::map<ModIdentity, std::string> refused;
 };
+
+// Whether an update job that did not finish (Failed, NeedsUserAction) has
+// nothing left to do: the installed mod reached the job's target (Steam's
+// record of the installed version is at least its time_updated), or, for a
+// job without a target, Steam no longer flags the mod for an update. Steam
+// updates subscribed items by itself, so this is the usual end of an
+// update it had not picked up yet.
+bool updateJobResolved(const AcquisitionJob& job, const InstalledMod& installed) noexcept;
 
 // `installed` and `job` may be null. A job for another identity is ignored.
 EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* installed,

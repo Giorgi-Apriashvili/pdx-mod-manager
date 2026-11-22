@@ -19,11 +19,14 @@
 //     the database is reconciled instead of re-subscribed. For an acquire job,
 //     items that are already installed are verified rather than downloaded
 //     again; only an explicit update or re-download downloads installed content.
-//   - Nothing is ever deleted. Only a reinstall job unsubscribes, once per job
-//     (ReinstallStep, persisted), and every failure after that says that the
-//     item is now unsubscribed; Retry subscribes again. An update job never
-//     subscribes. Cancel only stops application-managed work and says what
-//     remains in Steam.
+//   - Nothing is ever deleted. Only a reinstall job unsubscribes, and only an
+//     item that is subscribed; its step (ReinstallStep, persisted before the
+//     request is sent) keeps a retry or a restart from unsubscribing again
+//     once Steam did, and every failure after the request says that the item
+//     is (or may be) unsubscribed now; Retry subscribes again. Neither an
+//     update nor a reinstall adds a subscription the account did not have.
+//     Cancel only stops application-managed work and says what remains in
+//     Steam.
 //
 //   start/resume --QuerySession--> ProviderReady --QueryState--> ItemState
 //   acquire:
@@ -37,18 +40,30 @@
 //     installed, target reached . VerifyContent -> Installed
 //     otherwise ................. RequestDownload, even when Steam calls it current;
 //                                 done when installed and current AND the install
-//                                 timestamp reaches the target; still the old
-//                                 version updateRecheckMs after the request:
-//                                 RequestDownload once more, then Failed
-//                                 (update_not_seen, no automatic retry)
+//                                 timestamp reaches the target (without a target:
+//                                 after this run's request, or once this run saw
+//                                 Steam download it); still the old version
+//                                 updateRecheckMs after the request: RequestDownload
+//                                 once more, then Failed (update_not_seen, no
+//                                 automatic retry). A download Steam ran by itself
+//                                 that ends short of the target counts as no
+//                                 request: the first one follows at once.
 //   reinstall (re-download from scratch):
-//     step start, subscribed .... Unsubscribe -> UnsubscribeResult(OK): step
-//                                 unsubscribed -> poll QueryState until Steam
-//                                 dropped the subscription (and, within
-//                                 removalGraceMs, the installed files)
-//     step unsubscribed ......... Subscribe -> SubscribeResult(OK): step resubscribed
-//     step resubscribed ......... RequestDownload, then as an update (target
-//                                 when known)
+//     step start, not subscribed  NeedsUserAction ("not subscribed in Steam")
+//     step start, subscribed .... step unsubscribing (stored), Unsubscribe ->
+//                                 UnsubscribeResult(OK): step unsubscribed -> poll
+//                                 QueryState until Steam dropped the subscription
+//                                 (and, within removalGraceMs, the installed files)
+//     step unsubscribing ........ the result was not seen: subscribed: Unsubscribe
+//                                 again; not subscribed: step unsubscribed
+//     step unsubscribed ......... Subscribe, also while Steam still lists the
+//                                 subscription (its list lags behind a confirmed
+//                                 unsubscribe) -> SubscribeResult(OK): step resubscribed
+//     step resubscribed ......... RequestDownload, then as an update: done at the
+//                                 target when known, else only once this run saw
+//                                 Steam fetch the item (not installed, downloading,
+//                                 or a new install time); Steam keeping the old
+//                                 files ends Failed (update_not_seen)
 //
 // The persisted part is the core AcquisitionJob; the rest of the context is
 // transient and rebuilt on restart by calling startAcquisition() again.
@@ -92,6 +107,13 @@ inline constexpr std::string_view kUpdateNotSeenMessage =
     "Steam has not picked up this update yet. Steam checks for updates about every 45 "
     "minutes; restarting Steam makes it check right away.";
 
+// The failure text of a re-download without a known newer version that Steam
+// did not carry out: it kept the installed files (ErrorCode::UpdateNotSeen).
+inline constexpr std::string_view kRedownloadNotSeenMessage =
+    "Steam kept the installed files and did not download the mod again. It is subscribed, "
+    "and the installed version stays. To force a fresh download, unsubscribe from it in "
+    "Steam, wait until Steam removes its files, then subscribe to it again.";
+
 // What the job is currently waiting for. Transient (not persisted).
 enum class AwaitStep {
     Nothing,           // idle: terminal, or waiting for the user
@@ -119,10 +141,11 @@ struct AcquisitionContext {
     bool sessionKnown = false;
     bool loggedOn = false;
     bool ownsApp = false;
-    bool subscribeSent = false;      // this run sent Subscribe
-    bool subscribeConfirmed = false; // this run saw SubscribeResult(OK) or the Subscribed flag
-    bool downloadRequested = false;  // this run's RequestDownload was accepted
-    bool unsubscribeSent = false;    // this run sent Unsubscribe (reinstall)
+    bool subscribeSent = false;       // this run sent Subscribe
+    bool subscribeConfirmed = false;  // this run saw SubscribeResult(OK) or the Subscribed flag
+    bool downloadRequested = false;   // this run's RequestDownload was accepted
+    bool unsubscribeSent = false;     // this run sent Unsubscribe (reinstall)
+    bool unsubscribeRepeated = false; // ... while the step said an earlier one was sent
     // Update/reinstall: when the accepted request was made, whether it was
     // made a second time, and whether Steam's latest report was "installed
     // and current" with an installed version short of the target.
@@ -130,6 +153,11 @@ struct AcquisitionContext {
     bool reRequested = false;
     bool currentButOld = false;
     std::int64_t droppedAtMs = 0; // reinstall: first report without the subscription
+    // Update/reinstall: whether this run saw Steam fetch the item (a report
+    // of it not installed or downloading, or of an install time other than
+    // the first one this run saw).
+    bool fetchSeen = false;
+    std::uint32_t firstTimestamp = 0;
     std::uint32_t lastFlags = 0;
     std::string installPath; // path handed to VerifyContent
 };

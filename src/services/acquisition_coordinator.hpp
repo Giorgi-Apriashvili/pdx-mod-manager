@@ -17,7 +17,8 @@
 //     nothing is re-subscribed blindly and installed items are verified, not
 //     downloaded again, except by an explicit update or re-download) and
 //     picks up jobs created since (e.g. by an import). Update and re-download
-//     jobs stay parked while the game runs;
+//     jobs stay parked while the game runs, and tick() resumes them once it
+//     no longer does;
 //   - runs at most one job per mod: a job that starts supersedes the older,
 //     finished in-memory jobs of the same mod, so that neither an automatic
 //     retry nor a state report revives them next to it;
@@ -31,7 +32,9 @@
 //     belongs to the game (share codes are untrusted input); state queries
 //     and the verification of content Steam already installed go ahead, and
 //     so does the download of an update Steam's own Workshop manifest flagged
-//     for an installed item (it works without the Web API). Without a
+//     for an installed item (it works without the Web API), and the new
+//     subscription and download of a re-download past its unsubscribe (they
+//     restore what the account had). Without a
 //     verdict within identityTimeoutMs the job needs the user; Retry asks the
 //     Web API again;
 //   - keeps, for the session, the Web API's answers about installed items
@@ -130,6 +133,9 @@ struct CoordinatorOptions {
     // With a metadata host, how long a subscribe or download request waits
     // for the Web API to confirm the item before the job needs the user.
     std::int64_t identityTimeoutMs = 15'000;
+    // While update or re-download jobs wait for their game to close, how
+    // often tick() looks whether it still runs.
+    std::int64_t parkedRecheckMs = 10'000;
 };
 
 struct JobSnapshot {
@@ -151,10 +157,12 @@ struct JobSnapshot {
 struct AcquisitionSnapshot {
     GameKey game;
     // Jobs worked on in this session plus stored jobs that need attention
-    // (failed, needs user action, unavailable), newest job per mod only. Idle
-    // acquire jobs whose mod a rescan has since found installed (for example
-    // after the manual fallback) are left out: usable installed content wins.
-    // Update and re-download jobs stay, failed or running.
+    // (failed, needs user action, unavailable, and re-downloads cancelled
+    // after their unsubscribe), newest job per mod only. Idle acquire jobs
+    // whose mod a rescan has since found installed (for example after the
+    // manual fallback) are left out: usable installed content wins. Update
+    // and re-download jobs stay, failed or running, except failed updates
+    // whose mod has since reached the update's target (updateJobResolved()).
     std::vector<JobSnapshot> jobs;
     ProviderStatus providerStatus = ProviderStatus::Unknown;
     std::string providerMessage; // recovery text for the status
@@ -197,6 +205,8 @@ struct UpdateCheckItem {
     std::string name;      // installed descriptor name > name hint > id
     bool enabled = true;   // in the playset
     bool answered = false; // the Web API answered (now, or within updateCheckMaxAgeMs)
+    // False for a mod installed after the last check: it was never asked about.
+    bool asked = true;
     providers::WorkshopUpdateVerdict verdict = providers::WorkshopUpdateVerdict::NotCompared;
     // Steam's own Workshop manifest says a newer version exists (no network).
     bool steamFlagged = false;
@@ -219,12 +229,14 @@ struct UpdateCheckReport {
     std::size_t updates = 0;            // updateAvailable
     std::size_t notCompared = 0;
     std::size_t refused = 0;
-    std::size_t unanswered = 0;
+    std::size_t unanswered = 0; // asked, but not answered
+    std::size_t notChecked = 0; // installed after the last check: not asked yet
     // False when nothing could be asked or answered although there was
     // something to check (offline, Web API unreachable): offer Retry.
     bool reachable = true;
-    // "Checked 12 Workshop mods: 3 have an update." / "All 12 Workshop mods
-    // are up to date." / "The Steam Workshop could not be reached, ..."
+    // "Checked 12 Workshop mods: 3 have an update." (the mods the Workshop
+    // answered for) / "All 12 Workshop mods are up to date." / "The Steam
+    // Workshop could not be reached, ..."
     std::string summary;
 };
 
@@ -407,7 +419,9 @@ private:
     // applies the verdicts to waiting and held jobs. Inside run() only.
     void absorbMetadata(const GameKey& game,
                         const std::vector<providers::WorkshopItemMetadata>& items);
-    Result<UpdateCheckReport> buildReport(std::int64_t playsetId) const;
+    // `recording`: the report of a check just made; every unanswered mod was
+    // asked. Otherwise mods installed since the last check are "not checked".
+    Result<UpdateCheckReport> buildReport(std::int64_t playsetId, bool recording) const;
     // ConflictingProcess when the game runs (or its processes cannot be
     // listed), for work that changes installed mods.
     Status refuseWhileRunning(const GameKey& game, std::string_view what) const;
@@ -440,6 +454,10 @@ private:
     std::set<ModIdentity> m_metadataRequested; // Web API requests in flight
     std::map<ModIdentity, Status> m_verdicts;  // Web API: ok, or why it cannot be acquired
     std::map<ModIdentity, Answer> m_answers;   // Web API answers of this session
+    std::set<ModIdentity> m_checkedItems;      // installed mods some update check covered
+    // Games whose update or re-download jobs wait until the game is closed.
+    std::set<GameKey> m_parkedWhileRunning;
+    std::int64_t m_parkedCheckedAtMs = 0;
     std::uint64_t m_pass = 0;
     bool m_draining = false;
     bool m_changed = false;

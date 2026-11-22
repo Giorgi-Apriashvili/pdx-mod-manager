@@ -61,7 +61,7 @@ std::string stateTextOf(const AcquisitionJob& job) {
     case AcquisitionState::Installed:
         return update ? "Updated" : reinstall ? "Downloaded again" : "Installed";
     case AcquisitionState::Failed:
-        return "Failed";
+        return update ? "Update failed" : reinstall ? "Re-download failed" : "Failed";
     case AcquisitionState::Unavailable:
         return "Unavailable";
     case AcquisitionState::NeedsUserAction:
@@ -70,6 +70,13 @@ std::string stateTextOf(const AcquisitionJob& job) {
         return "Cancelled";
     }
     return "Unknown";
+}
+
+std::string quotedNames(const std::vector<std::string>& names) {
+    std::string out;
+    for (std::size_t i = 0; i < names.size(); ++i)
+        out += (i == 0 ? "" : i + 1 == names.size() ? " and " : ", ") + ("\"" + names[i] + "\"");
+    return out;
 }
 
 bool retryable(AcquisitionState state) {
@@ -286,13 +293,22 @@ bool AcquisitionCoordinator::holdForIdentity(std::int64_t jobId, Runtime& runtim
                                      });
     const AcquisitionJob& job = runtime.context.job;
     const auto verdict = m_verdicts.find(job.identity);
+    const bool notRefused = verdict == m_verdicts.end() || verdict->second.ok();
     // An update of an installed, subscribed item (an update never subscribes)
     // that Steam's own manifest flagged needs no Web API: nothing new is
     // added to the account.
-    const bool flagged = network && job.kind == AcquisitionKind::Update &&
-                         (verdict == m_verdicts.end() || verdict->second.ok()) &&
+    const bool flagged = network && job.kind == AcquisitionKind::Update && notRefused &&
                          steamFlaggedUpdate(job.identity);
-    if (!network || flagged || (verdict != m_verdicts.end() && verdict->second.ok())) {
+    // A re-download past its unsubscribe (which waited for the Web API)
+    // subscribes again and downloads: that only restores what the account had.
+    const ReinstallStep step = transition.context.job.reinstallStep;
+    const bool restoring =
+        network && job.kind == AcquisitionKind::Reinstall && notRefused &&
+        (step == ReinstallStep::Unsubscribed || step == ReinstallStep::Resubscribed) &&
+        std::none_of(
+            transition.actions.begin(), transition.actions.end(),
+            [](const providers::Action& action) { return action.kind == ActionKind::Unsubscribe; });
+    if (!network || flagged || restoring || (verdict != m_verdicts.end() && verdict->second.ok())) {
         // A stale observation (no action, still waiting for the state) keeps the hold.
         if (!transition.actions.empty() || transition.context.awaiting != AwaitStep::State)
             runtime.heldSinceMs.reset();
@@ -337,14 +353,35 @@ void AcquisitionCoordinator::failUnconfirmed(Runtime& runtime) {
                                    "installed version stays. Retry when this computer is online.";
         break;
     case AcquisitionKind::Reinstall:
-        context.job.errorMessage =
-            context.job.reinstallStep == ReinstallStep::Unsubscribed
-                ? unconfirmed + ", so it did not subscribe to it again. Workshop item " +
-                      context.job.identity.id +
-                      " is now unsubscribed in Steam: Retry subscribes to it again and downloads "
-                      "it, when this computer is online."
-                : unconfirmed + ", so it did not unsubscribe or download it again. Nothing "
-                                "changed in Steam. Retry when this computer is online.";
+        // Worded from the stored step: only at "start" was nothing sent yet.
+        switch (context.job.reinstallStep) {
+        case ReinstallStep::Start:
+            context.job.errorMessage = unconfirmed +
+                                       ", so it did not unsubscribe or download it again. Nothing "
+                                       "changed in Steam. Retry when this computer is online.";
+            break;
+        case ReinstallStep::Unsubscribing:
+            context.job.errorMessage =
+                unconfirmed +
+                ", so it did not carry on with the re-download. An unsubscribe "
+                "request was already sent, so Workshop item " +
+                context.job.identity.id +
+                " may be unsubscribed now: Retry subscribes to it again in that case and "
+                "downloads it, when this computer is online.";
+            break;
+        case ReinstallStep::Unsubscribed:
+            context.job.errorMessage =
+                unconfirmed + ", so it did not subscribe to it again. Workshop item " +
+                context.job.identity.id +
+                " is now unsubscribed in Steam: Retry subscribes to it again and downloads it, "
+                "when this computer is online.";
+            break;
+        case ReinstallStep::Resubscribed:
+            context.job.errorMessage =
+                unconfirmed + ". It is subscribed again, but Steam was not asked to download it "
+                              "again. Retry when this computer is online.";
+            break;
+        }
         break;
     }
     context.job.updatedAt = std::max(context.clockMs, m_ctx.now());
@@ -415,9 +452,13 @@ void AcquisitionCoordinator::flushOutbox() {
 bool AcquisitionCoordinator::persist(Runtime& runtime, bool force) {
     const AcquisitionJob& job = runtime.context.job;
     const AcquisitionJob& last = runtime.persisted;
+    // The re-download step is written before the request it guards goes out.
     const bool significant = force || job.state != last.state || job.errorCode != last.errorCode ||
                              job.errorMessage != last.errorMessage ||
-                             job.attempts != last.attempts || job.playsetId != last.playsetId;
+                             job.attempts != last.attempts || job.playsetId != last.playsetId ||
+                             job.reinstallStep != last.reinstallStep ||
+                             job.targetTimeUpdated != last.targetTimeUpdated ||
+                             job.targetManifest != last.targetManifest;
     const std::int64_t now = m_ctx.now();
     if (!significant && now - runtime.persistedAtMs < m_options.progressPersistIntervalMs) {
         runtime.dirty = true;
@@ -753,22 +794,29 @@ CoordinatorUpdate AcquisitionCoordinator::start(const GameKey& game) {
         }
         std::vector<AcquisitionJob> fresh;
         std::optional<bool> gameRunning; // checked once, when needed
+        bool parked = false;
         for (const AcquisitionJob& job : unfinished.value()) {
             if (job.identity.game != game || m_jobs.count(job.id))
                 continue;
             if (job.kind != AcquisitionKind::Acquire) {
                 // Steam would change the files of mods the running game has
-                // loaded: the job stays parked until a start() after it closed.
+                // loaded: the job stays parked until the game closed (tick()
+                // looks for that).
                 if (!gameRunning)
                     gameRunning = !refuseWhileRunning(game, "updating mods").ok();
                 if (*gameRunning) {
                     logInfo(kComponent, "update job kept waiting while the game runs",
                             {{"job", std::to_string(job.id)}, {"mod", toString(job.identity)}});
+                    parked = true;
                     continue;
                 }
             }
             fresh.push_back(job);
         }
+        if (parked)
+            m_parkedWhileRunning.insert(game);
+        else
+            m_parkedWhileRunning.erase(game);
         if (fresh.empty())
             return;
         rememberNames(fresh);
@@ -965,6 +1013,17 @@ CoordinatorUpdate AcquisitionCoordinator::tick(std::int64_t nowMs) {
             if (busy(runtime) || runtime.context.retryAtMs > 0)
                 enqueue(id, obs::Tick{nowMs});
         }
+        // Updates parked while the game ran resume once it is closed.
+        if (!m_parkedWhileRunning.empty() &&
+            now - m_parkedCheckedAtMs >= m_options.parkedRecheckMs) {
+            m_parkedCheckedAtMs = now;
+            const std::set<GameKey> parked = m_parkedWhileRunning;
+            for (const GameKey& game : parked) {
+                auto running = detail::runningGameProcess(m_ctx, game);
+                if (running && !running.value())
+                    start(game); // re-entrant: its jobs are processed in this pass
+            }
+        }
     });
 }
 
@@ -1073,33 +1132,44 @@ CancelOutcome AcquisitionCoordinator::cancelAll(const GameKey& game) {
             }
         }
     });
-    // Re-downloads cancelled between their unsubscribe and the new subscription.
+    // Re-downloads cancelled between their unsubscribe and the new
+    // subscription, and those whose unsubscribe was sent but not confirmed.
     std::vector<std::string> unsubscribed;
+    std::vector<std::string> unsubscribing;
     for (const std::int64_t id : cancelledIds) {
         const auto it = m_jobs.find(id);
-        if (it != m_jobs.end() && it->second.context.job.kind == AcquisitionKind::Reinstall &&
-            it->second.context.job.reinstallStep == ReinstallStep::Unsubscribed)
+        if (it == m_jobs.end() || it->second.context.job.kind != AcquisitionKind::Reinstall)
+            continue;
+        if (it->second.context.job.reinstallStep == ReinstallStep::Unsubscribed)
             unsubscribed.push_back(nameFor(it->second.context.job));
+        else if (it->second.context.job.reinstallStep == ReinstallStep::Unsubscribing)
+            unsubscribing.push_back(nameFor(it->second.context.job));
     }
     if (outcome.cancelled == 0) {
         outcome.message = "There was nothing to cancel.";
+    } else if (!unsubscribing.empty()) {
+        outcome.message =
+            "Cancelled " + std::to_string(outcome.cancelled) +
+            (outcome.cancelled == 1 ? " download" : " downloads") + ". " +
+            (unsubscribed.empty()
+                 ? std::string()
+                 : quotedNames(unsubscribed) + (unsubscribed.size() == 1 ? " was" : " were") +
+                       " unsubscribed for a re-download and " +
+                       (unsubscribed.size() == 1 ? "is" : "are") + " not subscribed again. ") +
+            "An unsubscribe request for " + quotedNames(unsubscribing) +
+            " was already sent and may still complete; if it does, Retry subscribes again. "
+            "Nothing was deleted.";
     } else if (unsubscribed.empty()) {
         outcome.message = "Cancelled " + std::to_string(outcome.cancelled) +
                           (outcome.cancelled == 1 ? " download" : " downloads") +
                           ". Nothing was unsubscribed or deleted: subscriptions and downloads "
                           "that Steam already completed remain in Steam.";
     } else {
-        std::string names;
-        for (std::size_t i = 0; i < unsubscribed.size(); ++i)
-            names += (i == 0                         ? ""
-                      : i + 1 == unsubscribed.size() ? " and "
-                                                     : ", ") +
-                     ("\"" + unsubscribed[i] + "\"");
         outcome.message =
             "Cancelled " + std::to_string(outcome.cancelled) +
-            (outcome.cancelled == 1 ? " download" : " downloads") + ". " + names +
-            (unsubscribed.size() == 1 ? " was" : " were") + " unsubscribed for a re-download and " +
-            (unsubscribed.size() == 1 ? "is" : "are") +
+            (outcome.cancelled == 1 ? " download" : " downloads") + ". " +
+            quotedNames(unsubscribed) + (unsubscribed.size() == 1 ? " was" : " were") +
+            " unsubscribed for a re-download and " + (unsubscribed.size() == 1 ? "is" : "are") +
             " not subscribed again: Retry subscribes again. Nothing else was unsubscribed or "
             "deleted.";
     }
@@ -1209,31 +1279,36 @@ AcquisitionSnapshot AcquisitionCoordinator::snapshot(const GameKey& game) const 
     const std::vector<AcquisitionJob> jobs = detail::latestPerIdentity(detail::overlayJobs(
         stored ? std::move(stored).value() : std::vector<AcquisitionJob>{}, liveJobs(game)));
     // Usable installed content wins over the state of an acquire job (as in
-    // core/readiness); an update or re-download stays visible.
-    std::set<ModIdentity> usable;
-    std::set<ModIdentity> installed;
+    // core/readiness); an update or re-download stays visible until the
+    // installed version reached its target.
+    InstalledModMap installed;
     persistence::InventoryRepository inventory(m_ctx.database);
-    if (auto mods = inventory.list(game)) {
-        for (const InstalledMod& mod : mods.value()) {
-            installed.insert(mod.identity);
-            if (mod.state == InstallState::Ready || mod.state == InstallState::NeedsUpdate)
-                usable.insert(mod.identity);
-        }
-    }
+    if (auto mods = inventory.list(game))
+        installed = detail::toMap(std::move(mods).value());
 
     std::size_t downloading = 0, queued = 0, updating = 0, failed = 0, attention = 0,
                 unavailable = 0;
     for (const AcquisitionJob& job : jobs) {
         const auto runtime = m_jobs.find(job.id);
         const bool inMemory = runtime != m_jobs.end();
-        if (!inMemory &&
-            (job.state == AcquisitionState::Installed || job.state == AcquisitionState::Cancelled))
+        // A re-download cancelled after (or while) it unsubscribed stays
+        // listed: its Retry subscribes again.
+        const bool leftUnsubscribed = job.kind == AcquisitionKind::Reinstall &&
+                                      (job.reinstallStep == ReinstallStep::Unsubscribing ||
+                                       job.reinstallStep == ReinstallStep::Unsubscribed);
+        if (!inMemory && (job.state == AcquisitionState::Installed ||
+                          (job.state == AcquisitionState::Cancelled && !leftUnsubscribed)))
             continue; // finished in an earlier session
         const bool working =
             inMemory && (busy(runtime->second) || runtime->second.context.retryAtMs > 0);
-        if (job.kind == AcquisitionKind::Acquire && !working && retryable(job.state) &&
-            usable.count(job.identity))
+        const auto mod = installed.find(job.identity);
+        const bool usable =
+            mod != installed.end() && (mod->second.state == InstallState::Ready ||
+                                       mod->second.state == InstallState::NeedsUpdate);
+        if (job.kind == AcquisitionKind::Acquire && !working && retryable(job.state) && usable)
             continue; // resolved outside the job, e.g. manual fallback followed by a rescan
+        if (!working && mod != installed.end() && updateJobResolved(job, mod->second))
+            continue; // Steam installed the update by itself
         JobSnapshot item;
         item.job = job;
         item.name = nameFor(job);
@@ -1252,7 +1327,7 @@ AcquisitionSnapshot AcquisitionCoordinator::snapshot(const GameKey& game) const 
         item.canReinstall = job.kind == AcquisitionKind::Update && m_metadata != nullptr &&
                             (job.state == AcquisitionState::Failed ||
                              job.state == AcquisitionState::NeedsUserAction) &&
-                            installed.count(job.identity) != 0;
+                            mod != installed.end();
         if (item.canOpenFallback) {
             if (auto links = providers::manualFallbackLinks(job.identity.id))
                 item.fallback = std::move(links).value();
@@ -1343,13 +1418,6 @@ std::string modName(const InstalledMod& mod, const PlaysetEntry* entry) {
     return entry ? detail::entryLabel(*entry) : mod.identity.id;
 }
 
-std::string quotedNames(const std::vector<std::string>& names) {
-    std::string out;
-    for (std::size_t i = 0; i < names.size(); ++i)
-        out += (i == 0 ? "" : i + 1 == names.size() ? " and " : ", ") + ("\"" + names[i] + "\"");
-    return out;
-}
-
 std::string modCount(std::size_t count) {
     return std::to_string(count) + (count == 1 ? " Workshop mod" : " Workshop mods");
 }
@@ -1362,26 +1430,38 @@ std::string updateCheckSummary(const UpdateCheckReport& report) {
         return "The Steam Workshop could not be reached, so " + modCount(total) +
                (total == 1 ? " was" : " were") +
                " not checked. Check the internet connection and retry.";
-    std::string text;
     if (report.updates == 0 && report.notCompared == 0 && report.refused == 0 &&
-        report.unanswered == 0)
+        report.unanswered == 0 && report.notChecked == 0)
         return total == 1 ? std::string("The Workshop mod is up to date.")
                           : "All " + modCount(total) + " are up to date.";
-    if (report.updates > 0)
-        text = "Checked " + modCount(total) + ": " + std::to_string(report.updates) +
-               (report.updates == 1 ? " has" : " have") + " an update.";
-    else
-        text = "Checked " + modCount(total) + ": none has an update.";
+    // "Checked" counts the mods the Workshop answered for, and the updates
+    // among them.
+    const auto found = static_cast<std::size_t>(
+        std::count_if(report.items.begin(), report.items.end(), [](const UpdateCheckItem& item) {
+            return item.answered && item.updateAvailable;
+        }));
+    std::string text;
+    const auto add = [&text](const std::string& sentence) {
+        text += (text.empty() ? "" : " ") + sentence;
+    };
+    if (report.checked > 0)
+        add("Checked " + modCount(report.checked) + ": " +
+            (found == 0 ? std::string("none has an update.")
+                        : std::to_string(found) + (found == 1 ? " has" : " have") + " an update."));
     if (report.notCompared > 0)
-        text += " " + std::to_string(report.notCompared) +
-                " could not be compared: Steam's records do not say which version is installed.";
+        add(std::to_string(report.notCompared) +
+            " could not be compared: Steam's records do not say which version is installed.");
     if (report.refused > 0)
-        text += " " + std::to_string(report.refused) + (report.refused == 1 ? " is" : " are") +
-                " no longer available on the Workshop; the installed " +
-                (report.refused == 1 ? "copy stays." : "copies stay.");
+        add(std::to_string(report.refused) + (report.refused == 1 ? " is" : " are") +
+            " no longer available on the Workshop; the installed " +
+            (report.refused == 1 ? "copy stays." : "copies stay."));
     if (report.unanswered > 0)
-        text += " " + std::to_string(report.unanswered) +
-                " could not be checked: the Steam Workshop did not answer. Retry later.";
+        add(std::to_string(report.unanswered) +
+            " could not be checked: the Steam Workshop did not answer. Retry later.");
+    if (report.notChecked > 0)
+        add(std::to_string(report.notChecked) + (report.notChecked == 1 ? " was" : " were") +
+            " installed after the check; check again to include " +
+            (report.notChecked == 1 ? "it." : "them."));
     return text;
 }
 
@@ -1439,7 +1519,8 @@ Result<UpdateCheckPlan> AcquisitionCoordinator::prepareUpdateCheck(std::int64_t 
     return plan;
 }
 
-Result<UpdateCheckReport> AcquisitionCoordinator::buildReport(std::int64_t playsetId) const {
+Result<UpdateCheckReport> AcquisitionCoordinator::buildReport(std::int64_t playsetId,
+                                                              bool recording) const {
     persistence::PlaysetRepository playsets(m_ctx.database);
     auto playset = playsets.get(playsetId);
     if (!playset)
@@ -1484,9 +1565,15 @@ Result<UpdateCheckReport> AcquisitionCoordinator::buildReport(std::int64_t plays
                 ++report.notCompared;
             if (item.verdict == V::Refused)
                 ++report.refused;
-        } else {
+        } else if (recording || m_checkedItems.count(identity)) {
             item.message = "The Steam Workshop has not answered about this item.";
             ++report.unanswered;
+        } else {
+            // Installed after the last check: never asked about.
+            item.asked = false;
+            item.message = "Installed after the last check for mod updates; check again to "
+                           "include it.";
+            ++report.notChecked;
         }
         if (item.updateAvailable)
             ++report.updates;
@@ -1508,9 +1595,11 @@ Result<UpdateCheckReport> AcquisitionCoordinator::recordUpdateCheck(
         absorbMetadata(game, answers);
         m_changed = true; // the rows' update state may have changed
     });
-    auto report = buildReport(playsetId);
+    auto report = buildReport(playsetId, true);
     if (!report)
         return report;
+    for (const UpdateCheckItem& item : report.value().items)
+        m_checkedItems.insert(item.identity);
     report.value().update = std::move(update);
     report.value().reachable = asked == 0 || !answers.empty();
     report.value().summary = updateCheckSummary(report.value());
@@ -1524,7 +1613,7 @@ Result<UpdateCheckReport> AcquisitionCoordinator::recordUpdateCheck(
 }
 
 Result<UpdateCheckReport> AcquisitionCoordinator::updateCheckReport(std::int64_t playsetId) const {
-    return buildReport(playsetId);
+    return buildReport(playsetId, false);
 }
 
 WorkshopFindings AcquisitionCoordinator::workshopFindings(const GameKey& game) const {
@@ -1648,8 +1737,10 @@ Result<UpdateOutcome> AcquisitionCoordinator::acquireUpdates(std::int64_t playse
         m_names.try_emplace(candidate.identity, candidate.name);
 
     if (candidates.empty()) {
-        outcome.message =
-            ids.empty() ? "No mod of this playset has a known update." : "Nothing was updated.";
+        // Requested mods: the reasons below say it (the notification's title
+        // says that nothing was updated).
+        if (ids.empty())
+            outcome.message = "No mod of this playset has a known update.";
     } else {
         outcome.message = candidates.size() == 1
                               ? "Updating " + quotedNames(names) + " through Steam."
@@ -1658,7 +1749,8 @@ Result<UpdateOutcome> AcquisitionCoordinator::acquireUpdates(std::int64_t playse
                 {{"game", game}, {"mods", std::to_string(candidates.size())}});
     }
     for (const SkippedUpdate& skipped : outcome.skipped)
-        outcome.message += " Not updated: \"" + skipped.name + "\". " + skipped.reason;
+        outcome.message += (outcome.message.empty() ? "" : " ") + std::string("Not updated: \"") +
+                           skipped.name + "\". " + skipped.reason;
     if (!candidates.empty())
         outcome.update = start(game);
     return outcome;

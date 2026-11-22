@@ -646,6 +646,7 @@ TEST_CASE("Every transition keeps the machine's invariants", "[providers][acquis
     const Kind kinds[] = {{AcquisitionKind::Acquire, ReinstallStep::Start},
                           {AcquisitionKind::Update, ReinstallStep::Start},
                           {AcquisitionKind::Reinstall, ReinstallStep::Start},
+                          {AcquisitionKind::Reinstall, ReinstallStep::Unsubscribing},
                           {AcquisitionKind::Reinstall, ReinstallStep::Unsubscribed},
                           {AcquisitionKind::Reinstall, ReinstallStep::Resubscribed}};
     const std::vector<Observation> observations{
@@ -749,11 +750,13 @@ TEST_CASE("Every transition keeps the machine's invariants", "[providers][acquis
                     // request more comes from the clock).
                     CHECK(std::holds_alternative<obs::ItemState>(observations[i]));
                 }
-                // Only a reinstall unsubscribes, only before it did, and an
-                // update never subscribes.
+                // Only a reinstall unsubscribes, only before Steam confirmed
+                // it, and an update never subscribes.
                 if (a.kind == K::Unsubscribe) {
                     CHECK(c.job.kind == AcquisitionKind::Reinstall);
-                    CHECK(c.job.reinstallStep == ReinstallStep::Start);
+                    CHECK((c.job.reinstallStep == ReinstallStep::Start ||
+                           c.job.reinstallStep == ReinstallStep::Unsubscribing));
+                    CHECK(t.context.job.reinstallStep == ReinstallStep::Unsubscribing);
                 }
                 if (a.kind == K::Subscribe)
                     CHECK(c.job.kind != AcquisitionKind::Update);
@@ -893,7 +896,10 @@ TEST_CASE("An update never subscribes", "[providers][acquisition]") {
         m.feed(installedAt(kInst, kOld));
         CHECK(m.state() == S::NeedsUserAction);
         CHECK(m.ctx.job.errorMessage.find("no longer subscribed") != std::string::npos);
-        CHECK(m.ctx.job.errorMessage.find("Re-download from scratch") != std::string::npos);
+        // A re-download does not help: it never subscribes an unsubscribed item either.
+        CHECK(m.ctx.job.errorMessage.find("Subscribe to it on its Workshop page, then retry.") !=
+              std::string::npos);
+        CHECK(m.ctx.job.errorMessage.find("Re-download") == std::string::npos);
     }
     SECTION("offline: nothing is requested") {
         Machine m(updateJob());
@@ -913,7 +919,8 @@ TEST_CASE("A re-download unsubscribes, waits, subscribes again and downloads",
     m.feed(installedAt(kSub | kInst, kOld));
     CHECK(m.emitted(K::Unsubscribe));
     CHECK(m.state() == S::Unsubscribing);
-    CHECK(m.ctx.job.reinstallStep == ReinstallStep::Start);
+    CHECK(m.ctx.job.reinstallStep == ReinstallStep::Unsubscribing); // stored before it is sent
+    CHECK(m.last.persist);
 
     m.feed(obs::UnsubscribeResult{1});
     CHECK(m.emitted(K::QueryState));
@@ -961,13 +968,27 @@ TEST_CASE("A re-download whose files Steam removes subscribes at once",
     m.feed(obs::UnsubscribeResult{1});
     m.feed(item(0));
     CHECK(m.emitted(K::Subscribe));
+}
 
-    // An item that is not subscribed to begin with is only subscribed.
-    Machine fresh(reinstallJob());
-    fresh.feed(obs::ProviderReady{true, true});
-    fresh.feed(installedAt(kInst, kOld));
-    CHECK(fresh.emitted(K::Subscribe));
-    CHECK(fresh.ctx.job.reinstallStep == ReinstallStep::Unsubscribed);
+TEST_CASE("A re-download never subscribes an item that was not subscribed",
+          "[providers][acquisition]") {
+    Machine m(reinstallJob());
+    m.feed(obs::ProviderReady{true, true});
+    m.feed(installedAt(kInst, kOld)); // installed, but the account is not subscribed
+    CHECK(m.quiet());
+    CHECK(m.state() == S::NeedsUserAction);
+    CHECK(m.ctx.job.reinstallStep == ReinstallStep::Start);
+    CHECK(m.ctx.job.errorMessage ==
+          "Workshop item " + kId +
+              " is not subscribed in Steam, so it was not downloaded again. Subscribe to it on "
+              "its Workshop page, then retry.");
+    m.feed(obs::Retry{});
+    m.feed(installedAt(kInst, kOld));
+    CHECK(m.quiet()); // a retry does not subscribe either
+    // Subscribed on its Workshop page meanwhile: Retry re-downloads it.
+    m.feed(obs::Retry{});
+    m.feed(installedAt(kSub | kInst, kOld));
+    CHECK(m.emitted(K::Unsubscribe));
 }
 
 TEST_CASE("A re-download that fails after unsubscribing says so, and Retry subscribes again",
@@ -1016,6 +1037,17 @@ TEST_CASE("A re-download that fails after unsubscribing says so, and Retry subsc
         CHECK(m.state() == S::Failed);
         CHECK(m.ctx.job.errorCode == "timeout");
         CHECK(m.ctx.job.errorMessage.find(note) != std::string::npos);
+        REQUIRE(m.ctx.retryAtMs > 0);
+
+        // The automatic retry subscribes again although Steam still lists
+        // the subscription: it never takes that for "subscribed again".
+        m.tickTo(m.ctx.retryAtMs - kT0);
+        CHECK(m.emitted(K::QueryState));
+        m.feed(installedAt(kSub | kInst, kOld));
+        CHECK(m.emitted(K::Subscribe));
+        CHECK(m.ctx.job.reinstallStep == ReinstallStep::Unsubscribed);
+        m.feed(obs::SubscribeResult{1});
+        CHECK(m.ctx.job.reinstallStep == ReinstallStep::Resubscribed);
     }
     SECTION("cancelled after unsubscribing") {
         Machine m(reinstallJob());
@@ -1041,6 +1073,144 @@ TEST_CASE("A re-download that fails after unsubscribing says so, and Retry subsc
         m.feed(obs::Retry{});
         m.feed(installedAt(kSub | kInst, kOld));
         CHECK(m.emitted(K::RequestDownload));
+    }
+}
+
+TEST_CASE("A re-download whose unsubscribe was not confirmed carries on from there",
+          "[providers][acquisition]") {
+    const std::string maybe =
+        "Workshop item " + kId +
+        " may be unsubscribed now: Retry subscribes to it again in that case and downloads it.";
+    SECTION("the result times out; Steam did unsubscribe") {
+        Machine m(reinstallJob());
+        m.feed(obs::ProviderReady{true, true});
+        m.feed(installedAt(kSub | kInst, kOld));
+        m.tickTo(60'000);
+        CHECK(m.state() == S::Failed);
+        CHECK(m.ctx.job.reinstallStep == ReinstallStep::Unsubscribing);
+        CHECK(m.ctx.job.errorMessage.find(maybe) != std::string::npos);
+        m.tickTo(m.ctx.retryAtMs - kT0);
+        CHECK(m.emitted(K::QueryState));
+        m.feed(installedAt(kInst, kOld));
+        CHECK(m.emitted(K::Subscribe)); // not "not subscribed in Steam"
+        CHECK(m.ctx.job.reinstallStep == ReinstallStep::Unsubscribed);
+    }
+    SECTION("the result times out; Steam did not unsubscribe") {
+        Machine m(reinstallJob());
+        m.feed(obs::ProviderReady{true, true});
+        m.feed(installedAt(kSub | kInst, kOld));
+        m.tickTo(60'000);
+        m.feed(obs::Retry{});
+        m.feed(installedAt(kSub | kInst, kOld));
+        CHECK(m.emitted(K::Unsubscribe)); // asked again
+        // A refusal now may follow an earlier request that went through.
+        m.feed(obs::UnsubscribeResult{9});
+        CHECK(m.ctx.job.reinstallStep == ReinstallStep::Unsubscribing);
+        CHECK(m.ctx.job.errorMessage.find(maybe) != std::string::npos);
+    }
+    SECTION("cancelled while unsubscribing, then retried") {
+        Machine m(reinstallJob());
+        m.feed(obs::ProviderReady{true, true});
+        m.feed(installedAt(kSub | kInst, kOld));
+        m.feed(obs::Cancel{});
+        CHECK(m.state() == S::Cancelled);
+        CHECK(m.ctx.job.errorMessage.find("Cancelled. An unsubscribe request was already sent") ==
+              0);
+        m.feed(obs::Retry{});
+        m.feed(installedAt(kInst, kOld));
+        CHECK(m.emitted(K::Subscribe));
+    }
+    SECTION("restored after a restart") {
+        AcquisitionJob job = reinstallJob(ReinstallStep::Unsubscribing);
+        job.state = S::Unsubscribing;
+        Machine m(job);
+        m.feed(obs::ProviderReady{true, true});
+        m.feed(item(0));
+        CHECK(m.emitted(K::Subscribe));
+    }
+}
+
+TEST_CASE("A re-download that Steam does not carry out says that the files stayed",
+          "[providers][acquisition]") {
+    AcquisitionPolicy policy;
+    policy.removalGraceMs = 2000;
+    Machine m(reinstallJob(), policy);
+    m.feed(obs::ProviderReady{true, true});
+    m.feed(installedAt(kSub | kInst, kOld));
+    m.feed(obs::UnsubscribeResult{1});
+    m.feed(installedAt(kInst, kOld)); // dropped; the files stay
+    m.tickTo(3000);
+    m.feed(installedAt(kInst, kOld));
+    CHECK(m.emitted(K::Subscribe));
+    m.feed(obs::SubscribeResult{1});
+    m.feed(installedAt(kSub | kInst, kOld));
+    CHECK(m.emitted(K::RequestDownload));
+    m.feed(obs::DownloadAccepted{true});
+    // Steam calls the same files current: nothing was fetched.
+    int requests = 1;
+    for (int t = 4000; t <= 70'000 && m.state() != S::Failed; t += 1000) {
+        m.tickTo(t);
+        if (m.emitted(K::QueryState)) {
+            m.feed(installedAt(kSub | kInst, kOld));
+            CHECK_FALSE(m.emitted(K::VerifyContent));
+        } else if (m.emitted(K::RequestDownload)) {
+            ++requests;
+            m.feed(obs::DownloadAccepted{true});
+        }
+    }
+    CHECK(requests == 2);
+    CHECK(m.state() == S::Failed);
+    CHECK(m.ctx.job.errorCode == "update_not_seen");
+    CHECK(m.ctx.job.errorMessage == kRedownloadNotSeenMessage);
+    CHECK(m.ctx.job.reinstallStep == ReinstallStep::Resubscribed);
+    CHECK_FALSE(m.last.retryAfterMs.has_value());
+
+    // A changed install time counts as a fresh download.
+    Machine fresh(reinstallJob(ReinstallStep::Resubscribed));
+    fresh.feed(obs::ProviderReady{true, true});
+    fresh.feed(installedAt(kSub | kInst, kOld));
+    CHECK(fresh.emitted(K::RequestDownload));
+    fresh.feed(obs::DownloadAccepted{true});
+    fresh.feed(installedAt(kSub | kInst, kNew));
+    CHECK(fresh.emitted(K::VerifyContent));
+}
+
+TEST_CASE("A download Steam ran by itself does not count as the update's request",
+          "[providers][acquisition]") {
+    SECTION("with a target: it ends short of it, and two requests follow") {
+        Machine m(updateJob());
+        m.feed(obs::ProviderReady{true, true});
+        m.feed(item(kSub | kInst | kDl, kPath, 1, 4));
+        CHECK(m.state() == S::Downloading);
+        m.feed(installedAt(kSub | kInst, kOld)); // Steam's own download: the old version
+        CHECK(m.quiet());
+        m.tickTo(1000);
+        CHECK(m.emitted(K::RequestDownload)); // the first request, at once
+        m.feed(obs::DownloadAccepted{true});
+        CHECK_FALSE(m.ctx.reRequested);
+        int requests = 1;
+        for (int t = 2000; t <= 70'000 && m.state() != S::Failed; t += 1000) {
+            m.tickTo(t);
+            if (m.emitted(K::QueryState)) {
+                m.feed(installedAt(kSub | kInst, kOld));
+            } else if (m.emitted(K::RequestDownload)) {
+                ++requests;
+                CHECK(t >= 31'000); // 30 s after the accepted first request
+                m.feed(obs::DownloadAccepted{true});
+            }
+        }
+        CHECK(requests == 2);
+        CHECK(m.ctx.job.errorCode == "update_not_seen");
+        CHECK(m.ctx.job.errorMessage == kUpdateNotSeenMessage);
+    }
+    SECTION("without a target: the download seen is the update") {
+        Machine m(updateJob(0));
+        m.feed(obs::ProviderReady{true, true});
+        m.feed(item(kSub | kInst | kDl, kPath, 1, 4));
+        m.feed(installedAt(kSub | kInst, kNew));
+        CHECK(m.emitted(K::VerifyContent)); // no pointless request after Steam finished
+        m.feed(obs::ContentVerified{true, {}});
+        CHECK(m.state() == S::Installed);
     }
 }
 

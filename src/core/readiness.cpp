@@ -147,8 +147,9 @@ std::string countText(std::size_t count, const char* singular, const char* plura
 
 // The note a finished update or re-download of installed content leaves on
 // the entry when it did not succeed.
-void addJobWarning(const AcquisitionJob& job, EntryReadiness& readiness) {
-    if (job.kind == AcquisitionKind::Acquire)
+void addJobWarning(const AcquisitionJob& job, const InstalledMod& installed,
+                   EntryReadiness& readiness) {
+    if (job.kind == AcquisitionKind::Acquire || updateJobResolved(job, installed))
         return;
     switch (job.state) {
     case AcquisitionState::Failed:
@@ -164,10 +165,12 @@ void addJobWarning(const AcquisitionJob& job, EntryReadiness& readiness) {
         return;
     }
     case AcquisitionState::Cancelled:
-        // Cancelled between its unsubscribe and the new subscription: the
-        // mod is unsubscribed, and Steam removes its files.
+        // Cancelled between its unsubscribe and the new subscription (or
+        // while Steam was asked to unsubscribe): the mod is, or may be,
+        // unsubscribed, and Steam removes its files.
         if (job.kind == AcquisitionKind::Reinstall &&
-            job.reinstallStep == ReinstallStep::Unsubscribed)
+            (job.reinstallStep == ReinstallStep::Unsubscribed ||
+             job.reinstallStep == ReinstallStep::Unsubscribing))
             readiness.warnings.push_back("Re-download cancelled: " + job.errorMessage);
         return;
     default:
@@ -176,6 +179,16 @@ void addJobWarning(const AcquisitionJob& job, EntryReadiness& readiness) {
 }
 
 } // namespace
+
+bool updateJobResolved(const AcquisitionJob& job, const InstalledMod& installed) noexcept {
+    if (job.kind != AcquisitionKind::Update || job.identity != installed.identity ||
+        (job.state != AcquisitionState::Failed && job.state != AcquisitionState::NeedsUserAction))
+        return false;
+    if (job.targetTimeUpdated > 0)
+        return installed.contentTimeFromSteam &&
+               installed.contentUpdatedAt >= job.targetTimeUpdated;
+    return installed.state == InstallState::Ready;
+}
 
 EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* installed,
                                 const AcquisitionJob* job) {
@@ -210,7 +223,7 @@ EntryReadiness computeReadiness(const PlaysetEntry& entry, const InstalledMod* i
             r.updateAvailable = installed->state == InstallState::NeedsUpdate;
             addInstalledWarnings(entry, *installed, r);
             if (job)
-                addJobWarning(*job, r);
+                addJobWarning(*job, *installed, r);
             return r;
         }
     }

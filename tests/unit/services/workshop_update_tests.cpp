@@ -433,7 +433,7 @@ TEST_CASE("Play waits for an update of a disabled mod", "[services][updates]") {
     const LaunchCheck check = launcher.check(kGame, r.playsetId, {false});
     CHECK_FALSE(check.canLaunch);
     REQUIRE(check.blockers.size() == 1);
-    CHECK(check.blockers[0] == "1 other Workshop mod of Stellaris is being updated or downloaded "
+    CHECK(check.blockers[0] == "1 Workshop mod of Stellaris is being updated or downloaded "
                                "again. Wait until that finishes, or cancel it in Downloads, then "
                                "play.");
     r.settle();
@@ -598,4 +598,292 @@ TEST_CASE("A stored re-download resumes at its step after a restart", "[services
     r.settle();
     CHECK(r.job(kItem).state == AcquisitionState::Installed);
     CHECK(r.sentKinds() == std::vector<std::string>{"subscribe", "download"});
+}
+
+TEST_CASE("A failed update that Steam later installs by itself is no longer reported",
+          "[services][updates]") {
+    UpdateRig r;
+    r.steam.items[kItem].seesUpdate = false;
+    r.check({r.answer(kItem, kNew)});
+    require(r.c().acquireUpdates(r.playsetId));
+    r.settle();
+    REQUIRE(r.job(kItem).errorCode == "update_not_seen");
+    REQUIRE(snapshotJob(r.c().snapshot(kGame), kItem) != nullptr);
+
+    // Steam's own check fetches the new version later.
+    r.w.adapter.acf[kItem] = AcfRecord{kNew, "1100000000000000702", kNew, "1100000000000000702"};
+    r.steam.items[kItem].timestamp = kNew;
+    require(r.games.rescanMods(kGame));
+    REQUIRE(r.installed(kItem).contentUpdatedAt == kNew);
+
+    const PlaysetView view = r.view();
+    CHECK(view.rows[0].readiness.status == EntryStatus::Ready);
+    CHECK_FALSE(view.rows[0].readiness.updateAvailable);
+    CHECK(view.rows[0].readiness.warnings.empty());
+    const AcquisitionSnapshot snapshot = r.c().snapshot(kGame);
+    CHECK(snapshot.jobs.empty()); // no Retry, no "Re-download from scratch"
+    CHECK(snapshot.summary.empty());
+
+    // Also after a restart.
+    r.c().shutdown();
+    r.restart();
+    CHECK(r.view().rows[0].readiness.warnings.empty());
+    CHECK(r.c().snapshot(kGame).jobs.empty());
+}
+
+TEST_CASE("An update parked while the game ran resumes once the game is closed",
+          "[services][updates]") {
+    UpdateRig r;
+    r.check({r.answer(kItem, kNew)});
+    r.w.processes.push_back({1234, kExeName, r.w.executable});
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    persistence::AcquisitionJobRepository::NewJob kind{AcquisitionKind::Update, kNew, {}};
+    require(repo.createOrReuse({kGame, source::SteamWorkshop, kItem}, r.playsetId, kind));
+    r.c().start(kGame);
+    REQUIRE(r.c().liveJobs(kGame).empty());
+    for (int i = 0; i < 15; ++i) { // still running: nothing happens
+        r.w.clockMs += 1000;
+        r.c().tick(r.w.clockMs);
+    }
+    CHECK(r.c().liveJobs(kGame).empty());
+    CHECK(r.steam.opens == 0);
+
+    r.w.processes.pop_back(); // the game closed; no rescan, no button
+    for (int i = 0; i < 12 && r.c().liveJobs(kGame).empty(); ++i) {
+        r.w.clockMs += 1000;
+        r.c().tick(r.w.clockMs);
+    }
+    CHECK(r.c().liveJobs(kGame).size() == 1);
+    r.settle();
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    CHECK(r.installed(kItem).contentUpdatedAt == kNew);
+    LaunchService launcher(r.w.ctx, &r.c());
+    CHECK(launcher.check(kGame, r.playsetId, {false}).canLaunch);
+}
+
+TEST_CASE("A restored re-download past its unsubscribe finishes without the Web API",
+          "[services][updates]") {
+    UpdateRig r;
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    persistence::AcquisitionJobRepository::NewJob kind{AcquisitionKind::Reinstall, 0, {}};
+    AcquisitionJob job =
+        require(repo.createOrReuse({kGame, source::SteamWorkshop, kItem}, r.playsetId, kind));
+    job.attempts = 1;
+    std::vector<std::string> sent;
+    SECTION("subscribed again; Steam removed the files") {
+        job.state = AcquisitionState::Subscribed;
+        job.reinstallStep = ReinstallStep::Resubscribed;
+        r.steam.items[kItem].flags = providers::item_flag::Subscribed;
+        sent = {"download"};
+    }
+    SECTION("the unsubscribe was sent before the restart, and Steam carried it out") {
+        job.state = AcquisitionState::Unsubscribing;
+        job.reinstallStep = ReinstallStep::Unsubscribing;
+        r.steam.items[kItem].flags = providers::item_flag::Installed;
+        sent = {"subscribe", "download"};
+    }
+    requireOk(repo.update(job));
+    r.metadata.answering = false; // offline at the restart
+    r.restart().start(kGame);
+    r.settle();
+    const AcquisitionJob after = r.job(kItem);
+    CHECK(after.state == AcquisitionState::Installed);
+    CHECK(after.reinstallStep == ReinstallStep::Resubscribed);
+    CHECK(r.sentKinds() == sent);
+}
+
+TEST_CASE("An unconfirmed re-download says what it may have left unsubscribed",
+          "[services][updates]") {
+    UpdateRig r;
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    persistence::AcquisitionJobRepository::NewJob kind{AcquisitionKind::Reinstall, 0, {}};
+    AcquisitionJob job =
+        require(repo.createOrReuse({kGame, source::SteamWorkshop, kItem}, r.playsetId, kind));
+    job.state = AcquisitionState::Unsubscribing;
+    job.reinstallStep = ReinstallStep::Unsubscribing;
+    job.attempts = 1;
+    requireOk(repo.update(job));
+    // Steam still lists the subscription: asking again waits for the Web API.
+    r.metadata.answering = false;
+    r.restart().start(kGame);
+    r.settle();
+    const AcquisitionJob after = r.job(kItem);
+    CHECK(after.state == AcquisitionState::NeedsUserAction);
+    CHECK(r.sentKinds().empty());
+    CHECK_THAT(after.errorMessage, ContainsSubstring("An unsubscribe request was already sent"));
+    CHECK_THAT(after.errorMessage,
+               ContainsSubstring(std::string(kItem) + " may be unsubscribed now: Retry "
+                                                      "subscribes to it again in that case"));
+    CHECK_THAT(after.errorMessage, !ContainsSubstring("Nothing changed in Steam"));
+}
+
+TEST_CASE("A re-download stores its step at once", "[services][updates]") {
+    UpdateRig r;
+    require(r.c().reinstall(r.playsetId, kItem));
+    r.metadata.answer(r.c());
+    r.steam.pump(r.c()); // clock unchanged: progress would be coalesced
+    const std::vector<std::string> kinds = r.sentKinds();
+    REQUIRE(std::count(kinds.begin(), kinds.end(), "unsubscribe") == 1);
+    const auto live = r.c().liveJobs(kGame);
+    REQUIRE(live.size() == 1);
+    REQUIRE(live[0].reinstallStep == ReinstallStep::Unsubscribed);
+    CHECK(r.job(kItem).reinstallStep == ReinstallStep::Unsubscribed); // a crash now loses nothing
+}
+
+TEST_CASE("A re-download cancelled after its unsubscribe stays listed after a restart",
+          "[services][updates]") {
+    UpdateRig r;
+    r.steam.items[kItem].subscribeResult = 16;
+    require(r.c().reinstall(r.playsetId, kItem));
+    for (int i = 0; i < 20 && r.job(kItem).reinstallStep != ReinstallStep::Unsubscribed; ++i) {
+        r.metadata.answer(r.c());
+        r.steam.pump(r.c());
+        r.w.clockMs += 1000;
+        r.c().tick(r.w.clockMs);
+    }
+    REQUIRE(r.job(kItem).reinstallStep == ReinstallStep::Unsubscribed);
+    r.c().cancelAll(kGame);
+    r.c().shutdown();
+    r.restart();
+    const PlaysetView view = r.view();
+    REQUIRE(view.rows[0].readiness.warnings.size() == 1);
+    CHECK_THAT(view.rows[0].readiness.warnings[0], ContainsSubstring("Retry subscribes"));
+    const AcquisitionSnapshot snapshot = r.c().snapshot(kGame);
+    const JobSnapshot* item = snapshotJob(snapshot, kItem);
+    REQUIRE(item != nullptr); // where the warning's Retry is
+    CHECK(item->canRetry);
+    CHECK(item->stateText == "Cancelled");
+
+    r.steam.items[kItem].subscribeResult = 1;
+    require(r.c().retry(item->job.id));
+    r.settle();
+    CHECK(r.job(kItem).state == AcquisitionState::Installed);
+    CHECK(r.sentKinds().back() == "download");
+}
+
+TEST_CASE("A re-download needs a subscription to replace", "[services][updates]") {
+    UpdateRig r;
+    r.steam.items[kItem].flags = providers::item_flag::Installed; // unsubscribed in Steam
+    require(r.c().reinstall(r.playsetId, kItem));
+    r.settle();
+    const AcquisitionJob job = r.job(kItem);
+    CHECK(job.state == AcquisitionState::NeedsUserAction);
+    CHECK_THAT(job.errorMessage, ContainsSubstring("is not subscribed in Steam, so it was not "
+                                                   "downloaded again"));
+    CHECK(r.sentKinds().empty()); // never subscribed on the user's behalf
+}
+
+TEST_CASE("A re-download Steam does not carry out ends with the files it kept",
+          "[services][updates]") {
+    UpdateRig r;
+    r.steam.items[kItem].seesUpdate = false; // the files stay; a download fetches nothing
+    require(r.c().reinstall(r.playsetId, kItem));
+    r.settle();
+    const AcquisitionJob job = r.job(kItem);
+    CHECK(job.state == AcquisitionState::Failed);
+    CHECK(job.errorCode == "update_not_seen");
+    CHECK(job.errorMessage == providers::kRedownloadNotSeenMessage);
+    CHECK(job.reinstallStep == ReinstallStep::Resubscribed);
+    CHECK(r.sentKinds() ==
+          std::vector<std::string>{"unsubscribe", "subscribe", "download", "download"});
+    const AcquisitionSnapshot snapshot = r.c().snapshot(kGame);
+    const JobSnapshot* item = snapshotJob(snapshot, kItem);
+    REQUIRE(item != nullptr);
+    CHECK(item->stateText == "Re-download failed"); // never "Downloaded again"
+    const PlaysetView view = r.view();
+    CHECK(view.rows[0].readiness.status == EntryStatus::Ready); // the installed files stay usable
+    REQUIRE(view.rows[0].readiness.warnings.size() == 1);
+    CHECK_THAT(view.rows[0].readiness.warnings[0], ContainsSubstring("Steam kept the installed"));
+}
+
+TEST_CASE("The update check tells mods installed after it from unanswered ones",
+          "[services][updates]") {
+    UpdateRig r;
+    const UpdateCheckReport first = r.check({r.answer(kItem, kOld)});
+    REQUIRE(first.summary == "The Workshop mod is up to date.");
+
+    // A mod subscribed in Steam afterwards, picked up by a rescan.
+    r.install(kOther, "Example Later");
+    persistence::PlaysetRepository playsets(*r.w.db);
+    Playset p = require(playsets.get(r.playsetId));
+    p.entries.push_back(workshopEntry(kOther, "Example Later"));
+    requireOk(playsets.saveEntries(p.id, p.entries));
+    const UpdateCheckReport later = require(r.c().updateCheckReport(r.playsetId));
+    CHECK(later.unanswered == 0); // not a failure: never asked
+    CHECK(later.notChecked == 1);
+    REQUIRE(later.items.size() == 2);
+    CHECK_FALSE(later.items[1].asked);
+    CHECK(later.summary == "Checked 1 Workshop mod: none has an update. 1 was installed after "
+                           "the check; check again to include it.");
+
+    // Asked and not answered: that one is a failure.
+    r.w.clockMs += r.options.updateCheckMaxAgeMs;
+    const UpdateCheckReport partial = r.check({r.answer(kItem, kOld)});
+    CHECK(partial.unanswered == 1);
+    CHECK(partial.notChecked == 0);
+    CHECK(partial.summary == "Checked 1 Workshop mod: none has an update. 1 could not be "
+                             "checked: the Steam Workshop did not answer. Retry later.");
+}
+
+TEST_CASE("Without Workshop downloads, a stored update says how to finish it",
+          "[services][updates]") {
+    UpdateRig r;
+    persistence::AcquisitionJobRepository repo(*r.w.db);
+    persistence::AcquisitionJobRepository::NewJob kind{AcquisitionKind::Update, kNew, {}};
+    require(repo.createOrReuse({kGame, source::SteamWorkshop, kItem}, r.playsetId, kind));
+    LaunchService launcher(r.w.ctx, nullptr); // --no-steam, read-only: no coordinator
+    const LaunchCheck check = launcher.check(kGame, r.playsetId, {false});
+    CHECK_FALSE(check.canLaunch);
+    REQUIRE(check.blockers.size() == 2);
+    CHECK_THAT(check.blockers[0], ContainsSubstring("Updating: queued."));
+    CHECK(check.blockers[1] ==
+          "1 Workshop mod of Stellaris has an update or re-download that an earlier session "
+          "started and did not finish. Workshop downloads are off in this session (--no-steam "
+          "or read-only), so it can neither finish nor be cancelled here: start Paradox Mod "
+          "Manager normally to finish or cancel it, then play.");
+}
+
+TEST_CASE("An enabled mod waiting for an automatic retry is not an other mod",
+          "[services][updates]") {
+    UpdateRig r;
+    r.check({r.answer(kItem, kNew)});
+    r.steam.items[kItem].acceptDownload = false; // a retryable failure
+    require(r.c().acquireUpdates(r.playsetId));
+    for (int i = 0; i < 5 && r.c().liveJobs(kGame).at(0).state != AcquisitionState::Failed; ++i) {
+        r.metadata.answer(r.c());
+        r.steam.pump(r.c());
+    }
+    REQUIRE(r.c().liveJobs(kGame).at(0).state == AcquisitionState::Failed);
+    REQUIRE(r.c().updatesInProgress(kGame).size() == 1); // its automatic retry is due
+    LaunchService launcher(r.w.ctx, &r.c());
+    const LaunchCheck check = launcher.check(kGame, r.playsetId, {false});
+    CHECK_FALSE(check.canLaunch);
+    REQUIRE(check.blockers.size() == 1);
+    CHECK(check.blockers[0] == "1 Workshop mod of Stellaris is being updated or downloaded "
+                               "again. Wait until that finishes, or cancel it in Downloads, then "
+                               "play.");
+}
+
+TEST_CASE("Cancelling a re-download while it unsubscribes says the request may complete",
+          "[services][updates]") {
+    UpdateRig r;
+    require(r.c().reinstall(r.playsetId, kItem));
+    r.metadata.answer(r.c());
+    // Deliver Steam's events one at a time until the unsubscribe went out.
+    for (int i = 0; i < 20 && !r.steam.pending.empty(); ++i) {
+        const auto live = r.c().liveJobs(kGame);
+        if (!live.empty() && live[0].reinstallStep == ReinstallStep::Unsubscribing)
+            break;
+        auto next = std::move(r.steam.pending.front());
+        r.steam.pending.pop_front();
+        r.c().onHelperEvent(kGame, std::get<providers::HelperEvent>(next));
+    }
+    REQUIRE(r.c().liveJobs(kGame).at(0).reinstallStep == ReinstallStep::Unsubscribing);
+    REQUIRE(r.job(kItem).reinstallStep == ReinstallStep::Unsubscribing); // stored first
+    const CancelOutcome outcome = r.c().cancelAll(kGame);
+    CHECK(outcome.message == "Cancelled 1 download. An unsubscribe request for \"Example "
+                             "Outdated\" was already sent and may still complete; if it does, "
+                             "Retry subscribes again. Nothing was deleted.");
+    CHECK_THAT(r.view().rows[0].readiness.warnings.at(0),
+               ContainsSubstring("Re-download cancelled: Cancelled. An unsubscribe request"));
 }

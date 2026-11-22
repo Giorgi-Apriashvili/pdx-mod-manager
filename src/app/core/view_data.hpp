@@ -149,7 +149,8 @@ struct UpdateCheckItemData {
     QString name;
     QString providerId;
     // providers::WorkshopUpdateVerdict name ("up_to_date", "update_available",
-    // "not_compared", "refused"), or "unanswered"
+    // "not_compared", "refused"), "unanswered", or "not_checked" (installed
+    // after the last check)
     QString verdict;
     bool updateAvailable = false;
     bool enabled = true;

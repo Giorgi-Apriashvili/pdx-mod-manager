@@ -92,6 +92,7 @@ public:
             return;
         const std::uint32_t previousFlags = ctx().lastFlags;
         ctx().lastFlags = o.status.flags;
+        noteFetch(o.status);
         switch (ctx().awaiting) {
         case AwaitStep::State:
             plan(o.status);
@@ -134,7 +135,10 @@ public:
             return;
         const SteamResultInfo info = classifySteamResult(o.result);
         if (!info.ok()) {
-            // Nothing changed in Steam: the item is still subscribed.
+            // Steam refused it: nothing changed, the item is still subscribed
+            // (unless an earlier, unconfirmed request of this job went through).
+            if (!ctx().unsubscribeRepeated)
+                setStep(ReinstallStep::Start);
             failWith(o.result, "Unsubscribing from Workshop item " + job().identity.id);
             return;
         }
@@ -207,6 +211,12 @@ public:
                                   " made no progress for " + minutes(m_policy.stallTimeoutMs) +
                                   ". Check Steam's Downloads page (paused downloads, disk space, "
                                   "download restrictions), then retry.");
+            } else if (ctx().currentButOld && !ctx().downloadRequested) {
+                // A download Steam ran by itself ended short of the target:
+                // this run's first request (its wait starts when accepted).
+                ctx().currentButOld = false;
+                await(AwaitStep::DownloadAccepted);
+                emit(ActionKind::RequestDownload);
             } else if (ctx().currentButOld &&
                        now - ctx().downloadRequestedAtMs >= m_policy.updateRecheckMs) {
                 if (!ctx().reRequested) {
@@ -242,9 +252,7 @@ public:
             if (waited >= m_policy.unsubscribeTimeoutMs)
                 failRetryable(ErrorCode::Timeout,
                               "Steam did not confirm in time that it unsubscribed Workshop item " +
-                                  job().identity.id +
-                                  ", so the item may be unsubscribed now. A retry subscribes to "
-                                  "it again in that case.");
+                                  job().identity.id + ".");
             return;
         case AwaitStep::Session:
             if (waited >= m_policy.responseTimeoutMs)
@@ -282,7 +290,6 @@ public:
                                    s == AcquisitionState::Downloading;
         const bool subscribed = ctx().subscribeConfirmed || s == AcquisitionState::Subscribed;
         const bool subscribeMaybe = ctx().subscribeSent || s == AcquisitionState::Subscribing;
-        const bool unsubscribeMaybe = ctx().unsubscribeSent || s == AcquisitionState::Unsubscribing;
         idle();
         setState(AcquisitionState::Cancelled);
         std::string message;
@@ -295,7 +302,7 @@ public:
             if (subscribeMaybe)
                 message += " A subscription request was already sent and may still complete.";
         } else if (kind() == AcquisitionKind::Reinstall &&
-                   job().reinstallStep == ReinstallStep::Start && unsubscribeMaybe) {
+                   job().reinstallStep == ReinstallStep::Unsubscribing) {
             message = "Cancelled. An unsubscribe request was already sent and may still complete "
                       "in Steam; if it does, Retry subscribes to the item again and downloads "
                       "it.";
@@ -377,14 +384,19 @@ private:
         }
     }
 
-    // Every failure of a re-download that unsubscribed the item says so: the
-    // item must never be left unsubscribed without the user knowing.
+    // Every failure of a re-download that unsubscribed the item (or asked
+    // Steam to) says so: the item must never be left unsubscribed without the
+    // user knowing.
     void setError(ErrorCode code, std::string message) {
-        if (kind() == AcquisitionKind::Reinstall &&
-            job().reinstallStep == ReinstallStep::Unsubscribed && code != ErrorCode::Cancelled)
+        const bool reinstall = kind() == AcquisitionKind::Reinstall && code != ErrorCode::Cancelled;
+        if (reinstall && job().reinstallStep == ReinstallStep::Unsubscribed)
             message += " Workshop item " + job().identity.id +
                        " is now unsubscribed in Steam: Retry subscribes to it again and downloads "
                        "it.";
+        else if (reinstall && job().reinstallStep == ReinstallStep::Unsubscribing)
+            message += " Workshop item " + job().identity.id +
+                       " may be unsubscribed now: Retry subscribes to it again in that case and "
+                       "downloads it.";
         job().errorCode = std::string(errorCodeName(code));
         job().errorMessage = std::move(message);
         touch();
@@ -474,10 +486,13 @@ private:
 
     // Steam keeps reporting the old version: retrying within seconds would not
     // help (Steam checks about every 45 minutes), so only the user retries.
+    // A re-download without a target: Steam kept the installed files.
     void failNotSeen() {
         idle();
         setState(AcquisitionState::Failed);
-        setError(ErrorCode::UpdateNotSeen, std::string(kUpdateNotSeenMessage));
+        const bool kept = kind() == AcquisitionKind::Reinstall && job().targetTimeUpdated <= 0;
+        setError(ErrorCode::UpdateNotSeen,
+                 std::string(kept ? kRedownloadNotSeenMessage : kUpdateNotSeenMessage));
     }
 
     void failWith(int eresult, const std::string& context) {
@@ -522,10 +537,13 @@ private:
         ctx().subscribeConfirmed = false;
         ctx().downloadRequested = false;
         ctx().unsubscribeSent = false;
+        ctx().unsubscribeRepeated = false;
         ctx().downloadRequestedAtMs = 0;
         ctx().reRequested = false;
         ctx().currentButOld = false;
         ctx().droppedAtMs = 0;
+        ctx().fetchSeen = false;
+        ctx().firstTimestamp = 0;
         ctx().installPath.clear();
         ctx().retryAtMs = 0;
         if (ctx().sessionKnown) {
@@ -572,14 +590,33 @@ private:
         recordBytes(s, changed);
     }
 
+    // Records evidence that Steam fetched the item during this run: it was
+    // not installed or downloading, or its install time changed.
+    void noteFetch(const ItemStatus& s) {
+        const ItemFlags f = decodeItemFlags(s.flags);
+        if (!f.installed || f.downloading) {
+            ctx().fetchSeen = true;
+            return;
+        }
+        if (s.timestamp == 0)
+            return;
+        if (ctx().firstTimestamp == 0)
+            ctx().firstTimestamp = s.timestamp;
+        else if (s.timestamp != ctx().firstTimestamp)
+            ctx().fetchSeen = true;
+    }
+
     // Update and reinstall jobs: the installed version is the one wanted. With
     // a known target, Steam's install timestamp must reach it; without one, an
     // update is done once Steam calls the item current after this run's
-    // request, a reinstall once its download was requested.
+    // request or after a download this run saw, a reinstall only once this
+    // run saw Steam fetch the item (its old files may simply have stayed).
     bool targetReached(const ItemStatus& s) {
         if (job().targetTimeUpdated > 0)
             return static_cast<std::int64_t>(s.timestamp) >= job().targetTimeUpdated;
-        return ctx().downloadRequested || kind() == AcquisitionKind::Reinstall;
+        if (kind() == AcquisitionKind::Update)
+            return ctx().downloadRequested || ctx().fetchSeen;
+        return ctx().fetchSeen;
     }
 
     // Decides the next step from a fresh state report.
@@ -625,8 +662,7 @@ private:
             needsUser(ErrorCode::ValidationFailed,
                       "Workshop item " + job().identity.id +
                           " is not subscribed in Steam, so Steam does not update it. Subscribe "
-                          "to it on its Workshop page, or use Re-download from scratch, then "
-                          "retry.");
+                          "to it on its Workshop page, then retry.");
             return;
         }
         ctx().subscribeConfirmed = true;
@@ -639,24 +675,37 @@ private:
 
     void planReinstall(const ItemStatus& s) {
         const ItemFlags f = decodeItemFlags(s.flags);
-        if (job().reinstallStep == ReinstallStep::Start) {
-            if (f.subscribed) {
-                if (!requireOnline())
-                    return;
-                setState(AcquisitionState::Unsubscribing);
-                clearError();
-                ctx().unsubscribeSent = true;
-                await(AwaitStep::UnsubscribeResult);
-                emit(ActionKind::Unsubscribe);
+        switch (job().reinstallStep) {
+        case ReinstallStep::Start:
+            if (!f.subscribed) {
+                // A re-download replaces a subscription; it never adds one
+                // the account does not have.
+                needsUser(ErrorCode::ValidationFailed,
+                          "Workshop item " + job().identity.id +
+                              " is not subscribed in Steam, so it was not downloaded again. "
+                              "Subscribe to it on its Workshop page, then retry.");
                 return;
             }
-            setStep(ReinstallStep::Unsubscribed); // nothing to unsubscribe
+            unsubscribe();
+            return;
+        case ReinstallStep::Unsubscribing:
+            if (f.subscribed) {
+                unsubscribe(); // the earlier request was not carried out, or not yet
+                return;
+            }
+            setStep(ReinstallStep::Unsubscribed); // Steam carried out the earlier request
+            break;
+        case ReinstallStep::Unsubscribed:
+            break;
+        case ReinstallStep::Resubscribed:
+            if (!f.subscribed)
+                setStep(ReinstallStep::Unsubscribed); // unsubscribed again meanwhile
+            break;
         }
-        if (job().reinstallStep == ReinstallStep::Unsubscribed && f.subscribed)
-            setStep(ReinstallStep::Resubscribed); // subscribed again meanwhile
-        if (job().reinstallStep == ReinstallStep::Resubscribed && !f.subscribed)
-            setStep(ReinstallStep::Unsubscribed); // unsubscribed again meanwhile
         if (job().reinstallStep == ReinstallStep::Unsubscribed) {
+            // Also while Steam still lists the subscription: its list lags
+            // behind a confirmed unsubscribe, and subscribing to an item that
+            // is subscribed changes nothing.
             subscribe();
             return;
         }
@@ -666,6 +715,20 @@ private:
             job().state == AcquisitionState::Unsubscribing)
             setState(AcquisitionState::Subscribed);
         download(s, f);
+    }
+
+    // The step is stored before the request goes out, so that a retry or a
+    // restart knows that Steam may have unsubscribed the item.
+    void unsubscribe() {
+        if (!requireOnline())
+            return;
+        ctx().unsubscribeRepeated = job().reinstallStep == ReinstallStep::Unsubscribing;
+        setStep(ReinstallStep::Unsubscribing);
+        setState(AcquisitionState::Unsubscribing);
+        clearError();
+        ctx().unsubscribeSent = true;
+        await(AwaitStep::UnsubscribeResult);
+        emit(ActionKind::Unsubscribe);
     }
 
     void subscribe() {
@@ -706,7 +769,7 @@ private:
                       "Workshop item " + job().identity.id +
                           " is no longer subscribed in Steam (it may have been unsubscribed "
                           "manually), so Steam does not update it. Subscribe to it on its "
-                          "Workshop page, or use Re-download from scratch, then retry.");
+                          "Workshop page, then retry.");
             return;
         }
         if (dropped && kind() == AcquisitionKind::Reinstall) {

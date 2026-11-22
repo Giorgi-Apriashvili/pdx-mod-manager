@@ -144,9 +144,10 @@ TEST_CASE("Acquisition states round-trip through their names", "[core][model]") 
     CHECK(std::string(pmm::toString(AcquisitionKind::Update)) == "update");
     CHECK_FALSE(pmm::acquisitionKindFromString("").has_value());
     using pmm::ReinstallStep;
-    for (auto step :
-         {ReinstallStep::Start, ReinstallStep::Unsubscribed, ReinstallStep::Resubscribed})
+    for (auto step : {ReinstallStep::Start, ReinstallStep::Unsubscribing,
+                      ReinstallStep::Unsubscribed, ReinstallStep::Resubscribed})
         CHECK(pmm::reinstallStepFromString(pmm::toString(step)) == step);
+    CHECK(std::string(pmm::toString(ReinstallStep::Unsubscribing)) == "unsubscribing");
     CHECK(std::string(pmm::toString(ReinstallStep::Unsubscribed)) == "unsubscribed");
     CHECK_FALSE(pmm::reinstallStepFromString("done").has_value());
 }

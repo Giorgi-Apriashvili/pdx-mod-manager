@@ -193,6 +193,48 @@ TEST_CASE("A finished update leaves the installed mod ready, a failed one with a
     CHECK(r.warnings == std::vector<std::string>{
                             "Re-download cancelled: Cancelled. Workshop item 1 was unsubscribed "
                             "for the re-download."});
+    // ... and one cancelled while Steam was asked to unsubscribe it may have.
+    cancelled.reinstallStep = ReinstallStep::Unsubscribing;
+    cancelled.errorMessage = "Cancelled. An unsubscribe request was already sent.";
+    CHECK(computeReadiness(entry, &mod, &cancelled).warnings ==
+          std::vector<std::string>{
+              "Re-download cancelled: Cancelled. An unsubscribe request was already sent."});
+}
+
+TEST_CASE("A failed update is moot once the installed mod reached its target",
+          "[core][readiness]") {
+    const PlaysetEntry entry = workshop("1", "Mod");
+    InstalledMod mod = installed(entry.identity, "Mod");
+    mod.contentTimeFromSteam = true;
+    mod.contentUpdatedAt = 1'700'000'000;
+    AcquisitionJob failed = job(entry, AcquisitionState::Failed);
+    failed.kind = AcquisitionKind::Update;
+    failed.targetTimeUpdated = 1'700'000'500;
+    failed.errorMessage = "Steam has not picked up this update yet.";
+    CHECK_FALSE(updateJobResolved(failed, mod));
+    CHECK(computeReadiness(entry, &mod, &failed).warnings.size() == 1);
+
+    // Steam installed the update by itself later.
+    mod.contentUpdatedAt = 1'700'000'500;
+    for (AcquisitionState state : {AcquisitionState::Failed, AcquisitionState::NeedsUserAction}) {
+        failed.state = state;
+        CHECK(updateJobResolved(failed, mod));
+        const EntryReadiness r = computeReadiness(entry, &mod, &failed);
+        CHECK(r.status == EntryStatus::Ready);
+        CHECK(r.warnings.empty());
+    }
+    // Only Steam's own record of the installed version counts.
+    mod.contentTimeFromSteam = false;
+    CHECK_FALSE(updateJobResolved(failed, mod));
+    // Without a target: once Steam no longer flags the mod for an update.
+    failed.targetTimeUpdated = 0;
+    CHECK(updateJobResolved(failed, mod));
+    mod.state = InstallState::NeedsUpdate;
+    CHECK_FALSE(updateJobResolved(failed, mod));
+    // A re-download is never "resolved" this way: it changes the files.
+    failed.kind = AcquisitionKind::Reinstall;
+    mod.state = InstallState::Ready;
+    CHECK_FALSE(updateJobResolved(failed, mod));
 }
 
 TEST_CASE("The Workshop findings of the session mark updates and refused items",

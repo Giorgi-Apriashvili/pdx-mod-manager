@@ -64,8 +64,9 @@ constexpr std::array<std::pair<AcquisitionKind, std::string_view>, 3> kKindNames
     {AcquisitionKind::Reinstall, "reinstall"},
 }};
 
-constexpr std::array<std::pair<ReinstallStep, std::string_view>, 3> kReinstallStepNames{{
+constexpr std::array<std::pair<ReinstallStep, std::string_view>, 4> kReinstallStepNames{{
     {ReinstallStep::Start, "start"},
+    {ReinstallStep::Unsubscribing, "unsubscribing"},
     {ReinstallStep::Unsubscribed, "unsubscribed"},
     {ReinstallStep::Resubscribed, "resubscribed"},
 }};
