@@ -172,15 +172,22 @@ Steam to download the new versions.
   download. Whether Steam fetches a version it has not noticed yet when asked
   is not verified ([steam-workshop.md](steam-workshop.md#11-not-verified-yet-and-how-to-verify-it)).
 - **Re-download from scratch…** (on the failed download, or in a mod's
-  right-click menu) unsubscribes the mod in Steam, which deletes its files, then
+  right-click menu) unsubscribes the mod in Steam, which removes its files, then
   subscribes again and downloads it. The mod is missing until the download
   finishes; it stays in your playsets. Other games or launchers that use the
   same subscription see it disappear briefly. If anything fails after the
-  unsubscribe, the download says that the mod is now unsubscribed, and
-  **Retry** subscribes to it again.
-- "… is not subscribed in Steam, so Steam does not update it" means the mod's
-  files are there but your Steam account is not subscribed to it. Subscribe on
-  its Workshop page, or use **Re-download from scratch…**, then retry.
+  unsubscribe, the download says that the mod is now (or may be) unsubscribed,
+  and **Retry** subscribes to it again. It works only for a mod your account
+  is subscribed to.
+- "Steam kept the installed files and did not download the mod again" means
+  the re-download saw no sign of a fresh download: Steam did not remove the
+  files, and the new subscription fetched nothing. The mod is subscribed and
+  its installed version is used. To force a fresh download, unsubscribe in
+  Steam, wait until Steam removes the files, then subscribe again.
+- "… is not subscribed in Steam, so Steam does not update it" (or "… so it was
+  not downloaded again") means the mod's files are there but your Steam
+  account is not subscribed to it. Subscribe on its Workshop page, then
+  retry.
 - "Close it before updating mods" means the game is running: Steam would change
   the files of mods the game has loaded. Quit the game, then try again. Play
   also waits while an update runs.

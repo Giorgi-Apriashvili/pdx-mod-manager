@@ -161,8 +161,11 @@ a second after typing stops.
 
 **Check for mod updates** (Downloads area; `AcquisitionController::checkForUpdates()`,
 `ServiceRunner::checkWorkshopUpdates()`) is the only way the application
-asks the Web API about mods that are installed, and it does so only when the
-button is pressed: never at start, on a playset change or before Play.
+asks the Web API about the installed mods of a playset in bulk, and it does
+so only when the button is pressed: never at start, on a playset change or
+before Play. An update or re-download the user starts also asks about its
+own item (the identity gate), as a download does, unless the check already
+answered for it; so does such a job resumed after a restart.
 
 - It first rescans the game's mods, which re-reads Steam's own
   `appworkshop_<app>.acf`, then sends the item ids of the active playset's
@@ -175,8 +178,10 @@ button is pressed: never at start, on a playset change or before Play.
 - A mod has an update when the Workshop's `time_updated` is later than the
   `timeupdated` Steam recorded for the installed version; a mod Steam has no
   record of is not compared ([steam-workshop.md](steam-workshop.md#7-web-api-metadata)).
-- The result line says how many mods were checked and how many have an
-  update, or that the Workshop could not be reached, with **Retry**.
+- The result line says how many mods the Workshop answered for and how many
+  of them have an update, or that the Workshop could not be reached, with
+  **Retry**. A mod installed after the check (a rescan picked it up) is not
+  counted as a failure: the line says to check again to include it.
 - What Steam's own record says ("Update available" when it knows a newer
   version) is shown in every session, without any network use, also with
   `--no-steam` and `--read-only`; there the check and the update actions are

@@ -199,8 +199,10 @@ A job has a kind (`AcquisitionKind`, stored since schema version 3):
   Workshop's `time_updated` (and `hcontent_file`, recorded only), or the acf's
   `latest_timeupdated` / `latest_manifest`.
 - **reinstall**: "Re-download from scratch", which the user asks for per mod after a
-  confirmation. Its `ReinstallStep` (start, unsubscribed, resubscribed) is stored, so that a
-  retry or a restart carries on instead of unsubscribing twice or leaving the item unsubscribed.
+  confirmation, for a mod the account is subscribed to. Its `ReinstallStep` (start,
+  unsubscribing, unsubscribed, resubscribed) is stored, written before the request it guards
+  goes out, so that a retry or a restart carries on instead of unsubscribing again once Steam
+  did, or leaving the item unsubscribed.
 
 ```text
  startAcquisition (new job, or any non-terminal job loaded after a restart)
@@ -250,28 +252,46 @@ Update and reinstall jobs:
         |  otherwise (needs online) --------------------> RequestDownload (*), also when Steam
         |                                                  calls the installed version current
   [Progress] ItemState installed & current:
-        |     install timestamp >= target (no target: after this run's request) -> VerifyContent
+        |     install timestamp >= target (no target: after this run's request, or after a
+        |     download this run saw) -> VerifyContent
         |     still older -> keep polling; updateRecheckMs (30 s) after the accepted request:
         |                    RequestDownload once more, then Failed (update_not_seen, no
         |                    automatic retry): "Steam has not picked up this update yet. ..."
+        |                    A download Steam ran by itself that ends short of the target is
+        |                    not a request: the first request follows at once.
         |  ItemState not subscribed -> NeedsUserAction
 
  reinstall: [await State] --ItemState--> decide by ReinstallStep:
-        |  start, subscribed (needs online) ---> Unsubscribing --> [await UnsubscribeResult] (*)
-        |  start, not subscribed --------------> step unsubscribed, as below
-        |  unsubscribed -----------------------> Subscribing --> [await SubscribeResult] (*)
+        |  start, subscribed (needs online) ---> step unsubscribing (stored), Unsubscribing
+        |                                         --> [await UnsubscribeResult] (*)
+        |  start, not subscribed --------------> NeedsUserAction ("not subscribed in Steam, so
+        |                                         it was not downloaded again"): a re-download
+        |                                         never adds a subscription
+        |  unsubscribing (result not seen) ----> subscribed: Unsubscribe again; not subscribed:
+        |                                         Steam did it, step unsubscribed, as below
+        |  unsubscribed -----------------------> Subscribing --> [await SubscribeResult] (*),
+        |                                         also while Steam still lists the subscription
+        |                                         (its list lags behind a confirmed unsubscribe)
         |  resubscribed -----------------------> as an update (download even when current);
-        |                                         its target, when it has one, as an update's
+        |                                         done at its target when it has one, else only
+        |                                         once this run saw Steam fetch the item (not
+        |                                         installed, downloading, or a new install time)
   [await UnsubscribeResult] --OK--> step unsubscribed (stored), [await Removal]: QueryState
         |                             every pollInterval until Steam no longer reports the
         |                             subscription, then up to removalGraceMs (10 s) for the
         |                             files to go, then Subscribe; unsubscribeTimeoutMs (60 s)
         |                             without that -> Failed
-        |                   --error--> as a subscribe error; nothing changed in Steam
+        |                   --error--> as a subscribe error; nothing changed in Steam (step
+        |                              start again, unless an earlier request may have gone
+        |                              through)
   [await SubscribeResult] --OK--> step resubscribed (stored), QueryState
+  [Progress] (resubscribed) installed & current without any sign of a fresh download, also
+        after the second request: Failed (update_not_seen): "Steam kept the installed files
+        and did not download the mod again. ..." (with a target: as an update)
   Every failure in step unsubscribed adds: "Workshop item <id> is now unsubscribed in Steam:
-  Retry subscribes to it again and downloads it." Retry (and the automatic retries) subscribe
-  again; they never unsubscribe a second time.
+  Retry subscribes to it again and downloads it."; in step unsubscribing: "Workshop item <id>
+  may be unsubscribed now: Retry subscribes to it again in that case and downloads it." Retry
+  (and the automatic retries) subscribe again; they never unsubscribe once Steam did.
 
   (*) through the identity gate (below)
 ```
@@ -287,8 +307,9 @@ Invariants, all enforced by tests:
   re-download), and a restored job is reconciled instead of being subscribed again blindly.
 - A job is terminal (core `isTerminal`) exactly when it is waiting for nothing. Each transition
   emits at most one action.
-- The machine never deletes anything. Only a reinstall job unsubscribes, only in step start, and
-  an update job never subscribes.
+- The machine never deletes anything. Only a reinstall job unsubscribes, only in steps start
+  and unsubscribing (before Steam confirmed it), and only an item that is subscribed; neither
+  an update nor a reinstall adds a subscription the account did not have.
 
 Default policy (`AcquisitionPolicy`): 3 automatic runs per retry cycle; backoff 5 s, doubling, capped
 at 120 s; 30 s response timeout (60 s for subscribe and unsubscribe); 5 min stall timeout; state
@@ -305,9 +326,18 @@ What the services and the readiness rules make of the kinds:
 - `AcquisitionCoordinator::acquireUpdates()`, `reinstall()` and `reinstallJob()`, and a Retry of
   an update or reinstall job, are refused (`ConflictingProcess`) while the game's process runs
   (the launch check's process list); `start()` leaves stored update and reinstall jobs parked
-  meanwhile. A download Steam already accepted before an outside launch cannot be stopped.
+  meanwhile, and `tick()` resumes them once the game is closed (it looks every 10 s,
+  `CoordinatorOptions::parkedRecheckMs`). A download Steam already accepted before an outside
+  launch cannot be stopped.
 - The Downloads list keeps failed and running update and reinstall jobs, also when the mod is
-  installed and usable; a failed update offers "Re-download from scratch" (`canReinstall`).
+  installed and usable; a failed update offers "Re-download from scratch" (`canReinstall`). A
+  failed update whose mod has since reached its target (Steam installed it by itself, the
+  usual end of `update_not_seen`) is no longer listed, and its row loses the warning
+  (`updateJobResolved()`). A re-download cancelled after (or while) it unsubscribed stays
+  listed after a restart, with the Retry its warning names.
+- In a session without Workshop downloads (`--no-steam`, read-only), an unfinished update or
+  re-download stored by an earlier session still blocks Play, with a blocker that says so and
+  that the application must be started normally to finish or cancel it.
 
 ### Identity gate (services)
 
@@ -317,11 +347,14 @@ whenever Workshop acquisition is enabled),
 `services::AcquisitionCoordinator` sends these actions only for items the Web API has
 confirmed: the item exists, is not banned, and its `consumer_app_id` is the game's app id
 (`validateWorkshopItemForGame()`, section 7). The reducer above stays pure; the gate sits between
-its transitions and the helper. One exception: the download of an update that Steam's own
-`appworkshop_<app>.acf` flagged for an installed item passes without a verdict (an update never
-subscribes, so nothing new reaches the account), and works while the Web API is unreachable. A
-re-download needs a metadata host at all (`reinstall()` refuses without one): the Web API must
-confirm the item still exists before it is unsubscribed.
+its transitions and the helper. Two exceptions pass without a verdict (a negative one still
+stops them): the download of an update that Steam's own `appworkshop_<app>.acf` flagged for an
+installed item (an update never subscribes, so nothing new reaches the account; it works while
+the Web API is unreachable), and the new subscription and download of a re-download past its
+unsubscribe (steps unsubscribed and resubscribed: they restore what the account had, and the
+unsubscribe itself waited for the Web API). A re-download needs a metadata host at all
+(`reinstall()` refuses without one): the Web API must confirm the item still exists before it
+is unsubscribed.
 
 ```text
  job starts or resumes --> Web API request for its item (batched per game, before any session opens)
@@ -338,10 +371,12 @@ confirm the item still exists before it is unsubscribed.
                                                     NeedsUserAction (timeout): "could not confirm
                                                     ... so it did not subscribe to it" (update:
                                                     "did not ask Steam to download the update";
-                                                    reinstall: "did not unsubscribe or download
-                                                    it again", or, after the unsubscribe, "did
-                                                    not subscribe to it again" with the note
-                                                    that the item is now unsubscribed)
+                                                    reinstall, worded from its stored step:
+                                                    "did not unsubscribe or download it again.
+                                                    Nothing changed in Steam" only in step
+                                                    start; in step unsubscribing "may be
+                                                    unsubscribed now: Retry subscribes to it
+                                                    again in that case")
 ```
 
 - QuerySession, QueryState and the verification of content Steam already installed are never
@@ -439,10 +474,13 @@ reported as 2. A result that takes longer than 120 s is reported as 16 (Timeout)
 | Installed content unusable (no `descriptor.mod` and not exactly one other `.mod` file; Victoria 3: no `.metadata/metadata.json`) | Failed (validation_failed) | verify files in Steam or resubscribe there, retry |
 | Unsubscribed in Steam during the download | NeedsUserAction | retry to subscribe again |
 | Update: Steam does not fetch the newer version (it reports the item current, also after a second request 30 s later) | Failed (`update_not_seen`), no automatic retry | "Steam has not picked up this update yet. Steam checks for updates about every 45 minutes; restarting Steam makes it check right away." **Retry**, or **Re-download from scratch…** on the job. Nothing is deleted; the installed version stays and the mod stays Ready, with a warning |
-| Update of an item that is not subscribed in Steam | NeedsUserAction | "Workshop item … is not subscribed in Steam, so Steam does not update it. Subscribe to it on its Workshop page, or use Re-download from scratch, then retry." An update never subscribes |
+| Update of an item that is not subscribed in Steam | NeedsUserAction | "Workshop item … is not subscribed in Steam, so Steam does not update it. Subscribe to it on its Workshop page, then retry." An update never subscribes (nor does a re-download) |
 | Update or re-download while the game runs (the launch check's process list) | refused, no job (`ConflictingProcess`) | "Stellaris is running (…). Close it before updating mods: Steam would change the files of mods the game has loaded." Also for Retry of such a job; Play waits while one runs |
-| Re-download fails after the unsubscribe (subscribe refused, timeout, cancelled) | Failed / NeedsUserAction / Cancelled | the message ends "Workshop item … is now unsubscribed in Steam: Retry subscribes to it again and downloads it." The mod stays in the playsets, missing until then |
-| Re-download without the Web API (no metadata host, or no verdict within 15 s) | refused / NeedsUserAction (timeout) | nothing is unsubscribed: the Web API must confirm first that the item still exists |
+| Re-download fails after the unsubscribe (subscribe refused, timeout, cancelled) | Failed / NeedsUserAction / Cancelled | the message ends "Workshop item … is now unsubscribed in Steam: Retry subscribes to it again and downloads it." The mod stays in the playsets, missing until then. A cancelled one stays listed in Downloads after a restart |
+| Re-download whose unsubscribe Steam did not confirm (timeout, cancelled, Steam stopped) | Failed / Cancelled / NeedsUserAction | "Workshop item … may be unsubscribed now: Retry subscribes to it again in that case and downloads it." Retry unsubscribes again only while Steam still lists the subscription |
+| Re-download of an item the account is not subscribed to | NeedsUserAction | "Workshop item … is not subscribed in Steam, so it was not downloaded again. Subscribe to it on its Workshop page, then retry." A re-download never adds a subscription |
+| Re-download without a known newer version: Steam keeps the installed files and downloads nothing (no sign of a fresh download, also after a second request 30 s later) | Failed (`update_not_seen`), no automatic retry | "Steam kept the installed files and did not download the mod again. It is subscribed, and the installed version stays. To force a fresh download, unsubscribe from it in Steam, wait until Steam removes its files, then subscribe to it again." Never "Downloaded again" |
+| Re-download without the Web API (no metadata host, or no verdict within 15 s) | refused / NeedsUserAction (timeout) | nothing is unsubscribed: the Web API must confirm first that the item still exists. Past its unsubscribe, a restored re-download subscribes again and downloads without a verdict |
 | The update check finds the item removed, private, banned or another game's | no update for it | a warning on the row: the installed copy stays as it is; neither Update nor Re-download touches it |
 | The update check cannot reach the Workshop (offline, blocked) | (no job) | the result line says so, with **Retry**; Steam's own record still counts |
 | Cancel | Cancelled | the message says whether a subscription or download already happened and remains in Steam |
@@ -586,7 +624,10 @@ tests against the fake library.
      Steam's other downloads?
    - Re-download: does `UnsubscribeItem` answer with callback 1315 as the struct expects; does
      Steam remove the files while the helper session runs (Steamworks: "after the game quits"),
-     and when they stay, does subscribing again download anything?
+     and when they stay, does subscribing again download anything? (When nothing shows a fresh
+     download, the job says so instead of "Downloaded again".) What does `SubscribeItem`
+     answer for an item that is still subscribed, and `UnsubscribeItem` for one that is not
+     (both happen when a retry follows an unconfirmed step)?
 
    Suggested, opportunistic: when "Check for mod updates" reports an item Steam has not
    flagged, press **Update from Workshop** for it and read Steam's `workshop_log.txt`

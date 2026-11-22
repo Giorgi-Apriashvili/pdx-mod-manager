@@ -1381,9 +1381,14 @@ Packaging ([`packaging.md`](packaging.md)):
     confirmation, unsubscribes through the helper's new `unsubscribe`
     command (`UnsubscribeItem`, call result 1315), waits until Steam drops
     the subscription, subscribes again, downloads and verifies; a failure
-    after the unsubscribe says that the mod is now unsubscribed, and Retry
-    subscribes again. Updates and re-downloads are refused while the game
-    runs, and Play waits while one of the game runs. Jobs keep their kind,
+    after the unsubscribe says that the mod is now (or may be) unsubscribed,
+    and Retry subscribes again. It never adds a subscription the account did
+    not have, stores its step before each request, and says so when Steam
+    kept the installed files instead of reporting "Downloaded again".
+    Updates and re-downloads are refused while the game runs, wait (and
+    resume by themselves) while it runs, and Play waits while one of the
+    game runs; a failed update that Steam completes by itself later is no
+    longer reported. Jobs keep their kind,
     target and re-download step (schema 3, `v3_sample.sql`). Sessions
     without Steam (`--no-steam`, read-only) disable the actions and send
     nothing; Steam's own record still shows. Documented in

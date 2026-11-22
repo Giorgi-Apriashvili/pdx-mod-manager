@@ -411,7 +411,8 @@ Signal: `updateCheckFinished()`, when a check ended, also when it failed
 missing mod, "update", "reinstall" for a re-download from scratch), `state`
 (AcquisitionState name, also "unsubscribing"), `stateText` ("Update
 requested", "Updating 45 %", "Unsubscribing", "Subscribing again",
-"Downloaded again", ...), `progress` (real, -1 unknown), `errorMessage`,
+"Downloaded again", "Update failed", "Re-download failed", ...), `progress`
+(real, -1 unknown), `errorMessage`,
 `errorCode` (e.g. "update_not_seen"), `canRetry`, `canOpenFallback`,
 `canReinstall` (a failed update: "Re-download from scratch…" is offered).
 The model is updated in place by job id.
@@ -426,14 +427,18 @@ Invokables: `acquireMissing()`, `retry(jobId)`, `retryAllFailed()`,
   rescans the game's mods (Steam's own record), then asks the Steam Web API
   about the playset's installed Workshop mods, enabled and disabled: their
   item ids only, in batches of 100, nothing for ids answered in the last 5
-  minutes. Ignored while a check runs. Only this invokable sends anything;
-  nothing is checked automatically;
+  minutes. Ignored while a check runs. It sends only item ids, and nothing
+  is checked automatically; the update and re-download actions below send
+  their own item's id through the identity gate (as a download does) unless
+  the check already answered for it;
 - `updateMods()`: "Update mods", every mod of the active playset with an
   update, enabled and disabled;
 - `updateMod(providerId)`: "Update from Workshop" for one row;
 - `reinstallMod(providerId)`: "Re-download from scratch…" for one row, after
-  the QML's confirmation (Steam unsubscribes the mod, deletes its files and
-  downloads it again);
+  the QML's confirmation (Steam unsubscribes the mod, which removes its
+  files, then it is subscribed again and downloaded; a mod the account is
+  not subscribed to is not re-downloaded: the job asks the user to subscribe
+  first);
 - `reinstallJob(jobId)`: the same for the mod of a failed update job.
 
 The four actions post their result as a notification ("Updates requested",
@@ -445,7 +450,7 @@ it before updating mods: ..."). With downloads off, all of them explain that
 objectNames for the tests (`tests/app/qml_tests.cpp`, `ui/dev/tests`):
 `checkModUpdatesButton`, `updateModsButton`, `updateCheckLine`,
 `updateCheckRetry`, `downloadsEmptyText` and `jobList` in the Downloads
-area, `jobReinstallLink` in a job row, `updateFromWorkshopItem` and
+area, `jobRetryButton` and `jobReinstallLink` in a job row, `updateFromWorkshopItem` and
 `reinstallItem` in the mod list's context menu (`ModsPane.rowMenu`), and
 `confirmDialog` for the re-download's confirmation.
 
@@ -469,8 +474,10 @@ Properties:
   starts without mods." or "3 enabled mods have an update on the Workshop."
   (an update never blocks Play; an update or re-download that runs does: the
   entry is not ready, and for mods of the game outside the playset's enabled
-  entries a blocker says "N other Workshop mods of <Game> are being updated
-  or downloaded again. ...");
+  entries a blocker says "N Workshop mods of <Game> are being updated or
+  downloaded again. ...", with "other" when entries above are updating too;
+  in a session without Workshop downloads, where nothing can finish or
+  cancel such a job, it says that and how to finish it);
 - `busy` (bool), `state` ("idle" | "validating" | "applying" | "starting" |
   "started" | "failed"). "started" goes back to "idle" once the game was seen
   running and has exited, and "failed" once Play, blocked after the failure

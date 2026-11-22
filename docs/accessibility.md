@@ -61,6 +61,12 @@ what is still missing.
   queued, and the check's **Retry** while a check runs. When one of them had
   the focus, the focus moves to **Check for mod updates**, and stays in the
   actions column.
+- A download job's **Retry** goes away once the job runs again, and its
+  **Re-download from scratch…** once the re-download is queued (also when
+  the focus comes back to it as its confirmation closes). When one of them
+  had the focus, the focus moves to the job's next action (its manual
+  Workshop page link), else to **Check for mod updates**, else to the job
+  list.
 - When the table header hides while one of its column edges has the focus
   (a new or emptied playset, or no playset), the focus moves to the mod list,
   or without a playset to the first control of the mods column, so arrow keys
@@ -166,9 +172,9 @@ banner's "Show load order" link restores the view.
 | Settings | the selected theme option |
 | Playset history | Close (Shift+Tab reaches the Restore buttons) |
 | Locate installation | the first Browse… button |
-| Remove from playset (confirmation) | the confirm button; the question is its description |
-| Re-download from scratch (confirmation) | Cancel, so Enter changes nothing; what happens is the description of both buttons |
-| Discard an interrupted change (confirmation) | Cancel, so Enter changes nothing; the question, with the files, is its description |
+| Remove from playset (confirmation) | the confirm button; the question and the note below it are its description |
+| Re-download from scratch (confirmation) | Cancel, so Enter changes nothing; what happens, with the note on playsets and other games, is the description of both buttons |
+| Discard an interrupted change (confirmation) | Cancel, so Enter changes nothing; the question, with the files and the note below them, is its description |
 | New / duplicate / rename playset | the name field, with the text selected |
 | Keyboard shortcuts | the list |
 
