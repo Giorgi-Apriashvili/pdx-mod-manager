@@ -17,6 +17,8 @@ AppDialog {
     property var action: null
 
     preferredWidth: 420
+    // What the focused button says to screen readers: the text takes no focus.
+    readonly property string spoken: detail.length > 0 ? message + " " + detail : message
 
     function ask(title: string, message: string, detail: string, confirmText: string,
                  destructive: bool, cancelIsDefault: bool, action: var) {
@@ -103,7 +105,7 @@ AppDialog {
             id: cancelButton
             objectName: "cancelButton"
             text: qsTr("Cancel")
-            Accessible.description: dialog.cancelIsDefault ? dialog.message : ""
+            Accessible.description: dialog.cancelIsDefault ? dialog.spoken : ""
             onClicked: dialog.close()
         }
         AppButton {
@@ -111,8 +113,9 @@ AppDialog {
             objectName: "confirmButton"
             variant: dialog.destructive ? "danger" : "accent"
             text: dialog.confirmText
-            // The question is read with the focused button (Cancel's, when it has the focus).
-            Accessible.description: dialog.message
+            // The question and its note are read with the focused button
+            // (Cancel's, when it has the focus).
+            Accessible.description: dialog.spoken
             onClicked: {
                 const run = dialog.action
                 dialog.close()

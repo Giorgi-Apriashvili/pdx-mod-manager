@@ -37,6 +37,7 @@ ListModel {
         case "disabled": return !m.enabled
         case "missing": return m.status !== "ready"
         case "warning": return m.hasWarnings
+        case "updates": return m.updateAvailable
         default: return true
         }
     }
@@ -78,7 +79,8 @@ ListModel {
                 return
             }
             const v = get(i)
-            for (const r of ["position", "enabled", "blocking", "name", "status", "statusText", "progress"]) {
+            for (const r of ["position", "enabled", "blocking", "name", "status", "statusText", "progress",
+                             "updateAvailable"]) {
                 if (v[r] !== src[r])
                     setProperty(i, r, src[r])
             }

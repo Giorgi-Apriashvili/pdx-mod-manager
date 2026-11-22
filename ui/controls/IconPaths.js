@@ -22,6 +22,7 @@ const paths = {
         f: dot(8, 11.6, 0.9)
     },
     "circle-minus": { s: circle + " M5.3 8 L10.7 8" },
+    "circle-arrow-up": { s: circle + " M8 11.1 L8 5 M5.4 7.5 L8 4.9 L10.6 7.5" },
     "triangle-alert": { s: "M8 2.2 L14.4 13.4 L1.6 13.4 Z M8 6.2 L8 9.3", f: dot(8, 11.4, 0.9) },
     "info": { s: circle + " M8 7.4 L8 11.1", f: dot(8, 5.1, 0.9) },
     "clock": { s: circle + " M8 4.8 L8 8 L10.3 9.4" },

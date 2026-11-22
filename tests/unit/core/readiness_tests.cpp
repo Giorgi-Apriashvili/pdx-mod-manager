@@ -44,10 +44,12 @@ TEST_CASE("Installed usable content is ready, with mismatch warnings", "[core][r
     CHECK_THAT(r.warnings[0], ContainsSubstring("version 1.0"));
     CHECK_THAT(r.warnings[1], ContainsSubstring("fingerprint"));
 
+    CHECK_FALSE(r.updateAvailable);
     mod.state = InstallState::NeedsUpdate;
     r = computeReadiness(entry, &mod, nullptr);
     CHECK(r.status == EntryStatus::Ready);
-    CHECK_THAT(r.warnings[0], ContainsSubstring("update is pending"));
+    CHECK(r.updateAvailable); // a flag, not a warning
+    CHECK(r.warnings.size() == 3);
 
     // Installed content wins over any job state.
     const AcquisitionJob failed = job(entry, AcquisitionState::Failed);
@@ -86,13 +88,183 @@ TEST_CASE("Acquisition job states map to entry states", "[core][readiness]") {
                          Case{AcquisitionState::Failed, EntryStatus::Failed},
                          Case{AcquisitionState::Unavailable, EntryStatus::Unavailable},
                          Case{AcquisitionState::NeedsUserAction, EntryStatus::NeedsUserAction},
-                         Case{AcquisitionState::Cancelled, EntryStatus::Missing}}) {
-        INFO(toString(c.state));
-        const AcquisitionJob j = job(entry, c.state);
-        const EntryReadiness r = computeReadiness(entry, nullptr, &j);
-        CHECK(r.status == c.expected);
-        CHECK_FALSE(r.detail.empty());
+                         Case{AcquisitionState::Cancelled, EntryStatus::Missing},
+                         Case{AcquisitionState::Unsubscribing, EntryStatus::Pending}}) {
+        for (AcquisitionKind kind :
+             {AcquisitionKind::Acquire, AcquisitionKind::Update, AcquisitionKind::Reinstall}) {
+            INFO(toString(c.state) << " " << toString(kind));
+            AcquisitionJob j = job(entry, c.state);
+            j.kind = kind;
+            const EntryReadiness r = computeReadiness(entry, nullptr, &j);
+            CHECK(r.status == c.expected);
+            CHECK_FALSE(r.detail.empty());
+        }
     }
+}
+
+TEST_CASE("An unfinished update or re-download of an installed mod blocks it",
+          "[core][readiness]") {
+    const PlaysetEntry entry = workshop("1", "Mod");
+    for (InstallState installedState : {InstallState::Ready, InstallState::NeedsUpdate}) {
+        const InstalledMod mod = installed(entry.identity, "Mod", {}, installedState);
+        for (AcquisitionKind kind : {AcquisitionKind::Update, AcquisitionKind::Reinstall}) {
+            for (AcquisitionState state :
+                 {AcquisitionState::Pending, AcquisitionState::Unsubscribing,
+                  AcquisitionState::Subscribing, AcquisitionState::Subscribed,
+                  AcquisitionState::DownloadRequested, AcquisitionState::Downloading}) {
+                INFO(toString(kind) << " " << toString(state));
+                AcquisitionJob j = job(entry, state);
+                j.kind = kind;
+                j.bytesDownloaded = 1;
+                j.bytesTotal = 4;
+                const EntryReadiness r = computeReadiness(entry, &mod, &j);
+                CHECK(r.status == (state == AcquisitionState::Downloading ? EntryStatus::Downloading
+                                                                          : EntryStatus::Pending));
+                CHECK_THAT(r.detail,
+                           ContainsSubstring(kind == AcquisitionKind::Update ? "Updating"
+                                                                             : "Re-downloading"));
+                if (state == AcquisitionState::Downloading)
+                    CHECK(r.progress == 0.25);
+                CHECK_FALSE(r.updateAvailable);
+            }
+        }
+    }
+
+    // A job that acquires a missing mod never outranks installed content.
+    const InstalledMod mod = installed(entry.identity, "Mod");
+    const AcquisitionJob acquiring = job(entry, AcquisitionState::Downloading);
+    CHECK(computeReadiness(entry, &mod, &acquiring).status == EntryStatus::Ready);
+
+    // Play is blocked while it runs, and only by the entries it changes.
+    const std::vector<PlaysetEntry> entries{entry, workshop("2", "Other")};
+    InstalledModMap inventory;
+    add(inventory, installed(entries[0].identity, "Mod"));
+    add(inventory, installed(entries[1].identity, "Other", {}, InstallState::NeedsUpdate));
+    AcquisitionJob update = job(entry, AcquisitionState::DownloadRequested);
+    update.kind = AcquisitionKind::Update;
+    const std::vector<AcquisitionJob> jobs{update};
+    const auto readiness = computePlaysetReadiness(entries, inventory, jobs);
+    const LaunchReadiness launch = evaluateLaunch(entries, readiness);
+    CHECK_FALSE(launch.canLaunch);
+    REQUIRE(launch.blockers.size() == 1);
+    CHECK(launch.blockers[0].index == 0);
+    CHECK_THAT(launch.blockers[0].reason, ContainsSubstring("Updating"));
+    // An update available never blocks.
+    CHECK(readiness[1].status == EntryStatus::Ready);
+    CHECK(readiness[1].updateAvailable);
+}
+
+TEST_CASE("A finished update leaves the installed mod ready, a failed one with a warning",
+          "[core][readiness]") {
+    const PlaysetEntry entry = workshop("1", "Mod");
+    const InstalledMod mod = installed(entry.identity, "Mod", {}, InstallState::NeedsUpdate);
+    for (AcquisitionKind kind : {AcquisitionKind::Update, AcquisitionKind::Reinstall}) {
+        for (AcquisitionState state : {AcquisitionState::Failed, AcquisitionState::NeedsUserAction,
+                                       AcquisitionState::Unavailable}) {
+            INFO(toString(kind) << " " << toString(state));
+            AcquisitionJob j = job(entry, state);
+            j.kind = kind;
+            j.errorMessage = "Steam has not picked up this update yet.";
+            const EntryReadiness r = computeReadiness(entry, &mod, &j);
+            CHECK(r.status == EntryStatus::Ready);
+            CHECK(r.updateAvailable);
+            REQUIRE(r.warnings.size() == 1);
+            CHECK(r.warnings[0] == std::string(kind == AcquisitionKind::Update
+                                                   ? "Update failed: "
+                                                   : "Re-download failed: ") +
+                                       "Steam has not picked up this update yet.");
+        }
+        for (AcquisitionState state : {AcquisitionState::Installed, AcquisitionState::Cancelled}) {
+            AcquisitionJob j = job(entry, state);
+            j.kind = kind;
+            const EntryReadiness r = computeReadiness(entry, &mod, &j);
+            CHECK(r.status == EntryStatus::Ready);
+            CHECK(r.warnings.empty());
+        }
+    }
+
+    // A re-download cancelled after its unsubscribe left the mod unsubscribed.
+    AcquisitionJob cancelled = job(entry, AcquisitionState::Cancelled);
+    cancelled.kind = AcquisitionKind::Reinstall;
+    cancelled.reinstallStep = ReinstallStep::Unsubscribed;
+    cancelled.errorMessage = "Cancelled. Workshop item 1 was unsubscribed for the re-download.";
+    const EntryReadiness r = computeReadiness(entry, &mod, &cancelled);
+    CHECK(r.status == EntryStatus::Ready);
+    CHECK(r.warnings == std::vector<std::string>{
+                            "Re-download cancelled: Cancelled. Workshop item 1 was unsubscribed "
+                            "for the re-download."});
+    // ... and one cancelled while Steam was asked to unsubscribe it may have.
+    cancelled.reinstallStep = ReinstallStep::Unsubscribing;
+    cancelled.errorMessage = "Cancelled. An unsubscribe request was already sent.";
+    CHECK(computeReadiness(entry, &mod, &cancelled).warnings ==
+          std::vector<std::string>{
+              "Re-download cancelled: Cancelled. An unsubscribe request was already sent."});
+}
+
+TEST_CASE("A failed update is moot once the installed mod reached its target",
+          "[core][readiness]") {
+    const PlaysetEntry entry = workshop("1", "Mod");
+    InstalledMod mod = installed(entry.identity, "Mod");
+    mod.contentTimeFromSteam = true;
+    mod.contentUpdatedAt = 1'700'000'000;
+    AcquisitionJob failed = job(entry, AcquisitionState::Failed);
+    failed.kind = AcquisitionKind::Update;
+    failed.targetTimeUpdated = 1'700'000'500;
+    failed.errorMessage = "Steam has not picked up this update yet.";
+    CHECK_FALSE(updateJobResolved(failed, mod));
+    CHECK(computeReadiness(entry, &mod, &failed).warnings.size() == 1);
+
+    // Steam installed the update by itself later.
+    mod.contentUpdatedAt = 1'700'000'500;
+    for (AcquisitionState state : {AcquisitionState::Failed, AcquisitionState::NeedsUserAction}) {
+        failed.state = state;
+        CHECK(updateJobResolved(failed, mod));
+        const EntryReadiness r = computeReadiness(entry, &mod, &failed);
+        CHECK(r.status == EntryStatus::Ready);
+        CHECK(r.warnings.empty());
+    }
+    // Only Steam's own record of the installed version counts.
+    mod.contentTimeFromSteam = false;
+    CHECK_FALSE(updateJobResolved(failed, mod));
+    // Without a target: once Steam no longer flags the mod for an update.
+    failed.targetTimeUpdated = 0;
+    CHECK(updateJobResolved(failed, mod));
+    mod.state = InstallState::NeedsUpdate;
+    CHECK_FALSE(updateJobResolved(failed, mod));
+    // A re-download is never "resolved" this way: it changes the files.
+    failed.kind = AcquisitionKind::Reinstall;
+    mod.state = InstallState::Ready;
+    CHECK_FALSE(updateJobResolved(failed, mod));
+}
+
+TEST_CASE("The Workshop findings of the session mark updates and refused items",
+          "[core][readiness]") {
+    const std::vector<PlaysetEntry> entries{workshop("1", "Outdated"), workshop("2", "Removed"),
+                                            workshop("3", "Missing"), workshop("4", "Current")};
+    InstalledModMap inventory;
+    add(inventory, installed(entries[0].identity, "Outdated"));
+    add(inventory, installed(entries[1].identity, "Removed", {}, InstallState::NeedsUpdate));
+    add(inventory, installed(entries[3].identity, "Current"));
+    WorkshopFindings findings;
+    findings.updates = {entries[0].identity, entries[2].identity};
+    findings.refused[entries[1].identity] = "The Steam Workshop no longer lists this item.";
+
+    const auto plain = computePlaysetReadiness(entries, inventory, {});
+    CHECK_FALSE(plain[0].updateAvailable);
+    CHECK(plain[1].updateAvailable);
+
+    const auto r = computePlaysetReadiness(entries, inventory, {}, &findings);
+    CHECK(r[0].status == EntryStatus::Ready);
+    CHECK(r[0].updateAvailable);
+    CHECK(r[0].warnings.empty());
+    CHECK(r[1].status == EntryStatus::Ready);
+    CHECK_FALSE(r[1].updateAvailable); // refused items get no update
+    CHECK(r[1].warnings ==
+          std::vector<std::string>{"The Steam Workshop no longer lists this item."});
+    CHECK(r[2].status == EntryStatus::Missing); // only installed content can be updated
+    CHECK_FALSE(r[2].updateAvailable);
+    CHECK_FALSE(r[3].updateAvailable);
+    CHECK(evaluateLaunch(entries, r).blockers.size() == 1); // the missing one only
 }
 
 TEST_CASE("A finished job is not trusted until the inventory has the content",

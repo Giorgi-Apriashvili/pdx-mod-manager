@@ -359,6 +359,179 @@ TEST_CASE("ServiceRunner looks Workshop items up in batches and answers once", "
     }
 }
 
+TEST_CASE("Check for mod updates asks about the installed Workshop mods and keeps the answers",
+          "[app][runner][updates]") {
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    world.addWorkshopMod("5550001", "Example Outdated");
+    world.addWorkshopMod("5550002", "Example Current");
+    world.addWorkshopMod("5550003", "Example Folder Time"); // not in Steam's record
+    world.addLocalMod("example_local", "Example Local");
+    FakeAdapter adapter(world);
+    adapter.steamVersions["5550001"] = {1700000000, "1100000000000000801", 1700000000,
+                                        "1100000000000000801"};
+    adapter.steamVersions["5550002"] = {1700000000, "1100000000000000802", 1700000000,
+                                        "1100000000000000802"};
+    HttpStub stub;
+    stub.responder = HttpStub::catalog(
+        {{"5550001", {"Example Outdated", "281990", 1700000500, "1100000000000000803"}},
+         {"5550002", {"Example Current", "281990", 1700000000, "1100000000000000802"}},
+         {"5550003", {"Example Folder Time", "281990", 1700000500, {}}}});
+    RunnerOptions options = steamRunnerOptions(temp.path() / "profile", adapter, stub);
+    options.metadataTimeout = std::chrono::milliseconds(500);
+
+    QObject receiver;
+    std::vector<WorkshopUpdateCheck> answers;
+    const auto check = [&](ServiceRunner& runner, std::int64_t playsetId) {
+        runner.checkWorkshopUpdates(&receiver, playsetId, [&](WorkshopUpdateCheck answer) {
+            answers.push_back(std::move(answer));
+        });
+        CHECK(answers.empty()); // queued, like call()
+        REQUIRE(waitUntil([&] { return !answers.empty(); }));
+        waitUntil([] { return false; }, std::chrono::milliseconds(100));
+        REQUIRE(answers.size() == 1);
+        return std::exchange(answers, {}).front();
+    };
+    const auto preparePlayset = [](ServiceRunner& runner) {
+        return runner.callBlocking([](AppRuntime& runtime) -> std::int64_t {
+            runtime.games().refreshAll();
+            Playset playset;
+            playset.game = kGame;
+            playset.name = "Updates";
+            const auto entry = [](const char* source, const char* id, bool enabled) {
+                return PlaysetEntry{ModIdentity{kGame, source, id}, enabled, {}, {}, {}};
+            };
+            playset.entries = {entry(source::SteamWorkshop, "5550001", true),
+                               entry(source::SteamWorkshop, "5550002", false),
+                               entry(source::SteamWorkshop, "5550003", true),
+                               entry(source::SteamWorkshop, "5550009", true), // not installed
+                               entry(source::Local, "example_local", true)};
+            auto id = persistence::PlaysetRepository(runtime.database()).create(playset);
+            return id ? id.value() : -1;
+        });
+    };
+
+    SECTION("with Steam and the Web API") {
+        ServiceRunner runner(options);
+        REQUIRE(runner.start().ok);
+        QStringList rescanned;
+        QObject::connect(&runner, &ServiceRunner::acquisitionChanged, &receiver,
+                         [&](const QStringList& games) { rescanned += games; });
+        const std::int64_t playsetId = preparePlayset(runner);
+        REQUIRE(playsetId > 0);
+
+        const WorkshopUpdateCheck result = check(runner, playsetId);
+        CHECK(result.available);
+        CHECK_FALSE(result.error);
+        CHECK(result.report.reachable);
+        CHECK(result.report.updates == 1);
+        CHECK(result.report.notCompared == 1);
+        CHECK(result.report.summary ==
+              "Checked 3 Workshop mods: 1 has an update. 1 could not be compared: Steam's records "
+              "do not say which version is installed.");
+        // One request with the installed Workshop items' ids, and nothing else.
+        REQUIRE(stub.bodies.size() == 1);
+        CHECK(HttpStub::requestedIds(stub.bodies[0]) ==
+              std::vector<std::string>{"5550001", "5550002", "5550003"});
+        CHECK(rescanned.contains(QString::fromLatin1(kGame))); // the inventory was rescanned
+
+        const UpdateCheckData data = queries::updateCheckData(result.report);
+        REQUIRE(data.items.size() == 3);
+        CHECK(data.items[0].verdict == "update_available");
+        CHECK(data.items[0].key == "steam-workshop:5550001");
+        CHECK(data.items[1].verdict == "up_to_date");
+        CHECK_FALSE(data.items[1].enabled);
+        CHECK(data.items[2].verdict == "not_compared");
+
+        // The rows and the counts show the update; it does not block Play.
+        const PlaysetStateData state = runner.callBlocking(
+            [playsetId](AppRuntime& runtime) { return queries::playsetState(runtime, playsetId); });
+        REQUIRE(state.rows.size() == 5);
+        CHECK(state.rows[0].updateAvailable);
+        CHECK(state.rows[0].status == "ready");
+        CHECK(state.rows[0].statusText == "Update available");
+        CHECK_FALSE(state.rows[1].updateAvailable);
+        CHECK(state.rows[1].statusText == "Ready");
+        CHECK(state.counts.updates == 1);
+        CHECK(state.counts.updatesEnabled == 1);
+        const LaunchData launch = runner.callBlocking([playsetId](AppRuntime& runtime) {
+            return queries::launchData(runtime, QString::fromLatin1(kGame), playsetId,
+                                       QueryOptions{true, true});
+        });
+        CHECK(launch.warnings.contains("1 enabled mod has an update on the Workshop."));
+
+        // Asked again right away: the session's answers are used, nothing is sent.
+        const WorkshopUpdateCheck again = check(runner, playsetId);
+        CHECK(again.report.updates == 1);
+        CHECK(stub.bodies.size() == 1);
+    }
+    SECTION("the Web API does not answer") {
+        stub.responder = nullptr;
+        ServiceRunner runner(options);
+        REQUIRE(runner.start().ok);
+        const std::int64_t playsetId = preparePlayset(runner);
+        const WorkshopUpdateCheck result = check(runner, playsetId);
+        CHECK(result.available);
+        CHECK_FALSE(result.report.reachable);
+        CHECK(result.report.unanswered == 3);
+        CHECK(result.report.summary.rfind("The Steam Workshop could not be reached", 0) == 0);
+    }
+    SECTION("an unknown playset") {
+        ServiceRunner runner(options);
+        REQUIRE(runner.start().ok);
+        const WorkshopUpdateCheck result = check(runner, 987654);
+        CHECK(result.available);
+        REQUIRE(result.error.has_value());
+        CHECK(result.error->code == ErrorCode::NotFound);
+        CHECK(stub.requests == 0);
+    }
+    SECTION("sessions without Steam or the Web API send nothing") {
+        for (const bool steam : {false, true}) {
+            options.steam = steam;
+            options.metadata = !steam;
+            ServiceRunner runner(options);
+            REQUIRE(runner.start().ok);
+            const std::int64_t playsetId = preparePlayset(runner);
+            const WorkshopUpdateCheck result = check(runner, playsetId);
+            CHECK_FALSE(result.available);
+            CHECK(result.report.items.empty());
+        }
+        CHECK(stub.requests == 0);
+    }
+}
+
+TEST_CASE("Row status texts name updates and re-downloads", "[app][updates]") {
+    EntryReadiness ready;
+    ready.status = EntryStatus::Ready;
+    CHECK(queries::statusTextFor(ready, std::nullopt) == "Ready");
+    ready.updateAvailable = true;
+    CHECK(queries::statusTextFor(ready, std::nullopt) == "Update available");
+
+    AcquisitionJob job;
+    job.kind = AcquisitionKind::Update;
+    job.state = AcquisitionState::DownloadRequested;
+    EntryReadiness pending;
+    pending.status = EntryStatus::Pending;
+    CHECK(queries::statusTextFor(pending, job) == "Updating");
+    EntryReadiness downloading;
+    downloading.status = EntryStatus::Downloading;
+    downloading.progress = 0.45;
+    CHECK(queries::statusTextFor(downloading, job) == "Updating 45 %");
+    job.kind = AcquisitionKind::Reinstall;
+    CHECK(queries::statusTextFor(downloading, job) == "Re-downloading 45 %");
+    CHECK(queries::statusTextFor(pending, job) == "Re-downloading");
+    job.state = AcquisitionState::Unsubscribing;
+    CHECK(queries::statusTextFor(pending, job) == "Unsubscribing");
+    job.kind = AcquisitionKind::Acquire;
+    job.state = AcquisitionState::DownloadRequested;
+    CHECK(queries::statusTextFor(pending, job) == "Waiting for Steam");
+    CHECK(queries::statusTextFor(downloading, job) == "Downloading 45 %");
+
+    const ViewFilter filter = queries::toViewFilter({}, QStringLiteral("updates"), {});
+    CHECK(filter.status == StatusFilter::Updates);
+    CHECK_FALSE(reorderPolicy(filter).allowed);
+}
+
 TEST_CASE("ServiceRunner reports start-up failures with an actionable message", "[app][runner]") {
     TempDir temp;
     FakeWorld world(temp.path() / "world");

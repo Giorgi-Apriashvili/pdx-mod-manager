@@ -7,7 +7,10 @@
 // blocks on input. Exits after "quit" or end of input, calling SteamAPI_Shutdown.
 //
 // Safety: commands carry only validated published-file ids. There is no
-// command to unsubscribe, delete, or touch arbitrary paths or URLs.
+// command to delete anything or to touch arbitrary paths or URLs. The one
+// command that removes something is "unsubscribe" (one item, for the
+// re-download from scratch the user asks for); Steam then removes the item's
+// files itself.
 
 #include "core/utf8.hpp"
 #include "providers/helper_protocol.hpp"
@@ -43,7 +46,7 @@ namespace fs = std::filesystem;
 using Clock = std::chrono::steady_clock;
 
 constexpr auto kPumpInterval = std::chrono::milliseconds(50);
-constexpr auto kSubscribeTimeout = std::chrono::seconds(120);
+constexpr auto kCallResultTimeout = std::chrono::seconds(120); // subscribe and unsubscribe
 constexpr int kEResultFail = 2;
 constexpr int kEResultTimeout = 16;
 
@@ -169,6 +172,8 @@ public:
                     const bool accepted =
                         m_api.download(*parsePublishedFileId(c.id), c.highPriority);
                     send(DownloadRequestedEvent{c.id, accepted});
+                } else if constexpr (std::is_same_v<T, UnsubscribeCommand>) {
+                    unsubscribe(c.id);
                 } else {
                     static_assert(std::is_same_v<T, QuitCommand>);
                     keepRunning = false;
@@ -178,37 +183,50 @@ public:
         return keepRunning && m_out.ok();
     }
 
-    // Delivers finished (or timed-out) subscribe call results.
+    // Delivers finished (or timed-out) subscribe and unsubscribe call results.
     void poll() {
         const auto now = Clock::now();
         for (auto it = m_pending.begin(); it != m_pending.end();) {
             int eresult = 0;
-            const CallStatus call = m_api.pollSubscribeResult(it->call, eresult);
-            if (call == CallStatus::Pending && now - it->started < kSubscribeTimeout) {
+            const CallStatus call =
+                m_api.pollCallResult(it->call,
+                                     it->unsubscribe ? steamhelper::kUnsubscribeResultCallbackId
+                                                     : steamhelper::kSubscribeResultCallbackId,
+                                     eresult);
+            if (call == CallStatus::Pending && now - it->started < kCallResultTimeout) {
                 ++it;
                 continue;
             }
+            const char* what = it->unsubscribe ? "unsubscribe" : "subscribe";
             if (call == CallStatus::Completed) {
-                send(SubscribeResultEvent{it->id, eresult == 1, eresult});
+                sendResult(*it, eresult == 1, eresult);
             } else if (call == CallStatus::Failed) {
-                diag("subscribe call failed for item " + it->id);
-                send(SubscribeResultEvent{it->id, false, kEResultFail});
+                diag(std::string(what) + " call failed for item " + it->id);
+                sendResult(*it, false, kEResultFail);
             } else {
-                diag("subscribe call timed out for item " + it->id);
-                send(SubscribeResultEvent{it->id, false, kEResultTimeout});
+                diag(std::string(what) + " call timed out for item " + it->id);
+                sendResult(*it, false, kEResultTimeout);
             }
             it = m_pending.erase(it);
         }
     }
 
 private:
-    struct PendingSubscribe {
+    struct PendingCall {
         std::string id;
         SteamApiCall call = steamhelper::kInvalidApiCall;
         Clock::time_point started;
+        bool unsubscribe = false; // else subscribe
     };
 
     void send(const HelperEvent& event) { m_out.write(encodeEvent(event)); }
+
+    void sendResult(const PendingCall& pending, bool ok, int eresult) {
+        if (pending.unsubscribe)
+            send(UnsubscribeResultEvent{pending.id, ok, eresult});
+        else
+            send(SubscribeResultEvent{pending.id, ok, eresult});
+    }
 
     ItemStatus status(const std::string& id) {
         const std::uint64_t pid = *parsePublishedFileId(id); // validated by decodeCommand
@@ -234,12 +252,27 @@ private:
             send(SubscribeResultEvent{id, false, kEResultFail});
             return;
         }
-        m_pending.push_back(PendingSubscribe{id, call, Clock::now()});
+        m_pending.push_back(PendingCall{id, call, Clock::now(), false});
+    }
+
+    void unsubscribe(const std::string& id) {
+        if (!m_api.canUnsubscribe()) {
+            diag("the Steam API library does not export UnsubscribeItem (item " + id + ")");
+            send(UnsubscribeResultEvent{id, false, kEResultFail});
+            return;
+        }
+        const SteamApiCall call = m_api.unsubscribe(*parsePublishedFileId(id));
+        if (call == steamhelper::kInvalidApiCall) {
+            diag("UnsubscribeItem returned an invalid call handle for item " + id);
+            send(UnsubscribeResultEvent{id, false, kEResultFail});
+            return;
+        }
+        m_pending.push_back(PendingCall{id, call, Clock::now(), true});
     }
 
     SteamApi& m_api;
     ProtocolOutput& m_out;
-    std::vector<PendingSubscribe> m_pending;
+    std::vector<PendingCall> m_pending;
 };
 
 void setEnvironment(const std::string& name, const std::string& value) {

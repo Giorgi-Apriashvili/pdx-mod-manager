@@ -18,6 +18,8 @@ Rectangle {
     signal newPlaysetRequested()
     signal locateRequested()
     signal removeRequested(list<int> rows, string description)
+    // "Re-download from scratch…" in the context menu: Main.qml asks first.
+    signal reinstallRequested(string providerId, string name)
 
     // Column widths: #, On, Name, Source, Status. Name takes the remaining width;
     // the stored value at index 2 is informational only.
@@ -36,7 +38,8 @@ Rectangle {
         { value: "enabled", text: qsTr("Enabled") },
         { value: "disabled", text: qsTr("Disabled") },
         { value: "missing", text: qsTr("Missing") },
-        { value: "warning", text: qsTr("With warnings") }
+        { value: "warning", text: qsTr("With warnings") },
+        { value: "updates", text: qsTr("With updates") }
     ]
     readonly property var sortOptions: [
         { value: "order", text: qsTr("Load order") },
@@ -55,6 +58,9 @@ Rectangle {
     // Focus given programmatically (start-up, after dialogs) shows no list ring
     // until the user moves focus away and back.
     property bool quietListFocus: false
+
+    // The rows' context menu (tests reach its items through Menu.itemAt()).
+    readonly property AppMenu rowMenu: contextMenu
 
     // Drag-and-drop state (proxy rows; reordering only happens in the unfiltered load-order view).
     property int dragFrom: -1
@@ -1265,6 +1271,35 @@ Rectangle {
             iconName: "folder"
             enabled: Backend.details.canOpenFolder
             onTriggered: Backend.details.openContentFolder()
+        }
+        // Workshop updates of the current row: only listed where they apply,
+        // and disabled in sessions without Steam (--no-steam, read-only).
+        // A hidden item is disabled too, so the keyboard skips it.
+        AppMenuSeparator {
+            visible: updateItem.offered || reinstallItem.offered
+            height: visible ? implicitHeight : 0
+        }
+        AppMenuItem {
+            id: updateItem
+            objectName: "updateFromWorkshopItem"
+            readonly property bool offered: Backend.details.updateAvailable
+            text: qsTr("Update from Workshop")
+            iconName: "circle-arrow-up"
+            visible: offered
+            height: visible ? implicitHeight : 0
+            enabled: offered && Backend.acquisition.downloadsEnabled
+            onTriggered: Backend.acquisition.updateMod(Backend.details.providerId)
+        }
+        AppMenuItem {
+            id: reinstallItem
+            objectName: "reinstallItem"
+            readonly property bool offered: Backend.details.canReinstall
+            text: qsTr("Re-download from scratch…")
+            iconName: "refresh"
+            visible: offered
+            height: visible ? implicitHeight : 0
+            enabled: offered && Backend.acquisition.downloadsEnabled
+            onTriggered: root.reinstallRequested(Backend.details.providerId, Backend.details.name)
         }
         AppMenuSeparator {}
         AppMenuItem {

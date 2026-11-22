@@ -86,8 +86,9 @@ Steam helper from starting while Steam downloads should stay untouched.
 | Probes A, B, C | Local probe mods created by `probe_mods.py` | Created on both A and B |
 
 Subscribing to W3 on B changes that Steam account's subscriptions. Do it only
-on an account where that is acceptable. The manager never unsubscribes; remove
-subscriptions afterwards in the Steam client if wanted.
+on an account where that is acceptable. The manager unsubscribes only for a
+**Re-download from scratch…** that the user confirmed, and these steps do not
+use it; remove subscriptions afterwards in the Steam client if wanted.
 
 ### Paths used below
 

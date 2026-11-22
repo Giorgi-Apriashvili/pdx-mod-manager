@@ -41,6 +41,11 @@ class ModDetails : public QObject {
     Q_PROPERTY(QString workshopUrl READ workshopUrl NOTIFY changed)
     Q_PROPERTY(QString contentPath READ contentPath NOTIFY changed)
     Q_PROPERTY(bool canOpenFolder READ canOpenFolder NOTIFY changed)
+    // A newer version is on the Workshop: "Update from Workshop" is offered.
+    Q_PROPERTY(bool updateAvailable READ updateAvailable NOTIFY changed)
+    // An installed Workshop mod without a running download or update:
+    // "Re-download from scratch..." is offered.
+    Q_PROPERTY(bool canReinstall READ canReinstall NOTIFY changed)
 
 public:
     ModDetails(ModListModel* mods, NotificationCenter* notifications, QObject* parent = nullptr);
@@ -65,6 +70,8 @@ public:
     QString workshopUrl() const;
     QString contentPath() const;
     bool canOpenFolder() const;
+    bool updateAvailable() const;
+    bool canReinstall() const;
 
     Q_INVOKABLE void openWorkshopPage();
     Q_INVOKABLE void openContentFolder();

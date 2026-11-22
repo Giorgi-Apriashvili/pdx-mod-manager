@@ -176,17 +176,22 @@ obscurely.
 
 `buildPlaysetView()` is a pure function that derives what the mod list shows.
 Each row has a display name (installed descriptor name, else name hint, else
-id), readiness (`core/readiness`: installed content wins over job state,
-dependency warnings, plus the adapter's compatibility warnings), the latest
+id), readiness (`core/readiness`: installed content wins over the state of a
+job that acquires a missing mod, while an unfinished update or re-download
+makes the entry Pending or Downloading; dependency warnings, plus the
+adapter's compatibility warnings, and, with the coordinator's
+`WorkshopFindings`, `updateAvailable` or a warning for an item the Workshop
+refuses), the latest
 job, and where each name its descriptor lists under dependencies leads
 (`resolveDependencies()`: enabled earlier or later, disabled, not in the
 playset, not installed), which the details show, each mod once, for every
 game that does not need the named mods (all but Victoria 3), with the order
 warning where Stellaris or Crusader Kings III has one. The view also carries
-the footer counts and the
+the footer counts (`updates` and `updatesEnabled` count the entries with an
+update available) and the
 `LaunchReadiness` verdict. `loadPlaysetView()` reads everything from the
 database and overlays the coordinator's live jobs, which carry fresher
-progress than the coalesced database rows.
+progress than the coalesced database rows, and its findings.
 
 ### ShareService (`share_service.hpp`)
 
@@ -231,8 +236,10 @@ helper session per game. Its responsibilities:
 - Map events with `observationFromHelperEvent()` and actions with
   `helperCommandFor()`, batching state queries into one command.
 - Gate network actions on the Web API verdict. A share code is untrusted
-  input, so with a metadata host no Subscribe or RequestDownload is sent until
-  `onMetadata()` has confirmed that the item exists and belongs to the game.
+  input, so with a metadata host no Subscribe, RequestDownload or Unsubscribe
+  is sent until `onMetadata()` (or `recordUpdateCheck()`) has confirmed that
+  the item exists and belongs to the game. The download of an update Steam's
+  own Workshop manifest flagged for an installed item passes without one.
   Verdicts are cached per mod for the session. The gate lives in the
   coordinator (the reducer is unchanged): a held transition is dropped rather
   than queued, and the job's Steam timeouts are suspended while it waits, so
@@ -256,8 +263,21 @@ helper session per game. Its responsibilities:
   `not_owned`, `unavailable`, with recovery text.
 - Offer the clearly labelled manual Workshop page fallback
   (`providers/fallback.hpp`) for jobs that need the user.
+- Updates of installed mods (job kinds `update` and `reinstall`,
+  [Steam Workshop section 3](steam-workshop.md#3-acquisition-state-machine)):
+  `prepareUpdateCheck()` lists the ids the update check asks the Web API
+  about, `recordUpdateCheck()` keeps the answers for the session and returns
+  an `UpdateCheckReport` (per item: verdict, times, manifests, why not
+  compared or refused; counts; the result line), `workshopFindings()`
+  compares the answers with the current inventory for readiness,
+  `acquireUpdates()` queues update jobs (with the target version),
+  `reinstall()` / `reinstallJob()` a re-download, and `updatesInProgress()`
+  tells the launch check to wait. Update and re-download jobs are refused,
+  and stay parked at `start()`, while the game's process runs
+  (`detail::runningGameProcess()`, the launch check's list).
 
-It never unsubscribes or deletes anything.
+It never deletes anything; only a re-download the user confirmed unsubscribes,
+once per job.
 
 ### LaunchService (`launch_service.hpp`)
 
@@ -277,6 +297,12 @@ It never unsubscribes or deletes anything.
     app's read-only verification mode does so that it reports every other
     blocker without writing into game folders);
   - no game instance and no Paradox launcher is running;
+  - no update or re-download of a Workshop mod of the game is unfinished
+    (`AcquisitionCoordinator::updatesInProgress()`): Steam would change files
+    under the running game. The enabled entries it concerns are blockers
+    already; one line counts the others. Enabled mods with an update available
+    are a warning ("N enabled mods have an update on the Workshop."), never a
+    blocker;
   - for a Steam installation, the Steam client is running (the owner's
     decision of 2026-11-06; until then a Steam copy could be started with
     Steam closed). A Steam installation is one with
@@ -410,16 +436,33 @@ enabled.
  idle (no job of the game waits for Steam) -> host.close(game)
 ```
 
+Updates of installed mods:
+
+```text
+ checkWorkshopUpdates(playset) (ServiceRunner, user request only):
+              GameService::rescanMods(game) (re-reads appworkshop_<app>.acf)
+              -> prepareUpdateCheck(): installed Workshop mods of the playset,
+                 enabled and disabled, without an answer younger than 5 min
+              -> metadata host lookup() in batches of 100 (ids only)
+              -> recordUpdateCheck(answers): kept for the session, also as verdicts
+              -> UpdateCheckReport; workshopFindings(game) for views and Play
+ acquireUpdates(playset, ids) / reinstall(playset, id) / reinstallJob(job):
+              game running -> ConflictingProcess, nothing queued
+              -> createOrReuse(identity, playset, {kind, target}) -> start(game)
+```
+
 User actions: `retry(job)`, `retryAllFailed(game)` (fresh retry cycles),
 `cancelAll(game)` and `openFallback(job)`. `cancelAll` stops application-managed
 work only and says that subscriptions and downloads Steam already completed
-remain. `openFallback` returns the Steam client and web links; it is a limited,
+remain, and names the mods a cancelled re-download left unsubscribed. `openFallback` returns the Steam client and web links; it is a limited,
 clearly labelled fallback in which nothing is downloaded for the user, and a
 later rescan picks the content up. `acquireMissing(playset)` creates jobs for a
 playset's missing Workshop entries outside an import. `snapshot(game)` gives
 the jobs (state text, progress, retry and fallback availability), the provider
-status and a summary. Idle jobs whose mod a rescan has since found installed
-are left out, because usable installed content wins over job state.
+status and a summary. Idle acquire jobs whose mod a rescan has since found
+installed are left out, because usable installed content wins over their
+state; update and re-download jobs stay, failed or running, and a failed
+update offers a re-download (`canReinstall`).
 
 While a helper session is open, Steam treats the game as running. Before a
 launch, `closeSessionsForLaunch(game)` therefore saves progress, closes the
@@ -500,11 +543,17 @@ every service against:
 
 - an in-memory database on a fake clock;
 - temporary folders whose names contain spaces and non-ASCII characters;
-- a fake Stellaris adapter that scans plain folders and checks downloaded
-  content with the real Stellaris adapter's rule;
-- a simulated Steam helper that subscribes, downloads, fails, refuses sessions
-  and crashes on demand, and records its open, close and wait calls in order
-  (a launch test appends the process start to prove close, wait, start);
+- a fake Stellaris adapter that scans plain folders, checks downloaded
+  content with the real Stellaris adapter's rule, and reads Steam's version
+  record of Workshop items from a stand-in for `appworkshop_<app>.acf`
+  (`FakeAdapter::acf`, which can flag an update);
+- a simulated Steam helper that subscribes, unsubscribes, downloads, fails,
+  refuses sessions and crashes on demand, models updates (an install
+  timestamp a download moves, NeedsUpdate cleared when it finishes, a
+  download request that "installs nothing" while Steam has not seen the new
+  version, files removed on unsubscribe), keeps the fake acf current, and
+  records its open, close and wait calls in order (a launch test appends the
+  process start to prove close, wait, start);
 - a fake process starter and lister.
 
 Fixtures in `tests/fixtures/services` are sanitised descriptors and a

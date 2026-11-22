@@ -27,7 +27,11 @@ QtObject {
         .concat(extraBlockers)
     readonly property list<string> warnings: playsets && playsets.activeId < 0
         ? ["No playset is selected, so the game starts without mods."]
-        : mods && mods.warningCount > 0 ? [mods.warningCount + " mods report compatibility warnings."] : []
+        : (mods && mods.warningCount > 0 ? [mods.warningCount + " mods report compatibility warnings."] : [])
+          .concat(mods && mods.enabledUpdateCount > 0
+                  ? [mods.enabledUpdateCount === 1 ? "1 enabled mod has an update on the Workshop."
+                                                   : mods.enabledUpdateCount + " enabled mods have an update on the Workshop."]
+                  : [])
     property bool busy: false
     property string state: "idle"
     property string lastError

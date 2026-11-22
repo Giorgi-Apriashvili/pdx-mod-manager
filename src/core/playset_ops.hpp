@@ -87,6 +87,7 @@ enum class StatusFilter {
     Missing, // content not usable locally: Missing, Pending, Downloading, Failed,
              // Unavailable or NeedsUserAction
     Warning, // Broken, or any readiness warning
+    Updates, // an update available on the Workshop (EntryReadiness::updateAvailable)
 };
 
 struct ViewFilter {

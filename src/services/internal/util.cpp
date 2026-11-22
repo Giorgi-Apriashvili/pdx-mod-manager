@@ -1,6 +1,7 @@
 #include "services/internal/util.hpp"
 
 #include "core/import_plan.hpp"
+#include "persistence/installation_repository.hpp"
 #include "sharing/utf8.hpp"
 
 #include <algorithm>
@@ -104,6 +105,30 @@ std::vector<AcquisitionJob> overlayJobs(std::vector<AcquisitionJob> persisted,
             persisted.push_back(job);
     }
     return persisted;
+}
+
+Result<std::optional<platform::RunningProcess>> runningGameProcess(const ServiceContext& context,
+                                                                   const GameKey& game) {
+    const games::GameAdapter* adapter = context.adapterFor(game);
+    if (!adapter || !context.listProcesses)
+        return std::optional<platform::RunningProcess>();
+    persistence::InstallationRepository installations(context.database);
+    auto installation = installations.get(game);
+    if (!installation)
+        return std::move(installation).error();
+    if (!installation.value())
+        return std::optional<platform::RunningProcess>();
+    const games::ProcessNames names = adapter->processNames(*installation.value());
+    auto processes = context.listProcesses();
+    if (!processes)
+        return std::move(processes).error();
+    for (const platform::RunningProcess& process : processes.value()) {
+        for (const std::string& name : names.game) {
+            if (platform::executableNameMatches(process.executableName, name))
+                return std::optional<platform::RunningProcess>(process);
+        }
+    }
+    return std::optional<platform::RunningProcess>();
 }
 
 } // namespace pmm::services::detail

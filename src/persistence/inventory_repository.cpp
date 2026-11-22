@@ -17,7 +17,8 @@ constexpr const char* kSelect =
     "SELECT game_key, source, provider_id, name, version, supported_version, picture, "
     "declared_path, archive, remote_file_id, tags_json, dependencies_json, extra_json, "
     "content_path, descriptor_path, descriptor_ref, state, problems_json, content_updated_at, "
-    "fingerprint FROM installed_mods";
+    "fingerprint, content_time_from_steam, workshop_manifest, latest_manifest, latest_updated_at "
+    "FROM installed_mods";
 
 constexpr std::int64_t kMaxSeconds = std::numeric_limits<std::int64_t>::max() / 1000;
 
@@ -57,6 +58,10 @@ Result<InstalledMod> readMod(const Statement& stmt) {
     mod.problems = std::move(*problems);
     mod.contentUpdatedAt = stmt.columnInt64(18) / 1000;
     mod.fingerprint = stmt.columnText(19);
+    mod.contentTimeFromSteam = stmt.columnInt64(20) != 0;
+    mod.workshopManifest = stmt.columnText(21);
+    mod.latestManifest = stmt.columnText(22);
+    mod.latestUpdatedAt = stmt.columnInt64(23) / 1000;
     return mod;
 }
 
@@ -103,8 +108,10 @@ Status InventoryRepository::replaceForGame(const GameKey& game,
                 "INSERT INTO installed_mods (game_key, source, provider_id, name, version, "
                 "supported_version, picture, declared_path, archive, remote_file_id, tags_json, "
                 "dependencies_json, extra_json, content_path, descriptor_path, descriptor_ref, "
-                "state, problems_json, content_updated_at, fingerprint, scanned_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+                "state, problems_json, content_updated_at, fingerprint, scanned_at, "
+                "content_time_from_steam, workshop_manifest, latest_manifest, latest_updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                "?)"));
         const std::int64_t scannedAt = m_db.now();
         for (const auto& mod : mods) {
             const ModDescriptor& d = mod.descriptor;
@@ -114,7 +121,9 @@ Status InventoryRepository::replaceForGame(const GameKey& game,
                             stringListToJson(d.dependencies), pairListToJson(d.extra),
                             pathToText(mod.contentPath), pathToText(mod.descriptorPath),
                             mod.descriptorRef, toString(mod.state), stringListToJson(mod.problems),
-                            secondsToMs(mod.contentUpdatedAt), mod.fingerprint, scannedAt);
+                            secondsToMs(mod.contentUpdatedAt), mod.fingerprint, scannedAt,
+                            std::int64_t{mod.contentTimeFromSteam ? 1 : 0}, mod.workshopManifest,
+                            mod.latestManifest, secondsToMs(mod.latestUpdatedAt));
             PMM_TRY(insert->run());
             insert->reset();
         }

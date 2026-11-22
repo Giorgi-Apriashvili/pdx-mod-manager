@@ -4,6 +4,11 @@
 // starts with a known tag as rich text and loads its <img src> through the
 // network, so every text element of Pmm.Ui whose text is not a fixed literal
 // must say textFormat: Text.PlainText. This test reads the QML sources.
+//
+// It also keeps two labels apart: "Check for updates" is the application's
+// own update check (Settings), "Check for mod updates" asks the Steam
+// Workshop about the playset's mods (Downloads); the owner decided on
+// 2026-11-21 that the two must not be confused.
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -284,4 +289,44 @@ TEST_CASE("Pmm.Ui shows every non-literal text as plain text", "[app][qml][lint]
         report += v + "\n";
     INFO(report);
     CHECK(found.empty());
+}
+
+namespace {
+
+// The texts of the qsTr("...") literals of a QML source, comments left out.
+std::vector<std::string> translatedLiterals(const std::string& code) {
+    static const std::regex literal(R"re(qsTr\(\s*"((?:[^"\\]|\\.)*)")re");
+    std::vector<std::string> out;
+    const std::string stripped = stripComments(code);
+    for (auto it = std::sregex_iterator(stripped.begin(), stripped.end(), literal);
+         it != std::sregex_iterator(); ++it)
+        out.push_back((*it)[1].str());
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("The mod update check is never labelled like the application's update check",
+          "[app][qml][lint][updates]") {
+    CHECK(translatedLiterals("// qsTr(\"No\")\nText { text: qsTr(\"A \\\"b\\\"\") }") ==
+          std::vector<std::string>{"A \\\"b\\\""});
+    const fs::path root = PMM_UI_SOURCE_DIR;
+    std::map<std::string, std::set<std::string>> filesOf; // label -> files
+    for (const auto& entry : fs::recursive_directory_iterator(root)) {
+        const fs::path relative = fs::relative(entry.path(), root);
+        if (!entry.is_regular_file() || entry.path().extension() != ".qml" ||
+            *relative.begin() == "dev")
+            continue;
+        for (const std::string& text : translatedLiterals(readFile(entry.path())))
+            filesOf[text].insert(relative.generic_string());
+    }
+    // The application's updater, in Settings only.
+    CHECK(filesOf["Check for updates"] == std::set<std::string>{"dialogs/SettingsDialog.qml"});
+    // The Workshop check and its actions, in the Downloads area and the
+    // mod list's context menu.
+    CHECK(filesOf["Check for mod updates"] == std::set<std::string>{"panes/DownloadsSection.qml"});
+    CHECK(filesOf["Update mods"] == std::set<std::string>{"panes/DownloadsSection.qml"});
+    CHECK(filesOf["Update from Workshop"] == std::set<std::string>{"panes/ModsPane.qml"});
+    CHECK(filesOf["Re-download from scratch\xE2\x80\xA6"] ==
+          std::set<std::string>{"panes/JobDelegate.qml", "panes/ModsPane.qml"});
 }

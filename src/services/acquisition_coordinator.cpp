@@ -34,26 +34,34 @@ double progressOf(const AcquisitionJob& job) {
                     static_cast<double>(job.bytesDownloaded) / static_cast<double>(job.bytesTotal));
 }
 
+std::string percentText(const AcquisitionJob& job, const char* verb) {
+    const double progress = progressOf(job);
+    if (progress < 0)
+        return verb;
+    return std::string(verb) + " " + std::to_string(static_cast<int>(progress * 100.0)) + " %";
+}
+
 std::string stateTextOf(const AcquisitionJob& job) {
+    const bool update = job.kind == AcquisitionKind::Update;
+    const bool reinstall = job.kind == AcquisitionKind::Reinstall;
     switch (job.state) {
     case AcquisitionState::Pending:
-        return "Queued";
+        return update ? "Update queued" : reinstall ? "Re-download queued" : "Queued";
+    case AcquisitionState::Unsubscribing:
+        return "Unsubscribing";
     case AcquisitionState::Subscribing:
-        return "Subscribing";
+        return reinstall ? "Subscribing again" : "Subscribing";
     case AcquisitionState::Subscribed:
-        return "Subscribed, waiting for the download";
+        return update || reinstall ? "Waiting for the download"
+                                   : "Subscribed, waiting for the download";
     case AcquisitionState::DownloadRequested:
-        return "Download requested";
-    case AcquisitionState::Downloading: {
-        const double progress = progressOf(job);
-        if (progress < 0)
-            return "Downloading";
-        return "Downloading " + std::to_string(static_cast<int>(progress * 100.0)) + " %";
-    }
+        return update ? "Update requested" : "Download requested";
+    case AcquisitionState::Downloading:
+        return percentText(job, update ? "Updating" : "Downloading");
     case AcquisitionState::Installed:
-        return "Installed";
+        return update ? "Updated" : reinstall ? "Downloaded again" : "Installed";
     case AcquisitionState::Failed:
-        return "Failed";
+        return update ? "Update failed" : reinstall ? "Re-download failed" : "Failed";
     case AcquisitionState::Unavailable:
         return "Unavailable";
     case AcquisitionState::NeedsUserAction:
@@ -62,6 +70,13 @@ std::string stateTextOf(const AcquisitionJob& job) {
         return "Cancelled";
     }
     return "Unknown";
+}
+
+std::string quotedNames(const std::vector<std::string>& names) {
+    std::string out;
+    for (std::size_t i = 0; i < names.size(); ++i)
+        out += (i == 0 ? "" : i + 1 == names.size() ? " and " : ", ") + ("\"" + names[i] + "\"");
+    return out;
 }
 
 bool retryable(AcquisitionState state) {
@@ -269,14 +284,31 @@ void AcquisitionCoordinator::apply(std::int64_t jobId, providers::Transition tra
 // (tick() skips held jobs), and a fresh run starts once the verdict arrives.
 bool AcquisitionCoordinator::holdForIdentity(std::int64_t jobId, Runtime& runtime,
                                              const providers::Transition& transition) {
-    const bool network =
-        m_metadata != nullptr && std::any_of(transition.actions.begin(), transition.actions.end(),
-                                             [](const providers::Action& action) {
-                                                 return action.kind == ActionKind::Subscribe ||
-                                                        action.kind == ActionKind::RequestDownload;
-                                             });
-    const auto verdict = m_verdicts.find(runtime.context.job.identity);
-    if (!network || (verdict != m_verdicts.end() && verdict->second.ok())) {
+    const bool network = m_metadata != nullptr &&
+                         std::any_of(transition.actions.begin(), transition.actions.end(),
+                                     [](const providers::Action& action) {
+                                         return action.kind == ActionKind::Subscribe ||
+                                                action.kind == ActionKind::RequestDownload ||
+                                                action.kind == ActionKind::Unsubscribe;
+                                     });
+    const AcquisitionJob& job = runtime.context.job;
+    const auto verdict = m_verdicts.find(job.identity);
+    const bool notRefused = verdict == m_verdicts.end() || verdict->second.ok();
+    // An update of an installed, subscribed item (an update never subscribes)
+    // that Steam's own manifest flagged needs no Web API: nothing new is
+    // added to the account.
+    const bool flagged = network && job.kind == AcquisitionKind::Update && notRefused &&
+                         steamFlaggedUpdate(job.identity);
+    // A re-download past its unsubscribe (which waited for the Web API)
+    // subscribes again and downloads: that only restores what the account had.
+    const ReinstallStep step = transition.context.job.reinstallStep;
+    const bool restoring =
+        network && job.kind == AcquisitionKind::Reinstall && notRefused &&
+        (step == ReinstallStep::Unsubscribed || step == ReinstallStep::Resubscribed) &&
+        std::none_of(
+            transition.actions.begin(), transition.actions.end(),
+            [](const providers::Action& action) { return action.kind == ActionKind::Unsubscribe; });
+    if (!network || flagged || restoring || (verdict != m_verdicts.end() && verdict->second.ok())) {
         // A stale observation (no action, still waiting for the state) keeps the hold.
         if (!transition.actions.empty() || transition.context.awaiting != AwaitStep::State)
             runtime.heldSinceMs.reset();
@@ -306,11 +338,52 @@ void AcquisitionCoordinator::failUnconfirmed(Runtime& runtime) {
     context.retryAtMs = 0;
     context.job.state = AcquisitionState::NeedsUserAction;
     context.job.errorCode = std::string(errorCodeName(ErrorCode::Timeout));
-    context.job.errorMessage =
+    const std::string unconfirmed =
         "Paradox Mod Manager could not confirm with Steam that Workshop item " +
-        context.job.identity.id + " exists and belongs to " + gameDisplayName(runtime.game) +
-        ", so it did not subscribe to it. Retry when this computer is online, or open the "
-        "item's Workshop page manually.";
+        context.job.identity.id + " exists and belongs to " + gameDisplayName(runtime.game);
+    switch (context.job.kind) {
+    case AcquisitionKind::Acquire:
+        context.job.errorMessage = unconfirmed +
+                                   ", so it did not subscribe to it. Retry when this computer is "
+                                   "online, or open the item's Workshop page manually.";
+        break;
+    case AcquisitionKind::Update:
+        context.job.errorMessage = unconfirmed +
+                                   ", so it did not ask Steam to download the update. The "
+                                   "installed version stays. Retry when this computer is online.";
+        break;
+    case AcquisitionKind::Reinstall:
+        // Worded from the stored step: only at "start" was nothing sent yet.
+        switch (context.job.reinstallStep) {
+        case ReinstallStep::Start:
+            context.job.errorMessage = unconfirmed +
+                                       ", so it did not unsubscribe or download it again. Nothing "
+                                       "changed in Steam. Retry when this computer is online.";
+            break;
+        case ReinstallStep::Unsubscribing:
+            context.job.errorMessage =
+                unconfirmed +
+                ", so it did not carry on with the re-download. An unsubscribe "
+                "request was already sent, so Workshop item " +
+                context.job.identity.id +
+                " may be unsubscribed now: Retry subscribes to it again in that case and "
+                "downloads it, when this computer is online.";
+            break;
+        case ReinstallStep::Unsubscribed:
+            context.job.errorMessage =
+                unconfirmed + ", so it did not subscribe to it again. Workshop item " +
+                context.job.identity.id +
+                " is now unsubscribed in Steam: Retry subscribes to it again and downloads it, "
+                "when this computer is online.";
+            break;
+        case ReinstallStep::Resubscribed:
+            context.job.errorMessage =
+                unconfirmed + ". It is subscribed again, but Steam was not asked to download it "
+                              "again. Retry when this computer is online.";
+            break;
+        }
+        break;
+    }
     context.job.updatedAt = std::max(context.clockMs, m_ctx.now());
     logWarning(kComponent, "workshop item not confirmed by the web api in time",
                {{"mod", toString(context.job.identity)}});
@@ -326,7 +399,8 @@ void AcquisitionCoordinator::perform(std::int64_t jobId, const providers::Action
         return;
     case ActionKind::QueryState:
     case ActionKind::Subscribe:
-    case ActionKind::RequestDownload: {
+    case ActionKind::RequestDownload:
+    case ActionKind::Unsubscribe: {
         auto command = providers::helperCommandFor(action);
         if (!command)
             return;
@@ -378,9 +452,13 @@ void AcquisitionCoordinator::flushOutbox() {
 bool AcquisitionCoordinator::persist(Runtime& runtime, bool force) {
     const AcquisitionJob& job = runtime.context.job;
     const AcquisitionJob& last = runtime.persisted;
+    // The re-download step is written before the request it guards goes out.
     const bool significant = force || job.state != last.state || job.errorCode != last.errorCode ||
                              job.errorMessage != last.errorMessage ||
-                             job.attempts != last.attempts || job.playsetId != last.playsetId;
+                             job.attempts != last.attempts || job.playsetId != last.playsetId ||
+                             job.reinstallStep != last.reinstallStep ||
+                             job.targetTimeUpdated != last.targetTimeUpdated ||
+                             job.targetManifest != last.targetManifest;
     const std::int64_t now = m_ctx.now();
     if (!significant && now - runtime.persistedAtMs < m_options.progressPersistIntervalMs) {
         runtime.dirty = true;
@@ -715,10 +793,30 @@ CoordinatorUpdate AcquisitionCoordinator::start(const GameKey& game) {
             return;
         }
         std::vector<AcquisitionJob> fresh;
+        std::optional<bool> gameRunning; // checked once, when needed
+        bool parked = false;
         for (const AcquisitionJob& job : unfinished.value()) {
-            if (job.identity.game == game && !m_jobs.count(job.id))
-                fresh.push_back(job);
+            if (job.identity.game != game || m_jobs.count(job.id))
+                continue;
+            if (job.kind != AcquisitionKind::Acquire) {
+                // Steam would change the files of mods the running game has
+                // loaded: the job stays parked until the game closed (tick()
+                // looks for that).
+                if (!gameRunning)
+                    gameRunning = !refuseWhileRunning(game, "updating mods").ok();
+                if (*gameRunning) {
+                    logInfo(kComponent, "update job kept waiting while the game runs",
+                            {{"job", std::to_string(job.id)}, {"mod", toString(job.identity)}});
+                    parked = true;
+                    continue;
+                }
+            }
+            fresh.push_back(job);
         }
+        if (parked)
+            m_parkedWhileRunning.insert(game);
+        else
+            m_parkedWhileRunning.erase(game);
         if (fresh.empty())
             return;
         rememberNames(fresh);
@@ -858,43 +956,47 @@ CoordinatorUpdate AcquisitionCoordinator::onHelperExited(const GameKey& game, in
 CoordinatorUpdate
 AcquisitionCoordinator::onMetadata(const GameKey& game,
                                    const std::vector<providers::WorkshopItemMetadata>& items) {
-    return run([&] {
-        const std::string appId = appIdFor(game);
-        std::vector<std::int64_t> confirmed;
-        for (const providers::WorkshopItemMetadata& item : items) {
-            const ModIdentity identity{game, source::SteamWorkshop, item.id};
-            if (item.found && !item.title.empty()) {
-                const std::string title = detail::trimmed(item.title);
-                if (!title.empty() && m_names[identity] != title) {
-                    m_names[identity] = title;
-                    m_changed = true;
-                }
+    return run([&] { absorbMetadata(game, items); });
+}
+
+void AcquisitionCoordinator::absorbMetadata(
+    const GameKey& game, const std::vector<providers::WorkshopItemMetadata>& items) {
+    const std::string appId = appIdFor(game);
+    const std::int64_t now = m_ctx.now();
+    std::vector<std::int64_t> confirmed;
+    for (const providers::WorkshopItemMetadata& item : items) {
+        const ModIdentity identity{game, source::SteamWorkshop, item.id};
+        m_answers.insert_or_assign(identity, Answer{item, now});
+        if (item.found && !item.title.empty()) {
+            const std::string title = detail::trimmed(item.title);
+            if (!title.empty() && m_names[identity] != title) {
+                m_names[identity] = title;
+                m_changed = true;
             }
-            if (appId.empty())
+        }
+        if (appId.empty())
+            continue;
+        const Status valid = providers::validateWorkshopItemForGame(item, appId);
+        m_metadataRequested.erase(identity);
+        m_verdicts.insert_or_assign(identity, valid);
+        for (auto& [id, runtime] : m_jobs) {
+            if (runtime.context.job.identity != identity)
                 continue;
-            const Status valid = providers::validateWorkshopItemForGame(item, appId);
-            m_metadataRequested.erase(identity);
-            m_verdicts.insert_or_assign(identity, valid);
-            for (auto& [id, runtime] : m_jobs) {
-                if (runtime.context.job.identity != identity)
-                    continue;
-                if (!valid)
-                    enqueue(id, obs::ItemRejected{valid.error().code, valid.error().message});
-                else if (runtime.heldSinceMs)
-                    confirmed.push_back(id);
-            }
+            if (!valid)
+                enqueue(id, obs::ItemRejected{valid.error().code, valid.error().message});
+            else if (runtime.heldSinceMs)
+                confirmed.push_back(id);
         }
-        // Held jobs start a fresh run: it queries the item state again, so
-        // the decision to subscribe rests on a current report.
-        for (const std::int64_t id : confirmed) {
-            Runtime& runtime = m_jobs.at(id);
-            if (!runtime.heldSinceMs)
-                continue; // the item was listed twice
-            runtime.heldSinceMs.reset();
-            apply(id,
-                  providers::startAcquisition(runtime.context.job, m_ctx.now(), m_options.policy));
-        }
-    });
+    }
+    // Held jobs start a fresh run: it queries the item state again, so
+    // the decision to subscribe rests on a current report.
+    for (const std::int64_t id : confirmed) {
+        Runtime& runtime = m_jobs.at(id);
+        if (!runtime.heldSinceMs)
+            continue; // the item was listed twice
+        runtime.heldSinceMs.reset();
+        apply(id, providers::startAcquisition(runtime.context.job, m_ctx.now(), m_options.policy));
+    }
 }
 
 CoordinatorUpdate AcquisitionCoordinator::tick(std::int64_t nowMs) {
@@ -910,6 +1012,17 @@ CoordinatorUpdate AcquisitionCoordinator::tick(std::int64_t nowMs) {
             }
             if (busy(runtime) || runtime.context.retryAtMs > 0)
                 enqueue(id, obs::Tick{nowMs});
+        }
+        // Updates parked while the game ran resume once it is closed.
+        if (!m_parkedWhileRunning.empty() &&
+            now - m_parkedCheckedAtMs >= m_options.parkedRecheckMs) {
+            m_parkedCheckedAtMs = now;
+            const std::set<GameKey> parked = m_parkedWhileRunning;
+            for (const GameKey& game : parked) {
+                auto running = detail::runningGameProcess(m_ctx, game);
+                if (running && !running.value())
+                    start(game); // re-entrant: its jobs are processed in this pass
+            }
         }
     });
 }
@@ -940,6 +1053,11 @@ Result<CoordinatorUpdate> AcquisitionCoordinator::retryJob(std::int64_t jobId,
     if (!retryable(job.state))
         return makeError(ErrorCode::InvalidArgument,
                          "Workshop item " + job.identity.id + " is already installed.");
+    if (job.kind != AcquisitionKind::Acquire) {
+        PMM_TRY(refuseWhileRunning(job.identity.game, job.kind == AcquisitionKind::Update
+                                                          ? "updating mods"
+                                                          : "downloading mods again"));
+    }
     // A pending automatic retry counts as in progress.
     for (const auto& [id, other] : m_jobs) {
         if (id != jobId && other.context.job.identity == job.identity && inProgress(other))
@@ -997,6 +1115,7 @@ CoordinatorUpdate AcquisitionCoordinator::retryAllFailed(const GameKey& game) {
 
 CancelOutcome AcquisitionCoordinator::cancelAll(const GameKey& game) {
     CancelOutcome outcome;
+    std::vector<std::int64_t> cancelledIds;
     outcome.update = run([&] {
         persistence::AcquisitionJobRepository repo(m_ctx.database);
         if (auto unfinished = repo.listUnfinished()) {
@@ -1008,17 +1127,51 @@ CancelOutcome AcquisitionCoordinator::cancelAll(const GameKey& game) {
         for (const auto& [id, runtime] : m_jobs) {
             if (runtime.game == game && inProgress(runtime)) {
                 enqueue(id, obs::Cancel{});
+                cancelledIds.push_back(id);
                 ++outcome.cancelled;
             }
         }
     });
+    // Re-downloads cancelled between their unsubscribe and the new
+    // subscription, and those whose unsubscribe was sent but not confirmed.
+    std::vector<std::string> unsubscribed;
+    std::vector<std::string> unsubscribing;
+    for (const std::int64_t id : cancelledIds) {
+        const auto it = m_jobs.find(id);
+        if (it == m_jobs.end() || it->second.context.job.kind != AcquisitionKind::Reinstall)
+            continue;
+        if (it->second.context.job.reinstallStep == ReinstallStep::Unsubscribed)
+            unsubscribed.push_back(nameFor(it->second.context.job));
+        else if (it->second.context.job.reinstallStep == ReinstallStep::Unsubscribing)
+            unsubscribing.push_back(nameFor(it->second.context.job));
+    }
     if (outcome.cancelled == 0) {
         outcome.message = "There was nothing to cancel.";
-    } else {
+    } else if (!unsubscribing.empty()) {
+        outcome.message =
+            "Cancelled " + std::to_string(outcome.cancelled) +
+            (outcome.cancelled == 1 ? " download" : " downloads") + ". " +
+            (unsubscribed.empty()
+                 ? std::string()
+                 : quotedNames(unsubscribed) + (unsubscribed.size() == 1 ? " was" : " were") +
+                       " unsubscribed for a re-download and " +
+                       (unsubscribed.size() == 1 ? "is" : "are") + " not subscribed again. ") +
+            "An unsubscribe request for " + quotedNames(unsubscribing) +
+            " was already sent and may still complete; if it does, Retry subscribes again. "
+            "Nothing was deleted.";
+    } else if (unsubscribed.empty()) {
         outcome.message = "Cancelled " + std::to_string(outcome.cancelled) +
                           (outcome.cancelled == 1 ? " download" : " downloads") +
                           ". Nothing was unsubscribed or deleted: subscriptions and downloads "
                           "that Steam already completed remain in Steam.";
+    } else {
+        outcome.message =
+            "Cancelled " + std::to_string(outcome.cancelled) +
+            (outcome.cancelled == 1 ? " download" : " downloads") + ". " +
+            quotedNames(unsubscribed) + (unsubscribed.size() == 1 ? " was" : " were") +
+            " unsubscribed for a re-download and " + (unsubscribed.size() == 1 ? "is" : "are") +
+            " not subscribed again: Retry subscribes again. Nothing else was unsubscribed or "
+            "deleted.";
     }
     return outcome;
 }
@@ -1125,27 +1278,37 @@ AcquisitionSnapshot AcquisitionCoordinator::snapshot(const GameKey& game) const 
     auto stored = repo.listForGame(game);
     const std::vector<AcquisitionJob> jobs = detail::latestPerIdentity(detail::overlayJobs(
         stored ? std::move(stored).value() : std::vector<AcquisitionJob>{}, liveJobs(game)));
-    // Usable installed content wins over job state (as in core/readiness).
-    std::set<ModIdentity> usable;
+    // Usable installed content wins over the state of an acquire job (as in
+    // core/readiness); an update or re-download stays visible until the
+    // installed version reached its target.
+    InstalledModMap installed;
     persistence::InventoryRepository inventory(m_ctx.database);
-    if (auto mods = inventory.list(game)) {
-        for (const InstalledMod& mod : mods.value()) {
-            if (mod.state == InstallState::Ready || mod.state == InstallState::NeedsUpdate)
-                usable.insert(mod.identity);
-        }
-    }
+    if (auto mods = inventory.list(game))
+        installed = detail::toMap(std::move(mods).value());
 
-    std::size_t downloading = 0, queued = 0, failed = 0, attention = 0, unavailable = 0;
+    std::size_t downloading = 0, queued = 0, updating = 0, failed = 0, attention = 0,
+                unavailable = 0;
     for (const AcquisitionJob& job : jobs) {
         const auto runtime = m_jobs.find(job.id);
         const bool inMemory = runtime != m_jobs.end();
-        if (!inMemory &&
-            (job.state == AcquisitionState::Installed || job.state == AcquisitionState::Cancelled))
+        // A re-download cancelled after (or while) it unsubscribed stays
+        // listed: its Retry subscribes again.
+        const bool leftUnsubscribed = job.kind == AcquisitionKind::Reinstall &&
+                                      (job.reinstallStep == ReinstallStep::Unsubscribing ||
+                                       job.reinstallStep == ReinstallStep::Unsubscribed);
+        if (!inMemory && (job.state == AcquisitionState::Installed ||
+                          (job.state == AcquisitionState::Cancelled && !leftUnsubscribed)))
             continue; // finished in an earlier session
         const bool working =
             inMemory && (busy(runtime->second) || runtime->second.context.retryAtMs > 0);
-        if (!working && retryable(job.state) && usable.count(job.identity))
+        const auto mod = installed.find(job.identity);
+        const bool usable =
+            mod != installed.end() && (mod->second.state == InstallState::Ready ||
+                                       mod->second.state == InstallState::NeedsUpdate);
+        if (job.kind == AcquisitionKind::Acquire && !working && retryable(job.state) && usable)
             continue; // resolved outside the job, e.g. manual fallback followed by a rescan
+        if (!working && mod != installed.end() && updateJobResolved(job, mod->second))
+            continue; // Steam installed the update by itself
         JobSnapshot item;
         item.job = job;
         item.name = nameFor(job);
@@ -1161,19 +1324,24 @@ AcquisitionSnapshot AcquisitionCoordinator::snapshot(const GameKey& game) const 
         item.canOpenFallback = job.identity.source == source::SteamWorkshop &&
                                providers::isValidPublishedFileId(job.identity.id) &&
                                job.state != AcquisitionState::Installed;
+        item.canReinstall = job.kind == AcquisitionKind::Update && m_metadata != nullptr &&
+                            (job.state == AcquisitionState::Failed ||
+                             job.state == AcquisitionState::NeedsUserAction) &&
+                            mod != installed.end();
         if (item.canOpenFallback) {
             if (auto links = providers::manualFallbackLinks(job.identity.id))
                 item.fallback = std::move(links).value();
         }
         switch (job.state) {
         case AcquisitionState::Downloading:
-            ++downloading;
+            ++(job.kind == AcquisitionKind::Acquire ? downloading : updating);
             break;
         case AcquisitionState::Pending:
+        case AcquisitionState::Unsubscribing:
         case AcquisitionState::Subscribing:
         case AcquisitionState::Subscribed:
         case AcquisitionState::DownloadRequested:
-            ++queued;
+            ++(job.kind == AcquisitionKind::Acquire ? queued : updating);
             break;
         case AcquisitionState::Failed:
             ++failed;
@@ -1198,12 +1366,527 @@ AcquisitionSnapshot AcquisitionCoordinator::snapshot(const GameKey& game) const 
     };
     add(downloading, "downloading");
     add(queued, "queued");
+    add(updating, "updating");
     add(failed, "failed");
     add(attention, attention == 1 ? "needs attention" : "need attention");
     add(unavailable, "unavailable");
     for (const std::string& part : parts)
         snapshot.summary += (snapshot.summary.empty() ? "" : ", ") + part;
     return snapshot;
+}
+
+// --- Updates of installed Workshop mods ---------------------------------------
+
+namespace {
+
+// What is known about an update of one installed item: the session's Web API
+// answer compared with it, and Steam's own Workshop manifest.
+struct UpdateFacts {
+    std::optional<providers::WorkshopUpdateComparison> web;
+    bool steamFlagged = false;
+    bool refused = false;
+    bool available = false;
+    std::int64_t targetTime = 0;
+    std::string targetManifest;
+};
+
+UpdateFacts updateFacts(const InstalledMod& mod, const providers::WorkshopItemMetadata* answer,
+                        const std::string& appId) {
+    UpdateFacts facts;
+    facts.steamFlagged = mod.state == InstallState::NeedsUpdate;
+    if (answer && !appId.empty())
+        facts.web = providers::compareWithWorkshop(mod, *answer, appId);
+    using V = providers::WorkshopUpdateVerdict;
+    facts.refused = facts.web && facts.web->verdict == V::Refused;
+    const bool webUpdate = facts.web && facts.web->verdict == V::UpdateAvailable;
+    facts.available = !facts.refused && (webUpdate || facts.steamFlagged);
+    if (webUpdate) {
+        facts.targetTime = facts.web->workshopTimeUpdated;
+        facts.targetManifest = facts.web->workshopManifest;
+    }
+    if (facts.steamFlagged && mod.latestUpdatedAt > facts.targetTime) {
+        facts.targetTime = mod.latestUpdatedAt;
+        facts.targetManifest = mod.latestManifest;
+    }
+    return facts;
+}
+
+std::string modName(const InstalledMod& mod, const PlaysetEntry* entry) {
+    std::string name = detail::trimmed(mod.descriptor.name);
+    if (!name.empty())
+        return name;
+    return entry ? detail::entryLabel(*entry) : mod.identity.id;
+}
+
+std::string modCount(std::size_t count) {
+    return std::to_string(count) + (count == 1 ? " Workshop mod" : " Workshop mods");
+}
+
+std::string updateCheckSummary(const UpdateCheckReport& report) {
+    const std::size_t total = report.items.size();
+    if (total == 0)
+        return "This playset has no installed Workshop mods to check.";
+    if (!report.reachable)
+        return "The Steam Workshop could not be reached, so " + modCount(total) +
+               (total == 1 ? " was" : " were") +
+               " not checked. Check the internet connection and retry.";
+    if (report.updates == 0 && report.notCompared == 0 && report.refused == 0 &&
+        report.unanswered == 0 && report.notChecked == 0)
+        return total == 1 ? std::string("The Workshop mod is up to date.")
+                          : "All " + modCount(total) + " are up to date.";
+    // "Checked" counts the mods the Workshop answered for, and the updates
+    // among them.
+    const auto found = static_cast<std::size_t>(
+        std::count_if(report.items.begin(), report.items.end(), [](const UpdateCheckItem& item) {
+            return item.answered && item.updateAvailable;
+        }));
+    std::string text;
+    const auto add = [&text](const std::string& sentence) {
+        text += (text.empty() ? "" : " ") + sentence;
+    };
+    if (report.checked > 0)
+        add("Checked " + modCount(report.checked) + ": " +
+            (found == 0 ? std::string("none has an update.")
+                        : std::to_string(found) + (found == 1 ? " has" : " have") + " an update."));
+    if (report.notCompared > 0)
+        add(std::to_string(report.notCompared) +
+            " could not be compared: Steam's records do not say which version is installed.");
+    if (report.refused > 0)
+        add(std::to_string(report.refused) + (report.refused == 1 ? " is" : " are") +
+            " no longer available on the Workshop; the installed " +
+            (report.refused == 1 ? "copy stays." : "copies stay."));
+    if (report.unanswered > 0)
+        add(std::to_string(report.unanswered) +
+            " could not be checked: the Steam Workshop did not answer. Retry later.");
+    if (report.notChecked > 0)
+        add(std::to_string(report.notChecked) + (report.notChecked == 1 ? " was" : " were") +
+            " installed after the check; check again to include " +
+            (report.notChecked == 1 ? "it." : "them."));
+    return text;
+}
+
+} // namespace
+
+Status AcquisitionCoordinator::refuseWhileRunning(const GameKey& game,
+                                                  std::string_view what) const {
+    auto running = detail::runningGameProcess(m_ctx, game);
+    const std::string gameName = gameDisplayName(game);
+    if (!running)
+        return makeError(ErrorCode::ConflictingProcess,
+                         "Could not check whether " + gameName + " is running, so nothing was " +
+                             "changed. Close " + gameName + " and try again.",
+                         running.error().message);
+    if (running.value())
+        return makeError(ErrorCode::ConflictingProcess,
+                         gameName + " is running (" + running.value()->executableName +
+                             ", process " + std::to_string(running.value()->pid) +
+                             "). Close it before " + std::string(what) +
+                             ": Steam would change the files of mods the game has loaded.");
+    return {};
+}
+
+bool AcquisitionCoordinator::steamFlaggedUpdate(const ModIdentity& identity) const {
+    persistence::InventoryRepository inventory(m_ctx.database);
+    auto mod = inventory.find(identity);
+    return mod && mod.value() && mod.value()->state == InstallState::NeedsUpdate;
+}
+
+Result<UpdateCheckPlan> AcquisitionCoordinator::prepareUpdateCheck(std::int64_t playsetId) const {
+    persistence::PlaysetRepository playsets(m_ctx.database);
+    auto playset = playsets.get(playsetId);
+    if (!playset)
+        return std::move(playset).error();
+    UpdateCheckPlan plan;
+    plan.game = playset.value().game;
+    persistence::InventoryRepository inventory(m_ctx.database);
+    auto mods = inventory.list(plan.game);
+    if (!mods)
+        return std::move(mods).error();
+    const InstalledModMap installed = detail::toMap(mods.value());
+    const std::int64_t now = m_ctx.now();
+    std::set<std::string> seen;
+    for (const PlaysetEntry& entry : playset.value().entries) {
+        const ModIdentity identity{plan.game, entry.identity.source, entry.identity.id};
+        if (identity.source != source::SteamWorkshop || !installed.count(identity) ||
+            !providers::isValidPublishedFileId(identity.id) || !seen.insert(identity.id).second)
+            continue;
+        ++plan.installed;
+        const auto answer = m_answers.find(identity);
+        if (answer != m_answers.end() && now - answer->second.atMs < m_options.updateCheckMaxAgeMs)
+            continue; // asked a moment ago
+        plan.ids.push_back(identity.id);
+    }
+    return plan;
+}
+
+Result<UpdateCheckReport> AcquisitionCoordinator::buildReport(std::int64_t playsetId,
+                                                              bool recording) const {
+    persistence::PlaysetRepository playsets(m_ctx.database);
+    auto playset = playsets.get(playsetId);
+    if (!playset)
+        return std::move(playset).error();
+    UpdateCheckReport report;
+    report.game = playset.value().game;
+    report.playsetId = playsetId;
+    persistence::InventoryRepository inventory(m_ctx.database);
+    auto mods = inventory.list(report.game);
+    if (!mods)
+        return std::move(mods).error();
+    const InstalledModMap installed = detail::toMap(mods.value());
+    const std::string appId = appIdFor(report.game);
+    std::set<std::string> seen;
+    using V = providers::WorkshopUpdateVerdict;
+    for (const PlaysetEntry& entry : playset.value().entries) {
+        const ModIdentity identity{report.game, entry.identity.source, entry.identity.id};
+        const auto mod = installed.find(identity);
+        if (identity.source != source::SteamWorkshop || mod == installed.end() ||
+            !providers::isValidPublishedFileId(identity.id) || !seen.insert(identity.id).second)
+            continue;
+        const auto answer = m_answers.find(identity);
+        const UpdateFacts facts = updateFacts(
+            mod->second, answer != m_answers.end() ? &answer->second.item : nullptr, appId);
+        UpdateCheckItem item;
+        item.identity = identity;
+        item.name = modName(mod->second, &entry);
+        item.enabled = entry.enabled;
+        item.steamFlagged = facts.steamFlagged;
+        item.updateAvailable = facts.available;
+        item.installedTimeUpdated =
+            mod->second.contentTimeFromSteam ? mod->second.contentUpdatedAt : 0;
+        item.installedManifest = mod->second.workshopManifest;
+        if (facts.web) {
+            item.answered = true;
+            item.verdict = facts.web->verdict;
+            item.workshopTimeUpdated = facts.web->workshopTimeUpdated;
+            item.workshopManifest = facts.web->workshopManifest;
+            item.message = facts.web->message;
+            ++report.checked;
+            if (item.verdict == V::NotCompared)
+                ++report.notCompared;
+            if (item.verdict == V::Refused)
+                ++report.refused;
+        } else if (recording || m_checkedItems.count(identity)) {
+            item.message = "The Steam Workshop has not answered about this item.";
+            ++report.unanswered;
+        } else {
+            // Installed after the last check: never asked about.
+            item.asked = false;
+            item.message = "Installed after the last check for mod updates; check again to "
+                           "include it.";
+            ++report.notChecked;
+        }
+        if (item.updateAvailable)
+            ++report.updates;
+        report.items.push_back(std::move(item));
+    }
+    report.summary = updateCheckSummary(report);
+    return report;
+}
+
+Result<UpdateCheckReport> AcquisitionCoordinator::recordUpdateCheck(
+    std::int64_t playsetId, const std::vector<providers::WorkshopItemMetadata>& answers,
+    std::size_t asked) {
+    persistence::PlaysetRepository playsets(m_ctx.database);
+    auto playset = playsets.get(playsetId);
+    if (!playset)
+        return std::move(playset).error();
+    const GameKey game = playset.value().game;
+    CoordinatorUpdate update = run([&] {
+        absorbMetadata(game, answers);
+        m_changed = true; // the rows' update state may have changed
+    });
+    auto report = buildReport(playsetId, true);
+    if (!report)
+        return report;
+    for (const UpdateCheckItem& item : report.value().items)
+        m_checkedItems.insert(item.identity);
+    report.value().update = std::move(update);
+    report.value().reachable = asked == 0 || !answers.empty();
+    report.value().summary = updateCheckSummary(report.value());
+    logInfo(kComponent, "workshop update check",
+            {{"game", game},
+             {"mods", std::to_string(report.value().items.size())},
+             {"asked", std::to_string(asked)},
+             {"answered", std::to_string(answers.size())},
+             {"updates", std::to_string(report.value().updates)}});
+    return report;
+}
+
+Result<UpdateCheckReport> AcquisitionCoordinator::updateCheckReport(std::int64_t playsetId) const {
+    return buildReport(playsetId, false);
+}
+
+WorkshopFindings AcquisitionCoordinator::workshopFindings(const GameKey& game) const {
+    WorkshopFindings findings;
+    const bool any = std::any_of(m_answers.begin(), m_answers.end(),
+                                 [&](const auto& answer) { return answer.first.game == game; });
+    if (!any)
+        return findings;
+    const std::string appId = appIdFor(game);
+    persistence::InventoryRepository inventory(m_ctx.database);
+    auto mods = inventory.list(game);
+    if (appId.empty() || !mods)
+        return findings;
+    const InstalledModMap installed = detail::toMap(mods.value());
+    for (const auto& [identity, answer] : m_answers) {
+        const auto mod = installed.find(identity);
+        if (identity.game != game || mod == installed.end())
+            continue;
+        const providers::WorkshopUpdateComparison comparison =
+            providers::compareWithWorkshop(mod->second, answer.item, appId);
+        if (comparison.verdict == providers::WorkshopUpdateVerdict::UpdateAvailable)
+            findings.updates.insert(identity);
+        else if (comparison.verdict == providers::WorkshopUpdateVerdict::Refused)
+            findings.refused[identity] = comparison.message;
+    }
+    return findings;
+}
+
+Result<UpdateOutcome> AcquisitionCoordinator::acquireUpdates(std::int64_t playsetId,
+                                                             const std::vector<std::string>& ids) {
+    persistence::PlaysetRepository playsets(m_ctx.database);
+    auto playset = playsets.get(playsetId);
+    if (!playset)
+        return std::move(playset).error();
+    const GameKey game = playset.value().game;
+    PMM_TRY(refuseWhileRunning(game, "updating mods"));
+    persistence::InventoryRepository inventory(m_ctx.database);
+    auto mods = inventory.list(game);
+    if (!mods)
+        return std::move(mods).error();
+    const InstalledModMap installed = detail::toMap(mods.value());
+    const std::string appId = appIdFor(game);
+
+    struct Candidate {
+        ModIdentity identity;
+        std::string name;
+        UpdateFacts facts;
+    };
+    std::vector<Candidate> candidates;
+    UpdateOutcome outcome;
+    const auto consider = [&](const PlaysetEntry& entry, bool requested) {
+        const ModIdentity identity{game, entry.identity.source, entry.identity.id};
+        const auto mod = installed.find(identity);
+        if (mod == installed.end()) {
+            if (requested)
+                outcome.skipped.push_back(
+                    {identity, detail::entryLabel(entry),
+                     "It is not installed; use Download missing to download it."});
+            return;
+        }
+        const auto answer = m_answers.find(identity);
+        Candidate candidate{identity, modName(mod->second, &entry),
+                            updateFacts(mod->second,
+                                        answer != m_answers.end() ? &answer->second.item : nullptr,
+                                        appId)};
+        if (candidate.facts.refused) {
+            if (requested)
+                outcome.skipped.push_back({identity, candidate.name, candidate.facts.web->message});
+            return;
+        }
+        if (!candidate.facts.available) {
+            if (requested)
+                outcome.skipped.push_back({identity, candidate.name,
+                                           "No newer version is known. Use Check for mod "
+                                           "updates first."});
+            return;
+        }
+        candidates.push_back(std::move(candidate));
+    };
+    std::set<std::string> seen;
+    if (ids.empty()) {
+        for (const PlaysetEntry& entry : playset.value().entries) {
+            if (entry.identity.source == source::SteamWorkshop &&
+                seen.insert(entry.identity.id).second)
+                consider(entry, false);
+        }
+    } else {
+        for (const std::string& id : ids) {
+            if (!seen.insert(id).second)
+                continue;
+            const auto& entries = playset.value().entries;
+            const auto entry = std::find_if(entries.begin(), entries.end(), [&](const auto& e) {
+                return e.identity.source == source::SteamWorkshop && e.identity.id == id;
+            });
+            if (entry == entries.end()) {
+                outcome.skipped.push_back({ModIdentity{game, source::SteamWorkshop, id}, id,
+                                           "It is not a Workshop mod of this playset."});
+                continue;
+            }
+            consider(*entry, true);
+        }
+    }
+
+    persistence::AcquisitionJobRepository repo(m_ctx.database);
+    std::vector<std::string> names;
+    PMM_TRY(m_ctx.database.transaction([&]() -> Status {
+        for (const Candidate& candidate : candidates) {
+            persistence::AcquisitionJobRepository::NewJob kind;
+            kind.kind = AcquisitionKind::Update;
+            kind.targetTimeUpdated = candidate.facts.targetTime;
+            kind.targetManifest = candidate.facts.targetManifest;
+            auto job = repo.createOrReuse(candidate.identity, playsetId, kind);
+            if (!job)
+                return std::move(job).error();
+            outcome.jobIds.push_back(job.value().id);
+            names.push_back(candidate.name);
+        }
+        return {};
+    }));
+    for (const Candidate& candidate : candidates)
+        m_names.try_emplace(candidate.identity, candidate.name);
+
+    if (candidates.empty()) {
+        // Requested mods: the reasons below say it (the notification's title
+        // says that nothing was updated).
+        if (ids.empty())
+            outcome.message = "No mod of this playset has a known update.";
+    } else {
+        outcome.message = candidates.size() == 1
+                              ? "Updating " + quotedNames(names) + " through Steam."
+                              : "Updating " + modCount(candidates.size()) + " through Steam.";
+        logInfo(kComponent, "workshop updates queued",
+                {{"game", game}, {"mods", std::to_string(candidates.size())}});
+    }
+    for (const SkippedUpdate& skipped : outcome.skipped)
+        outcome.message += (outcome.message.empty() ? "" : " ") + std::string("Not updated: \"") +
+                           skipped.name + "\". " + skipped.reason;
+    if (!candidates.empty())
+        outcome.update = start(game);
+    return outcome;
+}
+
+Result<UpdateOutcome> AcquisitionCoordinator::reinstall(std::int64_t playsetId,
+                                                        const std::string& providerId) {
+    persistence::PlaysetRepository playsets(m_ctx.database);
+    auto playset = playsets.get(playsetId);
+    if (!playset)
+        return std::move(playset).error();
+    const GameKey game = playset.value().game;
+    const auto& entries = playset.value().entries;
+    const auto entry = std::find_if(entries.begin(), entries.end(), [&](const PlaysetEntry& e) {
+        return e.identity.source == source::SteamWorkshop && e.identity.id == providerId;
+    });
+    if (entry == entries.end())
+        return makeError(ErrorCode::InvalidArgument, "Workshop item " + providerId.substr(0, 32) +
+                                                         " is not a Workshop mod of this playset.");
+    const ModIdentity identity{game, source::SteamWorkshop, providerId};
+    persistence::InventoryRepository inventory(m_ctx.database);
+    auto mod = inventory.find(identity);
+    if (!mod)
+        return std::move(mod).error();
+    if (!mod.value())
+        return makeError(ErrorCode::InvalidArgument,
+                         "\"" + detail::entryLabel(*entry) +
+                             "\" is not installed, so there is nothing to download again. Use "
+                             "Download missing instead.");
+    return queueReinstall(identity, playsetId, modName(*mod.value(), &*entry));
+}
+
+Result<UpdateOutcome> AcquisitionCoordinator::reinstallJob(std::int64_t jobId) {
+    AcquisitionJob job;
+    if (const auto it = m_jobs.find(jobId); it != m_jobs.end()) {
+        job = it->second.context.job;
+    } else {
+        persistence::AcquisitionJobRepository repo(m_ctx.database);
+        auto stored = repo.get(jobId);
+        if (!stored)
+            return std::move(stored).error();
+        job = std::move(stored).value();
+    }
+    if (job.identity.source != source::SteamWorkshop)
+        return makeError(ErrorCode::InvalidArgument,
+                         "Local mods cannot be downloaded again from the Workshop.");
+    persistence::InventoryRepository inventory(m_ctx.database);
+    auto mod = inventory.find(job.identity);
+    if (!mod)
+        return std::move(mod).error();
+    if (!mod.value())
+        return makeError(ErrorCode::InvalidArgument,
+                         "Workshop item " + job.identity.id +
+                             " is not installed, so there is nothing to download again. Retry "
+                             "the download instead.");
+    return queueReinstall(job.identity, job.playsetId, modName(*mod.value(), nullptr));
+}
+
+Result<UpdateOutcome> AcquisitionCoordinator::queueReinstall(const ModIdentity& identity,
+                                                             std::optional<std::int64_t> playsetId,
+                                                             const std::string& name) {
+    if (!m_metadata)
+        return makeError(ErrorCode::ProviderUnavailable,
+                         "Downloading a mod again needs the Steam Web API to confirm first that "
+                         "the item still exists, and it is not available in this session.");
+    if (!providers::isValidPublishedFileId(identity.id))
+        return makeError(ErrorCode::InvalidArgument,
+                         "\"" + identity.id.substr(0, 64) + "\" is not a valid Workshop item id.");
+    PMM_TRY(refuseWhileRunning(identity.game, "downloading mods again"));
+    if (const auto verdict = m_verdicts.find(identity);
+        verdict != m_verdicts.end() && !verdict->second.ok())
+        return makeError(verdict->second.error().code,
+                         verdict->second.error().message +
+                             " It was not unsubscribed, and the installed copy stays.");
+    for (const auto& [id, runtime] : m_jobs) {
+        if (runtime.context.job.identity == identity && inProgress(runtime))
+            return makeError(ErrorCode::AlreadyExists,
+                             "\"" + name +
+                                 "\" is already being downloaded or updated. Wait until it "
+                                 "finishes, or cancel it in Downloads.");
+    }
+    persistence::AcquisitionJobRepository repo(m_ctx.database);
+    auto unfinished = repo.listUnfinished();
+    if (!unfinished)
+        return std::move(unfinished).error();
+    for (const AcquisitionJob& other : unfinished.value()) {
+        if (other.identity == identity)
+            return makeError(ErrorCode::AlreadyExists,
+                             "\"" + name +
+                                 "\" is already being downloaded or updated. Wait until it "
+                                 "finishes, or cancel it in Downloads.");
+    }
+    // The newest version known, when an update is known: reached or reported.
+    persistence::AcquisitionJobRepository::NewJob kind;
+    kind.kind = AcquisitionKind::Reinstall;
+    persistence::InventoryRepository inventory(m_ctx.database);
+    if (auto mod = inventory.find(identity); mod && mod.value()) {
+        const auto answer = m_answers.find(identity);
+        const UpdateFacts facts =
+            updateFacts(*mod.value(), answer != m_answers.end() ? &answer->second.item : nullptr,
+                        appIdFor(identity.game));
+        if (facts.available) {
+            kind.targetTimeUpdated = facts.targetTime;
+            kind.targetManifest = facts.targetManifest;
+        }
+    }
+    auto job = repo.createOrReuse(identity, playsetId, kind);
+    if (!job)
+        return std::move(job).error();
+    m_names.insert_or_assign(identity, name);
+    logInfo(kComponent, "workshop re-download queued",
+            {{"job", std::to_string(job.value().id)}, {"mod", toString(identity)}});
+    UpdateOutcome outcome;
+    outcome.jobIds.push_back(job.value().id);
+    outcome.message = "Downloading \"" + name +
+                      "\" again: Steam unsubscribes it, then subscribes again and downloads it.";
+    outcome.update = start(identity.game);
+    return outcome;
+}
+
+std::vector<ModIdentity> AcquisitionCoordinator::updatesInProgress(const GameKey& game) const {
+    std::set<ModIdentity> identities;
+    for (const auto& [id, runtime] : m_jobs) {
+        if (runtime.game == game && runtime.context.job.kind != AcquisitionKind::Acquire &&
+            inProgress(runtime))
+            identities.insert(runtime.context.job.identity);
+    }
+    persistence::AcquisitionJobRepository repo(m_ctx.database);
+    if (auto unfinished = repo.listUnfinished()) {
+        for (const AcquisitionJob& job : unfinished.value()) {
+            if (job.identity.game == game && job.kind != AcquisitionKind::Acquire &&
+                !m_jobs.count(job.id))
+                identities.insert(job.identity);
+        }
+    }
+    return {identities.begin(), identities.end()};
 }
 
 std::vector<AcquisitionJob> AcquisitionCoordinator::liveJobs(const GameKey& game) const {

@@ -187,8 +187,9 @@ TEST_CASE("Reordering is only allowed in the unfiltered load-order view", "[core
     CHECK(policy.explanation == "Clear the search and filters to change load order.");
 
     filter.search.clear();
-    for (const StatusFilter status : {StatusFilter::Enabled, StatusFilter::Disabled,
-                                      StatusFilter::Missing, StatusFilter::Warning}) {
+    for (const StatusFilter status :
+         {StatusFilter::Enabled, StatusFilter::Disabled, StatusFilter::Missing,
+          StatusFilter::Warning, StatusFilter::Updates}) {
         filter.status = status;
         policy = reorderPolicy(filter);
         CHECK_FALSE(policy.allowed);
@@ -214,6 +215,7 @@ TEST_CASE("visibleIndices filters and sorts the view without touching load order
     readiness[1].status = EntryStatus::Missing;
     readiness[2].status = EntryStatus::Ready;
     readiness[2].warnings = {"version differs"};
+    readiness[2].updateAvailable = true;
     readiness[3].status = EntryStatus::NeedsUserAction;
     readiness[4].status = EntryStatus::Broken;
     const auto snapshot = entries;
@@ -237,6 +239,8 @@ TEST_CASE("visibleIndices filters and sorts the view without touching load order
     CHECK(visibleIndices(entries, readiness, filter) == std::vector<std::size_t>{1, 3});
     filter.status = StatusFilter::Warning;
     CHECK(visibleIndices(entries, readiness, filter) == std::vector<std::size_t>{2, 4});
+    filter.status = StatusFilter::Updates;
+    CHECK(visibleIndices(entries, readiness, filter) == std::vector<std::size_t>{2});
 
     filter.status = StatusFilter::All;
     filter.browseSorted = true;

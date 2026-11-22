@@ -4,7 +4,9 @@
 // paths of docs/accessibility.md work with real key events. Names that look
 // like rich text (a playset, a mod, a Steam Workshop title from the Web API's
 // local stub) never make the window fetch anything, and the engine's network
-// access refuses everything but local resources.
+// access refuses everything but local resources. "Check for mod updates"
+// asks the local Web API stub only when pressed and shows its result, and the
+// update actions follow it (disabled, and sending nothing, without Steam).
 
 #include "app/core/qt_util.hpp"
 #include "app/core/service_runner.hpp"
@@ -2035,6 +2037,325 @@ TEST_CASE("In the smallest window the export dialog scrolls, and Tab reaches the
         QTest::keyClick(window, Qt::Key_Space);
         REQUIRE(waitUntil([&] { return QGuiApplication::clipboard()->text() == "1001|1002"; }));
         CHECK(backend.notifications()->latest().value("title") == "Workshop ID list copied");
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+namespace {
+
+// A world with two installed Workshop mods in Steam's record and a local mod.
+// `outdated` sets Steam's own record of 5550001 to a newer manifest (an
+// update Steam already knows about, no network needed).
+void addUpdateWorld(FakeWorld& world, FakeAdapter& adapter, bool outdated) {
+    world.addWorkshopMod("5550001", "Example Outdated");
+    world.addWorkshopMod("5550002", "Example Current");
+    world.addLocalMod("example_local", "Example Local");
+    adapter.steamVersions["5550001"] = {1700000000, "1100000000000000801", 1700000000,
+                                        outdated ? "1100000000000000803" : "1100000000000000801"};
+    adapter.steamVersions["5550002"] = {1700000000, "1100000000000000802", 1700000000,
+                                        "1100000000000000802"};
+}
+
+// A playset with the three mods, all enabled.
+void prepareUpdatePlayset(Backend& backend) {
+    backend.playsets()->create(QStringLiteral("Updates"));
+    REQUIRE(waitUntil([&] { return backend.activePlaysetId() >= 0; }));
+    backend.mods()->addMods(
+        {"steam-workshop:5550001", "steam-workshop:5550002", "local:example_local"});
+    REQUIRE(waitUntil([&] { return backend.mods()->count() == 3 && !backend.mods()->busy(); }));
+}
+
+// An item of the mod list's context menu (a QObject child of its Menu).
+QObject* contextMenuItem(QQuickWindow* window, const char* name) {
+    return window->findChild<QObject*>(QLatin1String(name));
+}
+
+} // namespace
+
+TEST_CASE("Check for mod updates shows its result, and the update actions follow it",
+          "[app][qml][a11y][updates]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    addUpdateWorld(world, adapter, false);
+    HttpStub stub;
+    stub.responder = HttpStub::catalog(
+        {{"5550001", {"Example Outdated", "281990", 1700000500, "1100000000000000803"}},
+         {"5550002", {"Example Current", "281990", 1700000000, "1100000000000000802"}}});
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = true; // the Web API host; no pmm-steam-helper to start
+    options.metadataEndpoint = stub.url();
+    options.helperExecutable = qpath(temp.path() / "no helper" / "pmm-steam-helper.exe");
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+    REQUIRE(runner.metadataEnabled());
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        OfflineNetworkAccessManagerFactory networkFactory; // as in main()
+        QQmlApplicationEngine engine;
+        engine.setNetworkAccessManagerFactory(&networkFactory);
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        const auto item = [&](const char* name) {
+            auto* found = window->findChild<QQuickItem*>(QLatin1String(name));
+            REQUIRE(found);
+            return found;
+        };
+        prepareUpdatePlayset(backend);
+        ModListModel* mods = backend.mods();
+        AcquisitionController* acquisition = backend.acquisition();
+
+        // Before the check: nothing was asked, and Steam's record knows no update.
+        QQuickItem* check = item("checkModUpdatesButton");
+        QQuickItem* update = item("updateModsButton");
+        QQuickItem* line = item("updateCheckLine");
+        CHECK(mods->installedWorkshopCount() == 2);
+        CHECK(mods->updateCount() == 0);
+        REQUIRE(waitUntil([&] { return check->isVisible(); }));
+        CHECK(check->isEnabled());
+        CHECK(check->property("text").toString() == "Check for mod updates");
+        CHECK_FALSE(update->isVisible());
+        CHECK_FALSE(line->isVisible());
+        CHECK(item("downloadsEmptyText")->property("text").toString() ==
+              "No downloads. Everything in this playset is installed.");
+        CHECK(stub.requests == 0);
+
+        Announcements announcements;
+        QMetaObject::invokeMethod(check, "clicked");
+        CHECK(acquisition->checkingUpdates());
+        const QString summary = QStringLiteral("Checked 2 Workshop mods: 1 has an update.");
+        REQUIRE(waitUntil([&] {
+            return !acquisition->checkingUpdates() && line->property("text").toString() == summary;
+        }));
+        CHECK(line->isVisible());
+        CHECK_FALSE(acquisition->updateCheckFailed());
+        CHECK_FALSE(item("updateCheckRetry")->isVisible());
+        // Only the installed Workshop mods' ids were sent, once.
+        REQUIRE(stub.bodies.size() == 1);
+        CHECK(HttpStub::requestedIds(stub.bodies[0]) ==
+              std::vector<std::string>{"5550001", "5550002"});
+        // Screen readers hear the result.
+        REQUIRE(waitUntil([&] { return Announcements::take().contains(summary); }));
+
+        // The row, the count, the Downloads area and the launch check follow.
+        REQUIRE(waitUntil([&] { return mods->updateCount() == 1 && update->isVisible(); }));
+        CHECK(mods->row(0)->updateAvailable);
+        CHECK(mods->row(0)->statusText == "Update available");
+        CHECK(mods->get(0).value("updateAvailable").toBool());
+        CHECK(mods->row(0)->status == "ready");
+        CHECK_FALSE(mods->row(1)->updateAvailable);
+        CHECK(update->isEnabled());
+        CHECK(item("downloadsEmptyText")->property("text").toString() ==
+              "1 mod has an update on the Workshop.");
+        REQUIRE(waitUntil([&] {
+            return backend.launcher()->warnings().contains(
+                "1 enabled mod has an update on the Workshop.");
+        }));
+        for (const QString& blocker : backend.launcher()->blockers())
+            CHECK_FALSE(blocker.contains(QLatin1String("update")));
+
+        // The "updates" filter.
+        backend.modView()->setStatusFilter(QStringLiteral("updates"));
+        CHECK(backend.modView()->rowCount() == 1);
+        backend.modView()->setStatusFilter(QStringLiteral("all"));
+
+        // The context menu offers both actions for the row; the re-download asks
+        // first and, cancelled, changes nothing.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(waitUntil([&] { return backend.details()->row() == 0; }));
+        CHECK(backend.details()->updateAvailable());
+        CHECK(backend.details()->canReinstall());
+        QObject* updateItem = contextMenuItem(window, "updateFromWorkshopItem");
+        QObject* reinstallItem = contextMenuItem(window, "reinstallItem");
+        REQUIRE(updateItem);
+        REQUIRE(reinstallItem);
+        CHECK(updateItem->property("offered").toBool());
+        CHECK(updateItem->property("enabled").toBool());
+        CHECK(reinstallItem->property("offered").toBool());
+        CHECK(reinstallItem->property("enabled").toBool());
+        QMetaObject::invokeMethod(item("modsPane"), "reinstallRequested",
+                                  Q_ARG(QString, QStringLiteral("5550001")),
+                                  Q_ARG(QString, QStringLiteral("Example Outdated")));
+        auto* dialog = window->findChild<QObject*>(QStringLiteral("confirmDialog"));
+        REQUIRE(dialog);
+        REQUIRE(waitUntil([&] { return dialog->property("opened").toBool(); }));
+        CHECK(dialog->property("title").toString() == "Re-download from scratch");
+        CHECK(dialog->property("message").toString().startsWith(
+            QStringLiteral("Steam unsubscribes “Example Outdated”, which removes its files, then "
+                           "it is subscribed again and downloaded.")));
+        QMetaObject::invokeMethod(window, "closeDialogs");
+        REQUIRE(waitUntil([&] { return !dialog->property("visible").toBool(); }));
+        waitUntil([] { return false; }, std::chrono::milliseconds(150));
+        CHECK(acquisition->jobs()->count() == 0);
+        // A local mod gets neither action.
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 2));
+        REQUIRE(waitUntil([&] { return backend.details()->row() == 2; }));
+        CHECK_FALSE(updateItem->property("offered").toBool());
+        CHECK_FALSE(reinstallItem->property("offered").toBool());
+
+        // Asked again at once: the session's answers are used, nothing is sent.
+        QMetaObject::invokeMethod(check, "clicked");
+        REQUIRE(waitUntil([&] { return !acquisition->checkingUpdates(); }));
+        waitUntil([] { return false; }, std::chrono::milliseconds(150));
+        CHECK(stub.bodies.size() == 1);
+        CHECK(line->property("text").toString() == summary);
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("A check that cannot reach the Workshop says so and offers Retry",
+          "[app][qml][updates]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    addUpdateWorld(world, adapter, false);
+    HttpStub stub; // no responder: requests are never answered
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = true;
+    options.metadataEndpoint = stub.url();
+    options.metadataTimeout = std::chrono::milliseconds(300);
+    options.helperExecutable = qpath(temp.path() / "no helper" / "pmm-steam-helper.exe");
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        prepareUpdatePlayset(backend);
+        auto* line = window->findChild<QQuickItem*>(QStringLiteral("updateCheckLine"));
+        auto* retry = window->findChild<QQuickItem*>(QStringLiteral("updateCheckRetry"));
+        auto* check = window->findChild<QQuickItem*>(QStringLiteral("checkModUpdatesButton"));
+        REQUIRE(line);
+        REQUIRE(retry);
+        REQUIRE(check);
+
+        backend.acquisition()->checkForUpdates();
+        REQUIRE(waitUntil([&] { return backend.acquisition()->updateCheckFailed(); }));
+        CHECK(line->property("text").toString().startsWith(
+            QStringLiteral("The Steam Workshop could not be reached, so 2 Workshop mods were not "
+                           "checked.")));
+        CHECK(line->property("level").toString() == "warning");
+        REQUIRE(waitUntil([&] { return retry->isVisible(); }));
+        CHECK(evaluateIn(retry, QStringLiteral("Accessible.name")).toString() ==
+              "Check for mod updates again");
+        CHECK(backend.mods()->updateCount() == 0);
+
+        // Retry asks again; its focus goes to the check button while it is hidden.
+        window->requestActivate();
+        REQUIRE(QTest::qWaitForWindowActive(window));
+        retry->forceActiveFocus(Qt::TabFocusReason);
+        const int asked = stub.requests;
+        QTest::keyClick(window, Qt::Key_Return);
+        REQUIRE(waitUntil([&] { return stub.requests > asked; }));
+        REQUIRE(waitUntil([&] { return check->hasActiveFocus(); }));
+        REQUIRE(waitUntil([&] { return !backend.acquisition()->checkingUpdates(); }));
+        CHECK(backend.acquisition()->updateCheckFailed());
+
+        window->close();
+        backend.shutdown();
+    }
+    runner.shutdown();
+    INFO(warnings.list().join('\n').toStdString());
+    CHECK(QmlWarnings::list().isEmpty());
+}
+
+TEST_CASE("Without Steam the update actions are off, nothing is sent, and Steam's own record "
+          "still shows",
+          "[app][qml][updates]") {
+    qputenv("QT_QUICK_BACKEND", "software");
+    TempDir temp;
+    FakeWorld world(temp.path() / "world");
+    FakeAdapter adapter(world);
+    addUpdateWorld(world, adapter, true); // Steam's record flags 5550001
+    HttpStub stub;
+    stub.responder = HttpStub::catalog({});
+    RunnerOptions options;
+    options.runtime = hermeticOptions(temp.path() / "profile", adapter);
+    options.steam = false; // --no-steam
+    options.metadataEndpoint = stub.url();
+    ServiceRunner runner(options);
+    const RunnerStart start = runner.start();
+    REQUIRE(start.ok);
+
+    QmlWarnings warnings;
+    {
+        Backend backend(runner, {});
+        backend.initialize(start);
+        const auto registration = registerBackend(backend);
+        QQmlApplicationEngine engine;
+        engine.loadFromModule("Pmm.Ui", "Main");
+        REQUIRE(engine.rootObjects().size() == 1);
+        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        REQUIRE(window);
+        REQUIRE(waitUntil([&] { return backend.initialRefreshDone(); }));
+        prepareUpdatePlayset(backend);
+        ModListModel* mods = backend.mods();
+
+        // Steam's own record: "Update available" without any network use.
+        REQUIRE(waitUntil([&] { return mods->updateCount() == 1; }));
+        CHECK(mods->row(0)->statusText == "Update available");
+        auto* check = window->findChild<QQuickItem*>(QStringLiteral("checkModUpdatesButton"));
+        auto* update = window->findChild<QQuickItem*>(QStringLiteral("updateModsButton"));
+        REQUIRE(check);
+        REQUIRE(update);
+        REQUIRE(waitUntil([&] { return check->isVisible() && update->isVisible(); }));
+        CHECK_FALSE(check->isEnabled());
+        CHECK_FALSE(update->isEnabled());
+        QMetaObject::invokeMethod(window, "selectMod", Q_ARG(int, 0));
+        REQUIRE(waitUntil([&] { return backend.details()->row() == 0; }));
+        QObject* updateItem = contextMenuItem(window, "updateFromWorkshopItem");
+        QObject* reinstallItem = contextMenuItem(window, "reinstallItem");
+        REQUIRE(updateItem);
+        REQUIRE(reinstallItem);
+        CHECK(updateItem->property("offered").toBool());
+        CHECK_FALSE(updateItem->property("enabled").toBool());
+        CHECK(reinstallItem->property("offered").toBool());
+        CHECK_FALSE(reinstallItem->property("enabled").toBool());
+
+        // The controller refuses with the existing text.
+        for (const char* action : {"checkForUpdates", "updateMods"}) {
+            INFO(action);
+            backend.notifications()->dismiss();
+            QMetaObject::invokeMethod(backend.acquisition(), action);
+            CHECK(backend.notifications()->latest().value("title") == "Workshop downloads are off");
+        }
+        backend.notifications()->dismiss();
+        backend.acquisition()->reinstallMod(QStringLiteral("5550001"));
+        CHECK(backend.notifications()->latest().value("title") == "Workshop downloads are off");
+        CHECK_FALSE(backend.acquisition()->checkingUpdates());
+        waitUntil([] { return false; }, std::chrono::milliseconds(300));
+        CHECK(stub.requests == 0);
 
         window->close();
         backend.shutdown();

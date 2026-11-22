@@ -65,6 +65,7 @@ reason documented.
 | Journaled game-config writes with backups, rollback and crash recovery | Implemented | [ADR 0005](docs/adr/0005-journaled-config-writes.md) |
 | Workshop helper: Steam session and item state in the game's app context | **Verified** read-only, 2026-10-29, Stellaris 4.5.2, Windows 11 | [Probe evidence](docs/evidence/steam-helper-probe.md) |
 | Workshop subscribe and download | **Verified** 2026-10-30, EU4 1.37.5 and Stellaris 4.5.2, Windows 11 (one item each, live) | [Live validation](docs/evidence/live-validation-2026-10-30.md): pending job survives a restart; nothing is subscribed until the Web API confirms the item's game |
+| Updates of installed Workshop mods (unreleased): **Check for mod updates** asks the Steam Web API when pressed, **Update mods** and **Update from Workshop** ask Steam for the new versions, **Re-download from scratch…** unsubscribes, subscribes again and downloads | Implemented; tested with fakes and a local Web API stub only; **not verified live** | [Steam Workshop](docs/steam-workshop.md#11-not-verified-yet-and-how-to-verify-it), [checking for updates](docs/app.md#checking-installed-workshop-mods-for-updates); an update never blocks Play, a running one does |
 | Manual Workshop fallback (open the item in Steam, then rescan) | Implemented, unverified | Limited: does not satisfy automatic download |
 | Direct launch bypassing the Paradox launcher | **Verified** 2026-10-30, Stellaris 4.5.2 and EU4 1.37.5, 2026-11-13, CK3 1.20.1.2, and 2026-11-21, Victoria 3 1.15.2 and Hearts of Iron IV 1.20.0.0, Windows 11 | No launcher process and no restart through Steam ([CK3 probe run](docs/evidence/2026-11-13-ck3-load-order.md), [Victoria 3 probe run](docs/evidence/2026-11-21-vic3-load-order.md), [Hearts of Iron IV probe run](docs/evidence/2026-11-21-hoi4-load-order.md)); EU4 runs without `steam_appid.txt`; write and start failures restore the previous configuration. Since 0.1.1, tested with fakes only: a Steam copy starts only while the Steam client runs ([troubleshooting](docs/troubleshooting.md#steam-is-not-running-not-signed-in-or-the-game-is-not-owned)) |
 | In-game verification of loaded mods and order | **Verified** with probe mods: 2026-10-30 Stellaris and EU4, 2026-11-13 CK3 1.20.1.2, 2026-11-21 Victoria 3 1.15.2 and Hearts of Iron IV 1.20.0.0 | Stellaris, Crusader Kings III and Victoria 3: the later mod in the list wins a shared file (Victoria 3: whole files; which mod's database entry wins follows the game's own rules). **EU4: the list order is ignored; the mod whose name sorts first wins. Hearts of Iron IV: the list order is ignored; the mod whose `.mod` file name sorts last wins** ([load order](docs/load-order.md)) |
@@ -200,6 +201,14 @@ until the next start. **Settings > Updates** has **Check for updates** for a che
 at any time, and **Check for updates automatically** to turn the daily check off
 ([what it contacts and verifies](docs/updates.md)). A ZIP copy gets a link to the
 release page instead.
+
+**What it sends to Steam.** Paradox Mod Manager asks the Steam Web API
+(`api.steampowered.com`) about Workshop items by their IDs only, with no
+account, cookies or API key: for the mods it downloads or updates, for the names
+in an import preview, and for the installed Workshop mods of the active
+playset when you press **Check for mod updates** (never on its own). Sessions
+started with `--no-steam` or `--read-only` send none of these
+([details](docs/app.md#web-api-host)).
 
 **Uninstalling.** Use **Settings > Apps > Installed apps** (Windows 10: **Apps &
 features**) > **Paradox Mod Manager** > **Uninstall**, or right-click the Start menu

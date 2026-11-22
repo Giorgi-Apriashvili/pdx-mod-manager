@@ -12,6 +12,8 @@
 #include <QSettings>
 #include <QUrl>
 
+#include <optional>
+
 namespace pmm::app {
 namespace {
 
@@ -24,10 +26,31 @@ bool steamUrlHandlerRegistered() {
 } // namespace
 
 AcquisitionController::AcquisitionController(Backend* backend, QObject* parent)
-    : QObject(parent), m_backend(backend) {}
+    : QObject(parent), m_backend(backend) {
+    connect(backend, &Backend::contextLoaded, this, &AcquisitionController::refreshUpdateCheck);
+}
 
 bool AcquisitionController::downloadsEnabled() const {
     return m_backend->steamEnabled();
+}
+
+const UpdateCheckData* AcquisitionController::activeCheck() const {
+    const auto found = m_checks.find(m_backend->activePlaysetId());
+    return found == m_checks.end() ? nullptr : &found->second;
+}
+
+bool AcquisitionController::checkingUpdates() const {
+    return m_checkingPlayset >= 0 && m_checkingPlayset == m_backend->activePlaysetId();
+}
+
+QString AcquisitionController::updateCheckSummary() const {
+    const UpdateCheckData* check = activeCheck();
+    return check ? check->summary : QString();
+}
+
+bool AcquisitionController::updateCheckFailed() const {
+    const UpdateCheckData* check = activeCheck();
+    return check && (!check->reachable || check->unanswered > 0);
 }
 
 bool AcquisitionController::isTrustedFallbackUrl(const QString& url) {
@@ -71,6 +94,48 @@ void AcquisitionController::runUpdate(
             else if (!successTitle.isEmpty())
                 m_backend->notifications()->info(successTitle, successText);
             m_backend->refreshAcquisition();
+        });
+}
+
+void AcquisitionController::runUpdateOutcome(
+    const QString& failureTitle, const QString& successTitle,
+    std::function<Result<services::UpdateOutcome>(AppRuntime&)> op) {
+    ServiceRunner* runner = &m_backend->runner();
+    struct Outcome {
+        std::optional<Error> error;
+        QString message;
+        bool queued = false;
+        bool skipped = false;
+    };
+    runner->call(
+        this,
+        [op = std::move(op), runner](AppRuntime& runtime) {
+            Outcome outcome;
+            auto result = op(runtime);
+            if (!result) {
+                outcome.error = result.error();
+                return outcome;
+            }
+            runner->report(result.value().update);
+            outcome.message = qs(result.value().message);
+            outcome.queued = !result.value().jobIds.empty();
+            outcome.skipped = !result.value().skipped.empty();
+            return outcome;
+        },
+        [this, failureTitle, successTitle](const Outcome& outcome) {
+            NotificationCenter* notifications = m_backend->notifications();
+            if (outcome.error)
+                notifications->warning(failureTitle, qs(outcome.error->message));
+            else if (outcome.queued && !outcome.skipped)
+                notifications->info(successTitle, outcome.message);
+            else if (outcome.queued)
+                notifications->warning(successTitle, outcome.message);
+            else if (outcome.skipped)
+                notifications->warning(tr("Nothing was updated"), outcome.message);
+            else
+                notifications->info(tr("Nothing to update"), outcome.message);
+            // The new jobs block Play: the launch check follows at once.
+            m_backend->refreshAcquisition(true);
         });
 }
 
@@ -197,6 +262,121 @@ void AcquisitionController::openFallback(int jobId) {
 
 void AcquisitionController::rescanNow() {
     m_backend->rescanCurrentMods();
+}
+
+void AcquisitionController::checkForUpdates() {
+    if (refuseWithoutSteam())
+        return;
+    const std::int64_t playsetId = m_backend->activePlaysetId();
+    if (playsetId < 0 || m_checkingPlayset >= 0)
+        return;
+    m_checkingPlayset = playsetId;
+    ++m_checkGeneration; // a rebuild still on its way is older than this check
+    emit changed();
+    m_backend->runner().checkWorkshopUpdates(
+        this, playsetId, [this, playsetId](WorkshopUpdateCheck check) {
+            m_checkingPlayset = -1;
+            ++m_checkGeneration;
+            if (!check.available) {
+                // No Web API host in this session (or shutting down): nothing was sent.
+                m_backend->notifications()->warning(
+                    tr("Could not check for mod updates"),
+                    tr("The Steam Workshop cannot be asked in this session, so nothing was "
+                       "checked."));
+            } else if (check.error) {
+                m_backend->notifications()->warning(tr("Could not check for mod updates"),
+                                                    qs(check.error->message));
+            } else {
+                m_checks[playsetId] = queries::updateCheckData(check.report);
+            }
+            emit changed();
+            emit updateCheckFinished();
+            // The rows, the counts and the launch check's warning follow the answers.
+            m_backend->refreshAcquisition(true);
+        });
+}
+
+void AcquisitionController::refreshUpdateCheck() {
+    const std::int64_t playsetId = m_backend->activePlaysetId();
+    const auto found = m_checks.find(playsetId);
+    // A failed check keeps its own words; a running one brings a new result.
+    if (found == m_checks.end() || !found->second.reachable || m_checkingPlayset >= 0 ||
+        !m_backend->steamEnabled())
+        return;
+    const quint64 generation = ++m_checkGeneration;
+    m_backend->runner().call(
+        this,
+        [playsetId](AppRuntime& runtime) -> std::optional<UpdateCheckData> {
+            if (!runtime.acquisition())
+                return std::nullopt;
+            auto report = runtime.acquisition()->updateCheckReport(playsetId);
+            if (!report)
+                return std::nullopt;
+            return queries::updateCheckData(report.value());
+        },
+        [this, playsetId, generation](std::optional<UpdateCheckData> data) {
+            if (generation != m_checkGeneration || !data)
+                return;
+            m_checks[playsetId] = std::move(*data);
+            emit changed();
+        });
+}
+
+void AcquisitionController::updateMods() {
+    if (refuseWithoutSteam())
+        return;
+    const std::int64_t playsetId = m_backend->activePlaysetId();
+    if (playsetId < 0)
+        return;
+    runUpdateOutcome(tr("Could not update the mods"), tr("Updates requested"),
+                     [playsetId](AppRuntime& runtime) -> Result<services::UpdateOutcome> {
+                         if (!runtime.acquisition())
+                             return makeError(ErrorCode::ProviderUnavailable,
+                                              "Workshop downloads are off.");
+                         return runtime.acquisition()->acquireUpdates(playsetId);
+                     });
+}
+
+void AcquisitionController::updateMod(const QString& providerId) {
+    if (refuseWithoutSteam())
+        return;
+    const std::int64_t playsetId = m_backend->activePlaysetId();
+    if (playsetId < 0 || providerId.isEmpty())
+        return;
+    runUpdateOutcome(
+        tr("Could not update the mod"), tr("Update requested"),
+        [playsetId, id = utf8(providerId)](AppRuntime& runtime) -> Result<services::UpdateOutcome> {
+            if (!runtime.acquisition())
+                return makeError(ErrorCode::ProviderUnavailable, "Workshop downloads are off.");
+            return runtime.acquisition()->acquireUpdates(playsetId, {id});
+        });
+}
+
+void AcquisitionController::reinstallMod(const QString& providerId) {
+    if (refuseWithoutSteam())
+        return;
+    const std::int64_t playsetId = m_backend->activePlaysetId();
+    if (playsetId < 0 || providerId.isEmpty())
+        return;
+    runUpdateOutcome(
+        tr("Could not download the mod again"), tr("Downloading again"),
+        [playsetId, id = utf8(providerId)](AppRuntime& runtime) -> Result<services::UpdateOutcome> {
+            if (!runtime.acquisition())
+                return makeError(ErrorCode::ProviderUnavailable, "Workshop downloads are off.");
+            return runtime.acquisition()->reinstall(playsetId, id);
+        });
+}
+
+void AcquisitionController::reinstallJob(int jobId) {
+    if (refuseWithoutSteam())
+        return;
+    runUpdateOutcome(tr("Could not download the mod again"), tr("Downloading again"),
+                     [jobId](AppRuntime& runtime) -> Result<services::UpdateOutcome> {
+                         if (!runtime.acquisition())
+                             return makeError(ErrorCode::ProviderUnavailable,
+                                              "Workshop downloads are off.");
+                         return runtime.acquisition()->reinstallJob(jobId);
+                     });
 }
 
 } // namespace pmm::app

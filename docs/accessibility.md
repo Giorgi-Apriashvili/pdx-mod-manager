@@ -57,6 +57,16 @@ what is still missing.
 - When **Recover** or **Discard this record** goes away while it has the
   focus (its banner closes after a recovery or a discard, or the discard link
   once it was used), the focus moves to the mod list.
+- In the Downloads area, **Update mods** goes away once its updates are
+  queued, and the check's **Retry** while a check runs. When one of them had
+  the focus, the focus moves to **Check for mod updates**, and stays in the
+  actions column.
+- A download job's **Retry** goes away once the job runs again, and its
+  **Re-download from scratch…** once the re-download is queued (also when
+  the focus comes back to it as its confirmation closes). When one of them
+  had the focus, the focus moves to the job's next action (its manual
+  Workshop page link), else to **Check for mod updates**, else to the job
+  list.
 - When the table header hides while one of its column edges has the focus
   (a new or emptied playset, or no playset), the focus moves to the mod list,
   or without a playset to the first control of the mods column, so arrow keys
@@ -162,8 +172,9 @@ banner's "Show load order" link restores the view.
 | Settings | the selected theme option |
 | Playset history | Close (Shift+Tab reaches the Restore buttons) |
 | Locate installation | the first Browse… button |
-| Remove from playset (confirmation) | the confirm button; the question is its description |
-| Discard an interrupted change (confirmation) | Cancel, so Enter changes nothing; the question, with the files, is its description |
+| Remove from playset (confirmation) | the confirm button; the question and the note below it are its description |
+| Re-download from scratch (confirmation) | Cancel, so Enter changes nothing; what happens, with the note on playsets and other games, is the description of both buttons |
+| Discard an interrupted change (confirmation) | Cancel, so Enter changes nothing; the question, with the files and the note below them, is its description |
 | New / duplicate / rename playset | the name field, with the text selected |
 | Keyboard shortcuts | the list |
 
@@ -201,14 +212,16 @@ through the `Accessible` attached properties.
 
 | Element | Role | Name (description) |
 | --- | --- | --- |
-| Mod row | list item | "3. *name*, enabled, Workshop, Ready" (warnings) |
+| Mod row | list item | "3. *name*, enabled, Workshop, Ready" (warnings); "…, Update available", "…, Updating 45 %" for updates |
 | Check box in a row | check box, toggle action | "Enable *name*" |
 | Warning glyph in a row | indicator | "Warnings for *name*" (the warnings) |
 | Toolbar | buttons | "Add mods…", "Enable selected mods", "Disable selected mods", "Remove selected mods from playset", "Move up in load order", "Move down in load order", "Undo", "Redo" (tool tips with shortcuts) |
 | Icon-only buttons | buttons | "Undo", "Redo", "Playset history", "More playset actions", "Refresh", "Dismiss notification", "Close (Esc)" |
 | Playset actions | buttons | "New playset…", "Duplicate playset…", "Rename playset…", "Delete playset", "Restore deleted playset" |
 | Selected mod details | static text | "Status: Ready", "Workshop ID: 1234", "Tags: Overhaul, Graphics", "*dependency*: *state*"; in every game but Victoria 3, for a mod that names mods, the heading "Loads after", its note ("Hearts of Iron IV loads this mod after these mods when they are enabled. It does not need them.", or "Stellaris does not need these mods. This mod names them to load before it when they are enabled.") and "*mod*: Not installed; not needed" |
-| Download job | list item, progress bar, button | "*name*, Downloading 45 %"; "*name*: Downloading 45 %" (value); "Retry download of *name*" |
+| Download job | list item, progress bar, button, link | "*name*, Downloading 45 %"; "*name*: Downloading 45 %" (value); "Retry download of *name*", "Retry update of *name*", "Retry re-download of *name*"; "Re-download *name* from scratch…" (a failed update) |
+| Workshop updates in Downloads | buttons, static text, link | "Check for mod updates" (asks the Steam Workshop, sends only the Workshop IDs), "Update mods" (the tool tip counts the mods); the result line "Checked 12 Workshop mods: 3 have an update." ("Warning: The Steam Workshop could not be reached, …" when it failed); "Check for mod updates again" (Retry) |
+| Mod list context menu | menu items | "Update from Workshop" (only on a row with an update), "Re-download from scratch…" (only on an installed Workshop mod); while not listed, the arrow keys skip them |
 | History entry | list item, button | "*playset*, *reason*, *time*"; "Restore *playset* (*reason*, *time*)" |
 | Banner | group | "Warning. *title*. *text*" (actions inside the group) |
 | Update banner | group, button, link | "Paradox Mod Manager 1.2.3 is available." (and why this session cannot install); "Update and restart" or "Open release page"; "Not now" |
@@ -248,6 +261,9 @@ Changes that happen without a focus change are spoken with
   pixels", polite); the separator's name changes with it;
 - each step of an update in Settings ("Version 1.2.3 is available.", errors),
   not every percent of the download;
+- the result of **Check for mod updates** ("Checked 12 Workshop mods: 3 have
+  an update.", politely; a check that could not reach the Workshop
+  interrupts), which is also scrolled into view;
 - the update banner when it appears and at each step of the update it started,
   politely (its errors interrupt); the progress is not part of its text.
 
@@ -262,7 +278,8 @@ one from the keyboard returns focus to the mod list.
 
 Mod and job states use distinct glyph shapes (check, clock, download arrow,
 circle with exclamation mark, circle with cross, no-entry sign, question
-mark, triangle) next to their text (`Theme.statusIcons`). The enabled column
+mark, triangle, and a circle with an arrow up for a Ready mod with an update
+on the Workshop) next to their text (`Theme.statusIcons`). The enabled column
 shows a check mark, and the import preview a check mark or a dash. Banners
 and messages pair an icon with text, and their accessible names start with
 "Error", "Warning" or "Problem". The footer counts are text.
@@ -375,7 +392,8 @@ playset from the game's configuration and the light theme, but a made-up
 Stellaris installation with invented mods instead of the development
 machine's: `scripts/app-screenshots.py` makes them
 ([`app.md`](app.md#hidden-verification-switches)). They were last taken on
-2026-11-21, on the 2560x1440 screen at 100 %: 2100x1290 pixels, and at 2 again
+2026-11-22 (with the disabled **Check for mod updates** of a read-only
+session), on the 2560x1440 screen at 100 %: 2100x1290 pixels, and at 2 again
 the window limited to the screen, 2800x1422.
 
 ![Real application with made-up mods at scale factor 1.5](screenshots/a11y-scale-150.png)
@@ -386,7 +404,7 @@ the window limited to the screen, 2800x1422.
 
 Automated:
 
-- `ui/dev/preview.sh --test` (fake backend, 33 tests; ctest runs them too, as
+- `ui/dev/preview.sh --test` (fake backend, 44 tests; ctest runs them too, as
   `pmm_ui_preview` with the label `ui-preview`, so `scripts/check.sh` and the
   release's CI include them): besides the editing
   tests, Tab visits the actions, games and mods columns in that order and
@@ -411,6 +429,15 @@ Automated:
   column scrolls; in a squeezed window, divider keys and drags that would
   widen a column store nothing and the chosen widths come back; a long
   confirmation scrolls from the keyboard and leaves room for its scroll bar.
+  Since 2026-11-22 (updates of installed Workshop mods): the "Update
+  available" rows, their glyph and accessible name, and the "With updates"
+  filter; **Check for mod updates** and its result line, **Update mods**
+  from the keyboard giving its focus to the check button once it goes, a
+  failed check whose Retry does the same; the context menu's "Update from
+  Workshop" and "Re-download from scratch…" with the keyboard, which skips
+  them where they are not listed, and the confirmation, whose Enter on the
+  focused Cancel changes nothing; "Re-download from scratch…" on a failed
+  update job; everything disabled without Steam.
 - `ctest --preset debug -R Pmm.Ui` (real Backend, offscreen window, key events
   through `QTest`): Tab order, F6, Alt+Up/Down and Ctrl+Up/Down with undo, Esc
   on the confirmation, the context menu and the shortcuts list with focus
@@ -429,7 +456,12 @@ Automated:
   the header row inside the mods column, the icon-only toolbar, the
   footer's "Showing 1 of 2" inside the column, the scrolling actions column
   with Play scrolled into view by Tab), and restoring a window saved at the
-  smallest size.
+  smallest size. The `[qml][updates]` cases (2026-11-22): **Check for mod
+  updates** against the local Web API stub, its result line announced and
+  the row, the counts, the empty-state text and Play's warning following it,
+  the context menu's items, the confirmation; a failed check whose Retry
+  hands its focus to the check button; and a session without Steam, where
+  the actions are disabled and nothing is sent.
 - `python3 ui/dev/check_contrast.py`: 138 colour pairs.
 
 UI Automation inspection on 2026-10-29 (Windows `System.Windows.Automation`

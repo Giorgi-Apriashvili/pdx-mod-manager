@@ -66,6 +66,18 @@ bool ModDetails::canOpenFolder() const {
     return r && r->canOpenFolder;
 }
 
+bool ModDetails::updateAvailable() const {
+    const ModRowData* r = current();
+    return r && r->updateAvailable;
+}
+
+bool ModDetails::canReinstall() const {
+    const ModRowData* r = current();
+    // Installed (it has a content folder), and no job is changing it.
+    return r && r->source == QLatin1String(source::SteamWorkshop) && r->canOpenFolder &&
+           r->status != QLatin1String("pending") && r->status != QLatin1String("downloading");
+}
+
 QVariantList ModDetails::dependencies() const {
     QVariantList out;
     const ModRowData* r = current();

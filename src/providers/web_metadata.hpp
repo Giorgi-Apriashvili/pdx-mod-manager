@@ -2,16 +2,19 @@
 
 // Request builder and response parser for the public, key-less Steam Web API
 // call ISteamRemoteStorage/GetPublishedFileDetails/v1. It is used to show
-// names/sizes for missing Workshop items and to verify that an imported id
-// really belongs to the expected game before acquisition starts. The HTTP
-// request itself is performed by the application layer (Qt networking); this
-// module only builds the form body and parses the JSON reply.
+// names/sizes for missing Workshop items, to verify that an imported id
+// really belongs to the expected game before acquisition starts, and, on the
+// user's request, to check installed items for newer Workshop versions
+// (compareWithWorkshop()). The HTTP request itself is performed by the
+// application layer (Qt networking); this module only builds the form body
+// and parses the JSON reply.
 //
 // Observed reply shape (2026-10-29): "file_size" is a string, app ids,
 // timestamps, "visibility" and "banned" are numbers, and unknown/hidden items
 // come back as {"publishedfileid":"…","result":9}. The parser accepts numbers
 // and numeric strings for every numeric field to tolerate either form.
 
+#include "core/model.hpp"
 #include "core/result.hpp"
 
 #include <cstddef>
@@ -48,6 +51,10 @@ struct WorkshopItemMetadata {
     std::uint64_t fileSize = 0;
     std::int64_t timeCreated = 0; // unix seconds
     std::int64_t timeUpdated = 0; // unix seconds
+    // "hcontent_file": the id of the current content manifest (very likely
+    // what appworkshop_<app>.acf calls "manifest"; not verified). Empty when
+    // missing or "0".
+    std::string contentManifest;
     bool banned = false;
     std::string banReason;
     int visibility = 0; // WorkshopVisibility value as reported
@@ -73,5 +80,37 @@ WorkshopItemVerdict classifyWorkshopItemForGame(const WorkshopItemMetadata& item
 // detail; banned -> ItemUnavailable; consumer_app_id mismatch -> WrongGame.
 Status validateWorkshopItemForGame(const WorkshopItemMetadata& item,
                                    std::string_view expectedAppId);
+
+// How an installed Workshop item compares with the Web API's answer about it.
+enum class WorkshopUpdateVerdict {
+    UpToDate,        // the Workshop has no version newer than the installed one
+    UpdateAvailable, // time_updated is later than the installed version's
+    // Not compared: the installed version's time is not Steam's record of it
+    // (InstalledMod::contentTimeFromSteam false: the folder's modification
+    // time is the local download time), or the reply has no time_updated.
+    NotCompared,
+    Refused, // the Workshop refuses the item for the game (validateWorkshopItemForGame())
+};
+const char* toString(WorkshopUpdateVerdict verdict) noexcept; // "up_to_date", ...
+
+struct WorkshopUpdateComparison {
+    WorkshopUpdateVerdict verdict = WorkshopUpdateVerdict::NotCompared;
+    std::int64_t installedTimeUpdated = 0; // unix seconds; 0 when not Steam's record
+    std::int64_t workshopTimeUpdated = 0;  // unix seconds; 0 when unknown
+    std::string installedManifest;         // acf manifest; empty when unknown
+    std::string workshopManifest;          // hcontent_file; empty when unknown or "0"
+    // Refused / NotCompared: why, as a sentence for the user. Refused also
+    // says that the installed copy stays.
+    std::string message;
+    ErrorCode refusal = ErrorCode::ItemUnavailable; // Refused: ItemUnavailable or WrongGame
+};
+
+// Compares `installed` (its contentUpdatedAt when it is Steam's record) with
+// the Workshop's time_updated for the game with Steam AppId `expectedAppId`.
+// Only the times decide: the manifests are recorded, not compared, until it
+// is confirmed that hcontent_file and the acf manifest name the same thing.
+WorkshopUpdateComparison compareWithWorkshop(const InstalledMod& installed,
+                                             const WorkshopItemMetadata& item,
+                                             std::string_view expectedAppId);
 
 } // namespace pmm::providers

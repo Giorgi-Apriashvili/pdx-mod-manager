@@ -29,6 +29,10 @@ InstalledMod workshopMod(const std::string& id, const std::string& name,
         ("ugc_" + id + ".mod");
     mod.descriptorRef = "mod/ugc_" + id + ".mod";
     mod.contentUpdatedAt = 1761000000;
+    mod.contentTimeFromSteam = true;
+    mod.workshopManifest = "1100000000000000201";
+    mod.latestManifest = "1100000000000000202";
+    mod.latestUpdatedAt = 1762000000;
     return mod;
 }
 
@@ -71,6 +75,10 @@ void checkEqual(const InstalledMod& a, const InstalledMod& b) {
     CHECK(a.state == b.state);
     CHECK(a.problems == b.problems);
     CHECK(a.contentUpdatedAt == b.contentUpdatedAt);
+    CHECK(a.contentTimeFromSteam == b.contentTimeFromSteam);
+    CHECK(a.workshopManifest == b.workshopManifest);
+    CHECK(a.latestManifest == b.latestManifest);
+    CHECK(a.latestUpdatedAt == b.latestUpdatedAt);
     CHECK(a.fingerprint == b.fingerprint);
 }
 

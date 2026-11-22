@@ -325,6 +325,23 @@ TEST_CASE("Stellaris scan reports broken and pending mods per mod", "[games][ste
 
     const InstalledMod& outdated = f.mod(mods, "1000000005");
     CHECK(outdated.state == InstallState::NeedsUpdate);
+    // Steam's record of the installed version and of the newest one it knows.
+    CHECK(outdated.contentTimeFromSteam);
+    CHECK(outdated.contentUpdatedAt == 1709000000);
+    CHECK(outdated.workshopManifest == "1100000000000000101");
+    CHECK(outdated.latestManifest == "1100000000000000103");
+    CHECK(outdated.latestUpdatedAt == 1709500000);
+    const InstalledMod& current = f.mod(mods, "1000000001");
+    CHECK(current.state == InstallState::Ready);
+    CHECK(current.contentTimeFromSteam);
+    CHECK(current.latestManifest == current.workshopManifest);
+    // Installed without details: Steam's time, but no newer version known.
+    const InstalledMod& noDetails = f.mod(mods, "1000000003");
+    CHECK(noDetails.contentTimeFromSteam);
+    CHECK(noDetails.latestManifest.empty());
+    CHECK(noDetails.latestUpdatedAt == 0);
+    // Not in the manifest at all: the folder's time, which is never compared.
+    CHECK_FALSE(f.mod(mods, "1000000006").contentTimeFromSteam);
 
     // Registered Workshop items whose content is in no library are not
     // installed (whether Steam is downloading them or not): they read as

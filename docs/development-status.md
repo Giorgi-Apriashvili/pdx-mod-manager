@@ -38,6 +38,7 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | Play without a playset (for 0.1.1) | `src/services/launch_service`, `src/app/core/view_data`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/vanilla-launch`. Owner's decision of 2026-11-06: spec section 7 says "validate the installation, active playset, ..."; no playset now means a launch without mods instead of a blocker. Every other check still runs; the empty mod list is written as one journaled transaction labelled `launch <game> without mods`, which Restore and Recover handle like any launch. Tested with fakes only; **not run against a real game** (a live run needs the owner's approval) | |
 | Play requires the Steam client for Steam installations (for 0.1.1) | `src/services/launch_service`, `src/platform/steam`, `src/app/gui/backend`, `src/app/core/view_data`, [`architecture-services.md`](architecture-services.md#launchservice-launch_servicehpp), [`app.md`](app.md), [`ui-contract.md`](ui-contract.md#launchcontroller-qobject) | done 2026-11-06 on `agent/require-steam`. Owner's decision of 2026-11-06: games could be started directly with Steam closed; Play now requires the Steam client for Steam installations (`DistributionSource::Steam`: found through Steam's app manifest, or located by hand inside a Steam library). A copy from another store located by hand is not blocked. The check uses the process list the running-instance check already reads (`steam.exe`, or the pid in `HKCU\Software\Valve\Steam\ActiveProcess` without a readable name); an unreadable list is a warning. While Steam, the game or the Paradox launcher blocks, the Backend re-checks every 3 s without the write probes, so Play follows on its own. Tested with fakes only; **not run against a real game or Steam** (a live run needs the owner's approval). Limitations: whether Steam runs is detected, whether it is signed in is not; the process list covers every Windows session, so another signed-in user's Steam counts as running | |
 | Discard an interrupted change that Recover cannot undo (for 0.1.2) | `src/platform/file_transaction`, `src/services/launch_service`, `src/app/gui/launch_controller`, `ui/panes/PlaySection.qml`, `ui/dialogs/ConfirmDialog.qml`, [`troubleshooting.md`](troubleshooting.md#recover-reports-a-missing-or-damaged-backup), [ADR 0005](adr/0005-journaled-config-writes.md) | done 2026-11-07 on `agent/discard-interrupted`. Recovery skips the backups of targets already original (or absent and absent before); `abandon()` gives up an interrupted transaction (`abandoned`, no file changed, folder and backups kept, pruned like any finished one but counted from when it was abandoned); after a Recover that failed with `IntegrityCheckFailed` the banner offers "Discard this record", and Play is available afterwards when nothing else blocks. Tested with fakes only; **not run against a real game** | |
+| Updates of installed Workshop mods (for 0.3.1) | `src/providers/{acquisition,web_metadata,helper_protocol}`, `tools/steam-helper`, `src/services/acquisition_coordinator`, `src/persistence` (schema 3), `src/app/core/{service_runner,view_data}`, `src/app/gui/{acquisition_controller,mod_list_model,mod_filter_model,jobs_model,mod_details}`, `ui/panes/{DownloadsSection,JobDelegate,ModRow,ModsPane}.qml`, [`steam-workshop.md`](steam-workshop.md), [`app.md`](app.md#checking-installed-workshop-mods-for-updates), [`ui-contract.md`](ui-contract.md) | done 2026-11-22 on `agent/workshop-updates`, not merged (item 17). The owner's request and decisions of 2026-11-21: **Check for mod updates** asks the Steam Web API (ids only, on request) and Steam's own `appworkshop_<app>.acf` counts without any network; **Update mods** and **Update from Workshop** in the Downloads area and the right-click menu; Play warns about updates and waits only while one runs; **Re-download from scratch…** unsubscribes, subscribes again and downloads after a confirmation. Tested with fakes, the fake Steam library and the local Web API stub only; **live verification pending the owner's approval** | [steam-workshop.md, section 11, item 4](steam-workshop.md#11-not-verified-yet-and-how-to-verify-it) |
 | QML user interface | `ui/`, [`ui/README.md`](../ui/README.md) | done; data shown as plain text (checked by a source test) | screenshots in `docs/screenshots/` |
 | Accessibility and high-DPI | `ui/`, [`accessibility.md`](accessibility.md) | done except the gaps listed there; 2026-11-12 on `agent/accessibility-6`, merged into `main` (`8e4c7da`) for 0.2.0: the smallest window fits 1920x1080 at 200 %, keyboard resizing of the columns, Play focusable while blocked, preview tests in ctest | UI Automation inspection, contrast check, scale factors 1.5 and 2, captures of the smallest window at 100 % and 200 % |
 | Windows package (ZIP) | `cmake/Packaging.cmake`, `packaging/`, [`packaging.md`](packaging.md) | verified from an extracted copy without Qt or Visual Studio | [packaging](evidence/packaging-2026-10-29.md) |
@@ -47,6 +48,81 @@ one. Headless checks use the hidden verification switches of `pmm-app`
 | `Release` workflow | `.github/workflows/release.yml`, [`releasing.md`](releasing.md) | published 0.1.0 on 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42197165030)); dry runs passed on 2026-10-30 and 2026-11-06. The contract checks and the extended smoke test passed in the dry run of 2026-11-06 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/42164236292)): 57 of 57 installer checks, including the update run against a held mutex | [installer](evidence/installer-2026-10-30.md#release-workflow-what-could-be-checked) |
 | README, ADRs, support matrix, validation procedure, troubleshooting, changelog | repository root, `docs/` | up to date with this handoff | |
 | In-game probe mods | `tools/probe-mods/probe_mods.py` | done; used in the live validation of 2026-10-30 (Stellaris, EU4). `--game ck3` (CK3 event syntax, 2026-11-13) checked by creating the probes into a scratch folder, then used for the CK3 probe run of 2026-11-13. `--game vic3` (2026-11-20: probe folders with `metadata.json`, `--no-shared`, `--no-game-custom-data`, `analyze` of the rotating debug logs) checked in scratch folders, then used for the Victoria 3 probe run of 2026-11-21. `--game hoi4` (2026-11-21: `add_namespace`, no BOM, LF; `rename` for the runs 3 and 4 of its procedure; `analyze --game hoi4` reads `system.log`) checked in scratch folders, then used for the Hearts of Iron IV probe run of 2026-11-21 (all four runs; its `precedence` label names the winner's place in the list, which is not Hearts of Iron IV's rule) | [CK3 probe run](evidence/2026-11-13-ck3-load-order.md), [Victoria 3 probe run](evidence/2026-11-21-vic3-load-order.md), [Hearts of Iron IV probe run](evidence/2026-11-21-hoi4-load-order.md) |
+
+## Test status (2026-11-22, updates of installed Workshop mods, `agent/workshop-updates`)
+
+Local runs only, with fakes, the fake Steam library, the local Web API stub
+and new scratch folders; no game, no launcher and no Steam client was
+started, `pmm-steam-helper` never ran against the real Steam client, nothing
+was subscribed, unsubscribed or downloaded, the real Web API was not asked,
+and nothing under Steam, the game folders or `Documents/Paradox Interactive`
+was written. Item 17 below.
+
+- `debug` preset: **699/699 tests pass** (656 on `main`), by label:
+  pmm_core_tests 64, pmm_persistence_tests 75, pmm_providers_tests 75,
+  pmm_services_tests 117, pmm_app_tests 133, the others as before
+  (pmm_sharing_tests 70, pmm_platform_tests 59, pmm_games_tests 110), and
+  ui-preview 1 (44 test functions, 38 on `main`).
+- The window's part (`b039536` to `6763714`): 2 models tests (the row
+  role, the counts, the "updates" filter and status sort, the details'
+  offers; the job kind, error code and re-download offer), 3
+  `[qml][updates]` cases (Check for mod updates against the local stub,
+  with its result line, announcement, the rows, counts, empty-state text,
+  Play's warning, the context menu and the confirmation, and a repeat that
+  sends nothing; a check that cannot reach the Workshop, with Retry and its
+  focus; a session without Steam, where everything is disabled and nothing
+  is sent while Steam's own record still shows "Update available"), a
+  source test that keeps "Check for updates" (Settings) apart from "Check
+  for mod updates" and the update actions, and 6 preview tests
+  (`test_c1` to `test_c6`).
+- Without the change: against `main`'s production QML the 3
+  `[qml][updates]` cases and the label test fail, and so do the 6 preview
+  tests (the other 38 pass); against `main`'s preview
+  fakes the 6 preview tests fail; with `main`'s `mod_filter_model.cpp` and
+  `jobs_model.cpp` both models tests fail.
+- Screenshots: the preview's captures differ from `main`'s only by the two
+  rows with "Update available", the failed update job ("2 failed") and
+  the job list's scroll bar, so the twelve captures that show them were
+  replaced (`game-not-found.png` kept); a second run differed from the
+  first only by scattered pixels and a hover state. The real
+  application's captures (`scripts/app-screenshots.py`) differ only by the
+  disabled **Check for mod updates** of a read-only session and were
+  replaced (`app-import-preview.png` and `app-settings-updates.png` kept);
+  a second run matched them except for a text cursor.
+- `scripts/check.sh --full` on `ccb6ea0`: passed in 12 min 49 s (ASan and
+  clang-cl with UBSan 565/565 each, the update contract's 112 checks,
+  clang-tidy on the 43 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 699/699). The commit
+  after it changes this file only.
+- Review fixes (`3c57a40` to `6918942`): a re-download stores an
+  "unsubscribing" step before its unsubscribe goes out and always
+  subscribes again after a confirmed one (also while Steam still lists
+  the subscription), never subscribes an item that was not subscribed,
+  and fails with "Steam kept the installed files" instead of reporting
+  "Downloaded again" when nothing shows a fresh download; an update that
+  finds Steam already downloading makes its first request only after that
+  download; the coordinator writes step and target changes at once, lets
+  a re-download past its unsubscribe finish without a Web API verdict and
+  words an unconfirmed one from its step, resumes updates parked while
+  the game ran, keeps a cancelled re-download that left the mod
+  unsubscribed listed, and drops failed updates Steam completed by
+  itself; the update check tells mods installed after it from unanswered
+  ones; the launch blockers drop a wrong "other" and explain stored jobs
+  in sessions without Workshop downloads; job actions that hide with the
+  focus hand it on. `debug` preset: **716/716 tests pass**
+  (pmm_core_tests 65, pmm_providers_tests 79, pmm_services_tests 129, the
+  others as above; ui-preview 1 with 44 test functions). 12 new services
+  cases, 4 new reducer cases and 1 new readiness case, plus changed
+  checks; each of the 10 services and reducer behaviours was switched off
+  once and its test failed, and `test_c5` fails without the focus
+  handling. No committed screenshot shows a changed text (the failed
+  update job is scrolled out of view), so none was replaced; a new run
+  differed only by an animation phase and focus timing.
+  `scripts/check.sh --full` on `6918942`: passed in 13 min 27 s (ASan
+  and clang-cl with UBSan 582/582 each, the update contract's 112 checks,
+  clang-tidy on the 43 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 716/716). The commit
+  after it changes this file only.
 
 ## Test status (2026-11-21, dependencies not required, `agent/dependencies-optional`)
 
@@ -953,6 +1029,7 @@ Still open, each needing the user's approval:
 | Hearts of Iron IV: the file-name rule beyond two local mods | measured with two local mods and two file-name comparisons; Workshop items (`mod/ugc_<id>.mod`, so 9- and 10-digit ids compared as strings) inferred; case, non-ASCII names, `dependencies`, `replace_path`, per-object merging and a launcher-started game not tested ([Hearts of Iron IV adapter](games/hoi4.md#outstanding-validation)) |
 | Hearts of Iron IV `supported_version` `"*"`, `"1.*"` and `"1.20.0"` | not tried; `"1.*.*"` (invalid) and `"1.20"` (not reported) are settled for 1.20.0.0 |
 | Hearts of Iron IV steps 4 and 6-9 (Workshop subscribe and download for app 394360), and `userdir.txt` or an absolute `gameDataPath` in the game | not run; the latter needs a write to the installation folder |
+| Updates and re-downloads of installed Workshop items (since 2026-11-22) | tested with fakes, the fake Steam library and a local Web API stub only: whether `DownloadItem` fetches a version Steam has not noticed yet, whether the Web API's `time_updated` matches the acf, and whether Steam removes an unsubscribed item while the helper session runs are open ([steam-workshop.md](steam-workshop.md#11-not-verified-yet-and-how-to-verify-it), item 4). It downloads into, and a re-download unsubscribes from, the owner's account |
 
 **EU4 and Hearts of Iron IV order:** these two games do not use the playset
 order for file overrides (EU4: the mod whose name sorts first wins; Hearts
@@ -1309,6 +1386,50 @@ Packaging ([`packaging.md`](packaging.md)):
     contract's 112 checks, clang-tidy on the 12 C++ files changed since
     `origin/main` without findings, the `ci` preset from a fresh checkout
     656/656). The commit after it changes this file only. Not merged.
+17. Done 2026-11-22 on `agent/workshop-updates` (the owner's request "We
+    need a button for re-downloading mods that have been updated on
+    Workshop." and decisions of 2026-11-21; a 0.3.1 release follows and is
+    not part of this item). **Check for mod updates** in the Downloads area
+    asks the Steam Web API about the active playset's installed Workshop
+    mods, enabled and disabled (item ids only, batches of 100, only when
+    pressed, answers kept for the session and not asked again for 5
+    minutes), after a rescan that re-reads Steam's own
+    `appworkshop_<app>.acf`, which also counts without any network (with a
+    guard for a `latest_manifest` of "0"); only `time_updated` against the
+    acf's `timeupdated` decides, and mods whose time came from the folder
+    are not compared. A Ready mod with an update stays Ready and
+    launchable, says "Update available" with a glyph of its own, has a
+    filter ("With updates") and is counted in Play's warnings. **Update
+    mods** (every mod with an update, enabled and disabled) and **Update
+    from Workshop** (right-click) queue update jobs: they never subscribe,
+    request the download also when Steam calls the item current, end only
+    when the install time reaches the Workshop's, ask once more after 30 s
+    and then fail with `update_not_seen` ("Steam has not picked up this
+    update yet. ..."), with Retry. **Re-download from scratch…** (right-click
+    on an installed Workshop mod, and on a failed update job), after a
+    confirmation, unsubscribes through the helper's new `unsubscribe`
+    command (`UnsubscribeItem`, call result 1315), waits until Steam drops
+    the subscription, subscribes again, downloads and verifies; a failure
+    after the unsubscribe says that the mod is now (or may be) unsubscribed,
+    and Retry subscribes again. It never adds a subscription the account did
+    not have, stores its step before each request, and says so when Steam
+    kept the installed files instead of reporting "Downloaded again".
+    Updates and re-downloads are refused while the game runs, wait (and
+    resume by themselves) while it runs, and Play waits while one of the
+    game runs; a failed update that Steam completes by itself later is no
+    longer reported. Jobs keep their kind,
+    target and re-download step (schema 3, `v3_sample.sql`). Sessions
+    without Steam (`--no-steam`, read-only) disable the actions and send
+    nothing; Steam's own record still shows. Documented in
+    [`steam-workshop.md`](steam-workshop.md), [`app.md`](app.md#checking-installed-workshop-mods-for-updates),
+    [`ui-contract.md`](ui-contract.md), [`accessibility.md`](accessibility.md),
+    [`troubleshooting.md`](troubleshooting.md#steam-has-not-picked-up-the-update),
+    the support matrix, the README and the changelog. Tested with fakes,
+    the fake Steam library, a hand-written helper transcript and the local
+    Web API stub only (test status above). **Live verification pending the
+    owner's approval** (the open questions L1-L9 and the re-download's in
+    [`steam-workshop.md`](steam-workshop.md#11-not-verified-yet-and-how-to-verify-it),
+    item 4). Not merged.
 
 ## Working rules
 

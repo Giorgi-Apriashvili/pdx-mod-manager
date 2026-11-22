@@ -51,10 +51,13 @@ struct ModRowData {
     QString sourceLabel;
     QString providerId;
     QString status;
-    QString statusText;
+    QString statusText; // "Update available" for a Ready row with an update
     QStringList warnings;
     double progress = -1.0;
     bool blocking = false;
+    // Ready, and a newer version is on the Workshop (Steam's own record, or
+    // this session's update check). Never blocks Play.
+    bool updateAvailable = false;
     // Details panel
     QString version;
     QString supportedVersion;
@@ -75,6 +78,8 @@ struct CountsData {
     int missing = 0;
     int warning = 0;
     int blocking = 0;
+    int updates = 0;        // rows with updateAvailable, enabled or not
+    int updatesEnabled = 0; // ... of them enabled
 };
 
 struct UndoData {
@@ -126,12 +131,42 @@ struct JobRowData {
     std::int64_t jobId = 0;
     QString name;
     QString providerId;
+    QString kind;  // AcquisitionKind name: "acquire", "update", "reinstall"
     QString state; // AcquisitionState name
     QString stateText;
     double progress = -1.0;
     QString errorMessage;
+    QString errorCode; // errorCodeName(), e.g. "update_not_seen"
     bool canRetry = false;
     bool canOpenFallback = false;
+    // A failed update: "Re-download from scratch..." (reinstallJob) is offered.
+    bool canReinstall = false;
+};
+
+// One installed Workshop mod in the result of "Check for mod updates".
+struct UpdateCheckItemData {
+    QString key; // "steam-workshop:<id>", as ModRowData::key
+    QString name;
+    QString providerId;
+    // providers::WorkshopUpdateVerdict name ("up_to_date", "update_available",
+    // "not_compared", "refused"), "unanswered", or "not_checked" (installed
+    // after the last check)
+    QString verdict;
+    bool updateAvailable = false;
+    bool enabled = true;
+    QString message;
+};
+
+// The result line of "Check for mod updates" (services::UpdateCheckReport).
+struct UpdateCheckData {
+    bool reachable = true; // false: offer Retry
+    QString summary;       // "Checked 12 Workshop mods: 3 have an update."
+    int checked = 0;
+    int updates = 0;
+    int notCompared = 0;
+    int refused = 0;
+    int unanswered = 0;
+    std::vector<UpdateCheckItemData> items;
 };
 
 struct AcquisitionData {
@@ -205,7 +240,9 @@ GameContextData gameContext(AppRuntime& runtime, const QString& game,
 // "Today 14:02", "Yesterday 09:15", "12 Oct 2026".
 QString relativeTime(std::int64_t unixMs);
 QString historyReasonText(const std::string& reason);
+// "Ready", "Update available", "Updating 45 %", "Re-downloading", "Missing", ...
 QString statusTextFor(const EntryReadiness& readiness, const std::optional<AcquisitionJob>& job);
+UpdateCheckData updateCheckData(const services::UpdateCheckReport& report);
 // The view state as the core reorder rules see it.
 ViewFilter toViewFilter(const QString& search, const QString& statusFilter,
                         const QString& sortMode);

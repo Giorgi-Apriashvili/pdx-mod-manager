@@ -9,8 +9,13 @@
 //
 // The helper prints a "ready" event first (it carries the protocol version),
 // then answers commands. Commands only ever carry validated published-file
-// ids; the protocol deliberately has no way to pass paths, URLs, or to
-// unsubscribe/delete items. See docs/steam-workshop.md for the full contract.
+// ids; the protocol deliberately has no way to pass paths or URLs, or to
+// delete anything. "unsubscribe" (one item) exists only for the re-download
+// from scratch that the user asks for per mod (AcquisitionKind::Reinstall);
+// Steam then removes the item's files itself. It was added to version 1
+// without a version change: helper and application ship together, and an
+// older helper answers it with an "unknown_command" error. See
+// docs/steam-workshop.md for the full contract.
 
 #include "core/result.hpp"
 #include "providers/workshop_item.hpp"
@@ -47,12 +52,17 @@ struct DownloadCommand {
     bool highPriority = true;
     bool operator==(const DownloadCommand&) const = default;
 };
+// ISteamUGC::UnsubscribeItem; answered by an "unsubscribe_result" event.
+struct UnsubscribeCommand {
+    std::string id;
+    bool operator==(const UnsubscribeCommand&) const = default;
+};
 struct QuitCommand {
     bool operator==(const QuitCommand&) const = default;
 };
 
-using HelperCommand =
-    std::variant<PingCommand, StateCommand, SubscribeCommand, DownloadCommand, QuitCommand>;
+using HelperCommand = std::variant<PingCommand, StateCommand, SubscribeCommand, DownloadCommand,
+                                   UnsubscribeCommand, QuitCommand>;
 
 // One line of JSON without the trailing newline. Ids are not re-validated
 // here; decodeCommand() is the gatekeeper on the helper side.
@@ -114,6 +124,14 @@ struct DownloadRequestedEvent {
     bool operator==(const DownloadRequestedEvent&) const = default;
 };
 
+// The call result of UnsubscribeItem (collected by polling, like subscribe's).
+struct UnsubscribeResultEvent {
+    std::string id;
+    bool ok = false;
+    int result = 0; // EResult; see classifySteamResult()
+    bool operator==(const UnsubscribeResultEvent&) const = default;
+};
+
 struct PongEvent {
     bool operator==(const PongEvent&) const = default;
 };
@@ -126,8 +144,9 @@ struct ErrorEvent {
     bool operator==(const ErrorEvent&) const = default;
 };
 
-using HelperEvent = std::variant<ReadyEvent, ItemStateEvent, SubscribeResultEvent,
-                                 DownloadRequestedEvent, PongEvent, ErrorEvent>;
+using HelperEvent =
+    std::variant<ReadyEvent, ItemStateEvent, SubscribeResultEvent, DownloadRequestedEvent,
+                 UnsubscribeResultEvent, PongEvent, ErrorEvent>;
 
 std::string encodeEvent(const HelperEvent& event);
 

@@ -1,6 +1,8 @@
 # Paradox Mod Manager — Implementation Specification
 
 > Amended 2026-10-30: the product is Windows only; the reason is in [docs/adr/0009-windows-only.md](docs/adr/0009-windows-only.md).
+>
+> Note 2026-11-22 (owner's decision of 2026-11-21): "Do not redownload installed, usable content unnecessarily" (import workflow, step 5) still holds for acquisition. Installed Workshop mods are downloaded again only when the user asks for it: "Update mods", "Update from Workshop" and "Re-download from scratch…" ([docs/steam-workshop.md](docs/steam-workshop.md)); the Steam Web API is asked about installed mods only when the user presses "Check for mod updates".
 
 ## Instructions to the implementation agent
 

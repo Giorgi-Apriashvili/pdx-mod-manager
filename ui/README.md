@@ -76,7 +76,11 @@ Things the QML relies on beyond the tables in the contract:
   mod's details `dependenciesHeading` ("Dependencies", or "Loads after" for
   a mod that names mods in a game that does not need them: every game but
   Victoria 3), `dependenciesNote` and `dependencyRow` (each listed
-  dependency).
+  dependency); for the updates of installed Workshop mods
+  `checkModUpdatesButton`, `updateModsButton`, `updateCheckLine`,
+  `updateCheckRetry`, `downloadsEmptyText`, `jobList`, `jobRetryButton` and
+  `jobReinstallLink` (in a job row), and `updateFromWorkshopItem` and
+  `reinstallItem` in the mod list's context menu (`ModsPane.rowMenu`).
 - The window's minimum size is 900x440 (it fits a 1920x1080 screen at
   200 %); `docs/accessibility.md` ("Smallest window") describes how the
   columns, the toolbar, the actions column and the dialogs adapt.
@@ -145,6 +149,14 @@ would, over Stellaris's list, since the preview has no mods of the other
 games: `"ck3"` the same as Stellaris, `"eu4"` without the warning, `"vic3"`
 as requirements ("Dependencies", "Requires …"), and `"hoi4"` four example
 mods of its own on the installed ones of rows 3, 10, 17, ….
+Rows 2 and 4 and about one Ready Workshop mod in a hundred have an update
+("Update available"); **Check for mod updates** answers after 0.4 s from the
+fake list (`Backend.acquisition.workshopReachable = false` previews a check
+that could not reach the Workshop), **Update mods**, **Update from Workshop**
+and **Re-download from scratch…** turn rows and jobs into updates, a failed
+update job ("Steam has not picked up this update yet.") offers the
+re-download, and `Backend.acquisition.downloadsEnabled = false` previews a
+session without Steam.
 Nothing is read from or written to disk.
 
 ```sh

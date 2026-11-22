@@ -109,6 +109,62 @@ TEST_CASE("update persists every mutable field", "[persistence][jobs]") {
     CHECK(jobs.get(987654).error().code == ErrorCode::NotFound);
 }
 
+TEST_CASE("Update and reinstall jobs keep their kind, target and step", "[persistence][jobs]") {
+    auto db = openMemory();
+    AcquisitionJobRepository jobs(*db);
+    AcquisitionJobRepository::NewJob update;
+    update.kind = AcquisitionKind::Update;
+    update.targetTimeUpdated = 1762000000;
+    update.targetManifest = "1100000000000000301";
+    auto created = require(jobs.createOrReuse(workshop("41"), std::nullopt, update));
+    CHECK(created.kind == AcquisitionKind::Update);
+    CHECK(created.targetTimeUpdated == 1762000000);
+    CHECK(created.targetManifest == "1100000000000000301");
+    CHECK(created.reinstallStep == ReinstallStep::Start);
+    auto loaded = require(jobs.get(created.id));
+    CHECK(loaded.kind == AcquisitionKind::Update);
+    CHECK(loaded.targetTimeUpdated == 1762000000);
+    CHECK(loaded.targetManifest == "1100000000000000301");
+    CHECK(queryInt(*db, "SELECT target_time_updated FROM acquisition_jobs") == 1762000000000);
+
+    // An unfinished job of another kind is reused unchanged.
+    auto again = require(jobs.createOrReuse(workshop("41"), std::nullopt));
+    CHECK(again.id == created.id);
+    CHECK(again.kind == AcquisitionKind::Update);
+
+    AcquisitionJobRepository::NewJob reinstall;
+    reinstall.kind = AcquisitionKind::Reinstall;
+    auto redo = require(jobs.createOrReuse(workshop("42"), std::nullopt, reinstall));
+    redo.state = AcquisitionState::Unsubscribing;
+    redo.reinstallStep = ReinstallStep::Unsubscribed;
+    redo.targetTimeUpdated = 1763000000; // mutable, like the target manifest
+    requireOk(jobs.update(redo));
+    auto reloaded = require(jobs.get(redo.id));
+    CHECK(reloaded.kind == AcquisitionKind::Reinstall);
+    CHECK(reloaded.state == AcquisitionState::Unsubscribing);
+    CHECK(reloaded.reinstallStep == ReinstallStep::Unsubscribed);
+    CHECK(reloaded.targetTimeUpdated == 1763000000);
+    redo.reinstallStep = ReinstallStep::Unsubscribing;
+    requireOk(jobs.update(redo));
+    CHECK(require(jobs.get(redo.id)).reinstallStep == ReinstallStep::Unsubscribing);
+    CHECK(require(jobs.listUnfinished()).size() == 2);
+
+    // 'unsubscribing' is unfinished: a second unfinished job for the mod conflicts.
+    auto finished = require(jobs.createOrReuse(workshop("43"), std::nullopt));
+    finished.state = AcquisitionState::Failed;
+    requireOk(jobs.update(finished));
+    auto running = require(jobs.createOrReuse(workshop("43"), std::nullopt, reinstall));
+    running.state = AcquisitionState::Unsubscribing;
+    requireOk(jobs.update(running));
+    finished.state = AcquisitionState::Pending;
+    auto conflict = jobs.update(finished);
+    REQUIRE_FALSE(conflict.ok());
+    CHECK(conflict.error().code == ErrorCode::AlreadyExists);
+
+    execRaw(*db, "UPDATE acquisition_jobs SET kind = 'sideload' WHERE provider_id = '41'");
+    CHECK(jobs.get(created.id).error().code == ErrorCode::DatabaseError);
+}
+
 TEST_CASE("Reopening a finished job conflicts with another unfinished job", "[persistence][jobs]") {
     auto db = openMemory();
     AcquisitionJobRepository jobs(*db);
@@ -133,11 +189,12 @@ TEST_CASE("listUnfinished returns non-terminal jobs for restart reconciliation",
         auto db = require(Database::open(temp.dbFile()));
         AcquisitionJobRepository jobs(*db);
         const AcquisitionState states[] = {
-            AcquisitionState::Pending,         AcquisitionState::Subscribing,
-            AcquisitionState::Subscribed,      AcquisitionState::DownloadRequested,
-            AcquisitionState::Downloading,     AcquisitionState::Installed,
-            AcquisitionState::Failed,          AcquisitionState::Unavailable,
-            AcquisitionState::NeedsUserAction, AcquisitionState::Cancelled};
+            AcquisitionState::Pending,           AcquisitionState::Unsubscribing,
+            AcquisitionState::Subscribing,       AcquisitionState::Subscribed,
+            AcquisitionState::DownloadRequested, AcquisitionState::Downloading,
+            AcquisitionState::Installed,         AcquisitionState::Failed,
+            AcquisitionState::Unavailable,       AcquisitionState::NeedsUserAction,
+            AcquisitionState::Cancelled};
         int n = 0;
         for (auto state : states) {
             auto job = require(jobs.createOrReuse(workshop(std::to_string(100 + n++)), {}));
@@ -152,10 +209,10 @@ TEST_CASE("listUnfinished returns non-terminal jobs for restart reconciliation",
     AcquisitionJobRepository jobs(*db);
     auto unfinished = require(jobs.listUnfinished());
     CHECK(jobIds(unfinished) == expected);
-    CHECK(unfinished.size() == 5);
+    CHECK(unfinished.size() == 6);
     for (const auto& job : unfinished)
         CHECK_FALSE(isTerminal(job.state));
-    CHECK(require(jobs.listForGame("stellaris")).size() == 10);
+    CHECK(require(jobs.listForGame("stellaris")).size() == 11);
     CHECK(require(jobs.listForGame("eu4")).empty());
 }
 

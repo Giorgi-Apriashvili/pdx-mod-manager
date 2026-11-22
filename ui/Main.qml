@@ -101,6 +101,14 @@ ApplicationWindow {
                           qsTr("Discard"), true, true, () => Backend.launcher.discardInterrupted())
     }
 
+    // "Re-download from scratch…" of one Workshop mod (a row, or a failed update job).
+    function askReinstall(name: string, action: var) {
+        confirmDialog.ask(qsTr("Re-download from scratch"),
+                          qsTr("Steam unsubscribes “%1”, which removes its files, then it is subscribed again and downloaded. The mod is missing until the download finishes.").arg(name),
+                          qsTr("It stays in your playsets. Other games or launchers that use the same Steam subscription see it disappear briefly."),
+                          qsTr("Re-download"), true, true, action)
+    }
+
     function deleteActivePlayset() {
         // Deletion is snapshotted by the backend; the Restore banner undoes it.
         const id = Backend.playsets.activeId
@@ -333,6 +341,9 @@ ApplicationWindow {
             onImportRequested: window.openImport("")
             onNewPlaysetRequested: window.askName("new")
             onLocateRequested: window.openLocate()
+            onReinstallRequested: (providerId, name) => {
+                window.askReinstall(name, () => Backend.acquisition.reinstallMod(providerId))
+            }
             onRemoveRequested: (rows, description) => {
                 confirmDialog.ask(qsTr("Remove from playset"), description,
                                   qsTr("The mods stay installed and can be added again. Ctrl+Z undoes the removal."),
@@ -361,6 +372,9 @@ ApplicationWindow {
             onImportRequested: window.openImport("")
             onExportRequested: window.openExport()
             onDiscardInterruptedRequested: window.askDiscardInterrupted()
+            onReinstallJobRequested: (jobId, name) => {
+                window.askReinstall(name, () => Backend.acquisition.reinstallJob(jobId))
+            }
             onFocusReleased: modsPane.focusList()
             onNewPlaysetRequested: window.askName("new")
             onDuplicateRequested: window.askName("duplicate")

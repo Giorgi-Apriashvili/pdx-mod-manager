@@ -106,9 +106,11 @@ public:
     struct Item {
         std::string title; // empty: not found (result 9)
         std::string appId = "281990";
+        std::int64_t timeUpdated = 0; // "time_updated" when set
+        std::string contentManifest;  // "hcontent_file" when set
     };
-    // A reply for the requested ids: the known ones found with their title
-    // and app, the others not found.
+    // A reply for the requested ids: the known ones found with their title,
+    // app and (when set) time_updated and hcontent_file, the others not found.
     static std::function<QByteArray(const QByteArray&)> catalog(std::map<std::string, Item> items) {
         return [items = std::move(items)](const QByteArray& body) {
             const auto escaped = [](const std::string& text) {
@@ -127,7 +129,13 @@ public:
                 details += R"({"publishedfileid":")" + QByteArray::fromStdString(id) +
                            R"(","result":1,"consumer_app_id":)" +
                            QByteArray::fromStdString(it->second.appId) + R"(,"title":")" +
-                           escaped(it->second.title) + R"(","banned":0,"visibility":0})";
+                           escaped(it->second.title) + R"(","banned":0,"visibility":0)";
+                if (it->second.timeUpdated != 0)
+                    details += R"(,"time_updated":)" + QByteArray::number(it->second.timeUpdated);
+                if (!it->second.contentManifest.empty())
+                    details += R"(,"hcontent_file":")" +
+                               QByteArray::fromStdString(it->second.contentManifest) + '"';
+                details += '}';
             }
             return http(200,
                         R"({"response":{"result":1,"publishedfiledetails":[)" + details + "]}}");

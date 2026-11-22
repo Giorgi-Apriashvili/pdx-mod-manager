@@ -11,6 +11,50 @@
 #include <iterator>
 
 namespace pmm::app {
+namespace {
+
+constexpr const char* kComponent = "app.runner";
+
+// Asks `host` about `ids` in batches of providers::kMaxPublishedFileDetailsItems
+// and calls `finished` once, on the host's thread, when every batch has been
+// answered or has failed (at once for no ids).
+void lookUpInBatches(QtWorkshopMetadataHost& host, const GameKey& game,
+                     const std::vector<std::string>& ids,
+                     std::function<void(WorkshopLookup)> finished) {
+    // Gathered on the worker, where every batch is answered.
+    struct Gathered {
+        WorkshopLookup lookup;
+        std::size_t batches = 0;
+        std::function<void(WorkshopLookup)> finished;
+    };
+    auto gathered = std::make_shared<Gathered>();
+    gathered->lookup.available = true;
+    gathered->finished = std::move(finished);
+    const std::size_t batchSize = providers::kMaxPublishedFileDetailsItems;
+    gathered->batches = (ids.size() + batchSize - 1) / batchSize;
+    if (gathered->batches == 0) {
+        gathered->finished(std::move(gathered->lookup));
+        return;
+    }
+    for (std::size_t start = 0; start < ids.size(); start += batchSize) {
+        const std::vector<std::string> batch(
+            ids.begin() + static_cast<std::ptrdiff_t>(start),
+            ids.begin() + static_cast<std::ptrdiff_t>(std::min(ids.size(), start + batchSize)));
+        host.lookup(game, batch, [gathered, count = batch.size()](WorkshopLookupReply reply) {
+            WorkshopLookup& lookup = gathered->lookup;
+            if (reply.answered)
+                lookup.items.insert(lookup.items.end(),
+                                    std::make_move_iterator(reply.items.begin()),
+                                    std::make_move_iterator(reply.items.end()));
+            else
+                lookup.unanswered += count;
+            if (--gathered->batches == 0)
+                gathered->finished(std::move(lookup));
+        });
+    }
+}
+
+} // namespace
 
 // Lives on the worker thread and owns everything that runs there.
 class RunnerWorker : public QObject {
@@ -175,36 +219,83 @@ void ServiceRunner::lookupWorkshopItems(QObject* receiver, GameKey game,
             answer({});
             return;
         }
-        // Gathered on the worker, where every batch is answered.
-        struct Gathered {
-            WorkshopLookup lookup;
-            std::size_t batches = 0;
-        };
-        auto gathered = std::make_shared<Gathered>();
-        gathered->lookup.available = true;
-        const std::size_t batchSize = providers::kMaxPublishedFileDetailsItems;
-        gathered->batches = (ids.size() + batchSize - 1) / batchSize;
-        if (gathered->batches == 0) {
-            answer(std::move(gathered->lookup));
+        lookUpInBatches(*host, game, ids, answer);
+    });
+}
+
+void ServiceRunner::checkWorkshopUpdates(QObject* receiver, std::int64_t playsetId,
+                                         std::function<void(WorkshopUpdateCheck)> done) {
+    Q_ASSERT(receiver && receiver->thread() == thread());
+    // Only dereferenced on this object's thread, where the receiver lives.
+    QPointer<QObject> guard(receiver);
+    auto answer = [this, guard, done = std::move(done)](WorkshopUpdateCheck check) {
+        QMetaObject::invokeMethod(
+            this,
+            [guard, done, check = std::move(check)]() mutable {
+                if (guard)
+                    done(std::move(check));
+            },
+            Qt::QueuedConnection);
+    };
+    if (!m_worker || !m_running) {
+        answer({});
+        return;
+    }
+    dispatch([this, answer = std::move(answer), playsetId] {
+        AppRuntime* runtime = this->runtime();
+        QtWorkshopMetadataHost* host = m_worker ? m_worker->metadataHost() : nullptr;
+        services::AcquisitionCoordinator* coordinator = runtime ? runtime->acquisition() : nullptr;
+        if (!host || !coordinator) {
+            answer({}); // --no-steam, read-only, or no Web API: nothing is sent
             return;
         }
-        for (std::size_t start = 0; start < ids.size(); start += batchSize) {
-            const std::vector<std::string> batch(
-                ids.begin() + static_cast<std::ptrdiff_t>(start),
-                ids.begin() + static_cast<std::ptrdiff_t>(std::min(ids.size(), start + batchSize)));
-            host->lookup(game, batch,
-                         [gathered, count = batch.size(), answer](WorkshopLookupReply reply) {
-                             WorkshopLookup& lookup = gathered->lookup;
-                             if (reply.answered)
-                                 lookup.items.insert(lookup.items.end(),
-                                                     std::make_move_iterator(reply.items.begin()),
-                                                     std::make_move_iterator(reply.items.end()));
-                             else
-                                 lookup.unanswered += count;
-                             if (--gathered->batches == 0)
-                                 answer(std::move(lookup));
-                         });
+        WorkshopUpdateCheck check;
+        check.available = true;
+        auto playset = runtime->playsets().playset(playsetId);
+        if (!playset) {
+            check.error = std::move(playset).error();
+            answer(std::move(check));
+            return;
         }
+        const GameKey game = playset.value().game;
+        // Steam's own record first: the rescan re-reads its Workshop manifest.
+        if (auto rescanned = runtime->games().rescanMods(game)) {
+            services::CoordinatorUpdate update;
+            update.changed = true;
+            update.rescanned.push_back(std::move(rescanned).value());
+            report(update);
+        } else {
+            logWarning(kComponent, "inventory rescan before the update check failed",
+                       {{"game", game}, {"error", rescanned.error().message}});
+        }
+        auto plan = coordinator->prepareUpdateCheck(playsetId);
+        if (!plan) {
+            check.error = std::move(plan).error();
+            answer(std::move(check));
+            return;
+        }
+        const std::size_t asked = plan.value().ids.size();
+        lookUpInBatches(
+            *host, game, plan.value().ids,
+            [this, answer, playsetId, asked, check](const WorkshopLookup& lookup) mutable {
+                // Shutting down: the runtime goes before the Web API host.
+                AppRuntime* current = this->runtime();
+                services::AcquisitionCoordinator* recorder =
+                    current ? current->acquisition() : nullptr;
+                if (!recorder) {
+                    check.report.reachable = false;
+                    answer(std::move(check));
+                    return;
+                }
+                auto recorded = recorder->recordUpdateCheck(playsetId, lookup.items, asked);
+                if (recorded) {
+                    report(recorded.value().update);
+                    check.report = std::move(recorded).value();
+                } else {
+                    check.error = std::move(recorded).error();
+                }
+                answer(std::move(check));
+            });
     });
 }
 

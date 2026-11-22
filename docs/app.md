@@ -127,10 +127,11 @@ to `https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/
   aborted.
 - `PMM_WORKSHOP_METADATA_URL` overrides the endpoint (tests, local stubs);
   `RunnerOptions::metadataEndpoint` does the same for tests.
-- It runs for acquisition jobs (names and the identity gate) and for import
-  previews. `request()` answers the coordinator through its sink, and a
-  failed request is logged and not answered (offline operation).
-  `lookup()` answers only its own caller, exactly once, failures included.
+- It runs for acquisition jobs (names and the identity gate), for import
+  previews and for "Check for mod updates". `request()` answers the
+  coordinator through its sink, and a failed request is logged and not
+  answered (offline operation). `lookup()` answers only its own caller,
+  exactly once, failures included.
 
 #### Workshop names in the import preview
 
@@ -155,6 +156,36 @@ a second after typing stops.
 - Sessions without Steam (`--no-steam`, `--read-only` and the verification
   switches) have no Web API host, so neither the preview's nor the
   acquisition's requests happen. Read-only sessions never look anything up.
+
+#### Checking installed Workshop mods for updates
+
+**Check for mod updates** (Downloads area; `AcquisitionController::checkForUpdates()`,
+`ServiceRunner::checkWorkshopUpdates()`) is the only way the application
+asks the Web API about the installed mods of a playset in bulk, and it does
+so only when the button is pressed: never at start, on a playset change or
+before Play. An update or re-download the user starts also asks about its
+own item (the identity gate), as a download does, unless the check already
+answered for it; so does such a job resumed after a restart.
+
+- It first rescans the game's mods, which re-reads Steam's own
+  `appworkshop_<app>.acf`, then sends the item ids of the active playset's
+  installed Workshop mods, enabled and disabled, in requests of at most 100,
+  with the fixed headers above. Nothing else is sent: no account, no Steam
+  ID, no mod names.
+- Answers are kept for the session, and ids answered in the last 5 minutes
+  are not sent again, so pressing it twice in a row sends nothing the second
+  time (`CoordinatorOptions::updateCheckMaxAgeMs`).
+- A mod has an update when the Workshop's `time_updated` is later than the
+  `timeupdated` Steam recorded for the installed version; a mod Steam has no
+  record of is not compared ([steam-workshop.md](steam-workshop.md#7-web-api-metadata)).
+- The result line says how many mods the Workshop answered for and how many
+  of them have an update, or that the Workshop could not be reached, with
+  **Retry**. A mod installed after the check (a rescan picked it up) is not
+  counted as a failure: the line says to check again to include it.
+- What Steam's own record says ("Update available" when it knows a newer
+  version) is shown in every session, without any network use, also with
+  `--no-steam` and `--read-only`; there the check and the update actions are
+  disabled and send nothing.
 
 ### Updates
 
@@ -250,7 +281,7 @@ and joins the thread.
 | `--profile <dir>` | Keep every application file (database, journal, logs, cache) in `<dir>` instead of the standard per-user locations. Use it for a clean, isolated profile, for example for the "import into a clean profile" acceptance step. An installed copy does not install updates in such a session: it offers the release page and says to restart without `--profile`. |
 | `--verbose` | Write debug-level log records (including redacted helper stderr). |
 | `--game <key>` | Select this game at start-up (`ck3`, `eu4`, `hoi4`, `stellaris`, `vic3`). |
-| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing: a later session with Steam resumes only the downloads queued before, and the other missing mods need **Download missing** (or **Retry** after an earlier failed download). Updates offer the release page instead of installing, as with `--profile`. |
+| `--no-steam` | Never start the Steam helper. Workshop downloads are off for the session, and missing mods stay listed as missing. An import queues nothing: a later session with Steam resumes only the downloads queued before, and the other missing mods need **Download missing** (or **Retry** after an earlier failed download). **Check for mod updates**, **Update mods**, **Update from Workshop** and **Re-download from scratch…** are disabled and send nothing; mods Steam's own record marks as outdated still show "Update available". Updates offer the release page instead of installing, as with `--profile`. |
 | `--read-only` | Never write to game folders and never launch a game. Implies `--no-steam`. The launch check skips its write probes, and Play shows why it is disabled. "Check for updates" and the daily check are off too, and Settings says so. |
 
 ### Hidden verification switches

@@ -159,11 +159,23 @@ inline ModDescriptor parseDescriptor(const std::string& text) {
     return d;
 }
 
+// Steam's record of one installed Workshop item, as appworkshop_<app>.acf
+// keeps it (the fake's stand-in for that file).
+struct AcfRecord {
+    std::int64_t timeUpdated = 0; // the installed version
+    std::string manifest;
+    std::int64_t latestTimeUpdated = 0; // the newest version Steam knows
+    std::string latestManifest;
+};
+
 // Game adapter double for "stellaris": Workshop mods are the folders of
 // <library>/steamapps/workshop/content/281990, local mods the folders of
-// <userData>/mod. The launch plan writes <userData>/dlc_load.json.
+// <userData>/mod. The launch plan writes <userData>/dlc_load.json. Workshop
+// items listed in `acf` get Steam's version record (and NeedsUpdate when
+// Steam knows a newer manifest); the others only their folder's time.
 class FakeAdapter : public games::GameAdapter {
 public:
+    std::map<std::string, AcfRecord> acf;
     std::vector<GameInstallation> discovered;
     std::optional<Error> scanError;
     std::optional<Error> planError;
@@ -226,6 +238,14 @@ public:
                 mod.descriptorRef = sourceKey == source::SteamWorkshop ? "mod/ugc_" + id + ".mod"
                                                                        : "mod/" + id + ".mod";
                 mod.contentUpdatedAt = platform::lastWriteUnixSeconds(it->path());
+                if (const auto record = acf.find(id);
+                    sourceKey == source::SteamWorkshop && record != acf.end()) {
+                    mod.contentUpdatedAt = record->second.timeUpdated;
+                    mod.contentTimeFromSteam = record->second.timeUpdated > 0;
+                    mod.workshopManifest = record->second.manifest;
+                    mod.latestManifest = record->second.latestManifest;
+                    mod.latestUpdatedAt = record->second.latestTimeUpdated;
+                }
                 // Workshop folders follow the real adapters' rule (descriptor.mod,
                 // else the only *.mod file).
                 fs::path descriptorFile = it->path() / "descriptor.mod";
@@ -236,6 +256,8 @@ public:
                 auto text = platform::readFile(descriptorFile);
                 if (text && !text.value().empty()) {
                     mod.descriptor = parseDescriptor(text.value());
+                    if (!mod.latestManifest.empty() && mod.latestManifest != mod.workshopManifest)
+                        mod.state = InstallState::NeedsUpdate;
                 } else {
                     mod.state = InstallState::Broken;
                     mod.problems.push_back("descriptor.mod is missing");
@@ -307,6 +329,13 @@ public:
 
 // Simulated pmm-steam-helper session for kGame. Answers commands by queueing
 // events; pump() delivers them to the coordinator (never re-entrantly).
+//
+// Updates: an item's `timestamp` is the installed version
+// (GetItemInstallInfo); a finished download installs `latest` and clears
+// NeedsUpdate. Without `seesUpdate`, Steam has not noticed the new version:
+// a download request is accepted and installs nothing. Unsubscribe drops the
+// subscription and, with `removeOnUnsubscribe`, the installed files. With
+// `acf` set, Steam's record follows every install, like appworkshop_<app>.acf.
 class FakeSteam : public WorkshopSessionHost {
 public:
     struct Item {
@@ -319,6 +348,12 @@ public:
         bool writeContent = true;
         std::string contentFile = "descriptor.mod"; // the file writeContent writes
         std::string name = "Downloaded Example";
+        std::uint32_t timestamp = 0; // installed version; 0: none
+        std::uint32_t latest = 0;    // the version a download installs (0: timestamp)
+        std::string latestManifest;  // its manifest, for `acf`
+        bool seesUpdate = true;
+        int unsubscribeResult = 1; // EResult
+        bool removeOnUnsubscribe = false;
     };
     struct Exit {
         int code = 0;
@@ -335,6 +370,7 @@ public:
     providers::ReadyEvent ready;
     std::optional<int> exitBeforeReady;
     bool openSucceeds = true;
+    std::map<std::string, AcfRecord>* acf = nullptr; // FakeAdapter::acf
 
     int opens = 0;
     int closes = 0;
@@ -380,10 +416,27 @@ public:
                 subscribe->id, item.subscribeResult == 1, item.subscribeResult}});
         } else if (const auto* download = std::get_if<DownloadCommand>(&command)) {
             Item& item = items[download->id];
-            if (item.acceptDownload)
+            // Without the new version in sight, Steam "installs nothing".
+            const bool current = (item.flags & item_flag::Installed) &&
+                                 !(item.flags & item_flag::NeedsUpdate) && !item.seesUpdate;
+            if (item.acceptDownload && !current) {
                 item.flags |= item_flag::DownloadPending;
+                item.downloaded = 0;
+            }
             pending.emplace_back(
                 HelperEvent{DownloadRequestedEvent{download->id, item.acceptDownload}});
+        } else if (const auto* unsubscribe = std::get_if<UnsubscribeCommand>(&command)) {
+            Item& item = items[unsubscribe->id];
+            if (item.unsubscribeResult == 1) {
+                item.flags &= ~item_flag::Subscribed;
+                if (item.removeOnUnsubscribe) {
+                    item.flags &= ~(item_flag::Installed | item_flag::NeedsUpdate);
+                    std::error_code ec;
+                    fs::remove_all(m_workshop / u8(unsubscribe->id), ec);
+                }
+            }
+            pending.emplace_back(HelperEvent{UnsubscribeResultEvent{
+                unsubscribe->id, item.unsubscribeResult == 1, item.unsubscribeResult}});
         } else if (std::holds_alternative<PingCommand>(command)) {
             pending.emplace_back(HelperEvent{PongEvent{}});
         }
@@ -446,7 +499,18 @@ private:
             item.downloaded = std::min(
                 item.total, item.downloaded + item.total / static_cast<std::uint64_t>(item.steps));
             if (item.downloaded >= item.total) {
-                item.flags = (item.flags & ~Downloading) | Installed;
+                item.flags = (item.flags & ~(Downloading | NeedsUpdate)) | Installed;
+                if (item.latest != 0)
+                    item.timestamp = item.latest;
+                if (acf && item.timestamp != 0) {
+                    AcfRecord& record = (*acf)[id];
+                    record.timeUpdated = item.timestamp;
+                    record.latestTimeUpdated = item.timestamp;
+                    if (!item.latestManifest.empty())
+                        record.manifest = record.latestManifest = item.latestManifest;
+                    else
+                        record.latestManifest = record.manifest;
+                }
                 if (item.writeContent)
                     writeText(m_workshop / u8(id) / u8(item.contentFile),
                               "name=\"" + item.name + "\"\nremote_file_id=\"" + id + "\"\n");
@@ -462,8 +526,10 @@ private:
             s.bytesDownloaded = item.downloaded;
             s.bytesTotal = item.total;
         }
-        if (item.flags & providers::item_flag::Installed)
+        if (item.flags & providers::item_flag::Installed) {
             s.installPath = platform::pathToUtf8(m_workshop / u8(id));
+            s.timestamp = item.timestamp;
+        }
         return s;
     }
 

@@ -15,6 +15,10 @@ ListModel {
     property int missingCount: 0
     property int warningCount: 0
     property int blockingCount: 0
+    property int updateCount: 0
+    // Enabled mods with an update (the fake launch check's warning).
+    property int enabledUpdateCount: 0
+    property int installedWorkshopCount: 0
     property int undoDepth: 0
     property int redoDepth: 0
     readonly property bool canUndo: undoDepth > 0
@@ -32,7 +36,7 @@ ListModel {
 
     readonly property var roleNames: ["position", "enabled", "name", "source", "sourceLabel", "providerId",
         "status", "statusText", "warnings", "hasWarnings", "progress", "blocking", "version",
-        "supportedVersion", "tags"]
+        "supportedVersion", "tags", "updateAvailable"]
 
     function rowData(i: int): var {
         const m = get(i)
@@ -86,7 +90,7 @@ ListModel {
     }
 
     function afterChange(structural: bool) {
-        let en = 0, ready = 0, missing = 0, warn = 0, blocking = 0
+        let en = 0, ready = 0, missing = 0, warn = 0, blocking = 0, updates = 0, enabledUpdates = 0, workshop = 0
         for (let i = 0; i < count; ++i) {
             const m = get(i)
             if (m.position !== i + 1)
@@ -99,12 +103,22 @@ ListModel {
             if (m.status === "missing") missing++
             if (m.hasWarnings) warn++
             if (b) blocking++
+            if (m.updateAvailable) {
+                updates++
+                if (m.enabled) enabledUpdates++
+            }
+            // Installed, as the C++ model counts them (a content folder).
+            if (m.source === "steam-workshop" && (m.status === "ready" || m.status === "broken"))
+                workshop++
         }
         enabledCount = en
         readyCount = ready
         missingCount = missing
         warningCount = warn
         blockingCount = blocking
+        updateCount = updates
+        enabledUpdateCount = enabledUpdates
+        installedWorkshopCount = workshop
         if (playsets)
             playsets.updateCounts(playsetId, count, en)
         if (view)

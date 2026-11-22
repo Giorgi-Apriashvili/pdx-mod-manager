@@ -13,22 +13,34 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace pmm::persistence {
 
 class AcquisitionJobRepository {
 public:
+    // What a new job does (AcquisitionJob::kind and the update target).
+    struct NewJob {
+        AcquisitionKind kind = AcquisitionKind::Acquire;
+        std::int64_t targetTimeUpdated = 0; // unix seconds; update jobs
+        std::string targetManifest;         // update jobs
+    };
+
     explicit AcquisitionJobRepository(Database& db) noexcept : m_db(db) {}
 
-    // Returns the unfinished job for `identity` if there is one (unchanged),
-    // otherwise creates a Pending job linked to `playsetId`.
+    // Returns the unfinished job for `identity` if there is one (unchanged,
+    // whatever its kind), otherwise creates a Pending job of `kind` linked to
+    // `playsetId`. The first form creates an acquire job.
     Result<AcquisitionJob> createOrReuse(const ModIdentity& identity,
                                          std::optional<std::int64_t> playsetId);
-    // Persists the mutable fields (playsetId, state, error, attempts, bytes)
-    // of the job with `job.id` and sets updatedAt to now. The identity cannot
-    // change. NotFound for unknown ids; AlreadyExists when moving a finished
-    // job back to an unfinished state while another unfinished job exists.
+    Result<AcquisitionJob> createOrReuse(const ModIdentity& identity,
+                                         std::optional<std::int64_t> playsetId, const NewJob& kind);
+    // Persists the mutable fields (playsetId, state, error, attempts, bytes,
+    // update target, reinstall step) of the job with `job.id` and sets
+    // updatedAt to now. The identity and the kind cannot change. NotFound for
+    // unknown ids; AlreadyExists when moving a finished job back to an
+    // unfinished state while another unfinished job exists.
     Status update(const AcquisitionJob& job);
     Result<AcquisitionJob> get(std::int64_t id); // NotFound for unknown ids
     // Non-terminal jobs in creation order, for reconciliation after a restart.

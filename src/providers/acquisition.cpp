@@ -92,12 +92,19 @@ public:
             return;
         const std::uint32_t previousFlags = ctx().lastFlags;
         ctx().lastFlags = o.status.flags;
+        noteFetch(o.status);
         switch (ctx().awaiting) {
         case AwaitStep::State:
             plan(o.status);
             return;
         case AwaitStep::Progress:
             progress(o.status, previousFlags);
+            return;
+        case AwaitStep::Removal:
+            if (kind() == AcquisitionKind::Reinstall)
+                removal(o.status);
+            else
+                plan(o.status); // only a reinstall waits for a removal
             return;
         case AwaitStep::Nothing:
             rescan(o.status);
@@ -113,12 +120,34 @@ public:
         const SteamResultInfo info = classifySteamResult(o.result);
         if (info.ok()) {
             ctx().subscribeConfirmed = true;
+            if (kind() == AcquisitionKind::Reinstall)
+                setStep(ReinstallStep::Resubscribed);
             setState(AcquisitionState::Subscribed);
             clearError();
             queryState();
             return;
         }
         failWith(o.result, "Subscribing to Workshop item " + job().identity.id);
+    }
+
+    void on(const obs::UnsubscribeResult& o) {
+        if (ctx().awaiting != AwaitStep::UnsubscribeResult)
+            return;
+        const SteamResultInfo info = classifySteamResult(o.result);
+        if (!info.ok()) {
+            // Steam refused it: nothing changed, the item is still subscribed
+            // (unless an earlier, unconfirmed request of this job went through).
+            if (!ctx().unsubscribeRepeated)
+                setStep(ReinstallStep::Start);
+            failWith(o.result, "Unsubscribing from Workshop item " + job().identity.id);
+            return;
+        }
+        setStep(ReinstallStep::Unsubscribed);
+        clearError();
+        await(AwaitStep::Removal);
+        ctx().droppedAtMs = 0;
+        ctx().lastPollAtMs = ctx().clockMs;
+        emit(ActionKind::QueryState);
     }
 
     void on(const obs::DownloadAccepted& o) {
@@ -131,6 +160,8 @@ public:
             return;
         }
         ctx().downloadRequested = true;
+        ctx().downloadRequestedAtMs = ctx().clockMs;
+        ctx().currentButOld = false;
         setState(AcquisitionState::DownloadRequested);
         clearError();
         enterProgress();
@@ -180,6 +211,33 @@ public:
                                   " made no progress for " + minutes(m_policy.stallTimeoutMs) +
                                   ". Check Steam's Downloads page (paused downloads, disk space, "
                                   "download restrictions), then retry.");
+            } else if (ctx().currentButOld && !ctx().downloadRequested) {
+                // A download Steam ran by itself ended short of the target:
+                // this run's first request (its wait starts when accepted).
+                ctx().currentButOld = false;
+                await(AwaitStep::DownloadAccepted);
+                emit(ActionKind::RequestDownload);
+            } else if (ctx().currentButOld &&
+                       now - ctx().downloadRequestedAtMs >= m_policy.updateRecheckMs) {
+                if (!ctx().reRequested) {
+                    // Steam may have answered the first request before it
+                    // noticed the new version: ask once more.
+                    ctx().reRequested = true;
+                    ctx().currentButOld = false;
+                    await(AwaitStep::DownloadAccepted);
+                    emit(ActionKind::RequestDownload);
+                } else {
+                    failNotSeen();
+                }
+            } else if (now - ctx().lastPollAtMs >= m_policy.pollIntervalMs) {
+                ctx().lastPollAtMs = now;
+                emit(ActionKind::QueryState);
+            }
+            return;
+        case AwaitStep::Removal:
+            if (waited >= m_policy.unsubscribeTimeoutMs) {
+                failRetryable(ErrorCode::Timeout,
+                              "Steam did not drop the subscription in time after unsubscribing.");
             } else if (now - ctx().lastPollAtMs >= m_policy.pollIntervalMs) {
                 ctx().lastPollAtMs = now;
                 emit(ActionKind::QueryState);
@@ -189,6 +247,12 @@ public:
             if (waited >= m_policy.subscribeTimeoutMs)
                 failRetryable(ErrorCode::Timeout,
                               "Steam did not confirm the subscription in time.");
+            return;
+        case AwaitStep::UnsubscribeResult:
+            if (waited >= m_policy.unsubscribeTimeoutMs)
+                failRetryable(ErrorCode::Timeout,
+                              "Steam did not confirm in time that it unsubscribed Workshop item " +
+                                  job().identity.id + ".");
             return;
         case AwaitStep::Session:
             if (waited >= m_policy.responseTimeoutMs)
@@ -229,7 +293,25 @@ public:
         idle();
         setState(AcquisitionState::Cancelled);
         std::string message;
-        if (downloadAsked) {
+        if (kind() == AcquisitionKind::Reinstall &&
+            job().reinstallStep == ReinstallStep::Unsubscribed) {
+            message = "Cancelled. Workshop item " + job().identity.id +
+                      " was unsubscribed for the re-download and is not subscribed again: "
+                      "Retry subscribes to it again and downloads it, or subscribe on its "
+                      "Workshop page.";
+            if (subscribeMaybe)
+                message += " A subscription request was already sent and may still complete.";
+        } else if (kind() == AcquisitionKind::Reinstall &&
+                   job().reinstallStep == ReinstallStep::Unsubscribing) {
+            message = "Cancelled. An unsubscribe request was already sent and may still complete "
+                      "in Steam; if it does, Retry subscribes to the item again and downloads "
+                      "it.";
+        } else if (kind() != AcquisitionKind::Acquire) {
+            message = downloadAsked ? "Cancelled. Steam may still finish the download that was "
+                                      "already requested."
+                                    : "Cancelled before a download was requested from Steam; "
+                                      "the installed version stays.";
+        } else if (downloadAsked) {
             message = "Cancelled. Steam keeps the subscription and may finish the download that "
                       "was already requested; unsubscribe in Steam if you no longer want this "
                       "item.";
@@ -281,6 +363,7 @@ public:
 private:
     AcquisitionContext& ctx() { return m_t.context; }
     AcquisitionJob& job() { return m_t.context.job; }
+    AcquisitionKind kind() const { return m_t.context.job.kind; }
 
     void touch() {
         job().updatedAt = ctx().clockMs;
@@ -294,7 +377,26 @@ private:
         }
     }
 
+    void setStep(ReinstallStep step) {
+        if (job().reinstallStep != step) {
+            job().reinstallStep = step;
+            touch();
+        }
+    }
+
+    // Every failure of a re-download that unsubscribed the item (or asked
+    // Steam to) says so: the item must never be left unsubscribed without the
+    // user knowing.
     void setError(ErrorCode code, std::string message) {
+        const bool reinstall = kind() == AcquisitionKind::Reinstall && code != ErrorCode::Cancelled;
+        if (reinstall && job().reinstallStep == ReinstallStep::Unsubscribed)
+            message += " Workshop item " + job().identity.id +
+                       " is now unsubscribed in Steam: Retry subscribes to it again and downloads "
+                       "it.";
+        else if (reinstall && job().reinstallStep == ReinstallStep::Unsubscribing)
+            message += " Workshop item " + job().identity.id +
+                       " may be unsubscribed now: Retry subscribes to it again in that case and "
+                       "downloads it.";
         job().errorCode = std::string(errorCodeName(code));
         job().errorMessage = std::move(message);
         touch();
@@ -353,6 +455,7 @@ private:
         }
         clearError();
         ctx().installPath = installPath;
+        ctx().currentButOld = false;
         await(AwaitStep::Verification);
         emit(ActionKind::VerifyContent);
     }
@@ -379,6 +482,17 @@ private:
                        "Workshop page manually.";
         }
         setError(code, std::move(message));
+    }
+
+    // Steam keeps reporting the old version: retrying within seconds would not
+    // help (Steam checks about every 45 minutes), so only the user retries.
+    // A re-download without a target: Steam kept the installed files.
+    void failNotSeen() {
+        idle();
+        setState(AcquisitionState::Failed);
+        const bool kept = kind() == AcquisitionKind::Reinstall && job().targetTimeUpdated <= 0;
+        setError(ErrorCode::UpdateNotSeen,
+                 std::string(kept ? kRedownloadNotSeenMessage : kUpdateNotSeenMessage));
     }
 
     void failWith(int eresult, const std::string& context) {
@@ -422,6 +536,14 @@ private:
         ctx().subscribeSent = false;
         ctx().subscribeConfirmed = false;
         ctx().downloadRequested = false;
+        ctx().unsubscribeSent = false;
+        ctx().unsubscribeRepeated = false;
+        ctx().downloadRequestedAtMs = 0;
+        ctx().reRequested = false;
+        ctx().currentButOld = false;
+        ctx().droppedAtMs = 0;
+        ctx().fetchSeen = false;
+        ctx().firstTimestamp = 0;
         ctx().installPath.clear();
         ctx().retryAtMs = 0;
         if (ctx().sessionKnown) {
@@ -468,8 +590,51 @@ private:
         recordBytes(s, changed);
     }
 
+    // Records evidence that Steam fetched the item during this run: it was
+    // not installed or downloading, or its install time changed.
+    void noteFetch(const ItemStatus& s) {
+        const ItemFlags f = decodeItemFlags(s.flags);
+        if (!f.installed || f.downloading) {
+            ctx().fetchSeen = true;
+            return;
+        }
+        if (s.timestamp == 0)
+            return;
+        if (ctx().firstTimestamp == 0)
+            ctx().firstTimestamp = s.timestamp;
+        else if (s.timestamp != ctx().firstTimestamp)
+            ctx().fetchSeen = true;
+    }
+
+    // Update and reinstall jobs: the installed version is the one wanted. With
+    // a known target, Steam's install timestamp must reach it; without one, an
+    // update is done once Steam calls the item current after this run's
+    // request or after a download this run saw, a reinstall only once this
+    // run saw Steam fetch the item (its old files may simply have stayed).
+    bool targetReached(const ItemStatus& s) {
+        if (job().targetTimeUpdated > 0)
+            return static_cast<std::int64_t>(s.timestamp) >= job().targetTimeUpdated;
+        if (kind() == AcquisitionKind::Update)
+            return ctx().downloadRequested || ctx().fetchSeen;
+        return ctx().fetchSeen;
+    }
+
     // Decides the next step from a fresh state report.
     void plan(const ItemStatus& s) {
+        switch (kind()) {
+        case AcquisitionKind::Acquire:
+            planAcquire(s);
+            return;
+        case AcquisitionKind::Update:
+            planUpdate(s);
+            return;
+        case AcquisitionKind::Reinstall:
+            planReinstall(s);
+            return;
+        }
+    }
+
+    void planAcquire(const ItemStatus& s) {
         const ItemFlags f = decodeItemFlags(s.flags);
         if (f.subscribed)
             ctx().subscribeConfirmed = true;
@@ -480,18 +645,106 @@ private:
             return;
         }
         if (!subscribed) {
-            if (!requireOnline())
-                return;
-            setState(AcquisitionState::Subscribing);
-            clearError();
-            ctx().subscribeSent = true;
-            await(AwaitStep::SubscribeResult);
-            emit(ActionKind::Subscribe);
+            subscribe();
             return;
         }
         if (job().state == AcquisitionState::Pending ||
             job().state == AcquisitionState::Subscribing)
             setState(AcquisitionState::Subscribed);
+        download(s, f);
+    }
+
+    void planUpdate(const ItemStatus& s) {
+        const ItemFlags f = decodeItemFlags(s.flags);
+        if (!f.subscribed) {
+            // Steam does not keep an unsubscribed item updated, and an update
+            // never subscribes on the user's behalf.
+            needsUser(ErrorCode::ValidationFailed,
+                      "Workshop item " + job().identity.id +
+                          " is not subscribed in Steam, so Steam does not update it. Subscribe "
+                          "to it on its Workshop page, then retry.");
+            return;
+        }
+        ctx().subscribeConfirmed = true;
+        if (f.installedAndCurrent() && !s.installPath.empty() && targetReached(s)) {
+            verify(s.installPath); // already the wanted version
+            return;
+        }
+        download(s, f);
+    }
+
+    void planReinstall(const ItemStatus& s) {
+        const ItemFlags f = decodeItemFlags(s.flags);
+        switch (job().reinstallStep) {
+        case ReinstallStep::Start:
+            if (!f.subscribed) {
+                // A re-download replaces a subscription; it never adds one
+                // the account does not have.
+                needsUser(ErrorCode::ValidationFailed,
+                          "Workshop item " + job().identity.id +
+                              " is not subscribed in Steam, so it was not downloaded again. "
+                              "Subscribe to it on its Workshop page, then retry.");
+                return;
+            }
+            unsubscribe();
+            return;
+        case ReinstallStep::Unsubscribing:
+            if (f.subscribed) {
+                unsubscribe(); // the earlier request was not carried out, or not yet
+                return;
+            }
+            setStep(ReinstallStep::Unsubscribed); // Steam carried out the earlier request
+            break;
+        case ReinstallStep::Unsubscribed:
+            break;
+        case ReinstallStep::Resubscribed:
+            if (!f.subscribed)
+                setStep(ReinstallStep::Unsubscribed); // unsubscribed again meanwhile
+            break;
+        }
+        if (job().reinstallStep == ReinstallStep::Unsubscribed) {
+            // Also while Steam still lists the subscription: its list lags
+            // behind a confirmed unsubscribe, and subscribing to an item that
+            // is subscribed changes nothing.
+            subscribe();
+            return;
+        }
+        ctx().subscribeConfirmed = true;
+        if (job().state == AcquisitionState::Pending ||
+            job().state == AcquisitionState::Subscribing ||
+            job().state == AcquisitionState::Unsubscribing)
+            setState(AcquisitionState::Subscribed);
+        download(s, f);
+    }
+
+    // The step is stored before the request goes out, so that a retry or a
+    // restart knows that Steam may have unsubscribed the item.
+    void unsubscribe() {
+        if (!requireOnline())
+            return;
+        ctx().unsubscribeRepeated = job().reinstallStep == ReinstallStep::Unsubscribing;
+        setStep(ReinstallStep::Unsubscribing);
+        setState(AcquisitionState::Unsubscribing);
+        clearError();
+        ctx().unsubscribeSent = true;
+        await(AwaitStep::UnsubscribeResult);
+        emit(ActionKind::Unsubscribe);
+    }
+
+    void subscribe() {
+        if (!requireOnline())
+            return;
+        setState(AcquisitionState::Subscribing);
+        clearError();
+        ctx().subscribeSent = true;
+        await(AwaitStep::SubscribeResult);
+        emit(ActionKind::Subscribe);
+    }
+
+    // Subscribed: follow a running download, wait for the one this run asked
+    // for, or ask for one (for an update or reinstall also when Steam calls
+    // the installed version current).
+    void download(const ItemStatus& s, const ItemFlags& f) {
         if (f.downloading || f.downloadPending) {
             enterProgress();
             trackDownload(s, f);
@@ -510,11 +763,38 @@ private:
 
     void progress(const ItemStatus& s, std::uint32_t previousFlags) {
         const ItemFlags f = decodeItemFlags(s.flags);
-        if (f.installedAndCurrent() && !s.installPath.empty()) {
-            verify(s.installPath);
+        const bool dropped = !f.subscribed && !f.downloading && !f.downloadPending;
+        if (dropped && kind() == AcquisitionKind::Update) {
+            needsUser(ErrorCode::ValidationFailed,
+                      "Workshop item " + job().identity.id +
+                          " is no longer subscribed in Steam (it may have been unsubscribed "
+                          "manually), so Steam does not update it. Subscribe to it on its "
+                          "Workshop page, then retry.");
             return;
         }
-        if (!f.subscribed && !f.downloading && !f.downloadPending) {
+        if (dropped && kind() == AcquisitionKind::Reinstall) {
+            setStep(ReinstallStep::Unsubscribed); // a retry subscribes again
+            needsUser(ErrorCode::ValidationFailed,
+                      "Steam no longer reports a subscription to the re-downloaded item (it may "
+                      "have been unsubscribed manually).");
+            return;
+        }
+        if (f.installedAndCurrent() && !s.installPath.empty()) {
+            if (kind() == AcquisitionKind::Acquire || targetReached(s)) {
+                verify(s.installPath);
+                return;
+            }
+            // Steam calls the old version current; the Tick decides when to
+            // ask again or give up.
+            ctx().currentButOld = true;
+            bool changed = s.flags != previousFlags;
+            recordBytes(s, changed);
+            if (changed)
+                ctx().lastProgressAtMs = ctx().clockMs;
+            return;
+        }
+        ctx().currentButOld = false;
+        if (dropped) {
             // Steam will not download an item nobody is subscribed to.
             needsUser(ErrorCode::ValidationFailed,
                       "Workshop item " + job().identity.id +
@@ -532,6 +812,19 @@ private:
             ctx().lastProgressAtMs = ctx().clockMs;
     }
 
+    // Reinstall: after the unsubscribe, until Steam no longer reports the
+    // subscription and, within removalGraceMs, no longer the installed files.
+    void removal(const ItemStatus& s) {
+        const ItemFlags f = decodeItemFlags(s.flags);
+        if (f.subscribed)
+            return; // the Tick polls again and times out
+        if (ctx().droppedAtMs == 0)
+            ctx().droppedAtMs = std::max<std::int64_t>(1, ctx().clockMs);
+        if (f.installed && ctx().clockMs - ctx().droppedAtMs < m_policy.removalGraceMs)
+            return;
+        subscribe();
+    }
+
     // State reports while idle come from rescans (e.g. after the manual
     // fallback). Completed content is verified; a running download is tracked.
     void rescan(const ItemStatus& s) {
@@ -546,7 +839,12 @@ private:
         const ItemFlags f = decodeItemFlags(s.flags);
         if (!f.subscribed)
             return;
-        if (f.installedAndCurrent() && !s.installPath.empty()) {
+        // An update is complete only at its target; a re-download only once
+        // this job saw it download.
+        const bool complete =
+            kind() == AcquisitionKind::Acquire ||
+            (kind() == AcquisitionKind::Update && job().targetTimeUpdated > 0 && targetReached(s));
+        if (complete && f.installedAndCurrent() && !s.installPath.empty()) {
             ctx().retryAtMs = 0;
             ctx().subscribeConfirmed = true;
             verify(s.installPath);
@@ -555,6 +853,8 @@ private:
         if (f.downloading || f.downloadPending) {
             ctx().retryAtMs = 0;
             ctx().subscribeConfirmed = true;
+            if (kind() == AcquisitionKind::Reinstall)
+                setStep(ReinstallStep::Resubscribed);
             clearError();
             enterProgress();
             trackDownload(s, f);
@@ -583,6 +883,10 @@ const char* toString(AwaitStep step) noexcept {
         return "progress";
     case AwaitStep::Verification:
         return "verification";
+    case AwaitStep::UnsubscribeResult:
+        return "unsubscribe_result";
+    case AwaitStep::Removal:
+        return "removal";
     }
     return "nothing";
 }
@@ -603,6 +907,8 @@ const char* toString(ActionKind kind) noexcept {
         return "verify_content";
     case ActionKind::OpenFallbackPage:
         return "open_fallback_page";
+    case ActionKind::Unsubscribe:
+        return "unsubscribe";
     }
     return "none";
 }
@@ -672,6 +978,10 @@ std::optional<Observation> observationFromHelperEvent(const HelperEvent& event,
                 if (e.id == itemId)
                     return obs::SubscribeResult{e.result};
                 return std::nullopt;
+            } else if constexpr (std::is_same_v<T, UnsubscribeResultEvent>) {
+                if (e.id == itemId)
+                    return obs::UnsubscribeResult{e.result};
+                return std::nullopt;
             } else if constexpr (std::is_same_v<T, DownloadRequestedEvent>) {
                 if (e.id == itemId)
                     return obs::DownloadAccepted{e.accepted};
@@ -691,6 +1001,8 @@ std::optional<HelperCommand> helperCommandFor(const Action& action) {
         return HelperCommand{SubscribeCommand{action.itemId}};
     case ActionKind::RequestDownload:
         return HelperCommand{DownloadCommand{action.itemId, action.highPriority}};
+    case ActionKind::Unsubscribe:
+        return HelperCommand{UnsubscribeCommand{action.itemId}};
     case ActionKind::None:
     case ActionKind::QuerySession:
     case ActionKind::VerifyContent:

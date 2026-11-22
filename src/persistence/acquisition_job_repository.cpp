@@ -2,6 +2,8 @@
 
 #include "persistence/internal/mapping.hpp"
 
+#include <limits>
+
 namespace pmm::persistence {
 
 using namespace internal;
@@ -10,7 +12,17 @@ namespace {
 
 constexpr const char* kSelect =
     "SELECT id, game_key, source, provider_id, playset_id, state, error_code, error_message, "
-    "attempts, bytes_downloaded, bytes_total, created_at, updated_at FROM acquisition_jobs";
+    "attempts, bytes_downloaded, bytes_total, created_at, updated_at, kind, target_time_updated, "
+    "target_manifest, reinstall_step FROM acquisition_jobs";
+
+constexpr std::int64_t kMaxSeconds = std::numeric_limits<std::int64_t>::max() / 1000;
+
+// Unix seconds in the model, milliseconds in the database (as every timestamp).
+std::int64_t secondsToMs(std::int64_t seconds) noexcept {
+    if (seconds > kMaxSeconds || seconds < -kMaxSeconds)
+        return 0;
+    return seconds * 1000;
+}
 
 Result<AcquisitionJob> readJob(const Statement& stmt) {
     AcquisitionJob job;
@@ -30,6 +42,18 @@ Result<AcquisitionJob> readJob(const Statement& stmt) {
     job.bytesTotal = static_cast<std::uint64_t>(stmt.columnInt64(10));
     job.createdAt = stmt.columnInt64(11);
     job.updatedAt = stmt.columnInt64(12);
+    const auto kind = acquisitionKindFromString(stmt.columnText(13));
+    if (!kind)
+        return corruptValue("acquisition job " + std::to_string(job.id),
+                            "kind='" + stmt.columnText(13) + "'");
+    job.kind = *kind;
+    job.targetTimeUpdated = stmt.columnInt64(14) / 1000;
+    job.targetManifest = stmt.columnText(15);
+    const auto step = reinstallStepFromString(stmt.columnText(16));
+    if (!step)
+        return corruptValue("acquisition job " + std::to_string(job.id),
+                            "reinstall_step='" + stmt.columnText(16) + "'");
+    job.reinstallStep = *step;
     return job;
 }
 
@@ -55,6 +79,12 @@ Error jobNotFound(std::int64_t id) {
 Result<AcquisitionJob>
 AcquisitionJobRepository::createOrReuse(const ModIdentity& identity,
                                         std::optional<std::int64_t> playsetId) {
+    return createOrReuse(identity, playsetId, NewJob{});
+}
+
+Result<AcquisitionJob>
+AcquisitionJobRepository::createOrReuse(const ModIdentity& identity,
+                                        std::optional<std::int64_t> playsetId, const NewJob& kind) {
     if (identity.game.empty() || identity.source.empty() || identity.id.empty())
         return makeError(ErrorCode::InvalidArgument,
                          "Cannot queue a download for an incomplete mod identity.",
@@ -78,14 +108,21 @@ AcquisitionJobRepository::createOrReuse(const ModIdentity& identity,
         AcquisitionJob job;
         job.identity = identity;
         job.playsetId = playsetId;
+        job.kind = kind.kind;
+        job.targetTimeUpdated = kind.targetTimeUpdated;
+        job.targetManifest = kind.targetManifest;
         job.state = AcquisitionState::Pending;
         job.createdAt = job.updatedAt = m_db.now();
         PMM_DB_TRY_VALUE(
-            insert, c.prepare("INSERT INTO acquisition_jobs (game_key, source, provider_id, "
-                              "playset_id, state, attempts, bytes_downloaded, bytes_total, "
-                              "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?)"));
+            insert,
+            c.prepare("INSERT INTO acquisition_jobs (game_key, source, provider_id, playset_id, "
+                      "state, attempts, bytes_downloaded, bytes_total, created_at, updated_at, "
+                      "kind, target_time_updated, target_manifest, reinstall_step) "
+                      "VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?, ?)"));
         insert->bindAll(identity.game, identity.source, identity.id, playsetId, toString(job.state),
-                        job.createdAt, job.updatedAt);
+                        job.createdAt, job.updatedAt, toString(job.kind),
+                        secondsToMs(job.targetTimeUpdated), job.targetManifest,
+                        toString(job.reinstallStep));
         PMM_TRY(insert->run());
         job.id = c.lastInsertRowId();
         result = std::move(job);
@@ -99,10 +136,12 @@ Status AcquisitionJobRepository::update(const AcquisitionJob& job) {
     Connection& c = guard.connection();
     PMM_DB_TRY_VALUE(stmt, c.prepare("UPDATE acquisition_jobs SET playset_id = ?, state = ?, "
                                      "error_code = ?, error_message = ?, attempts = ?, "
-                                     "bytes_downloaded = ?, bytes_total = ?, updated_at = ? "
-                                     "WHERE id = ?"));
+                                     "bytes_downloaded = ?, bytes_total = ?, "
+                                     "target_time_updated = ?, target_manifest = ?, "
+                                     "reinstall_step = ?, updated_at = ? WHERE id = ?"));
     stmt->bindAll(job.playsetId, toString(job.state), job.errorCode, job.errorMessage, job.attempts,
-                  job.bytesDownloaded, job.bytesTotal, m_db.now(), job.id);
+                  job.bytesDownloaded, job.bytesTotal, secondsToMs(job.targetTimeUpdated),
+                  job.targetManifest, toString(job.reinstallStep), m_db.now(), job.id);
     if (auto status = stmt->run(); !status) {
         Error error = std::move(status).error();
         if (error.code == ErrorCode::AlreadyExists)

@@ -206,8 +206,9 @@ Result<HelperEvent> decodeState(const Json& j) {
     return HelperEvent{std::move(e)};
 }
 
-Result<HelperEvent> decodeSubscribeResult(const Json& j) {
-    SubscribeResultEvent e;
+// subscribe_result and unsubscribe_result: {id, ok, result}.
+template <class Event> Result<HelperEvent> decodeCallResult(const Json& j) {
+    Event e;
     auto id = requireItemId(j, "id");
     if (!id)
         return std::move(id).error();
@@ -273,6 +274,9 @@ std::string encodeCommand(const HelperCommand& command) {
                 j["cmd"] = "download";
                 j["id"] = c.id;
                 j["highPriority"] = c.highPriority;
+            } else if constexpr (std::is_same_v<T, UnsubscribeCommand>) {
+                j["cmd"] = "unsubscribe";
+                j["id"] = c.id;
             } else {
                 static_assert(std::is_same_v<T, QuitCommand>);
                 j["cmd"] = "quit";
@@ -337,6 +341,12 @@ Result<HelperCommand> decodeCommand(std::string_view line) {
             return std::move(high).error();
         return HelperCommand{DownloadCommand{std::move(*id), *high}};
     }
+    if (*cmd == "unsubscribe") {
+        auto id = requireItemId(j, "id");
+        if (!id)
+            return std::move(id).error();
+        return HelperCommand{UnsubscribeCommand{std::move(*id)}};
+    }
     return makeError(ErrorCode::ValidationFailed, "Unknown helper command.",
                      "cmd=\"" + cmd->substr(0, 32) + "\"");
 }
@@ -373,6 +383,11 @@ std::string encodeEvent(const HelperEvent& event) {
                 j["event"] = "download_requested";
                 j["id"] = e.id;
                 j["accepted"] = e.accepted;
+            } else if constexpr (std::is_same_v<T, UnsubscribeResultEvent>) {
+                j["event"] = "unsubscribe_result";
+                j["id"] = e.id;
+                j["ok"] = e.ok;
+                j["result"] = e.result;
             } else if constexpr (std::is_same_v<T, PongEvent>) {
                 j["event"] = "pong";
             } else {
@@ -402,9 +417,11 @@ Result<HelperEvent> decodeEvent(std::string_view line) {
     if (*name == "state")
         return decodeState(j);
     if (*name == "subscribe_result")
-        return decodeSubscribeResult(j);
+        return decodeCallResult<SubscribeResultEvent>(j);
     if (*name == "download_requested")
         return decodeDownloadRequested(j);
+    if (*name == "unsubscribe_result")
+        return decodeCallResult<UnsubscribeResultEvent>(j);
     if (*name == "pong")
         return HelperEvent{PongEvent{}};
     if (*name == "error") {
