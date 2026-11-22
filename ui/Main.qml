@@ -104,7 +104,7 @@ ApplicationWindow {
     // "Re-download from scratch…" of one Workshop mod (a row, or a failed update job).
     function askReinstall(name: string, action: var) {
         confirmDialog.ask(qsTr("Re-download from scratch"),
-                          qsTr("Steam unsubscribes “%1”, deletes its files and downloads it again. The mod is missing until the download finishes.").arg(name),
+                          qsTr("Steam unsubscribes “%1”, which removes its files, then it is subscribed again and downloaded. The mod is missing until the download finishes.").arg(name),
                           qsTr("It stays in your playsets. Other games or launchers that use the same Steam subscription see it disappear briefly."),
                           qsTr("Re-download"), true, true, action)
     }

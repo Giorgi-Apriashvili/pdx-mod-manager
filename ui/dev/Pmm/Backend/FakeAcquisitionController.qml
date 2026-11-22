@@ -54,7 +54,7 @@ QtObject {
           errorMessage: "The item was removed from the Workshop or is private.", errorCode: "item_unavailable",
           canRetry: false, canOpenFallback: true, canReinstall: false },
         { jobId: 15, name: "Glorious Edicts Lite", providerId: "2900000015", kind: "update", state: "failed",
-          stateText: "Failed", progress: -1,
+          stateText: "Update failed", progress: -1,
           errorMessage: "Steam has not picked up this update yet. Steam checks for updates about every 45 minutes; restarting Steam makes it check right away.",
           errorCode: "update_not_seen", canRetry: true, canOpenFallback: false, canReinstall: true }
     ]
@@ -160,9 +160,10 @@ QtObject {
     }
 
     // Rows of `providerIds` (all rows with an update when empty) become
-    // "Updating", as the real rows do while their update job runs.
-    function startUpdates(providerIds: var): int {
-        let started = 0
+    // "Updating", as the real rows do while their update job runs. Returns
+    // their names. The notification texts follow the engine's messages.
+    function startUpdates(providerIds: var): var {
+        const started = []
         for (let i = 0; i < mods.count; ++i) {
             const m = mods.get(i)
             if (!m.updateAvailable || (providerIds.length > 0 && providerIds.indexOf(m.providerId) < 0))
@@ -171,7 +172,7 @@ QtObject {
             mods.setProperty(i, "status", "pending")
             mods.setProperty(i, "statusText", "Updating")
             addJob(m, "update", "download_requested", "Update requested")
-            ++started
+            started.push(m.name)
         }
         mods.afterChange(false)
         return started
@@ -180,12 +181,13 @@ QtObject {
     function updateMods() {
         if (refuseWithoutSteam() || !mods)
             return
-        const n = startUpdates([])
-        if (n === 0)
+        const names = startUpdates([])
+        if (names.length === 0)
             notifications.post("info", "Nothing to update", "No mod of this playset has a known update.")
         else
             notifications.post("info", "Updates requested",
-                               n === 1 ? "Updating 1 Workshop mod through Steam." : "Updating " + n + " Workshop mods through Steam.")
+                               names.length === 1 ? "Updating \"" + names[0] + "\" through Steam."
+                                                  : "Updating " + names.length + " Workshop mods through Steam.")
     }
 
     function updateMod(providerId: string) {
@@ -196,11 +198,11 @@ QtObject {
             if (mods.get(i).providerId === providerId)
                 name = mods.get(i).name
         }
-        if (startUpdates([providerId]) === 0)
+        if (startUpdates([providerId]).length === 0)
             notifications.post("warning", "Nothing was updated",
-                               "Nothing was updated. Not updated: “" + name + "”. No newer version is known. Use Check for mod updates first.")
+                               "Not updated: \"" + name + "\". No newer version is known. Use Check for mod updates first.")
         else
-            notifications.post("info", "Update requested", "Updating “" + name + "” through Steam.")
+            notifications.post("info", "Update requested", "Updating \"" + name + "\" through Steam.")
     }
 
     function reinstallMod(providerId: string) {
@@ -215,8 +217,8 @@ QtObject {
             mods.setProperty(i, "statusText", "Unsubscribing")
             addJob(m, "reinstall", "unsubscribing", "Unsubscribing")
             mods.afterChange(false)
-            notifications.post("info", "Downloading again", "Downloading “" + m.name
-                               + "” again: Steam unsubscribes it, then subscribes again and downloads it.")
+            notifications.post("info", "Downloading again", "Downloading \"" + m.name
+                               + "\" again: Steam unsubscribes it, then subscribes again and downloads it.")
             return
         }
     }
@@ -230,8 +232,8 @@ QtObject {
                 continue
             jobs.set(i, { kind: "reinstall", state: "unsubscribing", stateText: "Unsubscribing", errorMessage: "",
                           errorCode: "", canRetry: false, canReinstall: false })
-            notifications.post("info", "Downloading again", "Downloading “" + job.name
-                               + "” again: Steam unsubscribes it, then subscribes again and downloads it.")
+            notifications.post("info", "Downloading again", "Downloading \"" + job.name
+                               + "\" again: Steam unsubscribes it, then subscribes again and downloads it.")
             return
         }
     }

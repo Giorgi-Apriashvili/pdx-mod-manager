@@ -13,6 +13,9 @@ Rectangle {
 
     // "Re-download from scratch…" on a failed update: Main.qml asks first.
     signal reinstallRequested(int jobId, string name)
+    // Retry or "Re-download from scratch…" went away with the focus (the job
+    // moved on): DownloadsSection moves the focus.
+    signal actionHidden()
 
     readonly property string jobState: model.state
     readonly property string kind: model.kind ?? "acquire"
@@ -50,6 +53,28 @@ Rectangle {
     Accessible.role: Accessible.ListItem
     Accessible.name: model.name + ", " + model.stateText
     Accessible.description: model.errorMessage
+
+    // Also when the focus comes back to an action already hidden (a dialog
+    // that asked about it closes).
+    function checkAction(action: var) {
+        if (action.visible) {
+            action.focusHeld = action.activeFocus
+        } else if (action.activeFocus || action.focusHeld) {
+            action.focusHeld = false
+            job.actionHidden()
+        }
+    }
+
+    // The first visible action of this job takes the focus; false when it has none.
+    function focusFirstAction(): bool {
+        for (const action of [retryButton, fallbackLink, reinstallLink]) {
+            if (action.visible && action.enabled) {
+                action.forceActiveFocus(Qt.TabFocusReason)
+                return true
+            }
+        }
+        return false
+    }
 
     GridLayout {
         id: layout
@@ -95,6 +120,9 @@ Rectangle {
             }
         }
         AppButton {
+            id: retryButton
+            objectName: "jobRetryButton"
+            property bool focusHeld: false
             Layout.row: 0
             Layout.column: 2
             Layout.alignment: Qt.AlignTop
@@ -108,6 +136,8 @@ Rectangle {
                            : job.kind === "reinstall" ? qsTr("Retry re-download of %1").arg(job.model.name)
                            : qsTr("Retry download of %1").arg(job.model.name)
             onClicked: Backend.acquisition.retry(job.model.jobId)
+            onActiveFocusChanged: job.checkAction(retryButton)
+            onVisibleChanged: job.checkAction(retryButton)
         }
 
         AppProgressBar {
@@ -136,6 +166,7 @@ Rectangle {
         }
 
         LinkButton {
+            id: fallbackLink
             Layout.row: 3
             Layout.column: 1
             Layout.columnSpan: 2
@@ -149,7 +180,9 @@ Rectangle {
         }
 
         LinkButton {
+            id: reinstallLink
             objectName: "jobReinstallLink"
+            property bool focusHeld: false
             Layout.row: 4
             Layout.column: 1
             Layout.columnSpan: 2
@@ -158,8 +191,10 @@ Rectangle {
             text: qsTr("Re-download from scratch…")
             Accessible.name: qsTr("Re-download %1 from scratch…").arg(job.model.name)
             font.pixelSize: Theme.fontSizeSmall
-            toolTipText: qsTr("Steam unsubscribes the mod, deletes its files and downloads it again. Asks first.")
+            toolTipText: qsTr("Steam unsubscribes the mod, which removes its files, then it is subscribed again and downloaded. Asks first.")
             onClicked: job.reinstallRequested(job.model.jobId, job.model.name)
+            onActiveFocusChanged: job.checkAction(reinstallLink)
+            onVisibleChanged: job.checkAction(reinstallLink)
         }
     }
 }

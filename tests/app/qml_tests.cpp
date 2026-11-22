@@ -2196,7 +2196,8 @@ TEST_CASE("Check for mod updates shows its result, and the update actions follow
         REQUIRE(waitUntil([&] { return dialog->property("opened").toBool(); }));
         CHECK(dialog->property("title").toString() == "Re-download from scratch");
         CHECK(dialog->property("message").toString().startsWith(
-            QStringLiteral("Steam unsubscribes “Example Outdated”, deletes its files")));
+            QStringLiteral("Steam unsubscribes “Example Outdated”, which removes its files, then "
+                           "it is subscribed again and downloaded.")));
         QMetaObject::invokeMethod(window, "closeDialogs");
         REQUIRE(waitUntil([&] { return !dialog->property("visible").toBool(); }));
         waitUntil([] { return false; }, std::chrono::milliseconds(150));

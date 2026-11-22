@@ -1371,13 +1371,19 @@ Item {
             press(Qt.Key_Return)
             tryVerify(() => dialog.opened)
             compare(dialog.title, "Re-download from scratch")
-            verify(dialog.message.indexOf("Steam unsubscribes “" + name + "”, deletes its files and downloads it again") === 0,
+            verify(dialog.message.indexOf("Steam unsubscribes “" + name
+                                          + "”, which removes its files, then it is subscribed again and downloaded.") === 0,
                    dialog.message)
             verify(dialog.message.indexOf("The mod is missing until the download finishes.") >= 0)
             verify(dialog.detail.indexOf("It stays in your playsets.") === 0, dialog.detail)
             verify(dialog.detail.indexOf("see it disappear briefly") >= 0)
             compare(findChild(dialog.footer, "confirmButton").text, "Re-download")
             tryVerify(() => findChild(dialog.footer, "cancelButton").activeFocus)
+            // Screen readers hear all of it with the focused Cancel: the text takes no focus.
+            compare(findChild(dialog.footer, "cancelButton").Accessible.description,
+                    dialog.message + " " + dialog.detail)
+            compare(findChild(dialog.footer, "confirmButton").Accessible.description,
+                    dialog.message + " " + dialog.detail)
             press(Qt.Key_Return)
             tryVerify(() => !dialog.visible)
             compare(notificationSpy.count, 0)
@@ -1419,17 +1425,40 @@ Item {
             const other = jobDelegate(13)
             verify(!findChild(other, "jobReinstallLink").visible)
 
+            // By keyboard: the focus does not stay on the link that the job hides.
             const dialog = named("confirmDialog")
-            link.clicked()
+            link.forceActiveFocus(Qt.TabFocusReason)
+            press(Qt.Key_Space)
             tryVerify(() => dialog.opened)
             compare(dialog.title, "Re-download from scratch")
             verify(dialog.message.indexOf(job.model.name) >= 0)
-            mouseClick(findChild(dialog.footer, "confirmButton"))
+            tryVerify(() => findChild(dialog.footer, "cancelButton").activeFocus)
+            press(Qt.Key_Tab)
+            verify(findChild(dialog.footer, "confirmButton").activeFocus)
+            press(Qt.Key_Space)
             tryVerify(() => !dialog.visible)
             const after = jobDelegate(15)
             compare(after.model.state, "unsubscribing")
             compare(after.kind, "reinstall")
             verify(after.active)
+            verify(!link.visible)
+            tryVerify(() => win.activeFocusItem && win.activeFocusItem.visible
+                            && win.activeFocusItem === named("checkModUpdatesButton"), 2000,
+                      "the focus stayed on the hidden link: " + win.activeFocusItem)
+
+            // Retry, hidden once the job runs again, hands its focus on too.
+            restoreUpdates(rows)
+            const failed = jobDelegate(13)
+            const retry = findChild(failed, "jobRetryButton")
+            verify(retry.visible)
+            retry.forceActiveFocus(Qt.TabFocusReason)
+            Backend.acquisition.jobs.setProperty(2, "canRetry", false)
+            verify(!retry.visible)
+            tryVerify(() => win.activeFocusItem && win.activeFocusItem.visible
+                            && win.activeFocusItem !== retry, 2000,
+                      "the focus stayed on the hidden Retry: " + win.activeFocusItem)
+            // The job's own fallback link is next.
+            compare(win.activeFocusItem.text, "Open in Steam (manual fallback)")
             restoreUpdates(rows)
         }
 

@@ -76,7 +76,11 @@ Things the QML relies on beyond the tables in the contract:
   mod's details `dependenciesHeading` ("Dependencies", or "Loads after" for
   a mod that names mods in a game that does not need them: every game but
   Victoria 3), `dependenciesNote` and `dependencyRow` (each listed
-  dependency).
+  dependency); for the updates of installed Workshop mods
+  `checkModUpdatesButton`, `updateModsButton`, `updateCheckLine`,
+  `updateCheckRetry`, `downloadsEmptyText`, `jobList`, `jobRetryButton` and
+  `jobReinstallLink` (in a job row), and `updateFromWorkshopItem` and
+  `reinstallItem` in the mod list's context menu (`ModsPane.rowMenu`).
 - The window's minimum size is 900x440 (it fits a 1920x1080 screen at
   200 %); `docs/accessibility.md` ("Smallest window") describes how the
   columns, the toolbar, the actions column and the dialogs adapt.

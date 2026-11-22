@@ -63,6 +63,18 @@ ColumnLayout {
         function onUpdateCheckFinished() { Qt.callLater(root.announceCheck) }
     }
 
+    // A job's Retry or "Re-download from scratch…" went away with the focus
+    // (the job moved on): the job's next action takes it, else "Check for mod
+    // updates", else the job list.
+    function focusAfterJobAction(job: JobDelegate) {
+        if (job && job.focusFirstAction())
+            return
+        if (checkButton.visible && checkButton.enabled)
+            checkButton.forceActiveFocus(Qt.TabFocusReason)
+        else
+            jobList.forceActiveFocus(Qt.TabFocusReason)
+    }
+
     function providerText(status: string): string {
         switch (status) {
         case "ready": return qsTr("Steam is running and signed in")
@@ -170,8 +182,10 @@ ColumnLayout {
         Accessible.name: qsTr("Download jobs")
 
         delegate: JobDelegate {
+            id: jobItem
             width: jobList.width - (jobList.contentHeight > jobList.height ? 10 : 0)
             onReinstallRequested: (jobId, name) => root.reinstallJobRequested(jobId, name)
+            onActionHidden: Qt.callLater(root.focusAfterJobAction, jobItem)
         }
     }
 
