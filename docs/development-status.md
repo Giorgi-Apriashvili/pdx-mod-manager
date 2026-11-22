@@ -94,6 +94,35 @@ was written. Item 17 below.
   clang-tidy on the 43 C++ files changed since `origin/main` without
   findings, the `ci` preset from a fresh checkout 699/699). The commit
   after it changes this file only.
+- Review fixes (`3c57a40` to `6918942`): a re-download stores an
+  "unsubscribing" step before its unsubscribe goes out and always
+  subscribes again after a confirmed one (also while Steam still lists
+  the subscription), never subscribes an item that was not subscribed,
+  and fails with "Steam kept the installed files" instead of reporting
+  "Downloaded again" when nothing shows a fresh download; an update that
+  finds Steam already downloading makes its first request only after that
+  download; the coordinator writes step and target changes at once, lets
+  a re-download past its unsubscribe finish without a Web API verdict and
+  words an unconfirmed one from its step, resumes updates parked while
+  the game ran, keeps a cancelled re-download that left the mod
+  unsubscribed listed, and drops failed updates Steam completed by
+  itself; the update check tells mods installed after it from unanswered
+  ones; the launch blockers drop a wrong "other" and explain stored jobs
+  in sessions without Workshop downloads; job actions that hide with the
+  focus hand it on. `debug` preset: **716/716 tests pass**
+  (pmm_core_tests 65, pmm_providers_tests 79, pmm_services_tests 129, the
+  others as above; ui-preview 1 with 44 test functions). 12 new services
+  cases, 4 new reducer cases and 1 new readiness case, plus changed
+  checks; each of the 10 services and reducer behaviours was switched off
+  once and its test failed, and `test_c5` fails without the focus
+  handling. No committed screenshot shows a changed text (the failed
+  update job is scrolled out of view), so none was replaced; a new run
+  differed only by an animation phase and focus timing.
+  `scripts/check.sh --full` on `6918942`: passed in 13 min 27 s (ASan
+  and clang-cl with UBSan 582/582 each, the update contract's 112 checks,
+  clang-tidy on the 43 C++ files changed since `origin/main` without
+  findings, the `ci` preset from a fresh checkout 716/716). The commit
+  after it changes this file only.
 
 ## Test status (2026-11-21, dependencies not required, `agent/dependencies-optional`)
 
