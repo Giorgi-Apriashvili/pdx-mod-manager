@@ -1463,7 +1463,18 @@ Packaging ([`packaging.md`](packaging.md)):
     text, so none was replaced. `scripts/check.sh --full` on `61dff0a`: passed
     in 8 min 4 s (ASan and clang-cl with UBSan 583/583 each, the update
     contract's 112 checks, clang-tidy on the 6 changed C++ files without
-    findings, the `ci` preset from a fresh checkout 717/717). Not merged.
+    findings, the `ci` preset from a fresh checkout 717/717). The entry
+    warnings in the preview: one new section in the app's Backend test (the
+    entry's `warnings` and status, the count line, no row warning after the
+    import) and one QML preview test (`test_9ca`: the warning under the row,
+    its accessible description, the next row moved down); without the
+    `ShareController` and `ImportDialog` changes both fail. The preview
+    backend's captures rendered with them are pixel for pixel the committed
+    ones, so none was replaced.
+    `scripts/check.sh --full` on `6c23a34`: passed in 9 min 4 s (`debug`
+    717/717, ASan and clang-cl with UBSan 583/583 each, the update contract's
+    112 checks, clang-tidy on the 8 changed C++ files without findings, the
+    `ci` preset from a fresh checkout 717/717). Not merged.
 
 ## Working rules
 
