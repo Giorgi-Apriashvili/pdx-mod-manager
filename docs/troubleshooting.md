@@ -126,6 +126,21 @@ itself, shown with its name, not the mods in it. The preview cannot tell a
 collection from a mod; paste the IDs or links of the collection's mods
 instead.
 
+## The import preview says a mod's version or files differ
+
+A share code remembers the version of each mod the sender had installed.
+When yours is another one, the import preview says so ("1 installed mod has
+a different version than in the share code."), and that is all: Steam
+installs only the newest version of a Workshop mod and updates it by itself,
+so there is nothing to choose, and the mod list does not warn about it. In
+multiplayer the game compares its own checksum.
+
+A local mod cannot be downloaded, so different files mean a different mod.
+When the preview can tell that a local mod's files differ from the ones the
+code was created with, it says so, and the mod list shows the warning "This
+local mod's files differ from the ones this playset was saved or shared
+with." To play together, use the sender's copy of the mod.
+
 ## Offline use
 
 Without a network connection, or with Steam in offline mode, the manager still

@@ -15,6 +15,10 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+### Changed
+
+- **No more mod version warnings.** A mod no longer gets a warning when its installed version differs from the one its playset remembers, which a playset read from the game's configuration also did after every Workshop update ("The shared setup used version …"). Steam installs only the newest version of a Workshop mod and updates it by itself, so there was nothing to do about it; such mods no longer count under "With warnings" or in **Play**'s warnings, whose line now reads "N enabled mods have warnings (for example about dependencies)". The import preview still says when a share code was created with other mod versions than yours ("1 installed mod has a different version than in the share code."), and a local mod still gets a warning when its files differ from the ones the playset was saved or shared with ([troubleshooting](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/main/docs/troubleshooting.md#the-import-preview-says-a-mods-version-or-files-differ)).
+
 ## [0.3.1] - 2026-11-22
 
 Check for and install updates of the playset's Workshop mods, re-download a mod from scratch, and mods' `dependencies` no longer treated as requirements outside Victoria 3. Installed copies update to this version from the update banner or **Settings > Updates**.

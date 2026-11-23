@@ -178,9 +178,9 @@ by count only):
   [load order](../load-order.md#dependencies)): no
   warning on the row, nothing counted under "with warnings" or in the launch
   check (whose line about them reads "N enabled mods have warnings; see the
-  mod list.", without "(versions or dependencies)"), no feedback when mods
-  are enabled or disabled. The selected mod's details list them under "Loads
-  after", each mod once, with what each is in the playset (enabled,
+  mod list.", without "(for example about dependencies)"), no feedback when
+  mods are enabled or disabled. The selected mod's details list them under
+  "Loads after", each mod once, with what each is in the playset (enabled,
   disabled, installed but not in the playset, not installed) and the note
   that the game does not need them (the only note that says the game loads
   the mod after them, because only Hearts of Iron IV documents it); a mod

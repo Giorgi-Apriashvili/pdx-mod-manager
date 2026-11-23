@@ -162,9 +162,9 @@ about a named mod's place in the list would be wrong too. The application
 therefore checks nothing (the catalog's `dependencyMeaning` is `LoadAfter`,
 as for Hearts of Iron IV): no warning on the row, in the launch check (whose
 line about mods with warnings reads "N enabled mods have warnings; see the
-mod list.", without "(versions or dependencies)") or when mods are enabled.
-The selected mod's details list the names under "Loads after", each mod
-once, with what each is in the playset and the note "Europa Universalis IV
+mod list.", without "(for example about dependencies)") or when mods are
+enabled. The selected mod's details list the names under "Loads after", each
+mod once, with what each is in the playset and the note "Europa Universalis IV
 does not need these mods. This mod names them to load before it when they
 are enabled."; nothing is enabled, added or reordered for them. Until
 2026-11-21 they were checked as requirements ("Requires …"). No mod on the
