@@ -185,7 +185,11 @@ Further rules:
   possible.
 * Identical references, ordering and enabled states do not guarantee identical
   bytes or multiplayer checksums: mods and games update independently. Version
-  and fingerprint differences are shown when the information is available.
+  and fingerprint differences are shown in the import preview when the
+  information is available. After the import only a local mod's fingerprint
+  difference stays a warning on the mod: a local mod cannot be downloaded,
+  while Steam installs only the newest version of a Workshop mod and updates
+  it by itself.
 
 ## 4. Canonical form
 

@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -25,7 +26,8 @@ AcquisitionJob job(const PlaysetEntry& entry, AcquisitionState state) {
 
 } // namespace
 
-TEST_CASE("Installed usable content is ready, with mismatch warnings", "[core][readiness]") {
+TEST_CASE("Installed usable content is ready; a remembered version is no warning",
+          "[core][readiness]") {
     PlaysetEntry entry = workshop("1", "Mod");
     InstalledMod mod = installed(entry.identity, "Mod");
 
@@ -33,27 +35,53 @@ TEST_CASE("Installed usable content is ready, with mismatch warnings", "[core][r
     CHECK(r.status == EntryStatus::Ready);
     CHECK(r.warnings.empty());
 
+    // The version a playset remembers (a share code's, or the one installed
+    // when the game's configuration was read) differing from the installed
+    // one is nothing to act on: Steam updates Workshop mods by itself and
+    // installs no older version. Only the import preview mentions it.
     entry.versionHint = "1.0";
     mod.descriptor.version = "1.1";
-    entry.fingerprint = "sha256:" + std::string(64, 'a');
-    mod.fingerprint = "sha256:" + std::string(64, 'b');
+    r = computeReadiness(entry, &mod, nullptr);
+    CHECK(r.status == EntryStatus::Ready);
+    CHECK(r.warnings.empty());
+
     mod.problems = {"Descriptor has no supported_version."};
     r = computeReadiness(entry, &mod, nullptr);
     CHECK(r.status == EntryStatus::Ready);
-    REQUIRE(r.warnings.size() == 3);
-    CHECK_THAT(r.warnings[0], ContainsSubstring("version 1.0"));
-    CHECK_THAT(r.warnings[1], ContainsSubstring("fingerprint"));
+    CHECK(r.warnings == std::vector<std::string>{"Descriptor has no supported_version."});
 
     CHECK_FALSE(r.updateAvailable);
     mod.state = InstallState::NeedsUpdate;
     r = computeReadiness(entry, &mod, nullptr);
     CHECK(r.status == EntryStatus::Ready);
     CHECK(r.updateAvailable); // a flag, not a warning
-    CHECK(r.warnings.size() == 3);
+    CHECK(r.warnings.size() == 1);
 
     // Installed content wins over any job state.
     const AcquisitionJob failed = job(entry, AcquisitionState::Failed);
     CHECK(computeReadiness(entry, &mod, &failed).status == EntryStatus::Ready);
+}
+
+TEST_CASE("A local mod whose files differ from the remembered ones has a warning",
+          "[core][readiness]") {
+    // The fingerprint comes from a share code or from the game's
+    // configuration, so the warning names neither.
+    PlaysetEntry entry = local("example-local", "Mod");
+    InstalledMod mod = installed(entry.identity, "Mod");
+    mod.fingerprint = "sha256:" + std::string(64, 'b');
+    CHECK(computeReadiness(entry, &mod, nullptr).warnings.empty()); // nothing remembered
+
+    entry.fingerprint = mod.fingerprint;
+    CHECK(computeReadiness(entry, &mod, nullptr).warnings.empty());
+
+    entry.fingerprint = "sha256:" + std::string(64, 'a');
+    const EntryReadiness r = computeReadiness(entry, &mod, nullptr);
+    CHECK(r.status == EntryStatus::Ready);
+    CHECK(r.warnings == std::vector<std::string>{"This local mod's files differ from the ones "
+                                                 "this playset was saved or shared with."});
+
+    mod.fingerprint.clear(); // not computed since the last scan
+    CHECK(computeReadiness(entry, &mod, nullptr).warnings.empty());
 }
 
 TEST_CASE("Broken or updating installed content is not ready", "[core][readiness]") {

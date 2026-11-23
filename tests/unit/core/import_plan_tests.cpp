@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -167,6 +168,9 @@ TEST_CASE("Import warnings cover versions and always state the content caveat", 
 }
 
 TEST_CASE("Mod version and fingerprint differences are visible", "[core][import]") {
+    // The preview is the only place that compares a share code's mod
+    // versions with the installed ones: the mod list does not
+    // (core/readiness.hpp).
     Scenario s;
     s.requested[0].versionHint = "1.0";
     s.inventory[s.requested[0].identity].descriptor.version = "1.2";
@@ -175,21 +179,26 @@ TEST_CASE("Mod version and fingerprint differences are visible", "[core][import]
 
     const ImportPlan plan = s.plan();
     CHECK(plan.entries[0].installedVersion == "1.2");
-    REQUIRE_FALSE(plan.entries[0].warnings.empty());
-    CHECK_THAT(plan.entries[0].warnings[0], ContainsSubstring("version 1.0"));
-    REQUIRE_FALSE(plan.entries[4].warnings.empty());
-    CHECK_THAT(plan.entries[4].warnings[0], ContainsSubstring("fingerprint"));
+    CHECK(plan.entries[0].warnings ==
+          std::vector<std::string>{"The share code was created with version 1.0; you have 1.2."});
+    CHECK(plan.entries[4].warnings ==
+          std::vector<std::string>{
+              "This local mod's files differ from the ones the share code was created with."});
 
-    bool versionNote = false;
-    bool fingerprintNote = false;
-    for (const std::string& w : plan.warnings) {
-        versionNote = versionNote || w.find("different installed version") != std::string::npos;
-        fingerprintNote = fingerprintNote || w.find("installed files differ") != std::string::npos;
-    }
-    CHECK(versionNote);
-    CHECK(fingerprintNote);
+    const auto has = [&](const std::string& text) {
+        return std::find(plan.warnings.begin(), plan.warnings.end(), text) != plan.warnings.end();
+    };
+    CHECK(has("1 installed mod has a different version than in the share code."));
+    CHECK(has("1 local mod's files differ from the ones the share code was created with."));
     // Informational only: the entries keep the requested hints.
     CHECK(plan.toPlayset().entries == s.requested);
+
+    // Counted per mod.
+    s.requested[4].versionHint = "3.0";
+    s.inventory[s.requested[4].identity].descriptor.version = "3.1";
+    const ImportPlan both = s.plan();
+    CHECK(std::count(both.warnings.begin(), both.warnings.end(),
+                     "2 installed mods have a different version than in the share code.") == 1);
 }
 
 TEST_CASE("Unmapped local mods get suggestions but are never mapped automatically",

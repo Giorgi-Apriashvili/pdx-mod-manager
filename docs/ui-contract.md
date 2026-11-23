@@ -152,7 +152,11 @@ Roles:
   for Steam", "Downloading 45 %", "Updating", "Updating 45 %",
   "Re-downloading", "Unsubscribing", "Subscribing again", "Verifying",
   "Failed", "Action needed", ...);
-- `warnings` (string list), `hasWarnings` (bool);
+- `warnings` (string list), `hasWarnings` (bool). An installed version
+  other than the one the playset remembers is not a warning (only the import
+  preview compares a share code's versions); a local mod whose files differ
+  from the remembered ones is ("This local mod's files differ from the ones
+  this playset was saved or shared with.");
 - `progress` (real, -1 when not downloading);
 - `blocking` (bool: enabled and not ready);
 - `updateAvailable` (bool): the row is Ready and a newer version is on the
@@ -371,14 +375,24 @@ Invokables:
   `missingDisabled`, `localUnmapped`;
 - `downloads` (bool): false when Workshop downloads are off in this session,
   so the import queues nothing;
-- `warnings` (list; the portability note is not repeated here);
+- `warnings` (list; the portability note is not repeated here), which
+  counts the entries whose version or files differ: "1 installed mod has a
+  different version than in the share code." (and "1 local mod's files
+  differ from the ones the share code was created with.");
 - `entries` (list of `{position, name, source, providerId, enabled, check,
-  statusText}`): `name` is the installed name, else the Workshop title, else
-  the text's hint, else the id; `check` is what the Steam Workshop said about
-  a missing Workshop entry ("" not asked or not answered, "ok", "notFound",
-  "unavailable", "banned", "wrongGame"), and `statusText` then reads "Not
-  found on Workshop", "Unavailable on Workshop", "Banned on Workshop" or
-  "Another game's mod".
+  statusText, warnings}`): `name` is the installed name, else the Workshop
+  title, else the text's hint, else the id; `check` is what the Steam
+  Workshop said about a missing Workshop entry ("" not asked or not
+  answered, "ok", "notFound", "unavailable", "banned", "wrongGame"), and
+  `statusText` then reads "Not found on Workshop", "Unavailable on
+  Workshop", "Banned on Workshop" or "Another game's mod"; `warnings`
+  (string list) are the installed entry's own ("The share code was created
+  with version 1.0; you have 1.2.", "This local mod's files differ from the
+  ones the share code was created with.", "An update is pending for the
+  installed copy.", a broken mod's problems), and its `statusText` then
+  reads "Installed · see warnings" (or "Installed · broken"). The dialog
+  shows them under the entry's row; the preview is the only place that
+  names a mod whose version differs from the code's.
 
 ## `AcquisitionController` (QObject)
 

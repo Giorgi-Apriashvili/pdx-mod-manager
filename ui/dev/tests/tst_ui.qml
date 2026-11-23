@@ -333,6 +333,44 @@ Item {
             tryVerify(() => !Backend.sharing.hasPreview)
         }
 
+        // An entry's own warnings, such as a version other than the code's,
+        // are shown under its row and read with it: the preview's warnings
+        // only count them, and the mod list does not show a version difference.
+        function test_9ca_importShowsEntryWarnings() {
+            win.openImport(Backend.sharing.clipboardText())
+            const dialog = named("importDialog")
+            tryVerify(() => dialog.opened)
+            const list = findChild(dialog.contentItem, "importEntryList")
+            tryCompare(list, "count", 42)
+            tryVerify(() => list.itemAtIndex(1) !== null)
+            compare(list.itemAtIndex(1).height, 22)
+            compare(list.itemAtIndex(1).Accessible.description, "")
+            verify(!findChild(list.itemAtIndex(1), "importEntryWarnings").visible)
+
+            const text = "The share code was created with version 1.0; you have 1.2."
+            const updated = Object.assign({}, Backend.sharing.preview)
+            updated.entries = updated.entries.slice()
+            updated.entries[1] = Object.assign({}, updated.entries[1],
+                                               { statusText: "Installed · see warnings", warnings: [text] })
+            Backend.sharing.preview = updated
+            tryVerify(() => list.itemAtIndex(1) !== null && list.itemAtIndex(1).height > 22)
+            const row = list.itemAtIndex(1)
+            const notes = findChild(row, "importEntryWarnings")
+            verify(notes.visible)
+            const lines = Array.prototype.filter.call(notes.children, c => c.text !== undefined)
+            compare(lines.length, 1)
+            compare(lines[0].text, text)
+            compare(lines[0].level, "warning")
+            verify(lines[0].visible)
+            compare(row.Accessible.description, text)
+            verify(row.Accessible.name.endsWith("Installed · see warnings"), row.Accessible.name)
+            // The rows after it move down rather than overlap.
+            tryVerify(() => list.itemAtIndex(2) !== null)
+            verify(list.itemAtIndex(2).y >= row.y + row.height)
+            dialog.close()
+            tryVerify(() => !Backend.sharing.hasPreview)
+        }
+
         function test_9d_exportShowsWorkshopIdList() {
             win.openExport()
             const dialog = named("exportDialog")

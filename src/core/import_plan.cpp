@@ -156,18 +156,20 @@ ImportPlan buildImportPlan(const GameKey& game, const std::string& playsetName,
                     item.warnings.push_back("The provider is currently updating the installed "
                                             "copy.");
             }
+            // Shown here once: the mod list does not warn about versions
+            // (core/readiness.hpp).
             if (!entry.versionHint.empty() && !mod.descriptor.version.empty() &&
                 entry.versionHint != mod.descriptor.version) {
                 ++versionMismatches;
-                item.warnings.push_back("The shared setup used version " + entry.versionHint +
-                                        "; the installed version is " + mod.descriptor.version +
+                item.warnings.push_back("The share code was created with version " +
+                                        entry.versionHint + "; you have " + mod.descriptor.version +
                                         ".");
             }
             if (!entry.fingerprint.empty() && !mod.fingerprint.empty() &&
                 entry.fingerprint != mod.fingerprint) {
                 ++fingerprintMismatches;
                 item.warnings.push_back(
-                    "The installed files differ from the shared setup (different fingerprint).");
+                    "This local mod's files differ from the ones the share code was created with.");
             }
         } else if (entry.identity.source == source::SteamWorkshop) {
             item.status = ImportEntryStatus::Missing;
@@ -213,11 +215,12 @@ ImportPlan buildImportPlan(const GameKey& game, const std::string& playsetName,
                                     " is installed. Mods may not work as expected.");
     }
     if (versionMismatches > 0)
-        plan.warnings.push_back(countText(versionMismatches, "mod has", "mods have") +
-                                " a different installed version than the shared setup.");
+        plan.warnings.push_back(
+            countText(versionMismatches, "installed mod has", "installed mods have") +
+            " a different version than in the share code.");
     if (fingerprintMismatches > 0)
-        plan.warnings.push_back(countText(fingerprintMismatches, "mod's", "mods'") +
-                                " installed files differ from the shared setup.");
+        plan.warnings.push_back(countText(fingerprintMismatches, "local mod's", "local mods'") +
+                                " files differ from the ones the share code was created with.");
     if (plan.counts.localUnmapped > 0)
         plan.warnings.push_back(
             countText(plan.counts.localUnmapped, "local mod is", "local mods are") +

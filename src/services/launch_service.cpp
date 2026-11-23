@@ -298,7 +298,7 @@ Prepared prepare(const ServiceContext& ctx, AcquisitionCoordinator* coordinator,
                     std::to_string(withWarnings) + " enabled " +
                     (withWarnings == 1 ? "mod has" : "mods have") +
                     (dependencyMeaningOf(game) != DependencyMeaning::LoadAfter
-                         ? " warnings (versions or dependencies); see the mod list."
+                         ? " warnings (for example about dependencies); see the mod list."
                          : " warnings; see the mod list."));
             // An update on the Workshop never blocks: the installed version is used.
             std::size_t withUpdates = 0;
