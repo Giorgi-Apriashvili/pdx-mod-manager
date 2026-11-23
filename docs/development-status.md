@@ -1432,32 +1432,38 @@ Packaging ([`packaging.md`](packaging.md)):
     item 4). Not merged.
 18. Done 2026-11-24 on `agent/version-note` (the owner's decision of
     2026-11-24, "Preview only", after asking what the point of "The shared
-    setup used version …; the installed version is …." was: entries
-    remember a version from a share code and also from the game's
-    configuration, so every Workshop update made saved playsets warn, and
-    nothing can be done about it, because Steam installs no older Workshop
-    version and updates mods by itself). Mod rows no longer warn about a
-    version other than the remembered one: no row warning, nothing under
-    "With warnings", nothing in Play's warnings, whose line now reads "(for
-    example about dependencies)" instead of "(versions or dependencies)". The
-    import preview still shows it once ("The share code was created with
-    version 1.0; you have 1.2." per entry, "1 installed mod has a different
-    version than in the share code." in its warnings). `versionHint` is
-    still recorded (share-code schema 1 and its fixtures unchanged) and
-    shown as the version of a mod that is not installed. A local mod whose
-    files differ keeps its row warning, worded for both origins of the
-    fingerprint: "This local mod's files differ from the ones this playset
-    was saved or shared with." (in the preview: "… the ones the share code
-    was created with."). Status: `debug` 717/717 (pmm_core_tests 66: one
-    new readiness case for the local mod's files, the readiness, import
-    preview and launch-check cases changed); against `main`'s code the
-    three changed cases fail, and with only the version warning put back
-    the readiness and launch-check cases still fail. No capture shows a
-    changed text, so none was replaced. `scripts/check.sh --full` on
-    `61dff0a`: passed in 8 min 4 s (ASan and clang-cl with UBSan 583/583
-    each, the update contract's 112 checks, clang-tidy on the 6 changed C++
-    files without findings, the `ci` preset from a fresh checkout
-    717/717). Not merged.
+    setup used version …; the installed version is …." was: entries remember a
+    version from a share code and also from the game's configuration, so every
+    Workshop update made saved playsets warn, and nothing can be done about it,
+    because Steam installs no older Workshop version and updates mods by
+    itself). Mod rows no longer warn about a version other than the remembered
+    one: no row warning, nothing under "With warnings", nothing in Play's
+    warnings, whose line now reads "(for example about dependencies)" instead
+    of "(versions or dependencies)" (EU4 and Hearts of Iron IV name no reason).
+    The import preview still shows it once: its warnings count it ("1 installed
+    mod has a different version than in the share code."), and the entry, whose
+    status reads "Installed · see warnings", now shows its own warnings under
+    its row ("The share code was created with version 1.0; you have 1.2.").
+    Before, the preview never showed an entry's warnings (`ShareController` did
+    not pass them on), so with the row warning gone nothing would have named
+    the mod; the entry's `warnings` are now in the preview map, shown in
+    `ImportDialog` and its accessible description. `versionHint` is still
+    recorded (share-code schema 1 and its fixtures unchanged) and shown as the
+    version of a mod that is not installed. A local mod whose files differ
+    keeps its row warning, worded for both origins of the fingerprint: "This
+    local mod's files differ from the ones this playset was saved or shared
+    with." (in the preview: "… the ones the share code was created with."). As
+    before, that check needs the installed copy's fingerprint, which only
+    exporting a share code with the mod computes and a rescan (also at every
+    start) drops, so it rarely fires. Status: `debug` 717/717 (pmm_core_tests
+    66: one new readiness case for the local mod's files, the readiness, import
+    preview and launch-check cases changed); against `main`'s code the three
+    changed cases fail, and with only the version warning put back the
+    readiness and launch-check cases still fail. No capture shows a changed
+    text, so none was replaced. `scripts/check.sh --full` on `61dff0a`: passed
+    in 8 min 4 s (ASan and clang-cl with UBSan 583/583 each, the update
+    contract's 112 checks, clang-tidy on the 6 changed C++ files without
+    findings, the `ci` preset from a fresh checkout 717/717). Not merged.
 
 ## Working rules
 

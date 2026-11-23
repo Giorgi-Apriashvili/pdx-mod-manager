@@ -129,17 +129,23 @@ instead.
 ## The import preview says a mod's version or files differ
 
 A share code remembers the version of each mod the sender had installed.
-When yours is another one, the import preview says so ("1 installed mod has
-a different version than in the share code."), and that is all: Steam
-installs only the newest version of a Workshop mod and updates it by itself,
-so there is nothing to choose, and the mod list does not warn about it. In
-multiplayer the game checks the players' checksums itself.
+When yours is another one, the import preview counts it ("1 installed mod
+has a different version than in the share code.") and says it under the
+mod's row ("The share code was created with version 1.0; you have 1.2.").
+For a Workshop mod that is all: Steam installs only the newest version of a
+Workshop mod and updates it by itself, so there is nothing to choose, and
+the mod list does not warn about it. In multiplayer the game checks the
+players' checksums itself.
 
-A local mod cannot be downloaded, so different files mean a different mod.
-When the preview can tell that a local mod's files differ from the ones the
-code was created with, it says so, and the mod list shows the warning "This
-local mod's files differ from the ones this playset was saved or shared
-with." To play together, use the sender's copy of the mod.
+A local mod cannot be downloaded, so a local mod with another version or
+other files is a different copy: to play together, use the sender's copy of
+the mod. The manager compares a local mod's files only once it has
+fingerprinted your copy, which it does when you export a share code that
+contains the mod, and only until the next rescan (one runs at every start).
+Then the preview says "This local mod's files differ from the ones the share
+code was created with.", and the mod list shows "This local mod's files
+differ from the ones this playset was saved or shared with." until the next
+rescan.
 
 ## Offline use
 
