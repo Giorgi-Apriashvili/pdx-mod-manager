@@ -75,6 +75,10 @@ inline constexpr const char* kIdenticalContentNotGuaranteed =
     "Identical mod references, order and enabled states do not guarantee identical files or "
     "multiplayer checksums: mods and the game can be updated independently.";
 
+// An installed entry whose version differs from its versionHint, and a local
+// mod whose fingerprint differs, get an entry warning each and one counting
+// plan warning per kind. The preview is the only place that shows a share
+// code's mod versions; the mod list does not (core/readiness.hpp).
 ImportPlan buildImportPlan(const GameKey& game, const std::string& playsetName,
                            const std::vector<PlaysetEntry>& requested,
                            const InstalledModMap& inventory,

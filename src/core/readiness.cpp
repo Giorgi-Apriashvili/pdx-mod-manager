@@ -21,16 +21,17 @@ std::string joined(const std::vector<std::string>& parts, const char* separator)
     return out;
 }
 
+// The entry's versionHint is no warning: Steam installs no older Workshop
+// version and updates the mods by itself, and descriptor versions are not
+// reliable. A local mod cannot be downloaded, so different files mean a
+// different mod. Entries get their fingerprint from a share code or from the
+// game's configuration, so the text names neither.
 void addInstalledWarnings(const PlaysetEntry& entry, const InstalledMod& installed,
                           EntryReadiness& readiness) {
-    const std::string& version = installed.descriptor.version;
-    if (!entry.versionHint.empty() && !version.empty() && entry.versionHint != version)
-        readiness.warnings.push_back("The shared setup used version " + entry.versionHint +
-                                     "; the installed version is " + version + ".");
     if (!entry.fingerprint.empty() && !installed.fingerprint.empty() &&
         entry.fingerprint != installed.fingerprint)
         readiness.warnings.push_back(
-            "The installed files differ from the shared setup (different fingerprint).");
+            "This local mod's files differ from the ones this playset was saved or shared with.");
     for (const std::string& problem : installed.problems)
         readiness.warnings.push_back(problem);
 }

@@ -9,8 +9,9 @@
 //
 // Mapping (entry -> EntryStatus):
 //   installed, unfinished update/reinstall job -> Pending, or Downloading (progress)
-//   installed, Ready or NeedsUpdate      -> Ready (+ warnings: version/fingerprint
-//                                           mismatch, scan problems, a failed
+//   installed, Ready or NeedsUpdate      -> Ready (+ warnings: a local mod's
+//                                           files differ from the entry's
+//                                           fingerprint, scan problems, a failed
 //                                           update or re-download unless
 //                                           updateJobResolved()); NeedsUpdate
 //                                           sets updateAvailable
@@ -29,6 +30,10 @@
 // Launching requires every ENABLED entry to be Ready. Disabled entries never
 // block, whatever their state; they stay visible as unresolved. An update
 // available on the Workshop never blocks.
+//
+// An installed version other than the entry's versionHint is no warning
+// (the owner's decision of 2026-11-24): only the import preview shows a
+// share code's versions (core/import_plan.hpp).
 
 #include "core/dependencies.hpp"
 #include "core/model.hpp"

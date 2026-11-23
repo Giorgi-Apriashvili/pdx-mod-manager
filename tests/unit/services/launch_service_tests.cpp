@@ -1,5 +1,6 @@
 #include "core/catalog_testing.hpp"
 #include "games/stellaris.hpp"
+#include "persistence/inventory_repository.hpp"
 #include "persistence/launch_history_repository.hpp"
 #include "persistence/playset_repository.hpp"
 #include "services/acquisition_coordinator.hpp"
@@ -239,18 +240,29 @@ TEST_CASE("The launch check names dependencies wherever they can cause a warning
           "[services][launch]") {
     World w;
     // #1 names a mod that is not installed and #2, which comes after it; #2's
-    // version is not the one the shared setup used.
+    // version is not the one the playset remembers, which is no warning; #3
+    // is a local mod whose files differ from the ones the playset remembers.
     writeText(w.workshop / "6000000001" / "descriptor.mod",
               "name=\"Example Overhaul\"\ndependencies={\"Example Missing\" \"Example Map\"}\n");
     writeText(w.workshop / "6000000002" / "descriptor.mod",
               "name=\"Example Map\"\nversion=\"2.0\"\n");
-    w.refresh();
+    writeText(w.userData / "mod" / "example_tweaks" / "descriptor.mod",
+              "name=\"Example Tweaks\"\n");
+    std::vector<InstalledMod> mods = w.refresh().inventory;
+    for (InstalledMod& mod : mods) {
+        if (mod.identity.source == source::Local)
+            mod.fingerprint = "sha256:" + std::string(64, 'b');
+    }
+    requireOk(persistence::InventoryRepository(*w.db).replaceForGame(kGame, mods));
     PlaysetEntry map = workshopEntry("6000000002", "Map");
     map.versionHint = "1.0";
-    const std::int64_t id = makePlayset(w, {workshopEntry("6000000001", "Overhaul"), map});
+    PlaysetEntry tweaks = localEntry("example_tweaks", "Tweaks");
+    tweaks.fingerprint = "sha256:" + std::string(64, 'a');
+    const std::int64_t id = makePlayset(w, {workshopEntry("6000000001", "Overhaul"), map, tweaks});
     LaunchService launcher(w.ctx, nullptr);
+    // #1 and #3.
     const std::string both =
-        "2 enabled mods have warnings (versions or dependencies); see the mod list.";
+        "2 enabled mods have warnings (for example about dependencies); see the mod list.";
 
     SECTION("Stellaris and CK3: a named mod that comes later is a warning") {
         REQUIRE(dependencyMeaningOf(kGame) == DependencyMeaning::LoadAfterInList);
