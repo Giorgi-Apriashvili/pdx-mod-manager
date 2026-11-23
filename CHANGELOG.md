@@ -15,9 +15,13 @@ is one line, and its links are full URLs.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-24
+
+Mod rows no longer warn when a mod's version differs from the one a playset remembers; the import preview shows each mod's version difference instead. Installed copies update to this version from the update banner or **Settings > Updates**.
+
 ### Changed
 
-- **No more mod version warnings.** Playsets read from the game's configuration remember the version installed then, so their mods warned after every Workshop update ("The shared setup used version …"); a mod no longer gets a warning when its installed version differs from the one its playset remembers. Steam installs only the newest version of a Workshop mod and updates it by itself, so there was nothing to do about it. Such mods no longer count under "With warnings" or in **Play**'s warnings, whose line now reads "N enabled mods have warnings (for example about dependencies)" (outside Europa Universalis IV and Hearts of Iron IV). The import preview still says when a share code was created with other mod versions than yours, now also under each such mod's row ("The share code was created with version 1.0; you have 1.2."), and a local mod still gets a warning when its files differ from the ones the playset was saved or shared with ([troubleshooting](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/main/docs/troubleshooting.md#the-import-preview-says-a-mods-version-or-files-differ)).
+- **No more mod version warnings.** Playsets read from the game's configuration remember the version installed then, so their mods warned after every Workshop update ("The shared setup used version …"); a mod no longer gets a warning when its installed version differs from the one its playset remembers. Steam installs only the newest version of a Workshop mod and updates it by itself, so there was nothing to do about it. Such mods no longer count under "With warnings" or in **Play**'s warnings, whose line now reads "N enabled mods have warnings (for example about dependencies)" (outside Europa Universalis IV and Hearts of Iron IV). The import preview still says when a share code was created with other mod versions than yours, now also under each such mod's row ("The share code was created with version 1.0; you have 1.2."), and a local mod still gets a warning when its files differ from the ones the playset was saved or shared with ([troubleshooting](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/blob/v0.3.2/docs/troubleshooting.md#the-import-preview-says-a-mods-version-or-files-differ)).
 
 ## [0.3.1] - 2026-11-22
 

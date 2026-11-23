@@ -1475,6 +1475,14 @@ Packaging ([`packaging.md`](packaging.md)):
     717/717, ASan and clang-cl with UBSan 583/583 each, the update contract's
     112 checks, clang-tidy on the 8 changed C++ files without findings, the
     `ci` preset from a fresh checkout 717/717). Not merged.
+19. 0.3.1 (owner's OK of 2026-11-22): items 15-17, published 2026-11-22
+    from `73f4dd0` ([release](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.3.1),
+    [run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/45004320755)); the request by
+    repository id answered `v0.3.1`. Released before the live test of item 17
+    (Workshop updates and re-downloads, tested with fakes only), at the
+    owner's wish. 0.3.2 (owner's OK of 2026-11-24): item 18, released from
+    `main` by pushing the tag `v0.3.2`; the owner kept the game-version
+    warning ("Made for ...") on mod rows as it is.
 
 ## Working rules
 

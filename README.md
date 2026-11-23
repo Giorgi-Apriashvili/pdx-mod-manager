@@ -15,9 +15,9 @@ Steam Deck and Proton are not supported
 ([ADR 0009](docs/adr/0009-windows-only.md)). It needs no server, account or
 telemetry.
 
-> **Status: 0.3.0 ([2026-11-21](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.3.0)).** The desktop
+> **Status: 0.3.2 ([2026-11-24](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/releases/tag/v0.3.2)).** The desktop
 > application (`pmm-app`), the adapters for all five games and every layer
-> below them are implemented and covered by 642 automated tests. On Windows 11
+> below them are implemented and covered by 717 automated tests. On Windows 11
 > with Steam, Stellaris and EU4 were started directly by the application with
 > the selected mods (checked in the games' own logs), a missing Workshop mod was
 > subscribed and downloaded live for each of them, and the failure cases
@@ -150,7 +150,7 @@ With the application (Qt):
 export QT_ROOT_DIR=C:/Qt/6.10.3/msvc2022_64       # PowerShell: $env:QT_ROOT_DIR = "C:/Qt/6.10.3/msvc2022_64"
 cmake --preset debug
 cmake --build --preset debug
-ctest --preset debug                              # 642 tests, 124 of them pmm_app_tests
+ctest --preset debug                              # 717 tests, 133 of them pmm_app_tests
 ```
 
 The application tests (`-L pmm_app_tests`) run on Qt's offscreen platform;

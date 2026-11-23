@@ -13,7 +13,7 @@ if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
 endif()
 
 project(ParadoxModManager
-  VERSION 0.3.1
+  VERSION 0.3.2
   DESCRIPTION "Compact mod manager for Paradox games on Windows"
   HOMEPAGE_URL "https://github.com/Giorgi-Apriashvili/pdx-mod-manager"
   LANGUAGES C CXX)
