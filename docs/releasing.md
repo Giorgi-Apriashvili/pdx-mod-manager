@@ -19,7 +19,8 @@ built for the release: the runner image's new Visual Studio refused its older
 clang-cl. A re-run uses the workflows of the tagged commit, so with the owner's
 OK the tag, which had no release, was deleted and pushed again at the commit
 that pins LLVM for that job. 0.3.1 (Workshop mod updates, dependencies no longer required outside Victoria 3) followed on 2026-11-22
-([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/45004320755)), and 0.3.2 (no version warnings on mod rows) on 2026-11-24.
+([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/45004320755)), and 0.3.2 (no version warnings on mod rows) on 2026-11-24
+([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/45270113839)).
 
 Every release must keep the [update contract](#the-update-contract): copies that are
 already installed find and install it only through the values frozen in 0.1.0.

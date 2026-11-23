@@ -1481,7 +1481,9 @@ Packaging ([`packaging.md`](packaging.md)):
     repository id answered `v0.3.1`. Released before the live test of item 17
     (Workshop updates and re-downloads, tested with fakes only), at the
     owner's wish. 0.3.2 (owner's OK of 2026-11-24): item 18, released from
-    `main` by pushing the tag `v0.3.2`; the owner kept the game-version
+    `d904cd0`, published 2026-11-24 ([run](https://github.com/Giorgi-Apriashvili/pdx-mod-manager/actions/runs/45270113839); checked as an
+    installed copy reads it: `releases/latest` answers `v0.3.2`, checksums and
+    contract assets OK, the real update client reads 0.3.2); the owner kept the game-version
     warning ("Made for ...") on mod rows as it is.
 
 ## Working rules
