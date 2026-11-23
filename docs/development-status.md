@@ -1430,6 +1430,34 @@ Packaging ([`packaging.md`](packaging.md)):
     owner's approval** (the open questions L1-L9 and the re-download's in
     [`steam-workshop.md`](steam-workshop.md#11-not-verified-yet-and-how-to-verify-it),
     item 4). Not merged.
+18. Done 2026-11-24 on `agent/version-note` (the owner's decision of
+    2026-11-24, "Preview only", after asking what the point of "The shared
+    setup used version …; the installed version is …." was: entries
+    remember a version from a share code and also from the game's
+    configuration, so every Workshop update made saved playsets warn, and
+    nothing can be done about it, because Steam installs no older Workshop
+    version and updates mods by itself). Mod rows no longer warn about a
+    version other than the remembered one: no row warning, nothing under
+    "With warnings", nothing in Play's warnings, whose line now reads "(for
+    example about dependencies)" instead of "(versions or dependencies)". The
+    import preview still shows it once ("The share code was created with
+    version 1.0; you have 1.2." per entry, "1 installed mod has a different
+    version than in the share code." in its warnings). `versionHint` is
+    still recorded (share-code schema 1 and its fixtures unchanged) and
+    shown as the version of a mod that is not installed. A local mod whose
+    files differ keeps its row warning, worded for both origins of the
+    fingerprint: "This local mod's files differ from the ones this playset
+    was saved or shared with." (in the preview: "… the ones the share code
+    was created with."). Status: `debug` 717/717 (pmm_core_tests 66: one
+    new readiness case for the local mod's files, the readiness, import
+    preview and launch-check cases changed); against `main`'s code the
+    three changed cases fail, and with only the version warning put back
+    the readiness and launch-check cases still fail. No capture shows a
+    changed text, so none was replaced. `scripts/check.sh --full` on
+    `61dff0a`: passed in 8 min 4 s (ASan and clang-cl with UBSan 583/583
+    each, the update contract's 112 checks, clang-tidy on the 6 changed C++
+    files without findings, the `ci` preset from a fresh checkout
+    717/717). Not merged.
 
 ## Working rules
 
