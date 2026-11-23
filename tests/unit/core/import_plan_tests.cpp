@@ -168,8 +168,9 @@ TEST_CASE("Import warnings cover versions and always state the content caveat", 
 }
 
 TEST_CASE("Mod version and fingerprint differences are visible", "[core][import]") {
-    // The preview is the one place that shows a share code's mod versions:
-    // the mod list does not (core/readiness.hpp).
+    // The preview is the only place that compares a share code's mod
+    // versions with the installed ones: the mod list does not
+    // (core/readiness.hpp).
     Scenario s;
     s.requested[0].versionHint = "1.0";
     s.inventory[s.requested[0].identity].descriptor.version = "1.2";

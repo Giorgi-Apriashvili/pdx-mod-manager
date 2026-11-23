@@ -154,7 +154,7 @@ Roles:
   "Failed", "Action needed", ...);
 - `warnings` (string list), `hasWarnings` (bool). An installed version
   other than the one the playset remembers is not a warning (only the import
-  preview mentions a share code's versions); a local mod whose files differ
+  preview compares a share code's versions); a local mod whose files differ
   from the remembered ones is ("This local mod's files differ from the ones
   this playset was saved or shared with.");
 - `progress` (real, -1 when not downloading);
@@ -375,10 +375,10 @@ Invokables:
   `missingDisabled`, `localUnmapped`;
 - `downloads` (bool): false when Workshop downloads are off in this session,
   so the import queues nothing;
-- `warnings` (list; the portability note is not repeated here), among them
-  the one place a share code's mod versions show: "1 installed mod has a
-  different version than in the share code." (and "1 local mod's files
-  differ from the ones the share code was created with.");
+- `warnings` (list; the portability note is not repeated here), the only
+  place that compares a share code's mod versions with the installed ones:
+  "1 installed mod has a different version than in the share code." (and "1
+  local mod's files differ from the ones the share code was created with.");
 - `entries` (list of `{position, name, source, providerId, enabled, check,
   statusText}`): `name` is the installed name, else the Workshop title, else
   the text's hint, else the id; `check` is what the Steam Workshop said about

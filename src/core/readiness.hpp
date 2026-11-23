@@ -32,8 +32,8 @@
 // available on the Workshop never blocks.
 //
 // An installed version other than the entry's versionHint is no warning
-// (the owner's decision of 2026-11-24): only the import preview shows a
-// share code's versions (core/import_plan.hpp).
+// (the owner's decision of 2026-11-24): only the import preview compares a
+// share code's versions with the installed ones (core/import_plan.hpp).
 
 #include "core/dependencies.hpp"
 #include "core/model.hpp"

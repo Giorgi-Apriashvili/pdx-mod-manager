@@ -133,7 +133,7 @@ When yours is another one, the import preview says so ("1 installed mod has
 a different version than in the share code."), and that is all: Steam
 installs only the newest version of a Workshop mod and updates it by itself,
 so there is nothing to choose, and the mod list does not warn about it. In
-multiplayer the game compares its own checksum.
+multiplayer the game checks the players' checksums itself.
 
 A local mod cannot be downloaded, so different files mean a different mod.
 When the preview can tell that a local mod's files differ from the ones the
