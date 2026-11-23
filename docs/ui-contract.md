@@ -375,17 +375,24 @@ Invokables:
   `missingDisabled`, `localUnmapped`;
 - `downloads` (bool): false when Workshop downloads are off in this session,
   so the import queues nothing;
-- `warnings` (list; the portability note is not repeated here), the only
-  place that compares a share code's mod versions with the installed ones:
-  "1 installed mod has a different version than in the share code." (and "1
-  local mod's files differ from the ones the share code was created with.");
+- `warnings` (list; the portability note is not repeated here), which
+  counts the entries whose version or files differ: "1 installed mod has a
+  different version than in the share code." (and "1 local mod's files
+  differ from the ones the share code was created with.");
 - `entries` (list of `{position, name, source, providerId, enabled, check,
-  statusText}`): `name` is the installed name, else the Workshop title, else
-  the text's hint, else the id; `check` is what the Steam Workshop said about
-  a missing Workshop entry ("" not asked or not answered, "ok", "notFound",
-  "unavailable", "banned", "wrongGame"), and `statusText` then reads "Not
-  found on Workshop", "Unavailable on Workshop", "Banned on Workshop" or
-  "Another game's mod".
+  statusText, warnings}`): `name` is the installed name, else the Workshop
+  title, else the text's hint, else the id; `check` is what the Steam
+  Workshop said about a missing Workshop entry ("" not asked or not
+  answered, "ok", "notFound", "unavailable", "banned", "wrongGame"), and
+  `statusText` then reads "Not found on Workshop", "Unavailable on
+  Workshop", "Banned on Workshop" or "Another game's mod"; `warnings`
+  (string list) are the installed entry's own ("The share code was created
+  with version 1.0; you have 1.2.", "This local mod's files differ from the
+  ones the share code was created with.", "An update is pending for the
+  installed copy.", a broken mod's problems), and its `statusText` then
+  reads "Installed · see warnings" (or "Installed · broken"). The dialog
+  shows them under the entry's row; the preview is the only place that
+  names a mod whose version differs from the code's.
 
 ## `AcquisitionController` (QObject)
 

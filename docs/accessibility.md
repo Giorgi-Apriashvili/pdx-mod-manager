@@ -156,7 +156,10 @@ banner's "Show load order" link restores the view.
 - **Import preview** and **Keyboard shortcuts**: the lists are read-only but
   focusable, so the entries can be read row by row and paged. When the names
   of missing Workshop mods arrive after the preview, the preview's list keeps
-  its current entry and scroll position, and a typed playset name stays.
+  its current entry and scroll position, and a typed playset name stays. An
+  entry's own warnings (a mod version other than the share code's, a local
+  mod's other files) are shown under its row, with the warning glyph, and
+  are the entry's accessible description.
 - **Confirmations** have nothing focusable but their buttons. When the text is
   taller than the dialog (a long list of files in a small window), Up, Down,
   PgUp, PgDn, Home and End on the buttons scroll it; the scroll bar has its

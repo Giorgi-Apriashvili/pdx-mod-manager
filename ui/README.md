@@ -67,7 +67,8 @@ Things the QML relies on beyond the tables in the contract:
   `dragHandleArea`, `playButton`, `interruptedBanner`,
   `discardInterruptedButton`, `settingsButton`, `importDialog`,
   `importNameField`, `importConfirmButton`, `importPreviewTitle`,
-  `importListNote`, `importLookupLine`, `importEntryList`, `exportDialog`,
+  `importListNote`, `importLookupLine`, `importEntryList` (in each entry
+  `importEntryWarnings`: its own warnings, under the row), `exportDialog`,
   `exportScroller` (its scrolling content), `copyShareCodeButton`,
   `workshopIdListField`, `workshopIdListNote`, `copyWorkshopIdListButton`,
   `confirmDialog`,

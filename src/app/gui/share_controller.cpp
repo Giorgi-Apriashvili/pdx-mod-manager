@@ -159,7 +159,10 @@ QVariantMap previewMap(const services::ImportPreview& preview, bool downloads) {
                         {QStringLiteral("providerId"), qs(entry.entry.identity.id)},
                         {QStringLiteral("enabled"), entry.entry.enabled},
                         {QStringLiteral("check"), check},
-                        {QStringLiteral("statusText"), entryStatusText(entry, downloads, check)}});
+                        {QStringLiteral("statusText"), entryStatusText(entry, downloads, check)},
+                        // The only place that names a mod whose version
+                        // differs from the code's (core/import_plan.hpp).
+                        {QStringLiteral("warnings"), qlist(entry.warnings)}});
     }
     const ImportCounts& counts = plan.counts;
     const QString listNote =

@@ -143,7 +143,8 @@ QtObject {
                 enabled: i % 5 !== 4,
                 check: "",
                 statusText: c.source === "local" ? "Local · needs mapping"
-                          : missing ? "Missing · will download" : "Installed"
+                          : missing ? "Missing · will download" : "Installed",
+                warnings: []
             })
         }
         setPreview({
@@ -206,7 +207,8 @@ QtObject {
                 providerId: ids[i],
                 enabled: true,
                 check: "",
-                statusText: isInstalled ? "Installed" : "Missing · will download"
+                statusText: isInstalled ? "Installed" : "Missing · will download",
+                warnings: []
             })
         }
         const missing = ids.length - installed

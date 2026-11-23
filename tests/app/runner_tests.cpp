@@ -678,6 +678,38 @@ TEST_CASE("Backend edits are persisted, undoable and reflected in the models", "
             CHECK(imported[i].enabled == exported[i].enabled);
         }
     }
+    SECTION("a share code's other mod version is named in the preview, not in the mod list") {
+        pmm::sharing::Manifest manifest;
+        manifest.game = kGame;
+        manifest.playsetName = "Shared";
+        manifest.mods = {{"steam-workshop", "1001", "Alpha", true, "0.9", {}},
+                         {"steam-workshop", "1002", "Beta", true, "1.0", {}}}; // installed: 1.0
+        backend.sharing()->previewImport(qs(require(pmm::sharing::encodeShareCode(manifest))));
+        REQUIRE(waitUntil(
+            [&] { return backend.sharing()->hasPreview() && !backend.sharing()->busy(); }));
+        const QVariantMap preview = backend.sharing()->preview();
+        REQUIRE(preview.value("ok").toBool());
+        CHECK(preview.value("warnings")
+                  .toStringList()
+                  .contains("1 installed mod has a different version than in the share code."));
+        const QVariantList entries = preview.value("entries").toList();
+        REQUIRE(entries.size() == 2);
+        CHECK(entries[0].toMap().value("statusText") == "Installed · see warnings");
+        CHECK(entries[0].toMap().value("warnings").toStringList() ==
+              QStringList{"The share code was created with version 0.9; you have 1.0."});
+        CHECK(entries[1].toMap().value("statusText") == "Installed");
+        CHECK(entries[1].toMap().contains("warnings"));
+        CHECK(entries[1].toMap().value("warnings").toStringList().isEmpty());
+
+        REQUIRE(
+            backend.sharing()->confirmImport("new", -1, preview.value("proposedName").toString()));
+        REQUIRE(waitUntil([&] {
+            return backend.activePlaysetId() != id && backend.mods()->count() == 2 &&
+                   backend.mods()->playsetId() == backend.activePlaysetId();
+        }));
+        CHECK(storedEntries(runner, backend.activePlaysetId()).front().versionHint == "0.9");
+        CHECK(backend.mods()->row(0)->warnings.isEmpty());
+    }
     SECTION("replacing a playset with a share code keeps its name") {
         backend.sharing()->exportCode();
         REQUIRE(waitUntil([&] { return !backend.sharing()->lastExportCode().isEmpty(); }));

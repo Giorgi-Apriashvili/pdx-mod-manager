@@ -367,8 +367,11 @@ AppDialog {
                                 id: entry
                                 required property var modelData
                                 required property int index
+                                // Under the row: the warnings above only count them, and
+                                // the mod list does not repeat a version difference.
+                                readonly property list<string> warningLines: Theme.lines(entry.modelData.warnings)
                                 width: entryList.width
-                                height: 22
+                                height: 22 + (warningLines.length > 0 ? notes.implicitHeight + 4 : 0)
                                 color: index % 2 === 1 ? Theme.alternateBase : Theme.base
                                 Accessible.role: Accessible.ListItem
                                 // The name comes from the text or from Steam: substituted
@@ -378,6 +381,7 @@ AppDialog {
                                                  .arg(entry.modelData.source === "local" ? qsTr("Local") : qsTr("Workshop"))
                                                  .arg(entry.modelData.statusText)
                                                  .arg(entry.modelData.name)
+                                Accessible.description: entry.warningLines.join(" ")
 
                                 Rectangle {
                                     anchors.fill: parent
@@ -390,8 +394,11 @@ AppDialog {
                                 }
 
                                 Row {
-                                    anchors.fill: parent
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
                                     anchors.leftMargin: 6
+                                    height: 22
                                     PreviewCell { width: 40; text: entry.modelData.position; alignRight: true; muted: true }
                                     Item {
                                         width: 34
@@ -417,6 +424,26 @@ AppDialog {
                                     PreviewCell {
                                         width: 170
                                         text: entry.modelData.statusText
+                                    }
+                                }
+
+                                // Aligned with the name.
+                                ColumnLayout {
+                                    id: notes
+                                    objectName: "importEntryWarnings"
+                                    visible: entry.warningLines.length > 0
+                                    x: 6 + 40 + 34 + 4
+                                    y: 22
+                                    width: parent.width - x - 10
+                                    spacing: 2
+                                    Repeater {
+                                        model: entry.warningLines
+                                        delegate: MessageLine {
+                                            required property string modelData
+                                            Layout.fillWidth: true
+                                            level: "warning"
+                                            text: modelData
+                                        }
                                     }
                                 }
                             }
